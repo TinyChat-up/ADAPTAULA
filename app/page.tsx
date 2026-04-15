@@ -10,6 +10,7 @@ import ConfigScreen from "@/components/screens/ConfigScreen";
 import GeneratingScreen from "@/components/screens/GeneratingScreen";
 import ResultScreen from "@/components/screens/ResultScreen";
 import SubscriptionScreen from "@/components/screens/SubscriptionScreen";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -418,21 +419,23 @@ export default function HomePage() {
 
   if (screen === "result" && adaptResult) {
     return (
-      <ResultScreen
-        cleanHtml={cleanHtml}
-        teacherNotes={adaptResult.teacherNotes}
-        pdfBusy={pdfBusy}
-        docxBusy={docxBusy}
-        docxError={docxError}
-        notesOpen={notesOpen}
-        perfil={perfil}
-        subject={subject}
-        supportDegree={supportDegree}
-        onReset={handleReset}
-        onPdf={handlePdf}
-        onDocx={() => void handleDocx()}
-        onToggleNotes={() => setNotesOpen((o) => !o)}
-      />
+      <ErrorBoundary onError={(err) => toast(err.message, "error")}>
+        <ResultScreen
+          cleanHtml={cleanHtml}
+          teacherNotes={adaptResult.teacherNotes}
+          pdfBusy={pdfBusy}
+          docxBusy={docxBusy}
+          docxError={docxError}
+          notesOpen={notesOpen}
+          perfil={perfil}
+          subject={subject}
+          supportDegree={supportDegree}
+          onReset={handleReset}
+          onPdf={handlePdf}
+          onDocx={() => void handleDocx()}
+          onToggleNotes={() => setNotesOpen((o) => !o)}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -466,6 +469,7 @@ export default function HomePage() {
 
   // screen === "configure"
   return (
+    <ErrorBoundary onError={(err) => toast(err.message, "error")}>
     <ConfigScreen
       perfil={perfil}
       subject={subject}
@@ -484,5 +488,6 @@ export default function HomePage() {
       onDismissWarning={() => setShowSecondaryWarning(false)}
       onBackFromWarning={() => { setShowSecondaryWarning(false); setScreen("upload"); setConfigError(""); }}
     />
+    </ErrorBoundary>
   );
 }
