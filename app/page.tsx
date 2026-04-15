@@ -1,65 +1,483 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import type { Subject, AdaptationType, SupportDegree } from "@/lib/adaptationRules";
+
+import UploadScreen from "@/components/screens/UploadScreen";
+import ConfigScreen from "@/components/screens/ConfigScreen";
+import GeneratingScreen from "@/components/screens/GeneratingScreen";
+import ResultScreen from "@/components/screens/ResultScreen";
+import SubscriptionScreen from "@/components/screens/SubscriptionScreen";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Screen = "upload" | "configure" | "generating" | "result" | "subscription";
+type Tab = "paste" | "file";
+type Perfil = "tea" | "tel" | "dislexia" | "di" | "tdah" | "retraso";
+
+type FileState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "done"; fileName: string; fullText: string }
+  | { status: "error"; message: string };
+
+type AdaptResult = {
+  documentHtml: string;
+  teacherNotes: string[];
+  adaptationDecisions: unknown[];
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PERFIL_TO_ADAPTATION: Record<Perfil, AdaptationType> = {
+  tea:      "pictogramas",
+  tel:      "simplificar",
+  dislexia: "simplificar",
+  di:       "pictogramas",
+  tdah:     "autonomia",
+  retraso:  "simplificar",
+};
+
+// ─── Secondary-level heuristic ───────────────────────────────────────────────
+
+function detectsSecondaryLevel(text: string): boolean {
+  const signals = [
+    /\b(ESO|bachillerato|2º ESO|3º ESO|4º ESO)\b/i,
+    /\b(ecuaci[oó]n de segundo grado|sistemas de ecuaciones|factorizaci[oó]n)\b/i,
+    /\b(derivada|integral|logaritmo|trigonometr[ií]a)\b/i,
+    /\b(hist[oó]ria de (espa[nñ]a|europa)|filosof[ií]a|geolog[ií]a)\b/i,
+    /x[²2]|ax\s*\+\s*b|discriminante/i,
+  ];
+  return signals.some((r) => r.test(text));
+}
+
+// ─── Style injection helper ───────────────────────────────────────────────────
+
+function injectAndStripStyles(html: string): string {
+  const match = html.match(/<style>([\s\S]*?)<\/style>/i);
+  if (!match) return html;
+  const existing = document.getElementById("aa-document-styles");
+  if (existing) existing.remove();
+  const el = document.createElement("style");
+  el.id = "aa-document-styles";
+  el.textContent = match[1];
+  document.head.appendChild(el);
+  return html.replace(/<style>[\s\S]*?<\/style>/i, "").trim();
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function HomePage() {
+
+  // ── Screen ───────────────────────────────────────────────────────────────────
+  const [screen, setScreen] = useState<Screen>("upload");
+
+  // ── Upload state ─────────────────────────────────────────────────────────────
+  const [tab, setTab] = useState<Tab>("file");
+  const [pastedText, setPastedText] = useState("");
+  const [fileState, setFileState] = useState<FileState>({ status: "idle" });
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const content =
+    tab === "paste"
+      ? pastedText.trim()
+      : fileState.status === "done"
+        ? fileState.fullText
+        : "";
+
+  // ── Configure state ───────────────────────────────────────────────────────────
+  const [perfil, setPerfil] = useState<Perfil>("dislexia");
+  const [subject, setSubject] = useState<Subject>("lengua");
+  const [supportDegree, setSupportDegree] = useState<SupportDegree>("medio");
+  const [interestsInput, setInterestsInput] = useState("");
+  const [configError, setConfigError] = useState("");
+  const [educationalLevel, setEducationalLevel] = useState<"primaria" | "secundaria">("primaria");
+  const [showSecondaryWarning, setShowSecondaryWarning] = useState(false);
+
+  // ── Generation progress (0-100, streaming real) ──────────────────────────────
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
+
+  // ── Result state ──────────────────────────────────────────────────────────────
+  const [adaptResult, setAdaptResult] = useState<AdaptResult | null>(null);
+  const [cleanHtml, setCleanHtml] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [docxBusy, setDocxBusy] = useState(false);
+  const [docxError, setDocxError] = useState("");
+  const savedAdaptationIdRef = useRef<string | null>(null);
+
+  // Inject / clean up styles when entering or leaving result screen
+  useEffect(() => {
+    if (screen === "result" && adaptResult) {
+      setCleanHtml(injectAndStripStyles(adaptResult.documentHtml));
+    } else {
+      document.getElementById("aa-document-styles")?.remove();
+    }
+  }, [screen, adaptResult]);
+
+  // Stagger-animate aa-block elements into view on result screen
+  useEffect(() => {
+    if (screen !== "result") return;
+    const timer = setTimeout(() => {
+      const blocks = document.querySelectorAll(".aa-block");
+      blocks.forEach((block, i) => {
+        setTimeout(() => block.classList.add("visible"), i * 120);
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [screen]);
+
+  // ── File extraction ───────────────────────────────────────────────────────────
+  const extractFile = useCallback(async (file: File) => {
+    const name = file.name.toLowerCase();
+    const mime = file.type.toLowerCase();
+    const ok =
+      mime === "application/pdf" || name.endsWith(".pdf") ||
+      mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || name.endsWith(".docx");
+
+    if (!ok) {
+      setFileState({ status: "error", message: "Solo se aceptan archivos PDF o DOCX." });
+      return;
+    }
+
+    setFileState({ status: "loading" });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/extract-text", { method: "POST", body: formData });
+      const json = await res.json() as { text?: string; error?: string };
+      if (!res.ok || !json.text) {
+        setFileState({ status: "error", message: "No se pudo leer el archivo. Comprueba que no está protegido con contraseña e inténtalo de nuevo." });
+        return;
+      }
+      setFileState({ status: "done", fullText: json.text, fileName: file.name });
+    } catch {
+      setFileState({ status: "error", message: "Error de red al extraer el texto." });
+    }
+  }, []);
+
+  const handleDragOver  = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
+  const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) void extractFile(file);
+  }, [extractFile]);
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void extractFile(file);
+  }, [extractFile]);
+
+  // ── Navigate upload → configure ───────────────────────────────────────────────
+  const handleContinue = () => {
+    if (detectsSecondaryLevel(content)) setShowSecondaryWarning(true);
+    setScreen("configure");
+  };
+
+  // ── Generate ──────────────────────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    setConfigError("");
+    setGenerationProgress(0);
+    setScreen("generating");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const studentInterests = interestsInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/adapt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          content,
+          subject,
+          adaptationType: PERFIL_TO_ADAPTATION[perfil],
+          supportDegree,
+          studentInterests,
+          educationalLevel,
+        }),
+      });
+
+      // Errores HTTP antes del stream (ej: 400, 429 por rate limit)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}) as Record<string, unknown>) as {
+          error?: string;
+          retryAfter?: number;
+        };
+        const retryMsg = errData.retryAfter ? ` Espera ${errData.retryAfter} segundos.` : " Espera unos segundos.";
+        setConfigError(
+          res.status === 429
+            ? `Has alcanzado el límite temporal.${retryMsg}`
+            : (errData.error ?? "No se pudo generar la adaptación. Inténtalo de nuevo."),
+        );
+        setScreen("configure");
+        return;
+      }
+
+      if (!res.body) {
+        setConfigError("Error de red: respuesta sin contenido.");
+        setScreen("configure");
+        return;
+      }
+
+      // Leer stream SSE
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: AdaptResult | null = null;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (!payload || payload === "[DONE]") continue;
+
+          let event: { type: string; progress?: number; documentHtml?: string; teacherNotes?: string[]; adaptationDecisions?: unknown[]; pictogramConcepts?: string[]; message?: string };
+          try {
+            event = JSON.parse(payload) as typeof event;
+          } catch {
+            continue;
+          }
+
+          if (event.type === "delta" && typeof event.progress === "number") {
+            setGenerationProgress(event.progress);
+          } else if (event.type === "done") {
+            result = {
+              documentHtml: event.documentHtml ?? "",
+              teacherNotes: event.teacherNotes ?? [],
+              adaptationDecisions: event.adaptationDecisions ?? [],
+            };
+            break outer;
+          } else if (event.type === "error") {
+            setConfigError(event.message ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
+            setScreen("configure");
+            return;
+          }
+        }
+      }
+
+      if (!result?.documentHtml) {
+        setConfigError("No se pudo generar la adaptación. Inténtalo de nuevo.");
+        setScreen("configure");
+        return;
+      }
+
+      savedAdaptationIdRef.current = null;
+      setGenerationProgress(100);
+      setAdaptResult(result);
+      setScreen("result");
+    } catch {
+      setConfigError("Error de red al generar la adaptación. Inténtalo de nuevo.");
+      setScreen("configure");
+    }
+  };
+
+  // ── Reset ─────────────────────────────────────────────────────────────────────
+  const handleReset = () => {
+    setPastedText("");
+    setFileState({ status: "idle" });
+    setTab("file");
+    setPerfil("dislexia");
+    setSubject("lengua");
+    setSupportDegree("medio");
+    setInterestsInput("");
+    setConfigError("");
+    setEducationalLevel("primaria");
+    setShowSecondaryWarning(false);
+    setAdaptResult(null);
+    setCleanHtml("");
+    setDocxError("");
+    savedAdaptationIdRef.current = null;
+    setScreen("upload");
+  };
+
+  // ── PDF (hidden iframe print) ─────────────────────────────────────────────────
+  const handlePdf = () => {
+    if (!adaptResult || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;";
+      document.body.appendChild(iframe);
+      const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!doc) {
+        document.body.removeChild(iframe);
+        setPdfBusy(false);
+        return;
+      }
+      doc.open();
+      doc.write(
+        `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>AdaptAula</title>` +
+        `<style media="print">@page{margin:0}body{margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>` +
+        `</head><body>${adaptResult.documentHtml}</body></html>`,
+      );
+      doc.close();
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.print();
+          setTimeout(() => { document.body.removeChild(iframe); setPdfBusy(false); }, 2000);
+        }, 300);
+      };
+    } catch {
+      setPdfBusy(false);
+    }
+  };
+
+  // ── DOCX ──────────────────────────────────────────────────────────────────────
+  const handleDocx = async () => {
+    if (!adaptResult || docxBusy) return;
+    setDocxBusy(true);
+    setDocxError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        // No auth → show subscription paywall
+        setDocxBusy(false);
+        setScreen("subscription");
+        return;
+      }
+
+      let adaptationId = savedAdaptationIdRef.current;
+      if (!adaptationId) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("adaptations")
+          .insert({ result_html: adaptResult.documentHtml })
+          .select("id")
+          .single();
+        const row = inserted as Record<string, unknown> | null;
+        if (insertError || !row?.id) {
+          setDocxError("No se pudo guardar la adaptación para la descarga.");
+          setDocxBusy(false);
+          return;
+        }
+        adaptationId = String(row.id);
+        savedAdaptationIdRef.current = adaptationId;
+      }
+
+      const res = await fetch("/api/export/docx", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ adaptationId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Error desconocido" })) as { error?: string };
+        setDocxError(err.error ?? "No se pudo generar el DOCX.");
+        setDocxBusy(false);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "adaptacion-adaptaula.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDocxError("Error de red al descargar el DOCX.");
+    } finally {
+      setDocxBusy(false);
+    }
+  };
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
+  if (screen === "generating") {
+    return (
+      <GeneratingScreen
+        perfil={perfil}
+        subject={subject}
+        supportDegree={supportDegree}
+        progress={generationProgress > 0 ? generationProgress : undefined}
+      />
+    );
+  }
+
+  if (screen === "result" && adaptResult) {
+    return (
+      <ResultScreen
+        cleanHtml={cleanHtml}
+        teacherNotes={adaptResult.teacherNotes}
+        pdfBusy={pdfBusy}
+        docxBusy={docxBusy}
+        docxError={docxError}
+        notesOpen={notesOpen}
+        perfil={perfil}
+        subject={subject}
+        supportDegree={supportDegree}
+        onReset={handleReset}
+        onPdf={handlePdf}
+        onDocx={() => void handleDocx()}
+        onToggleNotes={() => setNotesOpen((o) => !o)}
+      />
+    );
+  }
+
+  if (screen === "subscription") {
+    return (
+      <SubscriptionScreen
+        onBack={() => setScreen(adaptResult ? "result" : "upload")}
+      />
+    );
+  }
+
+  if (screen === "upload") {
+    return (
+      <UploadScreen
+        tab={tab}
+        pastedText={pastedText}
+        fileState={fileState}
+        isDragging={isDragging}
+        fileInputRef={fileInputRef}
+        onTabChange={setTab}
+        onPastedTextChange={setPastedText}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onFileInput={handleFileInput}
+        onContinue={handleContinue}
+        canContinue={!!content}
+      />
+    );
+  }
+
+  // screen === "configure"
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <ConfigScreen
+      perfil={perfil}
+      subject={subject}
+      supportDegree={supportDegree}
+      interestsInput={interestsInput}
+      educationalLevel={educationalLevel}
+      configError={configError}
+      showSecondaryWarning={showSecondaryWarning}
+      onPerfilChange={setPerfil}
+      onSubjectChange={setSubject}
+      onSupportDegreeChange={setSupportDegree}
+      onInterestsChange={setInterestsInput}
+      onEducationalLevelChange={setEducationalLevel}
+      onBack={() => { setScreen("upload"); setConfigError(""); }}
+      onGenerate={() => void handleGenerate()}
+      onDismissWarning={() => setShowSecondaryWarning(false)}
+      onBackFromWarning={() => { setShowSecondaryWarning(false); setScreen("upload"); setConfigError(""); }}
+    />
   );
 }
