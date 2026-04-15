@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f9ff;
+  --foreground: #1a2540;
+  --brand-blue: #0b4fb3;
+  --brand-green: #68c63e;
+  --brand-orange: #f59e0b;
+  --brand-pink: #ff3b6b;
+
+  /* AdaptAula warm palette (Stitch design) */
+  --aa-cream: #FAF7F2;
+  --aa-green: #7BAF7F;
+  --aa-green-dark: #4A7C59;
+  --aa-green-light: rgba(123, 175, 127, 0.10);
+  --aa-orange: #E8834A;
+  --aa-text: #2C3B2D;
+  --aa-text-muted: #6B7A6C;
 }
 
 @theme inline {
@@ -22,5 +35,104 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  background-image:
+    radial-gradient(1200px 600px at 10% -20%, rgba(11, 79, 179, 0.08), transparent 55%),
+    radial-gradient(1000px 500px at 100% 0%, rgba(255, 59, 107, 0.08), transparent 50%),
+    radial-gradient(900px 420px at 50% 100%, rgba(104, 198, 62, 0.08), transparent 60%);
+}
+
+/* ── AdaptAula screen base ───────────────────────────────────────────────── */
+.aa-screen {
+  min-height: 100svh;
+  background-color: var(--aa-cream);
+  color: var(--aa-text);
+}
+
+/* ── Drag & drop zone ────────────────────────────────────────────────────── */
+@keyframes aa-dropzone-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(123, 175, 127, 0.40); }
+  50%       { box-shadow: 0 0 0 10px rgba(123, 175, 127, 0); }
+}
+
+.aa-dropzone-idle {
+  border: 2px dashed var(--aa-green);
+  background: #fff;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.aa-dropzone-idle:hover {
+  background: var(--aa-green-light);
+  border-color: var(--aa-green-dark);
+}
+
+.aa-dropzone-active {
+  border: 2px solid var(--aa-green) !important;
+  background: var(--aa-green-light) !important;
+  animation: aa-dropzone-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Toast notifications ─────────────────────────────────────────────────── */
+@keyframes aa-toast-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes aa-toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(24px); }
+}
+
+.aa-toast {
+  animation: aa-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Skeleton shimmer ────────────────────────────────────────────────────── */
+@keyframes aa-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.aa-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #dceadc;
+  border-radius: 10px;
+}
+
+.aa-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  animation: aa-shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+@keyframes aa-progress-fill {
+  from { width: 2%; }
+  to   { width: 88%; }
+}
+
+.aa-progress-bar {
+  height: 6px;
+  background: var(--aa-green);
+  border-radius: 9999px;
+  animation: aa-progress-fill 28s cubic-bezier(0.1, 0, 0.3, 1) forwards;
+}
+
+/* ── Result block reveal ─────────────────────────────────────────────────── */
+@keyframes aa-block-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.aa-result-block {
+  opacity: 0;
+  animation: aa-block-in 0.35s ease-out forwards;
 }
