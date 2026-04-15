@@ -165,9 +165,26 @@ user_styles       — id, user_id, name, description, ...
 
 ## Optimizaciones aplicadas
 
-- `adapt/route.ts` v4: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE (caché implícita Gemini)
+- `adapt/route.ts` v4→v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE (caché implícita Gemini)
+- `adapt/route.ts` v5: `streamGenerateContent?alt=sse` + fallback a `generateContent`
 - `style-analysis/route.ts`: console.log eliminados, responseMimeType json, temperature 0.2
 - **knip**: ✅ zero findings — 10 archivos + 9 exports eliminados, build 14.3s
+
+---
+
+## Mejoras implementadas
+
+### Sprint 1 — UI/UX alta prioridad (commits 526d737→eee13aa)
+- **Metadata SEO**: `layout.tsx` título, descripción, openGraph, twitter card, `lang="es"`
+- **Historial `/history`**: rediseño completo tokens AA, filtros perfil+fecha, modal iframe `result_html`, estado vacío SVG
+- **Toast system**: `hooks/useToast.ts` + `components/ui/Toast.tsx` (4 variantes, auto-dismiss 4s, `aria-live`)
+- **Accesibilidad ConfigScreen**: `role=radiogroup`, `aria-checked`, `aria-describedby`, `htmlFor`+`id`, `.sr-only`
+
+### Sprint 2 — Backend y arquitectura (commits a931e4e→77e7f0b)
+- **Streaming Gemini**: SSE `delta`/`done`/`error`, progreso real en barra (elimina fake 28s), fallback automático
+- **Rate limiting**: `lib/rateLimit.ts` ventana deslizante 60s (5 anon / 20 auth), headers `X-RateLimit-*`, toast warning 429
+- **Error boundaries**: `app/error.tsx`, `app/history/error.tsx`, `components/ErrorBoundary.tsx` con `onError`→toast
+- **Limpieza legacy**: eliminados `/upload`, `/result`, `/adapt`, `/workspace` (14 rutas activas)
 
 ---
 
