@@ -29,6 +29,7 @@ import {
 } from "@/lib/pictogramResolver";
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -379,6 +380,42 @@ export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
+  // ── Rate limiting (antes del stream) ──────────────────────────────────────
+  // Para conocer el userId en la comprobación de límite necesitamos validar
+  // el token previamente. Creamos un cliente temporal solo para esto.
+  let rateLimitUserId = "";
+  if (token) {
+    const rlClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const { data } = await rlClient.auth.getUser(token);
+    rateLimitUserId = data.user?.id ?? "";
+  }
+
+  const clientIp = getClientIp(req.headers);
+  const rl = checkRateLimit(clientIp, rateLimitUserId);
+
+  const rlHeaders = {
+    "X-RateLimit-Limit": String(rl.limit),
+    "X-RateLimit-Remaining": String(rl.remaining),
+    "X-RateLimit-Reset": String(rl.resetInSeconds),
+  };
+
+  if (!rl.allowed) {
+    return new Response(
+      JSON.stringify({ error: "RATE_LIMIT", retryAfter: rl.resetInSeconds }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rl.resetInSeconds),
+          ...rlHeaders,
+        },
+      },
+    );
+  }
+
   const {
     content,
     workType,
@@ -554,6 +591,7 @@ export async function POST(req: Request) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-store",
       "Connection": "keep-alive",
+      ...rlHeaders,
     },
   });
 }

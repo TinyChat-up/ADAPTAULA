@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useToast } from "@/hooks/useToast";
 import type { Subject, AdaptationType, SupportDegree } from "@/lib/adaptationRules";
 
 import UploadScreen from "@/components/screens/UploadScreen";
@@ -69,6 +70,7 @@ function injectAndStripStyles(html: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const { toast } = useToast();
 
   // ── Screen ───────────────────────────────────────────────────────────────────
   const [screen, setScreen] = useState<Screen>("upload");
@@ -207,16 +209,19 @@ export default function HomePage() {
 
       // Errores HTTP antes del stream (ej: 400, 429 por rate limit)
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}) as Record<string, unknown>) as {
+        const errData = await res.json().catch(() => ({})) as {
           error?: string;
           retryAfter?: number;
         };
-        const retryMsg = errData.retryAfter ? ` Espera ${errData.retryAfter} segundos.` : " Espera unos segundos.";
-        setConfigError(
-          res.status === 429
-            ? `Has alcanzado el límite temporal.${retryMsg}`
-            : (errData.error ?? "No se pudo generar la adaptación. Inténtalo de nuevo."),
-        );
+        if (res.status === 429) {
+          const wait = errData.retryAfter ?? 60;
+          toast(
+            `Has alcanzado el límite de adaptaciones. Espera ${wait} segundos.`,
+            "warning",
+          );
+        } else {
+          setConfigError(errData.error ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
+        }
         setScreen("configure");
         return;
       }
