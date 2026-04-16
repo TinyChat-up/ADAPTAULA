@@ -1,10 +1,10 @@
-// app/api/adapt/route.ts — v5
-// Streaming Gemini con SSE + fallback a generateContent
-// Cambios v5:
-//   - streamGenerateContent?alt=sse → chunks de progreso real
-//   - POST devuelve text/event-stream con {type:'delta'|'done'|'error'}
-//   - Fallback a callGemini() si el stream falla
-//   - auth + pictogramas siguen en paralelo (Promise.all)
+// app/api/adapt/route.ts — v6
+// Sprint C.1: multi-provider IA (Gemini para free, GPT-4.1 para pro)
+// Cambios v6:
+//   - streamGemini/callGemini extraídos a lib/ai/providers/gemini.ts
+//   - Selección de proveedor via getAIProvider(plan) — lib/ai/provider.ts
+//   - Plan resuelto una sola vez antes del stream (reutiliza el getUserPlan del trial check)
+//   - Comportamiento externo del endpoint sin cambios
 
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -30,8 +30,8 @@ import {
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
-import { GEMINI_MODEL } from "@/lib/ai/model";
-import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE } from "@/lib/subscriptionService";
+import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
+import { getAIProvider } from "@/lib/ai/provider";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -40,13 +40,6 @@ type AdaptationDecision = {
   appliedAdjustment: string;
   pedagogicalReason: string;
 };
-
-interface GeminiStreamChunk {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-    finishReason?: string;
-  }>;
-}
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -76,125 +69,6 @@ function normalizeDecisions(raw: unknown): AdaptationDecision[] {
     })
     .filter((i): i is AdaptationDecision => Boolean(i))
     .slice(0, 10);
-}
-
-// ─── Llamada Gemini — no-streaming (fallback) ─────────────────────────────────
-
-async function callGemini(
-  userPrompt: string,
-  systemPrompt: string,
-): Promise<Record<string, unknown>> {
-  const model = GEMINI_MODEL;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          maxOutputTokens: 16384,
-        },
-      }),
-    },
-  );
-
-  const data = await response.json() as Record<string, unknown>;
-  if (!response.ok) {
-    const errData = data as { error?: { message?: string } };
-    throw new Error(errData?.error?.message || "Error de Gemini");
-  }
-
-  const candidates = data?.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined;
-  const rawText = candidates?.[0]?.content?.parts
-    ?.map((p) => p.text || "")
-    .join("")
-    .trim() || "";
-
-  if (!rawText) throw new Error("Gemini no devolvió texto");
-
-  const match = rawText.match(/\{[\s\S]*\}/);
-  return JSON.parse(match ? match[0] : rawText) as Record<string, unknown>;
-}
-
-// ─── Llamada Gemini — streaming ───────────────────────────────────────────────
-// Devuelve el JSON parseado acumulando chunks SSE de Gemini.
-// onProgress recibe el nº de chars acumulados (para estimar % progreso).
-
-async function streamGemini(
-  userPrompt: string,
-  systemPrompt: string,
-  onProgress: (accumulatedChars: number) => void,
-): Promise<Record<string, unknown>> {
-  const model = GEMINI_MODEL;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          maxOutputTokens: 16384,
-        },
-      }),
-    },
-  );
-
-  if (!response.ok || !response.body) {
-    const errorText = await response.text().catch(() => "");
-    let errorMessage = "Error de Gemini";
-    try {
-      const parsed = JSON.parse(errorText) as { error?: { message?: string } };
-      errorMessage = parsed?.error?.message || errorMessage;
-    } catch { /* ignore */ }
-    throw new Error(errorMessage);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let accumulated = "";
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-        const payload = trimmed.slice(6).trim();
-        if (!payload || payload === "[DONE]") continue;
-
-        try {
-          const chunk = JSON.parse(payload) as GeminiStreamChunk;
-          const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          if (text) {
-            accumulated += text;
-            onProgress(accumulated.length);
-          }
-        } catch { /* ignore malformed chunk */ }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (!accumulated) throw new Error("Gemini streaming no devolvió texto");
-
-  const match = accumulated.match(/\{[\s\S]*\}/);
-  return JSON.parse(match ? match[0] : accumulated) as Record<string, unknown>;
 }
 
 // ─── Construcción del user prompt ─────────────────────────────────────────────
@@ -429,10 +303,12 @@ export async function POST(req: Request) {
     { status: 402, headers: { "Content-Type": "application/json", ...rlHeaders } },
   );
 
+  let userPlan: Plan = "free";
+
   if (rateLimitUserId) {
     // Authenticated user: check plan and DB usage
-    const plan = await getUserPlan(rateLimitUserId);
-    if (plan !== "pro") {
+    userPlan = await getUserPlan(rateLimitUserId);
+    if (userPlan !== "pro") {
       const remaining = await hasFreeTrialRemaining(rateLimitUserId);
       if (!remaining) return trialExhaustedResponse;
     }
@@ -445,6 +321,8 @@ export async function POST(req: Request) {
     );
     if (hasTrialCookie) return trialExhaustedResponse;
   }
+
+  const aiProvider = getAIProvider(userPlan);
 
   const {
     content,
@@ -543,22 +421,20 @@ export async function POST(req: Request) {
           ? getSystemPromptForProfile(config.learningProfile)
           : FALLBACK_SYSTEM_PROMPT;
 
-        // ── Streaming Gemini con fallback ─────────────────────────────────
+        // ── Llamada al proveedor IA ───────────────────────────────────────
         let raw: Record<string, unknown>;
         let lastSentProgress = 0;
 
-        try {
-          raw = await streamGemini(userPrompt, systemPrompt, (accumulated) => {
-            const pct = Math.min(95, Math.round((accumulated / ESTIMATED_CHARS) * 100));
-            if (pct > lastSentProgress) {
-              lastSentProgress = pct;
-              controller.enqueue(sseChunk({ type: "delta", progress: pct }));
-            }
-          });
-        } catch (streamErr) {
-          console.error("STREAM_FALLBACK:", streamErr);
-          raw = await callGemini(userPrompt, systemPrompt);
-        }
+        const rawText = await aiProvider.stream(systemPrompt, userPrompt, (accumulated) => {
+          const pct = Math.min(95, Math.round((accumulated / ESTIMATED_CHARS) * 100));
+          if (pct > lastSentProgress) {
+            lastSentProgress = pct;
+            controller.enqueue(sseChunk({ type: "delta", progress: pct }));
+          }
+        });
+
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        raw = JSON.parse(jsonMatch ? jsonMatch[0] : rawText) as Record<string, unknown>;
 
         // ── Procesar resultado ────────────────────────────────────────────
         const rawHtml =

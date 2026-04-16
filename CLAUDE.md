@@ -3,22 +3,23 @@
 ---
 
 # AUDITORÍA TÉCNICA — AdaptAula
-**Fecha**: 2026-04-16 | **Sprint**: B.2 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
+**Fecha**: 2026-04-16 | **Sprint**: C.1 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
 
 ---
 
 ## 1. RESUMEN EJECUTIVO
 
-AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, motor de adaptación pedagógica sobre Gemini 2.5 Flash con streaming SSE, integración ARASAAC para pictogramas, y auth/DB en Supabase. El flujo principal funciona de extremo a extremo.
+AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, motor de adaptación pedagógica con proveedor IA seleccionable (Gemini free / GPT-4.1 pro) con streaming SSE, integración ARASAAC para pictogramas, y auth/DB en Supabase. El flujo principal funciona de extremo a extremo.
 
-**Estado tras Sprint A.1 + A.2 + B.1**:
+**Estado tras Sprint A.1 + A.2 + B.1 + B.2 + C.1**:
 - ✅ Middleware de rutas activo (`proxy.ts` es la convención correcta en Next.js 16.2.1)
-- ✅ `/api/export/pdf` protegido con auth (Bearer token)
+- ✅ `/api/export/pdf` y `/api/export/docx` protegidos con auth + plan check
 - ✅ `GEMINI_MODEL` centralizado en `lib/ai/model.ts`
 - ✅ Código legacy eliminado (8 archivos + src/)
 - ✅ Infraestructura Stripe real: tabla subscriptions, checkout, webhook, subscriptionService
 - ✅ SubscriptionScreen conectado a Stripe Checkout (botón Pro funcional)
-- ⚠️ Gating en adapt/export aún no aplicado (Sprint B.2 pendiente)
+- ✅ Gating free trial (1 adaptación): 402 en adapt, 403 en export para free/anónimo
+- ✅ Multi-provider IA: `lib/ai/provider.ts` + providers/gemini.ts + providers/openai.ts
 
 ---
 
@@ -30,7 +31,7 @@ AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, moto
 | UI | React 19 + TypeScript 5 strict | sin `any` innecesarios |
 | Estilos | Tailwind CSS 4 + `@theme` | CSS variables `--aa-*` |
 | Auth + DB | Supabase (SSR + browser client) | email/password, confirmación |
-| IA | Google Gemini 2.5 Flash | streaming SSE + fallback generateContent |
+| IA | Gemini 2.5 Flash (free) / GPT-4.1 (pro) | `AIProvider` interface, factory `getAIProvider(plan)` |
 | Pictogramas | ARASAAC API pública | batching 5 en 5, blacklist matemática |
 | Export | docx (DOCX) + pdf-lib (PDF) | DOCX requiere auth, PDF requiere auth |
 | Rate limit | In-memory Map (lib/rateLimit.ts) | 5 anon / 20 auth / 60s (se pierde en cold start) |
@@ -79,7 +80,11 @@ components/
 lib/
 ├── ai/
 │   ├── model.ts            ← GEMINI_MODEL = env || "gemini-2.5-flash"
-│   └── systemPrompts.ts    ← 6 system prompts por perfil NEE
+│   ├── provider.ts         ← AIProvider interface + getAIProvider(plan) factory
+│   ├── systemPrompts.ts    ← 6 system prompts por perfil NEE
+│   └── providers/
+│       ├── gemini.ts       ← GeminiProvider (streaming SSE + fallback)
+│       └── openai.ts       ← OpenAIProvider (GPT-4.1, json_object mode)
 ├── adaptationRules.ts      ← tipos + reglas pedagógicas (fuente de verdad)
 ├── adaptationsService.ts   ← CRUD tabla adaptations
 ├── arasaac.ts              ← utilidades ARASAAC avanzadas
@@ -127,7 +132,8 @@ proxy.ts                    ← middleware activo en Next.js 16.2.1
 | Código legacy eliminado | **✅ LIMPIO** | 8 archivos + src/ eliminados en Sprint A.2 |
 | **Infraestructura Stripe** | **✅ IMPLEMENTADO** | checkout + webhook + subscriptionService + tabla subscriptions |
 | **SubscriptionScreen checkout** | **✅ CONECTADO** | Botón Pro → /api/checkout → Stripe Checkout |
-| **Gating por plan** | **✅ IMPLEMENTADO** | adapt 402 si free≥3/mes; docx 403 si free |
+| **Gating por plan** | **✅ IMPLEMENTADO** | adapt 402 si free≥1 (trial); docx/pdf 403 si free |
+| **Multi-provider IA** | **✅ IMPLEMENTADO** | free=Gemini, pro=GPT-4.1 via AIProvider interface |
 | Rate limit sin persistencia | **⚠️ PARCIAL** | Map en memoria, se pierde en cold start |
 | Estilo en adapt route | **⚠️ NO CONECTADO** | styleContextService.ts existe pero adapt route no lo usa |
 | Feedback de adaptaciones | **⚠️ RESERVADO** | adaptationFeedbackService.ts sin UI (Sprint B) |
@@ -179,12 +185,14 @@ export const config = { matcher: [...] }
 ```
 POST /api/adapt
   → checkRateLimit(ip, userId) — 401/429 antes del stream
+  → getUserPlan(userId) — resuelve plan UNA vez (reusado para getAIProvider)
+  → hasFreeTrialRemaining() / cookie check — 402 FREE_TRIAL_EXHAUSTED si agotado
+  → getAIProvider(plan) — GeminiProvider (free) o OpenAIProvider (pro)
   → Promise.all([getUser, resolvePictograms])
-  → streamGemini() → ReadableStream text/event-stream
+  → aiProvider.stream() → ReadableStream text/event-stream
       data: {"type":"delta","progress":N}\n\n    ← 0-95%
       data: {"type":"done","result":{...}}\n\n    ← 100%
       data: {"type":"error","message":"..."}\n\n  ← error
-  → fallback a callGemini() si stream falla
   → injectCssIntoHtml() — CSS server-side (−550 tokens)
 ```
 
@@ -466,29 +474,33 @@ async function getUserPlan(userId: string): Promise<'free' | 'pro'> {
 
 ---
 
-## 14. BACKLOG SPRINT C — PROVEEDOR IA PREMIUM
+## 14. SPRINT C.1 — PROVEEDOR IA PREMIUM ✅ COMPLETADO
 
-**Objetivo**: Soportar modelos premium (GPT-4o, Claude Sonnet) sin reescribir route.ts.
+**Objetivo**: free → Gemini 2.5 Flash; pro → GPT-4.1. Sin reescribir el flujo de route.ts.
 
-**Archivos a crear/tocar**:
+**Archivos creados**:
 ```
-lib/ai/provider.ts              NUEVO — interfaz AIProvider + factory getAIProvider()
-lib/ai/providers/gemini.ts      NUEVO — extraer streamGemini + callGemini de route.ts
-lib/ai/providers/openai.ts      NUEVO — OpenAI chat completions streaming
-lib/ai/providers/anthropic.ts   NUEVO — Claude messages streaming
-app/api/adapt/route.ts          reemplazar callGemini/streamGemini por getAIProvider()
+lib/ai/provider.ts              AIProvider interface + getAIProvider(plan) factory
+lib/ai/providers/gemini.ts      GeminiProvider (streaming SSE + fallback non-streaming)
+lib/ai/providers/openai.ts      OpenAIProvider (GPT-4.1, json_object, streaming)
 ```
 
-**Interfaz mínima**:
+**Cambios en adapt/route.ts (v6)**:
+- Eliminados `callGemini()` y `streamGemini()` (extraídos a providers/gemini.ts)
+- `getUserPlan()` resuelve el plan una sola vez antes del stream
+- `getAIProvider(userPlan)` selecciona proveedor en ese momento
+- Dentro del stream: `aiProvider.stream(systemPrompt, userPrompt, onProgress)` → string → JSON.parse
+
+**Interfaz**:
 ```typescript
 export interface AIProvider {
-  stream(system: string, user: string, onProgress: (chars: number) => void): Promise<Record<string, unknown>>;
-  generate(system: string, user: string): Promise<Record<string, unknown>>;
+  stream(systemPrompt: string, userPrompt: string, onProgress: (chars: number) => void): Promise<string>;
 }
-export function getAIProvider(model?: string): AIProvider { ... }
+export function getAIProvider(plan: Plan): AIProvider
+// free → GeminiProvider; pro + OPENAI_API_KEY → OpenAIProvider; pro sin key → Gemini fallback
 ```
 
-**Output esperado**: cambiar a GPT-4o solo requiere `AI_MODEL=gpt-4o` en env.
+**Variable de entorno nueva**: `OPENAI_API_KEY` (opcional; sin ella, pro también usa Gemini)
 
 ---
 
@@ -507,10 +519,9 @@ STRIPE_SECRET_KEY=                 # sk_test_... o sk_live_...
 STRIPE_WEBHOOK_SECRET=             # whsec_... de Stripe Dashboard o CLI
 STRIPE_PRO_PRICE_ID=               # price_... del plan Pro en Stripe
 
-# Sprint C (multi-IA)
-AI_MODEL=gemini-2.5-flash          # o gpt-4o, claude-sonnet-4-6
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
+# Sprint C.1 (multi-IA) — OPENAI_API_KEY activa GPT-4.1 para usuarios Pro
+OPENAI_API_KEY=                    # opcional; sin ella, pro usa Gemini como fallback
+OPENAI_MODEL=gpt-4.1              # opcional, default gpt-4.1
 
 # Interno
 NEXT_PUBLIC_SITE_URL=https://adaptaula.com
@@ -539,6 +550,7 @@ INTERNAL_FEEDBACK_ALLOWED_EMAILS=email1@,email2@
 
 ## OPTIMIZACIONES ACUMULADAS
 
+- `adapt/route.ts` v6: multi-provider IA (Gemini free / GPT-4.1 pro), plan resuelto una sola vez antes del stream, callGemini/streamGemini extraídos a providers/
 - `adapt/route.ts` v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE, streaming SSE, GEMINI_MODEL centralizado
 - `style-analysis/route.ts`: responseMimeType json, temperature 0.2
 - Rate limit: 5 anon / 20 auth / 60s
