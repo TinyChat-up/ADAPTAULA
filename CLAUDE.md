@@ -604,8 +604,57 @@ INTERNAL_FEEDBACK_ALLOWED_EMAILS=email1@,email2@
 
 ---
 
+## 17. SPRINT QA — HARDENING MONETIZACIÓN ✅ COMPLETADO
+
+### Bugs encontrados y corregidos
+
+#### Bug 1 — CRÍTICO: subscriptionService usaba browser client para reads en servidor
+**Archivo**: `lib/subscriptionService.ts`
+**Problema**: `getActiveSubscription` y `getAdaptationUsage` usaban `supabase` (createBrowserClient)
+importado de `supabaseClient.ts`. Desde un API route (server Node.js) no hay browser context,
+`auth.uid()` es null. Si RLS requiere `auth.uid() = user_id`, los reads devuelven vacío:
+- `getUserPlan` siempre retorna "free" → Pro usuarios usan Gemini en vez de GPT-4.1
+- `getAdaptationUsage` retorna 0 → trial nunca agotado → adaptaciones ilimitadas gratis
+- export DOCX/PDF: `getUserPlan` → "free" → 403 para todos, incluidos Pro
+**Corrección**: Todas las funciones de lectura del servidor ahora usan `createServiceClient()`
+(service role key, bypassa RLS correctamente desde server context).
+
+#### Bug 2 — MEDIO: PDF exportable durante estado de carga del plan
+**Archivo**: `app/page.tsx` — `handlePdf` y `handleDocx`
+**Problema**: El gate era `if (userPlan === "free")`. Cuando `userPlan === null` (cargando),
+la condición es false y PDF proceede. Como PDF es 100% client-side (iframe + browser print,
+sin API enforcement), un usuario free podía imprimir la adaptación durante la ventana de
+carga (~200ms post-resultado).
+**Corrección**: Cambiado a `if (userPlan !== "pro")`. Null y "free" ambos muestran el modal.
+
+### Riesgos residuales documentados (aceptados)
+
+| Riesgo | Severidad | Motivo de no corregir |
+|--------|-----------|----------------------|
+| Anonymous trial bypass via cookie clear | Baja | Documentado, soft limit intencionado |
+| `getAdaptationUsage` falla silenciosa (returns 0) | Baja | Fail-open para no bloquear por errores transitorios de DB |
+| Rate limit in-memory se resetea en cold start | Media | Requiere Redis/Supabase, fuera del alcance del sprint |
+| PDF export es client-side (no server enforcement) | Baja | Mitigado con el gate `!== "pro"` corregido |
+| `hasFreeTrialRemaining` hace 2 llamadas a getUserPlan | Info | Redundancia menor, no bug funcional |
+
+### Estado post-QA
+
+| Layer | Estado |
+|-------|--------|
+| `/api/adapt` trial enforcement | ✅ Correcto (service client) |
+| `/api/export/docx` plan check | ✅ Correcto (service client) |
+| `/api/export/pdf` plan check | ✅ Correcto (service client) |
+| `/api/checkout` duplicate guard | ✅ Correcto |
+| `/api/webhooks/stripe` firma + upsert | ✅ Correcto |
+| Client-side PDF gate | ✅ Corregido (`!== "pro"`) |
+| Client-side DOCX gate | ✅ Corregido (`!== "pro"`) |
+| Plan loading state UX | ✅ Modal bloqueante durante carga |
+
+---
+
 ## OPTIMIZACIONES ACUMULADAS
 
+- QA hardening: subscriptionService reads → service client; PDF/DOCX gates → `!== "pro"` (null-safe)
 - `adapt/route.ts` v7: generationTier premium, PREMIUM_SYSTEM_SUFFIX, estilo docente en Pro, logging, JSON.parse try/catch
 - `adapt/route.ts` v6: multi-provider IA (Gemini free / GPT-4.1 pro), plan resuelto una sola vez antes del stream, callGemini/streamGemini extraídos a providers/
 - `adapt/route.ts` v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE, streaming SSE, GEMINI_MODEL centralizado

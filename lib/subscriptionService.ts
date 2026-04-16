@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabaseClient";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,7 +85,8 @@ export async function getUserPlan(userId: string): Promise<Plan> {
  * AND its current_period_end is in the future.
  */
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRow | null> {
-  const { data, error } = await supabase
+  const db = createServiceClient();
+  const { data, error } = await db
     .from("subscriptions")
     .select("*")
     .eq("user_id", userId)
@@ -113,7 +113,8 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
  * Fails open (returns 0) on DB error to avoid blocking on transient issues.
  */
 export async function getAdaptationUsage(userId: string): Promise<number> {
-  const { count, error } = await supabase
+  const db = createServiceClient();
+  const { count, error } = await db
     .from("adaptations")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId);

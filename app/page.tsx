@@ -354,7 +354,7 @@ export default function HomePage() {
   // ── PDF (hidden iframe print) ─────────────────────────────────────────────────
   const handlePdf = () => {
     if (!adaptResult || pdfBusy) return;
-    if (userPlan === "free") { setShowExportModal(true); return; }
+    if (userPlan !== "pro") { setShowExportModal(true); return; }
     setPdfBusy(true);
     try {
       const iframe = document.createElement("iframe");
@@ -387,7 +387,7 @@ export default function HomePage() {
   // ── DOCX ──────────────────────────────────────────────────────────────────────
   const handleDocx = async () => {
     if (!adaptResult || docxBusy) return;
-    if (userPlan === "free") { setShowExportModal(true); return; }
+    if (userPlan !== "pro") { setShowExportModal(true); return; }
     setDocxBusy(true);
     setDocxError("");
     try {
