@@ -30,6 +30,7 @@ import {
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { GEMINI_MODEL } from "@/lib/ai/model";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ async function callGemini(
   userPrompt: string,
   systemPrompt: string,
 ): Promise<Record<string, unknown>> {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = GEMINI_MODEL;
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {
@@ -127,7 +128,7 @@ async function streamGemini(
   systemPrompt: string,
   onProgress: (accumulatedChars: number) => void,
 ): Promise<Record<string, unknown>> {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = GEMINI_MODEL;
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
     {
