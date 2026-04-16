@@ -9,6 +9,7 @@ import UploadScreen from "@/components/screens/UploadScreen";
 import ConfigScreen from "@/components/screens/ConfigScreen";
 import GeneratingScreen from "@/components/screens/GeneratingScreen";
 import ResultScreen from "@/components/screens/ResultScreen";
+import ResultError from "@/components/ui/ResultError";
 import SubscriptionScreen from "@/components/screens/SubscriptionScreen";
 import ProGateModal from "@/components/ui/ProGateModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -138,6 +139,7 @@ export default function HomePage() {
   const [adaptResult, setAdaptResult] = useState<AdaptResult | null>(null);
   const [cleanHtml, setCleanHtml] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
+  const [adaptError, setAdaptError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docxBusy, setDocxBusy] = useState(false);
   const [docxError, setDocxError] = useState("");
@@ -215,6 +217,7 @@ export default function HomePage() {
   // ── Generate ──────────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     setConfigError("");
+    setAdaptError(null);
     setGenerationProgress(0);
     setScreen("generating");
     try {
@@ -309,16 +312,16 @@ export default function HomePage() {
             document.cookie = "aa-trial=1; max-age=31536000; path=/; SameSite=Lax";
             break outer;
           } else if (event.type === "error") {
-            setConfigError(event.message ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
-            setScreen("configure");
+            setAdaptError(event.message ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
+            setScreen("result");
             return;
           }
         }
       }
 
       if (!result?.documentHtml) {
-        setConfigError("No se pudo generar la adaptación. Inténtalo de nuevo.");
-        setScreen("configure");
+        setAdaptError("No se pudo generar la adaptación. Inténtalo de nuevo.");
+        setScreen("result");
         return;
       }
 
@@ -327,8 +330,8 @@ export default function HomePage() {
       setAdaptResult(result);
       setScreen("result");
     } catch {
-      setConfigError("Error de red al generar la adaptación. Inténtalo de nuevo.");
-      setScreen("configure");
+      setAdaptError("Error de red al generar la adaptación. Inténtalo de nuevo.");
+      setScreen("result");
     }
   };
 
@@ -342,6 +345,7 @@ export default function HomePage() {
     setSupportDegree("medio");
     setInterestsInput("");
     setConfigError("");
+    setAdaptError(null);
     setEducationalLevel("primaria");
     setShowSecondaryWarning(false);
     setAdaptResult(null);
@@ -455,6 +459,16 @@ export default function HomePage() {
         subject={subject}
         supportDegree={supportDegree}
         progress={generationProgress > 0 ? generationProgress : undefined}
+      />
+    );
+  }
+
+  if (screen === "result" && adaptError) {
+    return (
+      <ResultError
+        message={adaptError}
+        onBack={() => { setAdaptError(null); setScreen("configure"); }}
+        onRetry={() => { setAdaptError(null); void handleGenerate(); }}
       />
     );
   }
