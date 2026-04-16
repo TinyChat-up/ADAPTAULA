@@ -3,17 +3,39 @@
 ---
 
 # AUDITORÍA TÉCNICA — AdaptAula
-**Fecha**: 2026-04-16 | **Build**: ✅ limpio (14 rutas) | **Fuente**: inspección directa del código
+**Fecha**: 2026-04-16 | **Sprint**: A.2 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
 
 ---
 
 ## 1. RESUMEN EJECUTIVO
 
-AdaptAula es una Next.js 16 SPA con 5 pantallas en máquina de estados, motor de adaptación pedagógica sobre Gemini 2.5 Flash, integración ARASAAC para pictogramas, y auth/DB en Supabase. El flujo principal funciona de extremo a extremo. Hay tres zonas de riesgo crítico para las próximas fases: (1) **el middleware de protección de rutas no está activo** (`proxy.ts` nunca se carga), (2) **el paywall es 100% UI mockup sin backend** (sin Stripe ni columna de plan en DB), (3) **Gemini está acoplado en dos lugares** en el route de adapt con lógica duplicada.
+AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, motor de adaptación pedagógica sobre Gemini 2.5 Flash con streaming SSE, integración ARASAAC para pictogramas, y auth/DB en Supabase. El flujo principal funciona de extremo a extremo.
+
+**Estado tras Sprint A.1 + A.2**:
+- ✅ Middleware de rutas activo (`proxy.ts` es la convención correcta en Next.js 16.2.1)
+- ✅ `/api/export/pdf` protegido con auth (Bearer token)
+- ✅ `GEMINI_MODEL` centralizado en `lib/ai/model.ts`
+- ✅ Código legacy eliminado (8 archivos + src/)
+- 🔴 Paywall sigue siendo 100% UI mockup sin backend (Sprint B pendiente)
 
 ---
 
-## 2. MAPA DE ARQUITECTURA REAL
+## 2. STACK REAL
+
+| Capa | Tecnología | Notas |
+|------|-----------|-------|
+| Framework | Next.js 16.2.1 App Router | `proxy.ts` = middleware (convención 16.x) |
+| UI | React 19 + TypeScript 5 strict | sin `any` innecesarios |
+| Estilos | Tailwind CSS 4 + `@theme` | CSS variables `--aa-*` |
+| Auth + DB | Supabase (SSR + browser client) | email/password, confirmación |
+| IA | Google Gemini 2.5 Flash | streaming SSE + fallback generateContent |
+| Pictogramas | ARASAAC API pública | batching 5 en 5, blacklist matemática |
+| Export | docx (DOCX) + pdf-lib (PDF) | DOCX requiere auth, PDF requiere auth |
+| Rate limit | In-memory Map (lib/rateLimit.ts) | 5 anon / 20 auth / 60s (se pierde en cold start) |
+
+---
+
+## 3. MAPA DE ARQUITECTURA REAL
 
 ```
 app/
@@ -25,449 +47,343 @@ app/
 │   └── SubscriptionScreen  ← MOCKUP UI, sin Stripe, sin backend
 │
 ├── login/page.tsx          ← Supabase email/password, Suspense boundary
-├── history/page.tsx        ← adaptations table, filtros perfil+fecha, modal iframe
+├── history/page.tsx        ← tabla adaptations, filtros perfil+fecha, modal iframe
 ├── history/error.tsx       ← error boundary específico
 ├── error.tsx               ← error boundary raíz
-├── styles/page.tsx         ← IMPLEMENTADO (~600 líneas), usa stylesService.ts
-│                              (no es esqueleto — gestión completa de estilos)
+├── styles/page.tsx         ← IMPLEMENTADO (~600 líneas), stylesService CRUD completo
 ├── admin/feedback/page.tsx ← redirect a /internal/feedback
-├── internal/feedback/page.tsx ← SSR, requiere INTERNAL_FEEDBACK_ALLOWED_EMAILS
-│
-├── api/
-│   ├── adapt/route.ts      ← MOTOR: SSE stream + fallback, rate limit, CSS server-side
-│   ├── extract-text/       ← PDF (unpdf) + DOCX (mammoth), sin auth, 10MB límite
-│   ├── style-analysis/     ← Gemini T=0.2, REQUIERE auth, timeout 45s
-│   ├── export/docx/        ← docx lib, pictogramas incrustados, REQUIERE auth
-│   ├── export/pdf/         ← pdf-lib, paginación manual, NO requiere auth
-│   └── arasaac/search/     ← proxy API pública, sin auth, no cache persistente
-│
+└── internal/feedback/page.tsx ← SSR, requiere INTERNAL_FEEDBACK_ALLOWED_EMAILS
+
+api/
+├── adapt/route.ts          ← MOTOR: SSE stream + fallback, rate limit, CSS server-side
+├── extract-text/route.ts   ← PDF (unpdf) + DOCX (mammoth), sin auth, 10MB límite
+├── style-analysis/route.ts ← Gemini T=0.2, requiere auth, timeout 45s
+├── export/docx/route.ts    ← docx lib, pictogramas incrustados, requiere auth
+├── export/pdf/route.ts     ← pdf-lib, paginación manual, requiere auth (Sprint A.1)
+└── arasaac/search/route.ts ← proxy API pública, sin auth, sin cache persistente
+
 components/
-├── screens/                ← 5 pantallas SPA (ver arriba)
+├── screens/                ← 5 pantallas SPA
+│   ├── ConfigScreen.tsx    ← a11y completa (role=radiogroup, aria-checked)
+│   ├── GeneratingScreen.tsx← progress prop controlado + animación CSS fallback
+│   ├── ResultScreen.tsx
+│   ├── SubscriptionScreen.tsx ← MOCKUP
+│   └── UploadScreen.tsx
 ├── ui/Toast.tsx            ← Context + useReducer, 4 variantes, auto-dismiss 4s
-├── ErrorBoundary.tsx       ← class component, prop onError para toast
+├── ErrorBoundary.tsx       ← class component, onError prop para toast
 ├── AuthNavButton.tsx       ← detecta sesión, login/logout
-├── BrandLogo.tsx           ← SVG logo
-└── workspace/
-    ├── DocumentCanvas.tsx  ← iframe viewer (sin importadores activos)
-    └── GenerationCompanion.tsx ← UI generación (sin importadores activos)
+└── BrandLogo.tsx
 
 lib/
-├── adaptationRules.ts      ← tipos + reglas pedagógicas (fuente de verdad)
 ├── ai/
 │   ├── model.ts            ← GEMINI_MODEL = env || "gemini-2.5-flash"
 │   └── systemPrompts.ts    ← 6 system prompts por perfil NEE
-├── buildDocumentCss.ts     ← CSS dinámico server-side
+├── adaptationRules.ts      ← tipos + reglas pedagógicas (fuente de verdad)
+├── adaptationsService.ts   ← CRUD tabla adaptations
+├── arasaac.ts              ← utilidades ARASAAC avanzadas
+├── authService.ts          ← wrapper Supabase Auth
+├── buildDocumentCss.ts     ← CSS dinámico server-side (−550 tokens)
+├── export/adaptationExport.ts ← parseo + serialización para export
+├── extractDocumentText.ts  ← wrapper extract-text API
+├── extractPdfText.ts       ← unpdf directo (usado en api/extract-text)
 ├── pictogramResolver.ts    ← ARASAAC batching, blacklist matemática
 ├── rateLimit.ts            ← Map in-memory, ventana 60s
-├── authService.ts          ← wrapper Supabase Auth
+├── stylesService.ts        ← CRUD tabla user_styles + análisis
 ├── supabaseClient.ts       ← createBrowserClient
-├── adaptationsService.ts   ← CRUD tabla adaptations
-├── arasaac.ts              ← utilidades avanzadas (enrichDocument, merge)
-├── stylesService.ts        ← CRUD tabla user_styles, análisis
-├── styleContextService.ts  ← contexto de estilo activo
-├── adaptationFeedbackService.ts ← ratings tabla adaptation_feedback
-├── approvedExamplesService.ts   ← tabla approved_adaptation_examples
-├── documentTemplatesService.ts  ← tabla document_templates
-├── export/adaptationExport.ts   ← parseo + serialización para export
-├── extractDocumentText.ts  ← wrapper (llama a extract-text API)
-├── extractPdfText.ts       ← unpdf directo (usado en api/extract-text)
-├── mock-data.ts            ← arrays de opciones UI — SIN IMPORTADORES ACTIVOS
-│                              (huérfano, puede eliminarse con knip)
-├── document-format.ts      ← applyOutputFormatTemplate (legacy workspace)
-├── document-structure.ts   ← analyzeDocumentStructure (legacy workspace)
-└── [más servicios de workspace legacy]
+│
+│   ── Reservados (sin importadores activos, Sprint B/C) ──
+├── adaptationFeedbackService.ts ← ratings tabla adaptation_feedback (Sprint B UI)
+└── styleContextService.ts  ← resolveStyleContext (conectar a adapt route, Sprint B)
 
-proxy.ts                    ← CÓDIGO CORRECTO pero NUNCA SE EJECUTA
-                               (no hay middleware.ts → protección de rutas INACTIVA)
-src/app/page.tsx            ← landing page estática huérfana (no afecta rutas Next.js)
+proxy.ts                    ← middleware activo en Next.js 16.2.1
+                               (convención: named export `proxy`, NO default)
+                               Protege: /, /workspace, /styles, /history, /internal, /admin
 ```
 
 ---
 
-## 3. TABLA DE ESTADO REAL
+## 4. TABLA DE ESTADO REAL (post Sprint A.2)
 
 | Feature | Estado | Notas |
 |---------|--------|-------|
-| SPA Upload→Config→Generate→Result | **IMPLEMENTADO** | Flujo completo funciona |
-| Streaming SSE Gemini | **IMPLEMENTADO** | `streamGenerateContent?alt=sse` + fallback |
-| Progreso real barra generación | **IMPLEMENTADO** | 0-95% basado en chars, 100% al finalizar |
-| Rate limiting /api/adapt | **IMPLEMENTADO** | 5 anon / 20 auth por minuto, in-memory |
-| Metadata SEO | **IMPLEMENTADO** | title, og, twitter, lang="es" |
-| Error boundaries | **IMPLEMENTADO** | raíz + /history + screens ConfigScreen/ResultScreen |
-| Toast system | **IMPLEMENTADO** | 4 variantes, Context, auto-dismiss |
-| Accesibilidad ConfigScreen | **IMPLEMENTADO** | role=radiogroup, aria-checked, labels |
-| Export PDF | **IMPLEMENTADO** | print dialog via iframe oculto (no pdf-lib real) |
-| Export DOCX | **IMPLEMENTADO** | docx lib, pictogramas incrustados, requiere auth |
-| Auth email/password | **IMPLEMENTADO** | Supabase, confirmation email |
-| Historial /history | **IMPLEMENTADO** | filtros, modal iframe, empty state SVG |
-| Gestión estilos /styles | **IMPLEMENTADO** | ~600 líneas, stylesService CRUD completo |
-| Análisis estilo docente | **IMPLEMENTADO** | Gemini T=0.2, guarda en style_analyses |
-| **Middleware protección rutas** | **🔴 ROTO** | proxy.ts existe pero NO hay middleware.ts → todas las rutas "protegidas" accesibles sin login |
-| **Paywall / Suscripciones** | **🔴 MOCKUP** | SubscriptionScreen es UI sin backend, sin Stripe, sin columna plan en DB |
-| **DOCX export sin auth** | **PARCIAL** | Requiere auth ✓, pero no verifica plan de usuario |
-| Rate limit sin persistencia | **PARCIAL** | Map en memoria, se pierde en deploy/cold start |
-| Gestión estilos en SPA principal | **NO CONECTADO** | /styles existe pero SPA no navega ahí |
-| mock-data.ts | **LEGACY** | Sin importadores activos, candidato a eliminar |
-| document-format.ts / document-structure.ts | **LEGACY** | Usados solo en workspace (eliminado), sin importadores activos |
-| components/workspace/ | **LEGACY** | DocumentCanvas + GenerationCompanion sin importadores |
-| src/app/page.tsx | **LEGACY** | Landing estática huérfana, no afecta build pero confunde |
-| Pictogramas con cache persistente | **NO IMPLEMENTADO** | Cada request consulta ARASAAC desde cero |
-| Tests (unit / e2e) | **NO IMPLEMENTADO** | Cero cobertura |
-| i18n | **NO IMPLEMENTADO** | Hardcoded español |
-| Stripe / pago real | **NO IMPLEMENTADO** | Sólo UI mockup |
+| SPA Upload→Config→Generate→Result | **✅ IMPLEMENTADO** | Flujo completo |
+| Streaming SSE Gemini | **✅ IMPLEMENTADO** | `streamGenerateContent?alt=sse` + fallback |
+| Progreso barra generación | **✅ IMPLEMENTADO** | 0-95% chars, 100% al finalizar |
+| Rate limiting /api/adapt | **✅ IMPLEMENTADO** | 5 anon / 20 auth / 60s, in-memory |
+| Metadata SEO | **✅ IMPLEMENTADO** | title, og, twitter, lang="es" |
+| Error boundaries | **✅ IMPLEMENTADO** | raíz + /history + screens |
+| Toast system | **✅ IMPLEMENTADO** | 4 variantes, Context, auto-dismiss |
+| Accesibilidad ConfigScreen | **✅ IMPLEMENTADO** | role=radiogroup, aria-checked, labels |
+| Export PDF | **✅ IMPLEMENTADO** | pdf-lib, requiere auth (Sprint A.1) |
+| Export DOCX | **✅ IMPLEMENTADO** | docx lib, pictogramas, requiere auth |
+| Auth email/password | **✅ IMPLEMENTADO** | Supabase, confirmation email |
+| Historial /history | **✅ IMPLEMENTADO** | filtros, modal iframe, empty state SVG |
+| Gestión estilos /styles | **✅ IMPLEMENTADO** | ~600 líneas, stylesService CRUD |
+| Análisis estilo docente | **✅ IMPLEMENTADO** | Gemini T=0.2, guarda en style_analyses |
+| Middleware protección rutas | **✅ ACTIVO** | proxy.ts es la convención correcta en Next.js 16.2.1 |
+| GEMINI_MODEL centralizado | **✅ IMPLEMENTADO** | lib/ai/model.ts, sin duplicados en route.ts |
+| Código legacy eliminado | **✅ LIMPIO** | 8 archivos + src/ eliminados en Sprint A.2 |
+| **Paywall / Suscripciones** | **🔴 MOCKUP** | SubscriptionScreen UI sin Stripe ni backend |
+| Rate limit sin persistencia | **⚠️ PARCIAL** | Map en memoria, se pierde en cold start |
+| Estilo en adapt route | **⚠️ NO CONECTADO** | styleContextService.ts existe pero adapt route no lo usa |
+| Feedback de adaptaciones | **⚠️ RESERVADO** | adaptationFeedbackService.ts sin UI (Sprint B) |
+| Pictogramas cache persistente | **❌ NO IMPLEMENTADO** | Cada request consulta ARASAAC |
+| Tests (unit / e2e) | **❌ NO IMPLEMENTADO** | Cero cobertura |
+| Stripe / pago real | **❌ NO IMPLEMENTADO** | Solo UI mockup |
 
 ---
 
-## 4. CONTRADICCIONES ENTRE CÓDIGO Y CLAUDE.md ANTERIOR
+## 5. RUTAS ACTIVAS (build post Sprint A.2)
 
-| Afirmación en CLAUDE.md | Realidad en código |
-|--------------------------|-------------------|
-| `/history` "esqueleto vacío (sin implementación)" | **FALSO** — historia completa con filtros, modal y estado vacío SVG, 500+ líneas |
-| `/styles` "esqueleto vacío" | **FALSO** — página completa ~600 líneas con CRUD stylesService |
-| "Rutas incompletas /adapt, /workspace" borradas | **CORRECTO** — eliminadas en sprint 2 |
-| "Rate limiting aceptable para MVP" | Correcto pero omite que el Map se resetea en CADA deploy (Vercel serverless → cold starts frecuentes) |
-| "Auth middleware Supabase" | **INCOMPLETO** — proxy.ts tiene la lógica correcta pero NUNCA SE EJECUTA porque no hay middleware.ts |
-| "PDF via pdf-lib" | **INCORRECTO** — export PDF usa print dialog via iframe oculto (no pdf-lib). pdf-lib está en package.json sin uso activo aparente |
-| GEMINI_MODEL "abstraído en lib/ai/model.ts" | **PARCIAL** — model.ts existe pero route.ts duplica `process.env.GEMINI_MODEL || "gemini-2.5-flash"` en dos funciones (callGemini y streamGemini) sin importar model.ts |
-
----
-
-## 5. DEUDA TÉCNICA PRIORIZADA
-
-### 🔴 CRÍTICA (bloquea producción segura)
-
-1. **middleware.ts no existe** → `proxy.ts` está huérfano, ninguna ruta está realmente protegida. Un usuario sin sesión puede acceder directamente a `/history`, `/styles`, `/admin`, `/internal`. Las páginas tienen redirects client-side (getCurrentUser en useEffect) pero el middleware server-side no existe.
-   - Archivos: `proxy.ts` → renombrar/convertir a `middleware.ts` con `export default` + `export { config }`
-
-2. **Paywall sin backend** → `SubscriptionScreen` redirige users no-auth al checkout, pero no hay: tabla `subscriptions` en Supabase, verificación de plan en los endpoints, ni integración Stripe. El gating actual es solo "tiene sesión = puede exportar DOCX" lo cual no es modelo de negocio.
-   - Archivos: `components/screens/SubscriptionScreen.tsx`, `app/api/export/docx/route.ts`, nuevo `lib/subscriptionService.ts`
-
-3. **GEMINI_MODEL duplicado en route.ts** → Si se quiere cambiar de proveedor, hay que tocar múltiples lugares. El `model.ts` existe pero no se importa en `route.ts`.
-   - Archivo: `app/api/adapt/route.ts` líneas 85 y 130
-
-### 🟠 ALTA (afecta estabilidad o escalabilidad)
-
-4. **Rate limiting en memoria** → Se resetea en cada cold start de Vercel. En producción con tráfico real, usuarios pueden hacer burst de requests tras cada deploy. Para producción real necesita Redis/Upstash o tabla Supabase.
-   - Archivo: `lib/rateLimit.ts`
-
-5. **/api/export/pdf no usa auth** → Cualquier usuario (sin sesión) puede llamar a `/api/export/pdf` con cualquier HTML y generar PDFs. No hay verificación de origen ni de plan.
-   - Archivo: `app/api/export/pdf/route.ts`
-
-6. **Acoplamiento Gemini en route.ts** → Todo el código de llamada a Gemini (streamGemini, callGemini, building prompts, parsing) está en un único archivo de 600 líneas. Para soportar múltiples providers hay que extraer a `lib/ai/`.
-   - Archivo: `app/api/adapt/route.ts`
-
-7. **src/app/page.tsx** → Existe una landing estática en `src/app/` que TypeScript checkea (incluido en tsconfig `**/*.tsx`) pero Next.js no enruta. No causa errores pero confunde. Si algún día se añade `srcDir: 'src'` en next.config.ts, crearía conflicto de ruta con `/`.
-
-### 🟡 MEDIA (UX o mantenimiento)
-
-8. **mock-data.ts sin importadores** → Arrays de opciones de UI (workOptions, adaptationTypes, studentProfiles, outputFormats) sin ningún archivo que los importe. Candidato directo a `knip`.
-
-9. **components/workspace/ sin importadores** → DocumentCanvas + GenerationCompanion huérfanos tras borrar rutas legacy.
-
-10. **document-format.ts / document-structure.ts** → Usados solo por workspace (eliminado). Misma situación.
-
-11. **lib/approvedExamplesService.ts + lib/documentTemplatesService.ts** → Solo eran usados por workspace legacy. Verificar si /styles los usa antes de eliminar.
-
-12. **css injectAndStripStyles en page.tsx** → Manipulación DOM directa para inyectar `<style>` (línea 57-67). Funciona pero es frágil y difícil de testear. El CSS server-side ya viene en el HTML — este código puede no ser necesario.
-
-13. **Progreso SSE: estimación basada en chars** → `ESTIMATED_CHARS = 5000`. Si la respuesta real es <2500 chars, el progreso llega a ~50% y salta a 100%. Funciona pero la UX es inconsistente. Mejor: streaming real de tokens o un fake smooth linear.
-
-### 🟢 BAJA (limpieza)
-
-14. **pdf-lib en package.json sin uso** → `pdf-lib: 1.17.1` instalado, el export PDF usa print dialog. Peso en bundle innecesario.
-15. **proxy.ts renaming** → Una vez creado middleware.ts, proxy.ts debe eliminarse.
-16. **CLAUDE.md stale** → Este archivo (recién actualizado).
+```
+○ /                    (SPA principal, máquina de estados)
+○ /admin/feedback      (redirect a /internal/feedback)
+ƒ /api/adapt           (streaming SSE, rate limit, CSS server-side)
+ƒ /api/arasaac/search  (proxy público)
+ƒ /api/export/docx     (requiere auth + plan)
+ƒ /api/export/pdf      (requiere auth — añadido Sprint A.1)
+ƒ /api/extract-text    (sin auth, 10MB)
+ƒ /api/style-analysis  (requiere auth, Gemini T=0.2)
+○ /history             (filtros, modal, empty state)
+ƒ /internal/feedback   (INTERNAL_FEEDBACK_ALLOWED_EMAILS)
+○ /login               (Supabase email/password)
+○ /styles              (CRUD estilos docente)
+ƒ Proxy (Middleware)   ← proxy.ts activo, protege rutas privadas
+```
 
 ---
 
-## 6. TABLAS SUPABASE INFERIDAS DEL CÓDIGO
+## 6. PROXY / MIDDLEWARE EN NEXT.JS 16.2.1
+
+En esta versión de Next.js, la convención es `proxy.ts` con export nombrado (NO `middleware.ts`):
+
+```typescript
+// proxy.ts — convención Next.js 16.2.1
+export async function proxy(request: NextRequest) { ... }
+export const config = { matcher: [...] }
+```
+
+- `middleware.ts` es la convención DEPRECADA (Next.js ≤15)
+- El build muestra `ƒ Proxy (Middleware)` cuando está activo
+- Protege: `/`, `/workspace`, `/styles`, `/history`, `/internal`, `/admin`, `/login`
+- Lógica: cookie-based Supabase SSR, redirect a `/login?next=...` si no hay sesión
+
+---
+
+## 7. STREAMING SSE (adapt/route.ts)
+
+```
+POST /api/adapt
+  → checkRateLimit(ip, userId) — 401/429 antes del stream
+  → Promise.all([getUser, resolvePictograms])
+  → streamGemini() → ReadableStream text/event-stream
+      data: {"type":"delta","progress":N}\n\n    ← 0-95%
+      data: {"type":"done","result":{...}}\n\n    ← 100%
+      data: {"type":"error","message":"..."}\n\n  ← error
+  → fallback a callGemini() si stream falla
+  → injectCssIntoHtml() — CSS server-side (−550 tokens)
+```
+
+SSE events: `delta` (progreso), `done` (resultado completo), `error`
+
+---
+
+## 8. ESTADO DE EXPORT (post Sprint A.1)
+
+| Endpoint | Auth | Plan check | Notas |
+|----------|------|-----------|-------|
+| `/api/export/pdf` | ✅ Bearer token | ❌ (Sprint B) | pdf-lib, paginación manual |
+| `/api/export/docx` | ✅ Bearer token | ❌ (Sprint B) | docx lib, pictogramas incrustados |
+
+Ambos usan `loadAdaptationForExport()` de `lib/export/adaptationExport.ts`.
+
+---
+
+## 9. RATE LIMITING
+
+```typescript
+// lib/rateLimit.ts
+// Ventana deslizante 60s, Map in-memory
+checkRateLimit(ip, userId?) → { allowed, limit, remaining, resetInSeconds }
+// Límites: 5 req/min anon, 20 req/min auth
+// ⚠️ Se resetea en cada cold start (Vercel serverless)
+// Para producción real: migrar a Upstash Redis o tabla Supabase
+```
+
+Headers en respuestas: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+
+---
+
+## 10. SUBSCRIPTIONSCREEN (estado actual)
+
+`components/screens/SubscriptionScreen.tsx` es **100% UI mockup**:
+- Muestra planes Free / Pro / Teams con features
+- Botón "Suscribirse" NO conecta a Stripe
+- NO hay verificación de plan en ningún API route
+- NO existe tabla `subscriptions` en Supabase (o si existe, no se consulta)
+- El gating actual es solo "tiene sesión = puede exportar"
+
+**No tocar hasta Sprint B.**
+
+---
+
+## 11. KNIP (post Sprint A.2)
+
+### Antes (Sprint A.2 inicio):
+```
+Unused files (9):
+  components/workspace/DocumentCanvas.tsx
+  components/workspace/GenerationCompanion.tsx
+  lib/adaptationFeedbackService.ts
+  lib/approvedExamplesService.ts
+  lib/document-format.ts
+  lib/document-structure.ts
+  lib/documentTemplatesService.ts
+  lib/mock-data.ts
+  lib/styleContextService.ts
+
+Unused exports (9):
+  POPULAR_INTERESTS         lib/adaptationRules.ts
+  createAdaptation          lib/adaptationsService.ts
+  getAdaptationById         lib/adaptationsService.ts
+  getNextVersionNumber      lib/adaptationsService.ts
+  getAdaptationChain        lib/adaptationsService.ts
+  markAdaptationAsFinal     lib/adaptationsService.ts
+  mergePictogramConcepts    lib/arasaac.ts
+  resolveArasaacPictograms  lib/arasaac.ts
+  enrichDocumentWithArasaac lib/arasaac.ts
+```
+
+### Después (Sprint A.2 fin):
+```
+Unused files (2) — CONSERVADOS INTENCIONALMENTE:
+  lib/adaptationFeedbackService.ts   ← Sprint B: UI feedback en ResultScreen
+  lib/styleContextService.ts         ← Sprint B: conectar a adapt route
+
+Unused exports (9) — EN ARCHIVOS ACTIVOS, aplazados:
+  (mismos que antes — en adaptationRules, adaptationsService, arasaac)
+  Riesgo: en archivos activos del flujo principal, no eliminar sin revisión
+```
+
+**Eliminados en Sprint A.2**: 7 archivos (`mock-data.ts`, `document-format.ts`, `document-structure.ts`, `approvedExamplesService.ts`, `documentTemplatesService.ts`, `DocumentCanvas.tsx`, `GenerationCompanion.tsx`) + directorio `src/`
+
+---
+
+## 12. TABLAS SUPABASE INFERIDAS DEL CÓDIGO
 
 ```
 adaptations
-  id uuid PK
-  user_id uuid FK → auth.users
-  title text
-  source_text text
-  result_html text
-  work_type text
-  adaptation_type text
-  student_profile text
-  with_pictograms bool
-  visual_support_level text ('bajo'|'medio'|'alto')
-  style_id uuid FK → user_styles
-  ai_notes text
-  status text ('draft'|'completed')
-  version_number int
-  parent_adaptation_id uuid FK → adaptations
-  is_final bool
-  pictogram_concepts text[]
-  pictogram_data jsonb
-  adapted_content text
-  result_text text
-  prompt_used text
-  style_snapshot jsonb
-  template_id uuid FK → document_templates
-  template_snapshot jsonb
-  used_approved_examples bool
-  approved_examples_count int
-  approved_example_ids text[]
-  generation_variant text
-  created_at timestamptz
-  updated_at timestamptz
+  id, user_id, title, source_text, result_html, work_type, adaptation_type,
+  student_profile, with_pictograms, visual_support_level, style_id, ai_notes,
+  status, version_number, parent_adaptation_id, is_final, pictogram_concepts,
+  pictogram_data, adapted_content, result_text, prompt_used, style_snapshot,
+  created_at, updated_at
 
 user_styles
-  id uuid PK
-  user_id uuid FK → auth.users
-  name/title text
-  [campos de estilo docente]
+  id, user_id, name/title, description, structure, ...campos estilo docente
 
 style_analyses
-  id uuid PK
-  style_id uuid FK → user_styles
-  user_id uuid FK → auth.users
-  simplification_level text
-  pictogram_usage_level text
-  usual_structure text
-  instruction_style text
-  average_length text
-  tone text
-  key_observations text
-  analysis_json jsonb
-  source_excerpt text
-  strengths text[]
-  improvement_points text[]
-  visual_metrics jsonb
-  summary text
-  show_improvements bool
-  created_at timestamptz
+  id, style_id, user_id, summary, usual_structure, instruction_style, tone,
+  simplification_level, pictogram_usage_level, strengths, key_observations,
+  analysis_json, source_excerpt, strengths[], improvement_points[],
+  visual_metrics, show_improvements, created_at
 
-adaptation_feedback
-  id uuid PK
-  adaptation_id uuid FK → adaptations
-  user_id uuid FK → auth.users
-  rating text
-  comment text
-  created_at timestamptz
+adaptation_feedback                ← tabla lista, sin UI aún
+  id, adaptation_id, user_id, rating (useful|partial|not_useful), comment, created_at
 
-approved_adaptation_examples
-  id uuid PK
-  adaptation_id uuid FK → adaptations
-  user_id uuid FK → auth.users
-  output_format text
-  student_profile text
-  visual_support_level text
-  feedback_rating text
-  was_approved bool
-  created_at timestamptz
-
-document_templates
-  id uuid PK
-  user_id uuid FK → auth.users
-  [campos de template]
-  created_at timestamptz
-
--- FALTA (para suscripciones):
+-- FALTA (Sprint B):
 subscriptions
-  id uuid PK
-  user_id uuid FK → auth.users
-  plan text ('free'|'pro'|'teams')
-  status text ('active'|'canceled'|'past_due')
-  stripe_subscription_id text
-  stripe_customer_id text
-  current_period_end timestamptz
-  created_at timestamptz
+  id, user_id, plan (free|pro|teams), status (active|canceled|past_due),
+  stripe_subscription_id, stripe_customer_id, current_period_end, created_at
 ```
 
 ---
 
-## 7. RECOMENDACIÓN DE SPRINTS
-
-### Sprint A — Estabilización (hacer ANTES de cualquier monetización)
-
-**Objetivo**: Que lo que dice que funciona, realmente funcione de forma segura.
-
-**Archivos a tocar**:
-```
-proxy.ts                       → renombrar a middleware.ts + export default + export config
-app/api/adapt/route.ts         → importar GEMINI_MODEL desde lib/ai/model.ts (x2)
-app/api/export/pdf/route.ts    → añadir auth check (bearer token)
-lib/rateLimit.ts               → documentar claramente limitación cold start
-knip (npm run knip)            → eliminar: mock-data.ts, document-format.ts,
-                                  document-structure.ts, components/workspace/,
-                                  src/app/page.tsx, lib/approvedExamplesService.ts*,
-                                  lib/documentTemplatesService.ts*
-                                  (* verificar primero si /styles los usa)
-CLAUDE.md                      → este archivo (actualizar tras sprint)
-```
-
-**KPIs de éxito**:
-- Rutas `/history`, `/styles`, `/admin` redirigen a login sin sesión (middleware activo)
-- `/api/export/pdf` devuelve 401 sin token
-- `npm run knip` → 0 findings
-
-### Sprint B — Suscripciones
+## 13. BACKLOG SPRINT B — SUSCRIPCIONES
 
 **Objetivo**: Paywall real con Stripe. Free tier limitado, Pro ilimitado.
 
-**Modelo mínimo viable** (ver sección 8):
-- Free: 3 adaptaciones/mes, solo PDF, sin pictogramas
-- Pro (9,99€/mes): ilimitado, DOCX, pictogramas, historial
+**Modelo mínimo viable**:
+
+| Feature | Free | Pro (9,99€/mes) |
+|---------|------|-----------------|
+| Adaptaciones/mes | 3 | Ilimitadas |
+| Export PDF | ✅ | ✅ |
+| Export DOCX | ❌ | ✅ |
+| Pictogramas ARASAAC | ❌ | ✅ |
+| Historial | ❌ | ✅ |
+| Análisis de estilo | ❌ | ✅ |
 
 **Archivos a crear/tocar**:
 ```
-lib/subscriptionService.ts     → NUEVO: checkUserPlan(userId), getPlanFromDB()
-app/api/webhooks/stripe/       → NUEVO: route.ts (webhook Stripe → update subscriptions)
-app/api/checkout/              → NUEVO: route.ts (crear Stripe checkout session)
-app/api/adapt/route.ts         → añadir checkUserPlan() antes del stream
-app/api/export/docx/route.ts   → añadir checkUserPlan()
-app/api/export/pdf/route.ts    → añadir checkUserPlan() para plan free
-components/screens/SubscriptionScreen.tsx → conectar botón "Suscribirse" a /api/checkout
-supabase/                      → migración: tabla subscriptions
-.env.local                     → STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRO_PRICE_ID
-package.json                   → añadir stripe sdk
+lib/subscriptionService.ts          NUEVO — checkUserPlan(userId), getUserPlan()
+app/api/webhooks/stripe/route.ts    NUEVO — webhook Stripe → update subscriptions
+app/api/checkout/route.ts           NUEVO — crear Stripe Checkout Session
+app/api/adapt/route.ts              añadir checkUserPlan() antes del stream
+app/api/export/docx/route.ts        añadir checkUserPlan()
+app/api/export/pdf/route.ts         añadir checkUserPlan() (free: PDF ok)
+components/screens/SubscriptionScreen.tsx  conectar botón a /api/checkout
+supabase/migrations/                tabla subscriptions
+.env.local                          STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+                                    STRIPE_PRO_PRICE_ID, NEXT_PUBLIC_STRIPE_PK
+package.json                        añadir stripe sdk
 ```
 
-**Lógica de gating**:
+**Lógica de gating central**:
 ```typescript
 // lib/subscriptionService.ts
-type Plan = 'free' | 'pro' | 'teams';
-
-async function getUserPlan(userId: string): Promise<Plan> {
+async function getUserPlan(userId: string): Promise<'free' | 'pro'> {
   const { data } = await supabase
     .from('subscriptions')
     .select('plan, status, current_period_end')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .maybeSingle();
+    .eq('user_id', userId).eq('status', 'active').maybeSingle();
   if (!data || new Date(data.current_period_end) < new Date()) return 'free';
-  return data.plan as Plan;
+  return data.plan as 'free' | 'pro';
 }
 ```
 
-**KPIs de éxito**:
-- Botón "Suscribirse" abre Stripe checkout
+**KPIs de éxito Sprint B**:
+- Botón "Suscribirse" abre Stripe Checkout
 - Webhook actualiza tabla subscriptions
-- /api/adapt devuelve 402 tras 3 adaptaciones si plan=free (leer de DB, no rateLimit)
-- DOCX export solo disponible con plan≥pro
+- /api/adapt devuelve 402 tras 3 adaptaciones/mes si plan=free
+- DOCX export devuelve 403 si plan=free
 
-### Sprint C — Proveedor IA Premium
+---
 
-**Objetivo**: Soportar modelos premium (GPT-4o, Claude Sonnet) además de Gemini, sin reescribir route.ts.
+## 14. BACKLOG SPRINT C — PROVEEDOR IA PREMIUM
+
+**Objetivo**: Soportar modelos premium (GPT-4o, Claude Sonnet) sin reescribir route.ts.
 
 **Archivos a crear/tocar**:
 ```
-lib/ai/provider.ts             → NUEVO: factory de providers (ver sección 9)
-lib/ai/providers/gemini.ts     → NUEVO: extraer streamGemini + callGemini
-lib/ai/providers/openai.ts     → NUEVO: implementación OpenAI streaming
-lib/ai/providers/anthropic.ts  → NUEVO: implementación Claude Anthropic
-app/api/adapt/route.ts         → reemplazar callGemini/streamGemini por getAIProvider()
-.env.local                     → OPENAI_API_KEY o ANTHROPIC_API_KEY
-supabase/                      → migración: columna preferred_model en subscriptions
-                                  (pro puede elegir modelo)
+lib/ai/provider.ts              NUEVO — interfaz AIProvider + factory getAIProvider()
+lib/ai/providers/gemini.ts      NUEVO — extraer streamGemini + callGemini de route.ts
+lib/ai/providers/openai.ts      NUEVO — OpenAI chat completions streaming
+lib/ai/providers/anthropic.ts   NUEVO — Claude messages streaming
+app/api/adapt/route.ts          reemplazar callGemini/streamGemini por getAIProvider()
 ```
 
----
-
-## 8. PROPUESTA MODELO DE SUSCRIPCIÓN
-
-### Planes
-
-| Feature | Free | Pro (9,99€/mes) | Teams (precio a medida) |
-|---------|------|-----------------|------------------------|
-| Adaptaciones/mes | 3 | Ilimitadas | Ilimitadas |
-| Pictogramas ARASAAC | ❌ | ✅ | ✅ |
-| Export PDF | ✅ | ✅ | ✅ |
-| Export DOCX | ❌ | ✅ | ✅ |
-| Historial | ❌ (solo sesión) | ✅ (guardado) | ✅ |
-| Análisis de estilo | ❌ | ✅ | ✅ |
-| Modelo IA | Gemini Flash | Gemini Pro / GPT-4o | Modelo configurable |
-| Soporte | - | Email | 24/7 dedicado |
-
-### Columnas afectadas en código actual
-
-```
-Cambios mínimos:
-- /api/adapt: añadir plan check → sin pictogramas si free, contar adaptaciones mes
-- /api/export/docx: ya tiene auth check, añadir plan≥pro
-- /api/export/pdf: añadir auth check + plan (gratis: PDF siempre ok)
-- /history page: redirigir con "upgrade" si plan=free
-```
-
-### Conteo de uso mensual (free tier)
-
-Supabase query:
-```sql
-SELECT COUNT(*) FROM adaptations
-WHERE user_id = $1
-  AND created_at >= date_trunc('month', now())
-```
-
----
-
-## 9. ABSTRACCIÓN MULTI-PROVEEDOR IA
-
-### Interfaz mínima
-
+**Interfaz mínima**:
 ```typescript
-// lib/ai/provider.ts
-
-export interface AIStreamEvent {
-  type: 'delta';
-  progress: number;
-}
-
 export interface AIProvider {
-  stream(
-    systemPrompt: string,
-    userPrompt: string,
-    onProgress: (chars: number) => void,
-  ): Promise<Record<string, unknown>>;
-  generate(
-    systemPrompt: string,
-    userPrompt: string,
-  ): Promise<Record<string, unknown>>;
+  stream(system: string, user: string, onProgress: (chars: number) => void): Promise<Record<string, unknown>>;
+  generate(system: string, user: string): Promise<Record<string, unknown>>;
 }
-
-export function getAIProvider(model?: string): AIProvider {
-  const m = model ?? process.env.AI_MODEL ?? 'gemini-2.5-flash';
-  if (m.startsWith('gpt-')) return new OpenAIProvider(m);
-  if (m.startsWith('claude-')) return new AnthropicProvider(m);
-  return new GeminiProvider(m); // default
-}
+export function getAIProvider(model?: string): AIProvider { ... }
 ```
 
-### Cambio en route.ts
-
-```typescript
-// Antes (acoplado):
-raw = await streamGemini(userPrompt, systemPrompt, onProgress);
-
-// Después (abstracto):
-const ai = getAIProvider(process.env.AI_MODEL);
-raw = await ai.stream(systemPrompt, userPrompt, onProgress);
-```
-
-### Archivos a crear en Sprint C
-
-```
-lib/ai/provider.ts          → interfaz AIProvider + getAIProvider factory
-lib/ai/providers/gemini.ts  → extraer streamGemini + callGemini de route.ts
-lib/ai/providers/openai.ts  → OpenAI chat completions streaming
-lib/ai/providers/anthropic.ts → Claude messages streaming
-```
-
-**Output esperado**: Cambiar de Gemini a GPT-4o solo requiere `AI_MODEL=gpt-4o` en env, sin tocar route.ts.
+**Output esperado**: cambiar a GPT-4o solo requiere `AI_MODEL=gpt-4o` en env.
 
 ---
 
-## 10. VARIABLES DE ENTORNO
+## 15. VARIABLES DE ENTORNO
 
 ```env
 # Requeridas hoy
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash    # opcional
+GEMINI_MODEL=gemini-2.5-flash    # opcional, default en lib/ai/model.ts
 
 # Sprint B (suscripciones)
 STRIPE_SECRET_KEY=
@@ -477,8 +393,8 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
 # Sprint C (multi-IA)
 AI_MODEL=gemini-2.5-flash        # o gpt-4o, claude-sonnet-4-6
-OPENAI_API_KEY=                  # si AI_MODEL empieza por gpt-
-ANTHROPIC_API_KEY=               # si AI_MODEL empieza por claude-
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
 
 # Interno
 NEXT_PUBLIC_SITE_URL=https://adaptaula.com
@@ -487,31 +403,27 @@ INTERNAL_FEEDBACK_ALLOWED_EMAILS=email1@,email2@
 
 ---
 
-## 11. ESTADO DEL BUILD (2026-04-16)
+## 16. DEUDA TÉCNICA PENDIENTE
 
-```
-✅ npm run build → LIMPIO, sin errores TypeScript
-Rutas activas: 14
-  ○ / (SPA)
-  ○ /admin/feedback
-  ƒ /api/adapt (streaming SSE)
-  ƒ /api/arasaac/search
-  ƒ /api/export/docx
-  ƒ /api/export/pdf
-  ƒ /api/extract-text
-  ƒ /api/style-analysis
-  ○ /history
-  ƒ /internal/feedback
-  ○ /login
-  ○ /styles
-  ƒ Proxy (Middleware)   ← ENGAÑOSO: proxy.ts existe pero no hay middleware.ts activo
-```
+### 🟠 ALTA
+1. **Rate limit sin persistencia** — Map in-memory se resetea en cold start. Para producción: Upstash Redis o tabla Supabase.
+2. **styleContextService sin conectar** — `resolveStyleContext()` existe y está bien hecho, pero adapt route no lo llama. El estilo del docente no influye en la adaptación.
+3. **Exports sin use en archivos activos** — 9 exports de adaptationsService/arasaac/adaptationRules marcados por knip. En archivos del flujo principal → no eliminar sin revisión.
+
+### 🟡 MEDIA
+4. **Progreso SSE estimado** — `ESTIMATED_CHARS=5000`. Si respuesta <2500 chars el progreso llega a ~50% y salta a 100%. Funcionar pero UX inconsistente.
+5. **adaptationFeedbackService sin UI** — La lógica de feedback está completa (upsert rating + comment), falta el widget en ResultScreen.
+6. **pdf-lib en package.json** — Instalado y usado en export/pdf (correcto). Verificar que tree-shaking funciona en bundle cliente.
+
+### 🟢 BAJA
+7. **Cache ARASAAC** — Cada request consulta la API pública desde cero.
+8. **Tests** — Cero cobertura.
 
 ---
 
-## OPTIMIZACIONES ACUMULADAS (para referencia)
+## OPTIMIZACIONES ACUMULADAS
 
-- `adapt/route.ts` v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE (caché Gemini), streaming SSE
-- `style-analysis/route.ts`: console.log eliminados, responseMimeType json, temperature 0.2
-- Rate limit in-memory: 5 anon / 20 auth / 60s
-- build: 14.3s, 14 rutas (4 legacy eliminadas)
+- `adapt/route.ts` v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE, streaming SSE, GEMINI_MODEL centralizado
+- `style-analysis/route.ts`: responseMimeType json, temperature 0.2
+- Rate limit: 5 anon / 20 auth / 60s
+- Sprint A.2: 7 archivos legacy + src/ eliminados, build 14 rutas
