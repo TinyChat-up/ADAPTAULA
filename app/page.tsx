@@ -208,10 +208,11 @@ export default function HomePage() {
         }),
       });
 
-      // Errores HTTP antes del stream (ej: 400, 429 por rate limit)
+      // Errores HTTP antes del stream (ej: 400, 402, 429 por rate limit o plan)
       if (!res.ok) {
         const errData = await res.json().catch(() => ({})) as {
           error?: string;
+          code?: string;
           retryAfter?: number;
         };
         if (res.status === 429) {
@@ -220,10 +221,17 @@ export default function HomePage() {
             `Has alcanzado el límite de adaptaciones. Espera ${wait} segundos.`,
             "warning",
           );
+          setScreen("configure");
+        } else if (res.status === 402 && errData.code === "FREE_PLAN_LIMIT_REACHED") {
+          toast(
+            "Has alcanzado el límite de 3 adaptaciones/mes del plan gratuito.",
+            "warning",
+          );
+          setScreen("subscription");
         } else {
           setConfigError(errData.error ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
+          setScreen("configure");
         }
-        setScreen("configure");
         return;
       }
 

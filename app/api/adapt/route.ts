@@ -31,6 +31,7 @@ import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { GEMINI_MODEL } from "@/lib/ai/model";
+import { hasReachedFreePlanLimit } from "@/lib/subscriptionService";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -413,6 +414,24 @@ export async function POST(req: Request) {
           "Retry-After": String(rl.resetInSeconds),
           ...rlHeaders,
         },
+      },
+    );
+  }
+
+  // ── Plan limit (authenticated free users only) ─────────────────────────────
+  // Unauthenticated users are not blocked — they can't save adaptations and
+  // the free limit only applies to saved (authenticated) usage.
+  if (rateLimitUserId && await hasReachedFreePlanLimit(rateLimitUserId)) {
+    return new Response(
+      JSON.stringify({
+        error: "Has alcanzado el límite del plan gratuito",
+        code: "FREE_PLAN_LIMIT_REACHED",
+        currentPlan: "free",
+        limit: 3,
+      }),
+      {
+        status: 402,
+        headers: { "Content-Type": "application/json", ...rlHeaders },
       },
     );
   }

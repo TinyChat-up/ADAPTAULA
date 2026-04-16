@@ -58,6 +58,13 @@ function normalizeRow(row: Record<string, unknown>): SubscriptionRow {
   };
 }
 
+// ─── Plan limits ─────────────────────────────────────────────────────────────
+
+export const PLAN_LIMITS = {
+  free: { adaptationsPerMonth: 3, docxExport: false },
+  pro:  { adaptationsPerMonth: Infinity, docxExport: true },
+} as const satisfies Record<Plan, { adaptationsPerMonth: number; docxExport: boolean }>;
+
 // ─── Read helpers (browser client, respects RLS) ──────────────────────────────
 
 /**
@@ -94,6 +101,36 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
   }
 
   return row;
+}
+
+/**
+ * Counts how many adaptations the user has created in the current calendar month.
+ * Uses the browser client (RLS: user can only read their own rows).
+ */
+export async function getMonthlyAdaptationUsage(userId: string): Promise<number> {
+  const startOfMonth = new Date();
+  startOfMonth.setUTCDate(1);
+  startOfMonth.setUTCHours(0, 0, 0, 0);
+
+  const { count, error } = await supabase
+    .from("adaptations")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", startOfMonth.toISOString());
+
+  if (error) return 0; // fail open — block on count error would be worse UX
+  return count ?? 0;
+}
+
+/**
+ * Returns true if an authenticated free-plan user has reached their monthly limit.
+ * Always returns false for pro users or unauthenticated users.
+ */
+export async function hasReachedFreePlanLimit(userId: string): Promise<boolean> {
+  const plan = await getUserPlan(userId);
+  if (plan !== "free") return false;
+  const usage = await getMonthlyAdaptationUsage(userId);
+  return usage >= PLAN_LIMITS.free.adaptationsPerMonth;
 }
 
 // ─── Write helpers (service-role client, bypasses RLS) ────────────────────────

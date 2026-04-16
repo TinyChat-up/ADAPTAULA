@@ -3,7 +3,7 @@
 ---
 
 # AUDITORÍA TÉCNICA — AdaptAula
-**Fecha**: 2026-04-16 | **Sprint**: B.1 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
+**Fecha**: 2026-04-16 | **Sprint**: B.2 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
 
 ---
 
@@ -127,7 +127,7 @@ proxy.ts                    ← middleware activo en Next.js 16.2.1
 | Código legacy eliminado | **✅ LIMPIO** | 8 archivos + src/ eliminados en Sprint A.2 |
 | **Infraestructura Stripe** | **✅ IMPLEMENTADO** | checkout + webhook + subscriptionService + tabla subscriptions |
 | **SubscriptionScreen checkout** | **✅ CONECTADO** | Botón Pro → /api/checkout → Stripe Checkout |
-| **Gating por plan** | **⚠️ PENDIENTE B.2** | adapt/export aún no verifican plan |
+| **Gating por plan** | **✅ IMPLEMENTADO** | adapt 402 si free≥3/mes; docx 403 si free |
 | Rate limit sin persistencia | **⚠️ PARCIAL** | Map en memoria, se pierde en cold start |
 | Estilo en adapt route | **⚠️ NO CONECTADO** | styleContextService.ts existe pero adapt route no lo usa |
 | Feedback de adaptaciones | **⚠️ RESERVADO** | adaptationFeedbackService.ts sin UI (Sprint B) |
@@ -302,14 +302,30 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 # El CLI imprime el STRIPE_WEBHOOK_SECRET temporal para .env.local
 ```
 
-### Qué falta para Sprint B.2
+### Reglas free vs pro (Sprint B.2 — COMPLETADO)
 
-1. `checkUserPlan()` en `/api/adapt` → 402 si free y >3 adaptaciones/mes
-2. `checkUserPlan()` en `/api/export/docx` → 403 si plan=free
-3. Contador de adaptaciones mensuales (query sobre tabla `adaptations`)
-4. Portal de facturación Stripe (ver facturas, cancelar)
-5. Mostrar plan actual en UI (badge en navbar o ResultScreen)
-6. Conectar `/history` a plan (solo pro puede ver historial)
+| Regla | Free | Pro |
+|-------|------|-----|
+| Adaptaciones/mes | 3 (luego 402) | Ilimitadas |
+| Export DOCX | 403 | ✅ |
+| Export PDF | ✅ | ✅ |
+| Anónimo | Funciona (no guarda) | — |
+
+**Dónde se aplican los límites:**
+
+| Endpoint | Check | Respuesta |
+|----------|-------|-----------|
+| `POST /api/adapt` | `hasReachedFreePlanLimit(userId)` pre-stream | 402 `FREE_PLAN_LIMIT_REACHED` |
+| `POST /api/export/docx` | `getUserPlan(userId) !== 'pro'` | 403 `SUBSCRIPTION_REQUIRED` |
+| `POST /api/export/pdf` | Solo auth, sin plan check | — |
+
+**UI:** cuando `/api/adapt` devuelve 402 + `FREE_PLAN_LIMIT_REACHED`, `page.tsx` muestra toast warning y navega a SubscriptionScreen.
+
+### Qué falta todavía
+
+1. Portal de facturación Stripe (ver facturas, cancelar)
+2. Badge de plan actual en UI
+3. Conectar `/history` a plan (solo pro puede ver historial)
 
 ---
 

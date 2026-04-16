@@ -13,9 +13,39 @@ import {
   parseStructuredContentForExport,
   toSafeSlug,
 } from "@/lib/export/adaptationExport";
+import { getUserPlan } from "@/lib/subscriptionService";
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: Request) {
   try {
+    // ── Auth (existing) + plan check ────────────────────────────────────────
+    const authHeader = req.headers.get("authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+    if (!token) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: "Sesión inválida." }, { status: 401 });
+    }
+
+    const plan = await getUserPlan(user.id);
+    if (plan !== "pro") {
+      return NextResponse.json(
+        {
+          error: "Necesitas suscripción Pro para exportar en DOCX",
+          code: "SUBSCRIPTION_REQUIRED",
+        },
+        { status: 403 },
+      );
+    }
+
     const loaded = await loadAdaptationForExport(req);
     if ("error" in loaded) {
       return NextResponse.json({ error: loaded.error }, { status: loaded.status });
