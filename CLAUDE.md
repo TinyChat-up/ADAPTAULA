@@ -453,3 +453,19 @@ npm run knip
 ✓ Compiled successfully
 ○ 6 static routes + ƒ 8 API routes + ƒ Proxy (Middleware)
 ```
+
+---
+
+## 15. Invariantes del sistema (NO romper)
+
+Estas reglas no son preferencias — son restricciones que, si se violan, rompen la monetización
+o la seguridad del producto. Aplicar en cualquier sprint futuro.
+
+| # | Invariante | Razón |
+|---|-----------|-------|
+| 1 | `getUserPlan()` es la **única fuente de verdad** del plan | Cualquier otra lectura puede ser stale o engañada por RLS mal configurado |
+| 2 | **Nunca usar browser client para leer `subscriptions` en API routes** | `auth.uid()` es null en Node.js — RLS devuelve vacío, plan siempre "free" |
+| 3 | El gating siempre usa `userPlan !== "pro"` (no `=== "free"`) | Cubre `null` (loading) y evita que free acceda durante la ventana de carga |
+| 4 | **La lógica pedagógica de `adapt/route.ts` no se toca sin validación manual** | Cambios en prompts o reglas pueden degradar silenciosamente la calidad para NEE |
+| 5 | Pro siempre usa `OpenAIProvider` si `OPENAI_API_KEY` está disponible | Sin esto, Pro paga pero recibe calidad free — fallo de producto crítico |
+| 6 | **`ProGateModal` es la única vía de bloqueo UX** (no errores crudos) | Consistencia de conversión — mensajes de error genéricos rompen el funnel |
