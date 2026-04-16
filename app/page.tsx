@@ -222,9 +222,9 @@ export default function HomePage() {
             "warning",
           );
           setScreen("configure");
-        } else if (res.status === 402 && errData.code === "FREE_PLAN_LIMIT_REACHED") {
+        } else if (res.status === 402 && errData.code === "FREE_TRIAL_EXHAUSTED") {
           toast(
-            "Has alcanzado el límite de 3 adaptaciones/mes del plan gratuito.",
+            "Ya has usado tu adaptación gratuita. Actualiza a Pro para continuar.",
             "warning",
           );
           setScreen("subscription");
@@ -275,6 +275,9 @@ export default function HomePage() {
               teacherNotes: event.teacherNotes ?? [],
               adaptationDecisions: event.adaptationDecisions ?? [],
             };
+            // Mark anonymous trial as used via cookie so the server can check it next time.
+            // Authenticated users are tracked via DB; this cookie only matters for anonymous.
+            document.cookie = "aa-trial=1; max-age=31536000; path=/; SameSite=Lax";
             break outer;
           } else if (event.type === "error") {
             setConfigError(event.message ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");

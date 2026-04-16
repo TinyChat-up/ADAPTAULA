@@ -61,9 +61,13 @@ function normalizeRow(row: Record<string, unknown>): SubscriptionRow {
 // ─── Plan limits ─────────────────────────────────────────────────────────────
 
 export const PLAN_LIMITS = {
-  free: { adaptationsPerMonth: 3, docxExport: false },
-  pro:  { adaptationsPerMonth: Infinity, docxExport: true },
-} as const satisfies Record<Plan, { adaptationsPerMonth: number; docxExport: boolean }>;
+  free: { freeTrialAdaptations: 1, pdfExport: false, docxExport: false },
+  pro:  { freeTrialAdaptations: Infinity, pdfExport: true, docxExport: true },
+} as const satisfies Record<Plan, { freeTrialAdaptations: number; pdfExport: boolean; docxExport: boolean }>;
+
+// Cookie name used to track anonymous trial usage client-side.
+// Limitation: clearable by the user (cookied are not a hard limit).
+export const FREE_TRIAL_COOKIE = "aa-trial";
 
 // ─── Read helpers (browser client, respects RLS) ──────────────────────────────
 
@@ -104,33 +108,30 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
 }
 
 /**
- * Counts how many adaptations the user has created in the current calendar month.
- * Uses the browser client (RLS: user can only read their own rows).
+ * Total adaptation count for an authenticated user (all time).
+ * Used to enforce the 1-adaptation free trial for non-pro users.
+ * Fails open (returns 0) on DB error to avoid blocking on transient issues.
  */
-export async function getMonthlyAdaptationUsage(userId: string): Promise<number> {
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
-
+export async function getAdaptationUsage(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from("adaptations")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", startOfMonth.toISOString());
+    .eq("user_id", userId);
 
-  if (error) return 0; // fail open — block on count error would be worse UX
+  if (error) return 0;
   return count ?? 0;
 }
 
 /**
- * Returns true if an authenticated free-plan user has reached their monthly limit.
- * Always returns false for pro users or unauthenticated users.
+ * Returns true if an authenticated user still has their free trial available.
+ * Pro users always return true (unlimited).
+ * Free users: true only if they have 0 saved adaptations.
  */
-export async function hasReachedFreePlanLimit(userId: string): Promise<boolean> {
+export async function hasFreeTrialRemaining(userId: string): Promise<boolean> {
   const plan = await getUserPlan(userId);
-  if (plan !== "free") return false;
-  const usage = await getMonthlyAdaptationUsage(userId);
-  return usage >= PLAN_LIMITS.free.adaptationsPerMonth;
+  if (plan === "pro") return true;
+  const usage = await getAdaptationUsage(userId);
+  return usage < PLAN_LIMITS.free.freeTrialAdaptations;
 }
 
 // ─── Write helpers (service-role client, bypasses RLS) ────────────────────────

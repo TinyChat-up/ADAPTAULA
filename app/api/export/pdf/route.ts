@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getUserPlan } from "@/lib/subscriptionService";
 import {
   PDFDocument,
   StandardFonts,
@@ -77,6 +78,14 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser(token);
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const plan = await getUserPlan(user.id);
+    if (plan !== "pro") {
+      return NextResponse.json(
+        { error: "Necesitas suscripción Pro para exportar PDF", code: "SUBSCRIPTION_REQUIRED" },
+        { status: 403 },
+      );
     }
 
     const loaded = await loadAdaptationForExport(req);

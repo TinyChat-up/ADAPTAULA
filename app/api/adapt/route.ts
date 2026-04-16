@@ -31,7 +31,7 @@ import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { GEMINI_MODEL } from "@/lib/ai/model";
-import { hasReachedFreePlanLimit } from "@/lib/subscriptionService";
+import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE } from "@/lib/subscriptionService";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -418,22 +418,32 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── Plan limit (authenticated free users only) ─────────────────────────────
-  // Unauthenticated users are not blocked — they can't save adaptations and
-  // the free limit only applies to saved (authenticated) usage.
-  if (rateLimitUserId && await hasReachedFreePlanLimit(rateLimitUserId)) {
-    return new Response(
-      JSON.stringify({
-        error: "Has alcanzado el límite del plan gratuito",
-        code: "FREE_PLAN_LIMIT_REACHED",
-        currentPlan: "free",
-        limit: 3,
-      }),
-      {
-        status: 402,
-        headers: { "Content-Type": "application/json", ...rlHeaders },
-      },
+  // ── Free trial enforcement ─────────────────────────────────────────────────
+  const trialExhaustedResponse = new Response(
+    JSON.stringify({
+      error: "Ya has usado tu adaptación gratuita. Hazte Pro para seguir adaptando materiales.",
+      code: "FREE_TRIAL_EXHAUSTED",
+      currentPlan: "free",
+      limit: 1,
+    }),
+    { status: 402, headers: { "Content-Type": "application/json", ...rlHeaders } },
+  );
+
+  if (rateLimitUserId) {
+    // Authenticated user: check plan and DB usage
+    const plan = await getUserPlan(rateLimitUserId);
+    if (plan !== "pro") {
+      const remaining = await hasFreeTrialRemaining(rateLimitUserId);
+      if (!remaining) return trialExhaustedResponse;
+    }
+  } else {
+    // Anonymous user: check cookie set by the client after their first successful adaptation.
+    // Limitation: cookie is client-side and can be cleared. This is a best-effort soft limit.
+    const cookieHeader = req.headers.get("cookie") ?? "";
+    const hasTrialCookie = cookieHeader.split(";").some(
+      (c) => c.trim().startsWith(`${FREE_TRIAL_COOKIE}=`),
     );
+    if (hasTrialCookie) return trialExhaustedResponse;
   }
 
   const {

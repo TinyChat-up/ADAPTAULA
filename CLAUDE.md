@@ -302,24 +302,32 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 # El CLI imprime el STRIPE_WEBHOOK_SECRET temporal para .env.local
 ```
 
-### Reglas free vs pro (Sprint B.2 — COMPLETADO)
+### Reglas free vs pro (Sprint B.2)
 
-| Regla | Free | Pro |
-|-------|------|-----|
-| Adaptaciones/mes | 3 (luego 402) | Ilimitadas |
-| Export DOCX | 403 | ✅ |
-| Export PDF | ✅ | ✅ |
-| Anónimo | Funciona (no guarda) | — |
+| Regla | Anónimo | Free autenticado | Pro |
+|-------|---------|-----------------|-----|
+| Adaptaciones | 1 prueba (cookie) | 1 prueba (DB count) | Ilimitadas |
+| Export PDF | ❌ 401 | ❌ 403 | ✅ |
+| Export DOCX | ❌ 401 | ❌ 403 | ✅ |
 
-**Dónde se aplican los límites:**
+**Límite de prueba gratuita:**
+- Autenticado free: `getAdaptationUsage(userId)` total desde DB. Si ≥ 1 → 402.
+- Anónimo: cookie `aa-trial=1` (set client-side tras `done` SSE). Si cookie presente → 402.
+  - Limitación documentada: cookie borrable por el usuario (soft limit intencionado).
+
+**Dónde se aplican:**
 
 | Endpoint | Check | Respuesta |
 |----------|-------|-----------|
-| `POST /api/adapt` | `hasReachedFreePlanLimit(userId)` pre-stream | 402 `FREE_PLAN_LIMIT_REACHED` |
-| `POST /api/export/docx` | `getUserPlan(userId) !== 'pro'` | 403 `SUBSCRIPTION_REQUIRED` |
-| `POST /api/export/pdf` | Solo auth, sin plan check | — |
+| `POST /api/adapt` | `hasFreeTrialRemaining` / cookie | 402 `FREE_TRIAL_EXHAUSTED` |
+| `POST /api/export/pdf` | `getUserPlan !== 'pro'` | 403 `SUBSCRIPTION_REQUIRED` |
+| `POST /api/export/docx` | `getUserPlan !== 'pro'` | 403 `SUBSCRIPTION_REQUIRED` |
 
-**UI:** cuando `/api/adapt` devuelve 402 + `FREE_PLAN_LIMIT_REACHED`, `page.tsx` muestra toast warning y navega a SubscriptionScreen.
+**UI:** 402 `FREE_TRIAL_EXHAUSTED` → toast warning + navega a SubscriptionScreen.
+
+**Constantes en subscriptionService.ts:**
+- `PLAN_LIMITS` — fuente de verdad de límites por plan
+- `FREE_TRIAL_COOKIE = "aa-trial"` — nombre de cookie compartido entre server y client
 
 ### Qué falta todavía
 
