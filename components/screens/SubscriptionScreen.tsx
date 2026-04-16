@@ -1,7 +1,34 @@
 "use client";
 
+import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
 interface Props {
   onBack: () => void;
+}
+
+async function startProCheckout(): Promise<{ url: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token ?? "";
+
+  const res = await fetch("/api/checkout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ plan: "pro" }),
+  });
+
+  const json = await res.json() as Record<string, unknown>;
+
+  if (!res.ok) {
+    const msg = typeof json.error === "string" ? json.error : "Error al iniciar el pago";
+    throw new Error(msg);
+  }
+
+  if (typeof json.url !== "string") throw new Error("Respuesta inesperada del servidor");
+  return { url: json.url };
 }
 
 function CheckIcon({ color }: { color: string }) {
@@ -23,6 +50,21 @@ function PlanBenefit({ text, color }: { text: string; color: string }) {
 }
 
 export default function SubscriptionScreen({ onBack }: Props) {
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function handleProCheckout() {
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    try {
+      const { url } = await startProCheckout();
+      window.location.href = url;
+    } catch (err: unknown) {
+      setCheckoutError(err instanceof Error ? err.message : "Error inesperado");
+      setCheckoutBusy(false);
+    }
+  }
+
   return (
     <div className="aa-screen px-4 py-12">
       {/* Header */}
@@ -95,15 +137,22 @@ export default function SubscriptionScreen({ onBack }: Props) {
             <PlanBenefit text="Exportar PDF y Word" color="var(--aa-orange)" />
             <PlanBenefit text="Historial de adaptaciones" color="var(--aa-orange)" />
           </ul>
+          {checkoutError && (
+            <p className="mb-3 rounded-xl px-3 py-2 text-center text-xs" style={{ background: "rgba(190,18,60,0.08)", color: "#be123c" }}>
+              {checkoutError}
+            </p>
+          )}
           <button
             type="button"
-            className="w-full rounded-full py-2.5 text-sm font-bold text-white transition"
+            onClick={handleProCheckout}
+            disabled={checkoutBusy}
+            className="w-full rounded-full py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
             style={{
               background: "linear-gradient(135deg, var(--aa-orange) 0%, #f0a060 100%)",
               boxShadow: "0 4px 14px rgba(232,131,74,0.35)",
             }}
           >
-            Suscribirse ahora
+            {checkoutBusy ? "Redirigiendo…" : "Suscribirse ahora"}
           </button>
         </div>
 

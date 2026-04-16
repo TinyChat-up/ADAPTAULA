@@ -3,7 +3,7 @@
 ---
 
 # AUDITORÍA TÉCNICA — AdaptAula
-**Fecha**: 2026-04-16 | **Sprint**: A.2 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
+**Fecha**: 2026-04-16 | **Sprint**: B.1 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
 
 ---
 
@@ -11,12 +11,14 @@
 
 AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, motor de adaptación pedagógica sobre Gemini 2.5 Flash con streaming SSE, integración ARASAAC para pictogramas, y auth/DB en Supabase. El flujo principal funciona de extremo a extremo.
 
-**Estado tras Sprint A.1 + A.2**:
+**Estado tras Sprint A.1 + A.2 + B.1**:
 - ✅ Middleware de rutas activo (`proxy.ts` es la convención correcta en Next.js 16.2.1)
 - ✅ `/api/export/pdf` protegido con auth (Bearer token)
 - ✅ `GEMINI_MODEL` centralizado en `lib/ai/model.ts`
 - ✅ Código legacy eliminado (8 archivos + src/)
-- 🔴 Paywall sigue siendo 100% UI mockup sin backend (Sprint B pendiente)
+- ✅ Infraestructura Stripe real: tabla subscriptions, checkout, webhook, subscriptionService
+- ✅ SubscriptionScreen conectado a Stripe Checkout (botón Pro funcional)
+- ⚠️ Gating en adapt/export aún no aplicado (Sprint B.2 pendiente)
 
 ---
 
@@ -123,7 +125,9 @@ proxy.ts                    ← middleware activo en Next.js 16.2.1
 | Middleware protección rutas | **✅ ACTIVO** | proxy.ts es la convención correcta en Next.js 16.2.1 |
 | GEMINI_MODEL centralizado | **✅ IMPLEMENTADO** | lib/ai/model.ts, sin duplicados en route.ts |
 | Código legacy eliminado | **✅ LIMPIO** | 8 archivos + src/ eliminados en Sprint A.2 |
-| **Paywall / Suscripciones** | **🔴 MOCKUP** | SubscriptionScreen UI sin Stripe ni backend |
+| **Infraestructura Stripe** | **✅ IMPLEMENTADO** | checkout + webhook + subscriptionService + tabla subscriptions |
+| **SubscriptionScreen checkout** | **✅ CONECTADO** | Botón Pro → /api/checkout → Stripe Checkout |
+| **Gating por plan** | **⚠️ PENDIENTE B.2** | adapt/export aún no verifican plan |
 | Rate limit sin persistencia | **⚠️ PARCIAL** | Map en memoria, se pierde en cold start |
 | Estilo en adapt route | **⚠️ NO CONECTADO** | styleContextService.ts existe pero adapt route no lo usa |
 | Feedback de adaptaciones | **⚠️ RESERVADO** | adaptationFeedbackService.ts sin UI (Sprint B) |
@@ -214,16 +218,98 @@ Headers en respuestas: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimi
 
 ---
 
-## 10. SUBSCRIPTIONSCREEN (estado actual)
+## 10. ARQUITECTURA DE SUSCRIPCIONES (Sprint B.1)
 
-`components/screens/SubscriptionScreen.tsx` es **100% UI mockup**:
-- Muestra planes Free / Pro / Teams con features
-- Botón "Suscribirse" NO conecta a Stripe
-- NO hay verificación de plan en ningún API route
-- NO existe tabla `subscriptions` en Supabase (o si existe, no se consulta)
-- El gating actual es solo "tiene sesión = puede exportar"
+### Flujo completo
 
-**No tocar hasta Sprint B.**
+```
+Usuario pulsa "Suscribirse ahora"
+  → SubscriptionScreen llama POST /api/checkout { plan: "pro" }
+  → checkout/route.ts verifica auth (Bearer) + plan actual
+  → Crea Stripe Checkout Session con metadata.userId
+  → Devuelve { url } → window.location.href = url
+  → Usuario completa pago en Stripe
+  → Stripe llama POST /api/webhooks/stripe (signature verificada)
+  → webhook upserta tabla `subscriptions` vía service-role
+  → getUserPlan(userId) devuelve 'pro' desde ese momento
+```
+
+### Tabla subscriptions (Supabase)
+
+```sql
+-- Migración: supabase/migrations/20260416_subscriptions.sql
+-- Aplicar en: Supabase Dashboard > SQL Editor
+CREATE TABLE public.subscriptions (
+  id                      uuid    PK DEFAULT gen_random_uuid(),
+  user_id                 uuid    NOT NULL → auth.users,
+  plan                    text    CHECK ('free'|'pro')  DEFAULT 'free',
+  status                  text    CHECK ('active'|'canceled'|'past_due'|
+                                         'incomplete'|'trialing'|'paused'),
+  stripe_customer_id      text,
+  stripe_subscription_id  text    UNIQUE,
+  stripe_price_id         text,
+  current_period_end      timestamptz,
+  created_at / updated_at timestamptz
+);
+-- RLS: SELECT solo el propio usuario; INSERT/UPDATE/DELETE solo service-role
+```
+
+### lib/subscriptionService.ts
+
+| Función | Descripción |
+|---------|-------------|
+| `getUserPlan(userId)` | Devuelve `'free'` \| `'pro'` (default free) |
+| `getActiveSubscription(userId)` | Row completo o null si vencida/inactiva |
+| `upsertSubscription(input)` | Escribe desde webhook (service-role) |
+| `getUserIdByCustomer(customerId)` | Lookup fallback para eventos sin metadata |
+| `createServiceClient()` | Cliente Supabase con `SUPABASE_SERVICE_ROLE_KEY` |
+
+### app/api/checkout/route.ts
+
+- `POST` requiere auth Bearer
+- Verifica si el usuario ya tiene plan Pro (→ 409 si sí)
+- Crea Stripe Checkout Session en modo `subscription`
+- Devuelve `{ url: string }` → SubscriptionScreen redirige
+
+### app/api/webhooks/stripe/route.ts
+
+- Verifica firma con `STRIPE_WEBHOOK_SECRET` (raw body via `request.text()`)
+- Eventos manejados: `checkout.session.completed`, `customer.subscription.{created,updated,deleted}`
+- Resuelve `userId` desde `metadata.userId` o fallback por `stripe_customer_id`
+- Upsert en `subscriptions` vía service-role (RLS bypass)
+
+### Variables de entorno necesarias (Sprint B.1)
+
+```env
+STRIPE_SECRET_KEY=sk_live_...           # o sk_test_... en dev
+STRIPE_WEBHOOK_SECRET=whsec_...         # de Stripe Dashboard > Webhooks
+STRIPE_PRO_PRICE_ID=price_...           # ID del precio Pro en Stripe
+SUPABASE_SERVICE_ROLE_KEY=eyJ...        # de Supabase > Settings > API
+NEXT_PUBLIC_SITE_URL=https://adaptaula.com   # para success/cancel URLs
+```
+
+### SubscriptionScreen (estado post B.1)
+
+- Botón "Suscribirse ahora" → llama `/api/checkout` → redirige a Stripe
+- Estado de carga (`checkoutBusy`) y error (`checkoutError`) mínimos
+- Sin rehacer el diseño visual
+- Gating real (bloquear adapt/export según plan) → **Sprint B.2**
+
+### Configurar webhook en desarrollo
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+# El CLI imprime el STRIPE_WEBHOOK_SECRET temporal para .env.local
+```
+
+### Qué falta para Sprint B.2
+
+1. `checkUserPlan()` en `/api/adapt` → 402 si free y >3 adaptaciones/mes
+2. `checkUserPlan()` en `/api/export/docx` → 403 si plan=free
+3. Contador de adaptaciones mensuales (query sobre tabla `adaptations`)
+4. Portal de facturación Stripe (ver facturas, cancelar)
+5. Mostrar plan actual en UI (badge en navbar o ResultScreen)
+6. Conectar `/history` a plan (solo pro puede ver historial)
 
 ---
 
@@ -299,9 +385,15 @@ subscriptions
 
 ---
 
-## 13. BACKLOG SPRINT B — SUSCRIPCIONES
+## 13. BACKLOG SPRINTS B — SUSCRIPCIONES
 
-**Objetivo**: Paywall real con Stripe. Free tier limitado, Pro ilimitado.
+### Sprint B.1 — COMPLETADO ✅
+
+Infraestructura base: tabla `subscriptions`, `subscriptionService.ts`, `/api/checkout`, `/api/webhooks/stripe`, SubscriptionScreen conectado.
+
+### Sprint B.2 — PENDIENTE
+
+**Objetivo**: Aplicar gating real en endpoints. Free tier limitado, Pro ilimitado.
 
 **Modelo mínimo viable**:
 
@@ -382,17 +474,17 @@ export function getAIProvider(model?: string): AIProvider { ... }
 # Requeridas hoy
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=         # ← NUEVO Sprint B.1 (webhook escribe subscriptions)
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash    # opcional, default en lib/ai/model.ts
+GEMINI_MODEL=gemini-2.5-flash      # opcional, default en lib/ai/model.ts
 
-# Sprint B (suscripciones)
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRO_PRICE_ID=
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+# Sprint B.1 (suscripciones) — NUEVAS
+STRIPE_SECRET_KEY=                 # sk_test_... o sk_live_...
+STRIPE_WEBHOOK_SECRET=             # whsec_... de Stripe Dashboard o CLI
+STRIPE_PRO_PRICE_ID=               # price_... del plan Pro en Stripe
 
 # Sprint C (multi-IA)
-AI_MODEL=gemini-2.5-flash        # o gpt-4o, claude-sonnet-4-6
+AI_MODEL=gemini-2.5-flash          # o gpt-4o, claude-sonnet-4-6
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 
