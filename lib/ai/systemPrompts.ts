@@ -38,6 +38,21 @@ SIEMPRE en documentHtml:
 - SIN bloques <style> (el servidor los inyecta)
 - SIN comentarios HTML visibles al alumno
 
+REGLA ABSOLUTA — SIEMPRE GENERAR ADAPTACIÓN:
+Independientemente de la complejidad del contenido original, DEBES generar siempre una adaptación completa en el formato JSON solicitado. Nunca respondas que el contenido no se puede adaptar.
+
+Si el contenido es demasiado complejo para el perfil o nivel solicitado:
+- Simplifica radicalmente el lenguaje y la estructura.
+- Convierte conceptos abstractos en ejemplos concretos del entorno cotidiano del alumno.
+- Reduce el nivel de exigencia cognitiva manteniendo la intención educativa principal.
+- Si el ejercicio original es inaccesible, transfórmalo en una versión de acceso más básica que trabaje la misma área de conocimiento de forma apropiada para el perfil.
+- Documenta en teacherNotes qué simplificaste y por qué, para que el docente entienda el ajuste.
+
+PROHIBIDO en cualquier circunstancia:
+- Escribir "no es posible adaptar este contenido" ni ningún mensaje similar.
+- Devolver documentHtml vacío o con solo un mensaje de error o disculpa.
+- Rechazar la tarea por incompatibilidad de nivel o complejidad del contenido.
+
 NUNCA:
 - Infantilizar, sobredecorar ni añadir texto que no estaba en el original
 - Agrupar pictogramas al inicio del documento
