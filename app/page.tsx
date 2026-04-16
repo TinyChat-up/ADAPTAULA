@@ -10,6 +10,7 @@ import ConfigScreen from "@/components/screens/ConfigScreen";
 import GeneratingScreen from "@/components/screens/GeneratingScreen";
 import ResultScreen from "@/components/screens/ResultScreen";
 import SubscriptionScreen from "@/components/screens/SubscriptionScreen";
+import ProGateModal from "@/components/ui/ProGateModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,6 +76,37 @@ export default function HomePage() {
 
   // ── Screen ───────────────────────────────────────────────────────────────────
   const [screen, setScreen] = useState<Screen>("upload");
+
+  // ── Plan state (cargado una vez al montar) ────────────────────────────────────
+  const [userPlan, setUserPlan] = useState<"free" | "pro" | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) { setUserPlan("free"); return; }
+        const { data } = await supabase
+          .from("subscriptions")
+          .select("plan, status, current_period_end")
+          .eq("user_id", session.user.id)
+          .eq("status", "active")
+          .maybeSingle();
+        const row = data as { plan?: string; current_period_end?: string } | null;
+        if (row?.plan === "pro") {
+          const notExpired = !row.current_period_end || new Date(row.current_period_end) > new Date();
+          setUserPlan(notExpired ? "pro" : "free");
+        } else {
+          setUserPlan("free");
+        }
+      } catch {
+        setUserPlan("free");
+      }
+    })();
+  }, []);
+
+  // ── Modal state (Pro gate) ───────────────────────────────────────────────────
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // ── Upload state ─────────────────────────────────────────────────────────────
   const [tab, setTab] = useState<Tab>("file");
@@ -223,11 +255,8 @@ export default function HomePage() {
           );
           setScreen("configure");
         } else if (res.status === 402 && errData.code === "FREE_TRIAL_EXHAUSTED") {
-          toast(
-            "Ya has usado tu adaptación gratuita. Actualiza a Pro para continuar.",
-            "warning",
-          );
-          setScreen("subscription");
+          setScreen("configure");
+          setShowTrialModal(true);
         } else {
           setConfigError(errData.error ?? "No se pudo generar la adaptación. Inténtalo de nuevo.");
           setScreen("configure");
@@ -325,6 +354,7 @@ export default function HomePage() {
   // ── PDF (hidden iframe print) ─────────────────────────────────────────────────
   const handlePdf = () => {
     if (!adaptResult || pdfBusy) return;
+    if (userPlan === "free") { setShowExportModal(true); return; }
     setPdfBusy(true);
     try {
       const iframe = document.createElement("iframe");
@@ -357,14 +387,15 @@ export default function HomePage() {
   // ── DOCX ──────────────────────────────────────────────────────────────────────
   const handleDocx = async () => {
     if (!adaptResult || docxBusy) return;
+    if (userPlan === "free") { setShowExportModal(true); return; }
     setDocxBusy(true);
     setDocxError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        // No auth → show subscription paywall
+        // No auth → show export modal
         setDocxBusy(false);
-        setScreen("subscription");
+        setShowExportModal(true);
         return;
       }
 
@@ -441,11 +472,20 @@ export default function HomePage() {
           perfil={perfil}
           subject={subject}
           supportDegree={supportDegree}
+          isPro={userPlan === "pro"}
           onReset={handleReset}
           onPdf={handlePdf}
           onDocx={() => void handleDocx()}
           onToggleNotes={() => setNotesOpen((o) => !o)}
+          onUpgrade={() => setScreen("subscription")}
         />
+        {showExportModal && (
+          <ProGateModal
+            variant="export-locked"
+            onUpgrade={() => { setShowExportModal(false); setScreen("subscription"); }}
+            onClose={() => setShowExportModal(false)}
+          />
+        )}
       </ErrorBoundary>
     );
   }
@@ -481,24 +521,31 @@ export default function HomePage() {
   // screen === "configure"
   return (
     <ErrorBoundary onError={(err) => toast(err.message, "error")}>
-    <ConfigScreen
-      perfil={perfil}
-      subject={subject}
-      supportDegree={supportDegree}
-      interestsInput={interestsInput}
-      educationalLevel={educationalLevel}
-      configError={configError}
-      showSecondaryWarning={showSecondaryWarning}
-      onPerfilChange={setPerfil}
-      onSubjectChange={setSubject}
-      onSupportDegreeChange={setSupportDegree}
-      onInterestsChange={setInterestsInput}
-      onEducationalLevelChange={setEducationalLevel}
-      onBack={() => { setScreen("upload"); setConfigError(""); }}
-      onGenerate={() => void handleGenerate()}
-      onDismissWarning={() => setShowSecondaryWarning(false)}
-      onBackFromWarning={() => { setShowSecondaryWarning(false); setScreen("upload"); setConfigError(""); }}
-    />
+      <ConfigScreen
+        perfil={perfil}
+        subject={subject}
+        supportDegree={supportDegree}
+        interestsInput={interestsInput}
+        educationalLevel={educationalLevel}
+        configError={configError}
+        showSecondaryWarning={showSecondaryWarning}
+        onPerfilChange={setPerfil}
+        onSubjectChange={setSubject}
+        onSupportDegreeChange={setSupportDegree}
+        onInterestsChange={setInterestsInput}
+        onEducationalLevelChange={setEducationalLevel}
+        onBack={() => { setScreen("upload"); setConfigError(""); }}
+        onGenerate={() => void handleGenerate()}
+        onDismissWarning={() => setShowSecondaryWarning(false)}
+        onBackFromWarning={() => { setShowSecondaryWarning(false); setScreen("upload"); setConfigError(""); }}
+      />
+      {showTrialModal && (
+        <ProGateModal
+          variant="trial-exhausted"
+          onUpgrade={() => { setShowTrialModal(false); setScreen("subscription"); }}
+          onClose={() => { setShowTrialModal(false); setScreen("upload"); handleReset(); }}
+        />
+      )}
     </ErrorBoundary>
   );
 }

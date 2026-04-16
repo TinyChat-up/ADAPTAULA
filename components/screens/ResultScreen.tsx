@@ -1,6 +1,7 @@
 "use client";
 
 import BrandLogo from "@/components/BrandLogo";
+import PlanBadge from "@/components/ui/PlanBadge";
 import type { Subject, SupportDegree } from "@/lib/adaptationRules";
 
 type Perfil = "tea" | "tel" | "dislexia" | "di" | "tdah" | "retraso";
@@ -27,10 +28,12 @@ interface Props {
   perfil: Perfil;
   subject: Subject;
   supportDegree: SupportDegree;
+  isPro?: boolean;
   onReset: () => void;
   onPdf: () => void;
   onDocx: () => void;
   onToggleNotes: () => void;
+  onUpgrade?: () => void;
 }
 
 export default function ResultScreen({
@@ -43,10 +46,12 @@ export default function ResultScreen({
   perfil,
   subject,
   supportDegree,
+  isPro,
   onReset,
   onPdf,
   onDocx,
   onToggleNotes,
+  onUpgrade,
 }: Props) {
   return (
     <div style={{ minHeight: "100svh", background: "#F0EDE8" }}>
@@ -89,8 +94,13 @@ export default function ResultScreen({
             <BrandLogo />
           </div>
 
-          {/* Right: download buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right: plan badge (sm+) + download buttons */}
+          <div className="flex items-center gap-3 shrink-0">
+            {isPro !== undefined && (
+              <div className="hidden sm:block">
+                <PlanBadge plan={isPro ? "pro" : "free"} onUpgrade={!isPro ? onUpgrade : undefined} />
+              </div>
+            )}
             <button
               type="button"
               onClick={onPdf}
@@ -127,6 +137,44 @@ export default function ResultScreen({
           </p>
           <div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
         </div>
+
+        {/* Pro upsell banner — solo para usuarios free */}
+        {!isPro && onUpgrade && (
+          <div className="mx-auto max-w-[820px] px-4 pb-4">
+            <div
+              className="flex flex-col gap-3 rounded-2xl bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+              style={{ border: "1px solid #E8E5E0", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+            >
+              <div className="min-w-0">
+                <span
+                  className="mb-1.5 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white"
+                  style={{ background: "var(--aa-orange)" }}
+                >
+                  Con Pro obtienes
+                </span>
+                <p className="text-sm font-medium" style={{ color: "var(--aa-text)" }}>
+                  IA más precisa, PDF, DOCX y adaptaciones ilimitadas.
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--aa-text-muted)" }}>
+                  Tu adaptación gratuita ya está lista. Activa Pro para continuar.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+                <button
+                  type="button"
+                  onClick={onUpgrade}
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: "var(--aa-green-dark)" }}
+                >
+                  Ver plan Pro
+                </button>
+                <span className="text-[10px]" style={{ color: "var(--aa-text-muted)" }}>
+                  9,99 €/mes · cancela cuando quieras
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* DOCX error */}
         {docxError && (

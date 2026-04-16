@@ -31,23 +31,58 @@ async function startProCheckout(): Promise<{ url: string }> {
   return { url: json.url };
 }
 
-function CheckIcon({ color }: { color: string }) {
-  return (
-    <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" fill={color} fillOpacity={0.15} stroke={color} strokeWidth="1.5" />
-      <path d="M5 8l2 2 4-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+// ─── Feature card data ────────────────────────────────────────────────────────
 
-function PlanBenefit({ text, color }: { text: string; color: string }) {
-  return (
-    <li className="flex items-start gap-2 text-sm" style={{ color: "#4B5B4C" }}>
-      <CheckIcon color={color} />
-      {text}
-    </li>
-  );
-}
+const FEATURES = [
+  {
+    title: "Adaptaciones ilimitadas",
+    description: "Sin restricciones por mes. Adapta todos los materiales que necesites.",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+      />
+    ),
+  },
+  {
+    title: "Exportación PDF y DOCX",
+    description: "Descarga fichas listas para imprimir en los formatos del aula.",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+      />
+    ),
+  },
+  {
+    title: "IA de mayor precisión",
+    description: "GPT-4.1 con instrucciones pedagógicas premium. Resultados más fieles, consignas más claras.",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
+      />
+    ),
+  },
+  {
+    title: "Estilo docente propio",
+    description: "Aprende de tus materiales y adapta con tu estructura y tono habitual.",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"
+      />
+    ),
+  },
+] as const;
+
+const TRUST_ITEMS = ["✓ Pago seguro vía Stripe", "✓ Cancela cuando quieras", "✓ Factura disponible"];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubscriptionScreen({ onBack }: Props) {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
@@ -66,183 +101,138 @@ export default function SubscriptionScreen({ onBack }: Props) {
   }
 
   return (
-    <div className="aa-screen px-4 py-12">
-      {/* Header */}
-      <div className="mb-10 text-center">
-        <p className="text-2xl font-bold" style={{ color: "var(--aa-green-dark)" }}>
-          Elige el plan que mejor
-          <br className="hidden sm:block" /> se adapta a ti
-        </p>
-        <p className="mt-2 text-sm" style={{ color: "var(--aa-text-muted)" }}>
-          Más de 2.000 docentes ya usan AdaptAula
-        </p>
-      </div>
+    <div className="aa-screen px-4 py-12 sm:py-16">
+      <div className="mx-auto max-w-[640px]">
 
-      {/* Plan cards */}
-      <div className="mx-auto grid max-w-[900px] grid-cols-1 gap-5 sm:grid-cols-3">
-
-        {/* ── GRATUITO ── */}
-        <div className="flex flex-col rounded-3xl border bg-white p-6" style={{ borderColor: "#dde8dd" }}>
+        {/* ── Top badge ── */}
+        <div className="mb-6 flex justify-center">
           <span
-            className="mb-4 self-start rounded-full border px-3 py-0.5 text-xs font-semibold"
-            style={{ borderColor: "#c8dcc8", color: "var(--aa-text-muted)" }}
+            className="inline-flex items-center rounded-full px-4 py-1.5 text-xs font-semibold text-white"
+            style={{ background: "var(--aa-green-dark)" }}
           >
-            Gratis para siempre
+            Plan Pro · 9,99 €/mes
           </span>
-          <div className="mb-5">
-            <span className="text-3xl font-bold" style={{ color: "var(--aa-text)" }}>0 €</span>
-            <span className="text-sm" style={{ color: "var(--aa-text-muted)" }}>/mes</span>
-          </div>
-          <ul className="mb-6 flex-1 space-y-3">
-            <PlanBenefit text="3 adaptaciones al mes" color="#9aaa9b" />
-            <PlanBenefit text="Formatos básicos (PDF)" color="#9aaa9b" />
-            <PlanBenefit text="Sin pictogramas ARASAAC" color="#9aaa9b" />
-          </ul>
-          <button
-            type="button"
-            className="w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-gray-50"
-            style={{ borderColor: "var(--aa-green)", color: "var(--aa-green)" }}
-          >
-            Empezar gratis
-          </button>
         </div>
 
-        {/* ── PRO ── */}
-        <div
-          className="relative flex flex-col rounded-3xl border-2 bg-white p-6"
-          style={{ borderColor: "var(--aa-orange)", boxShadow: "0 8px 30px rgba(232,131,74,0.15)" }}
+        {/* ── Headline ── */}
+        <h1
+          className="mb-4 text-center text-3xl font-bold leading-tight sm:text-4xl"
+          style={{ color: "var(--aa-text)" }}
         >
-          {/* Badge */}
-          <span
-            className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1 text-xs font-bold text-white"
-            style={{ background: "var(--aa-orange)" }}
-          >
-            Más popular
-          </span>
+          Adaptaciones sin límites,
+          <br className="hidden sm:block" /> calidad profesional
+        </h1>
 
-          <span
-            className="mb-4 self-start rounded-full border px-3 py-0.5 text-xs font-semibold"
-            style={{ borderColor: "#f5c5a0", color: "var(--aa-orange)" }}
-          >
-            Pro
-          </span>
-          <div className="mb-5">
-            <span className="text-3xl font-bold" style={{ color: "var(--aa-orange)" }}>9,99 €</span>
-            <span className="text-sm" style={{ color: "var(--aa-text-muted)" }}>/mes</span>
-          </div>
-          <ul className="mb-6 flex-1 space-y-3">
-            <PlanBenefit text="Adaptaciones ilimitadas" color="var(--aa-orange)" />
-            <PlanBenefit text="Pictogramas ARASAAC incluidos" color="var(--aa-orange)" />
-            <PlanBenefit text="Todos los tipos de adaptación" color="var(--aa-orange)" />
-            <PlanBenefit text="Exportar PDF y Word" color="var(--aa-orange)" />
-            <PlanBenefit text="Historial de adaptaciones" color="var(--aa-orange)" />
-          </ul>
-          {checkoutError && (
-            <p className="mb-3 rounded-xl px-3 py-2 text-center text-xs" style={{ background: "rgba(190,18,60,0.08)", color: "#be123c" }}>
-              {checkoutError}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={handleProCheckout}
-            disabled={checkoutBusy}
-            className="w-full rounded-full py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
-            style={{
-              background: "linear-gradient(135deg, var(--aa-orange) 0%, #f0a060 100%)",
-              boxShadow: "0 4px 14px rgba(232,131,74,0.35)",
-            }}
-          >
-            {checkoutBusy ? "Redirigiendo…" : "Suscribirse ahora"}
-          </button>
-        </div>
-
-        {/* ── CENTRO EDUCATIVO ── */}
-        <div className="flex flex-col rounded-3xl border-2 bg-white p-6" style={{ borderColor: "var(--aa-green)" }}>
-          <span
-            className="mb-4 self-start rounded-full border px-3 py-0.5 text-xs font-semibold"
-            style={{ borderColor: "#c8dcc8", color: "var(--aa-green-dark)" }}
-          >
-            Para equipos
-          </span>
-          <div className="mb-5">
-            <span className="text-2xl font-bold" style={{ color: "var(--aa-text)" }}>Precio a medida</span>
-          </div>
-          <ul className="mb-6 flex-1 space-y-3">
-            <PlanBenefit text="Todo lo incluido en Pro" color="var(--aa-green)" />
-            <PlanBenefit text="Múltiples docentes" color="var(--aa-green)" />
-            <PlanBenefit text="Panel de administración" color="var(--aa-green)" />
-            <PlanBenefit text="Soporte prioritario 24/7" color="var(--aa-green)" />
-            <PlanBenefit text="Formación incluida" color="var(--aa-green)" />
-          </ul>
-          <button
-            type="button"
-            className="w-full rounded-full py-2.5 text-sm font-bold text-white transition"
-            style={{ background: "var(--aa-green)" }}
-          >
-            Contactar
-          </button>
-        </div>
-      </div>
-
-      {/* Trust badges */}
-      <div className="mx-auto mt-10 flex max-w-[500px] justify-center gap-8">
-        {[
-          {
-            label: "Pago seguro",
-            icon: (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 7.5v5m-2.5-2.5h5" />
-              </svg>
-            ),
-          },
-          {
-            label: "Cumplimiento LOPD",
-            icon: (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </svg>
-            ),
-          },
-          {
-            label: "Valoración 4.8/5",
-            icon: (
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-            ),
-          },
-        ].map(({ label, icon }) => (
-          <div key={label} className="flex flex-col items-center gap-1.5 text-center">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-full"
-              style={{ background: "rgba(123,175,127,0.12)", color: "var(--aa-green-dark)" }}
-            >
-              {icon}
-            </div>
-            <span className="text-xs" style={{ color: "var(--aa-text-muted)" }}>{label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <p className="mt-6 text-center text-xs" style={{ color: "var(--aa-text-muted)" }}>
-        Cancela cuando quieras. Sin permanencia.
-      </p>
-
-      {/* Back to adaptation */}
-      <div className="mt-8 text-center">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm transition"
+        {/* ── Subheadline ── */}
+        <p
+          className="mx-auto mb-10 max-w-[480px] text-center text-base leading-relaxed sm:text-lg"
           style={{ color: "var(--aa-text-muted)" }}
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          Volver a mi adaptación
+          Genera fichas adaptadas ilimitadas, exporta en PDF y DOCX, y benefíciate de inteligencia artificial de mayor precisión.
+        </p>
+
+        {/* ── Feature grid 2×2 ── */}
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl bg-white p-5"
+              style={{ border: "1px solid #E8E5E0", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+            >
+              <div
+                className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl"
+                style={{ background: "rgba(123,175,127,0.12)" }}
+              >
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="var(--aa-green-dark)"
+                  strokeWidth={1.6}
+                >
+                  {f.icon}
+                </svg>
+              </div>
+              <p className="mb-1 text-sm font-semibold" style={{ color: "var(--aa-text)" }}>
+                {f.title}
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--aa-text-muted)" }}>
+                {f.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Price block ── */}
+        <div className="mb-6 text-center">
+          <div className="flex items-baseline justify-center gap-1">
+            <span className="text-5xl font-bold" style={{ color: "var(--aa-text)" }}>9,99 €</span>
+            <span className="text-base" style={{ color: "var(--aa-text-muted)" }}>/mes</span>
+          </div>
+          <p className="mt-2 text-sm" style={{ color: "var(--aa-text-muted)" }}>
+            Cancela cuando quieras. Sin permanencia.
+          </p>
+        </div>
+
+        {/* ── Error ── */}
+        {checkoutError && (
+          <div
+            className="mb-4 rounded-xl px-4 py-3 text-center text-sm"
+            style={{ background: "rgba(190,18,60,0.08)", color: "#be123c" }}
+          >
+            {checkoutError}
+          </div>
+        )}
+
+        {/* ── Primary CTA ── */}
+        <button
+          type="button"
+          onClick={() => void handleProCheckout()}
+          disabled={checkoutBusy}
+          className="w-full rounded-2xl py-4 text-base font-bold text-white transition hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
+          style={{
+            background: "var(--aa-green-dark)",
+            boxShadow: "0 4px 20px rgba(74,124,89,0.30)",
+          }}
+        >
+          {checkoutBusy ? "Redirigiendo a Stripe…" : "Activar AdaptAula Pro"}
         </button>
+
+        {/* ── Secondary link ── */}
+        <p className="mt-4 text-center text-sm" style={{ color: "var(--aa-text-muted)" }}>
+          ¿Ya eres Pro?{" "}
+          <a
+            href="/login"
+            className="font-medium transition hover:opacity-75"
+            style={{ color: "var(--aa-green-dark)" }}
+          >
+            Accede a tu cuenta →
+          </a>
+        </p>
+
+        {/* ── Trust signals ── */}
+        <div className="mt-8 flex flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-6">
+          {TRUST_ITEMS.map((t) => (
+            <span key={t} className="text-xs" style={{ color: "var(--aa-text-muted)" }}>
+              {t}
+            </span>
+          ))}
+        </div>
+
+        {/* ── Back ── */}
+        <div className="mt-10 text-center">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-sm transition hover:opacity-75"
+            style={{ color: "var(--aa-text-muted)" }}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            Volver
+          </button>
+        </div>
       </div>
     </div>
   );
