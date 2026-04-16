@@ -3,7 +3,7 @@
 ---
 
 # AUDITORÍA TÉCNICA — AdaptAula
-**Fecha**: 2026-04-16 | **Sprint**: C.1 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
+**Fecha**: 2026-04-16 | **Sprint**: C.2 completado | **Build**: ✅ limpio | **Fuente**: inspección directa del código
 
 ---
 
@@ -20,6 +20,7 @@ AdaptAula es una SPA Next.js 16.2.1 con 5 pantallas en máquina de estados, moto
 - ✅ SubscriptionScreen conectado a Stripe Checkout (botón Pro funcional)
 - ✅ Gating free trial (1 adaptación): 402 en adapt, 403 en export para free/anónimo
 - ✅ Multi-provider IA: `lib/ai/provider.ts` + providers/gemini.ts + providers/openai.ts
+- ✅ Generación premium diferenciada: PREMIUM_SYSTEM_SUFFIX + estilo docente inyectado en Pro
 
 ---
 
@@ -504,6 +505,61 @@ export function getAIProvider(plan: Plan): AIProvider
 
 ---
 
+## 15. SPRINT C.2 — CALIDAD PREMIUM DIFERENCIADA ✅ COMPLETADO
+
+### Diferencia real entre free y pro
+
+| Aspecto | Free (standard) | Pro (premium) |
+|---------|----------------|---------------|
+| Modelo IA | Gemini 2.5 Flash | GPT-4.1 (si OPENAI_API_KEY) |
+| System prompt | Perfil NEE base | Perfil NEE + PREMIUM_SYSTEM_SUFFIX |
+| Estilo docente | No se usa | Inyectado en userPrompt si styleId existe |
+| teacherNotes | Genéricas | Mínimo 3 observaciones específicas y accionables |
+| Fidelidad al original | Estándar | Reforzada (no omitir secciones, conservar orden) |
+| Calidad consignas | Estándar | Instrucciones autónomas, verbo concreto al inicio |
+
+### Cómo funciona el tier premium
+
+```
+adapt/route.ts:
+  generationTier = userPlan === "pro" ? "premium" : "standard"
+
+  // System prompt:
+  systemPrompt = baseSystemPrompt
+  if (generationTier === "premium") systemPrompt += PREMIUM_SYSTEM_SUFFIX
+
+  // User prompt (style context):
+  if (generationTier === "premium" && styleId && style_analyses row exists):
+    userPrompt = basePrompt + styleContextBlock
+```
+
+### PREMIUM_SYSTEM_SUFFIX (lib/ai/systemPrompts.ts)
+Bloque adicional añadido al final del system prompt para pro. Instrucciones sobre:
+- Fidelidad al original (no omitir, no reordenar)
+- Jerarquía visual consistente
+- Instrucciones de actividad autónomas
+- Tono digno sin infantilizar
+- Consistencia interna (vocabulario, formatos, pictogramas)
+- teacherNotes de calidad (≥3 observaciones accionables)
+
+### Estilo docente en Pro (style_analyses)
+Si `styleId` viene en el request y el usuario es Pro:
+1. Pre-fetch de `style_analyses` con anon client + Bearer token (respeta RLS)
+2. Campos: `summary`, `usual_structure`, `instruction_style`, `tone`, `key_observations`
+3. Se inyecta como bloque `ESTILO DOCENTE` al final del userPrompt
+4. Si no hay análisis guardado: prompt normal sin bloque (silent fallback)
+
+### Logging por request
+```
+[ADAPT] { plan, tier, provider, hasStyleContext, profile }
+[ADAPT] JSON_PARSE_ERROR { provider, rawLength, parseErr }  // solo en error
+```
+
+### Robustez JSON (task 4)
+JSON.parse envuelto en try/catch explícito. Si falla: error descriptivo al usuario en lugar de crash genérico. El regex `/\{[\s\S]*\}/` ya filtraba markdown; el catch añade mensaje claro.
+
+---
+
 ## 15. VARIABLES DE ENTORNO
 
 ```env
@@ -550,6 +606,7 @@ INTERNAL_FEEDBACK_ALLOWED_EMAILS=email1@,email2@
 
 ## OPTIMIZACIONES ACUMULADAS
 
+- `adapt/route.ts` v7: generationTier premium, PREMIUM_SYSTEM_SUFFIX, estilo docente en Pro, logging, JSON.parse try/catch
 - `adapt/route.ts` v6: multi-provider IA (Gemini free / GPT-4.1 pro), plan resuelto una sola vez antes del stream, callGemini/streamGemini extraídos a providers/
 - `adapt/route.ts` v5: CSS server-side (−550 tokens), Promise.all auth+pictogramas, system prompts por perfil NEE, streaming SSE, GEMINI_MODEL centralizado
 - `style-analysis/route.ts`: responseMimeType json, temperature 0.2

@@ -1,10 +1,11 @@
-// app/api/adapt/route.ts — v6
-// Sprint C.1: multi-provider IA (Gemini para free, GPT-4.1 para pro)
-// Cambios v6:
-//   - streamGemini/callGemini extraídos a lib/ai/providers/gemini.ts
-//   - Selección de proveedor via getAIProvider(plan) — lib/ai/provider.ts
-//   - Plan resuelto una sola vez antes del stream (reutiliza el getUserPlan del trial check)
-//   - Comportamiento externo del endpoint sin cambios
+// app/api/adapt/route.ts — v7
+// Sprint C.2: generación premium diferenciada por tier (standard vs premium)
+// Cambios v7:
+//   - generationTier: "standard" (free) | "premium" (pro)
+//   - PREMIUM_SYSTEM_SUFFIX añadido al system prompt en tier premium
+//   - Estilo docente (style_analyses) inyectado en prompt solo para pro+styleId
+//   - Logging por request: plan, tier, provider, hasStyleContext
+//   - JSON.parse protegido con try/catch explícito
 
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -28,7 +29,7 @@ import {
   buildPictogramSuggestions,
 } from "@/lib/pictogramResolver";
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
-import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT } from "@/lib/ai/systemPrompts";
+import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT, PREMIUM_SYSTEM_SUFFIX } from "@/lib/ai/systemPrompts";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
 import { getAIProvider } from "@/lib/ai/provider";
@@ -69,6 +70,28 @@ function normalizeDecisions(raw: unknown): AdaptationDecision[] {
     })
     .filter((i): i is AdaptationDecision => Boolean(i))
     .slice(0, 10);
+}
+
+// ─── Contexto de estilo docente (solo Pro) ────────────────────────────────────
+
+function buildStyleContextBlock(row: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (row.summary) parts.push(`Resumen del estilo: ${String(row.summary)}`);
+  if (row.usual_structure) parts.push(`Estructura habitual: ${String(row.usual_structure)}`);
+  if (row.instruction_style) parts.push(`Tipo de consignas: ${String(row.instruction_style)}`);
+  if (row.tone) parts.push(`Tono habitual: ${String(row.tone)}`);
+  if (row.key_observations) parts.push(`Observaciones clave: ${String(row.key_observations)}`);
+  if (parts.length === 0) return "";
+
+  return `═══════════════════════════════════════════════
+ESTILO DOCENTE (guía de personalización Pro)
+═══════════════════════════════════════════════
+
+Este documento debe reflejar el estilo pedagógico habitual del docente:
+
+${parts.join("\n")}
+
+Aplica este estilo como referencia de personalización. Si hay conflicto con las reglas del perfil NEE, las reglas del perfil prevalecen siempre.`;
 }
 
 // ─── Construcción del user prompt ─────────────────────────────────────────────
@@ -323,6 +346,7 @@ export async function POST(req: Request) {
   }
 
   const aiProvider = getAIProvider(userPlan);
+  const generationTier: "standard" | "premium" = userPlan === "pro" ? "premium" : "standard";
 
   const {
     content,
@@ -341,6 +365,26 @@ export async function POST(req: Request) {
     : [];
   const educationalLevel = body.educationalLevel === "secundaria" ? "secundaria" : "primaria";
   const sourceText = typeof content === "string" ? content : "";
+
+  // ── Estilo docente (solo Pro + styleId) ───────────────────────────────────
+  // Fetch previo al stream para que esté disponible en buildPrompt.
+  // El error es silencioso: el contexto de estilo es mejora, no requisito.
+  let styleContextBlock = "";
+  if (generationTier === "premium" && typeof styleId === "string" && styleId) {
+    try {
+      const styleClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : undefined,
+      );
+      const { data } = await styleClient
+        .from("style_analyses")
+        .select("summary, usual_structure, instruction_style, tone, key_observations")
+        .eq("style_id", styleId)
+        .maybeSingle();
+      if (data) styleContextBlock = buildStyleContextBlock(data as Record<string, unknown>);
+    } catch { /* estilo es enhancement, no falla el request */ }
+  }
 
   const encoder = new TextEncoder();
 
@@ -404,7 +448,7 @@ export async function POST(req: Request) {
         const pictogramSuggestions = buildPictogramSuggestions(resolvedPictograms);
 
         // ── Prompts ───────────────────────────────────────────────────────
-        const userPrompt = buildPrompt({
+        const basePrompt = buildPrompt({
           sourceText,
           config,
           rulesText,
@@ -417,12 +461,29 @@ export async function POST(req: Request) {
           educationalLevel,
         });
 
-        const systemPrompt = config.learningProfile
+        const userPrompt = styleContextBlock
+          ? `${basePrompt}\n\n${styleContextBlock}`
+          : basePrompt;
+
+        const baseSystemPrompt = config.learningProfile
           ? getSystemPromptForProfile(config.learningProfile)
           : FALLBACK_SYSTEM_PROMPT;
 
+        const systemPrompt = generationTier === "premium"
+          ? `${baseSystemPrompt}\n\n${PREMIUM_SYSTEM_SUFFIX}`
+          : baseSystemPrompt;
+
+        // ── Logging ───────────────────────────────────────────────────────
+        const providerName = userPlan === "pro" && process.env.OPENAI_API_KEY ? "openai" : "gemini";
+        console.log("[ADAPT]", {
+          plan: userPlan,
+          tier: generationTier,
+          provider: providerName,
+          hasStyleContext: Boolean(styleContextBlock),
+          profile: config.learningProfile,
+        });
+
         // ── Llamada al proveedor IA ───────────────────────────────────────
-        let raw: Record<string, unknown>;
         let lastSentProgress = 0;
 
         const rawText = await aiProvider.stream(systemPrompt, userPrompt, (accumulated) => {
@@ -433,8 +494,14 @@ export async function POST(req: Request) {
           }
         });
 
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        raw = JSON.parse(jsonMatch ? jsonMatch[0] : rawText) as Record<string, unknown>;
+        let raw: Record<string, unknown>;
+        try {
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          raw = JSON.parse(jsonMatch ? jsonMatch[0] : rawText) as Record<string, unknown>;
+        } catch (parseErr) {
+          console.error("[ADAPT] JSON_PARSE_ERROR", { provider: providerName, rawLength: rawText.length, parseErr });
+          throw new Error("El modelo devolvió una respuesta con formato inválido. Inténtalo de nuevo.");
+        }
 
         // ── Procesar resultado ────────────────────────────────────────────
         const rawHtml =

@@ -268,3 +268,43 @@ Tu misión: transformar material escolar en fichas adaptadas que funcionen de ve
 Antes de cada decisión pregúntate: ¿Puede un alumno con este perfil trabajar esto de forma autónoma?
 
 ${OUTPUT_RULES}`;
+
+// ─── Sufijo de calidad premium ────────────────────────────────────────────────
+// Se añade al system prompt cuando el tier es "premium" (plan Pro).
+// Eleva la calidad del output sin alterar la lógica pedagógica de base.
+// El sufijo va DESPUÉS de OUTPUT_RULES para que el perfil + reglas tengan mayor peso.
+
+export const PREMIUM_SYSTEM_SUFFIX = `
+
+═══════════════════════════════════════════════
+ESTÁNDARES DE CALIDAD PREMIUM (plan Pro)
+═══════════════════════════════════════════════
+
+FIDELIDAD AL ORIGINAL:
+- Conserva la estructura y el orden de contenidos del documento fuente con exactitud.
+- No omitas ni reordenes secciones, preguntas ni apartados salvo que la adaptación lo requiera explícitamente.
+- Preserva datos, cifras, nombres propios y terminología específica sin parafrasear innecesariamente.
+
+JERARQUÍA VISUAL:
+- Los títulos (h1, aa-section-title, aa-subtitle) deben reflejar la jerarquía real del original.
+- Los bloques de lectura y actividad deben seguir la progresión pedagógica del documento fuente.
+- Separa bloques de forma consistente: ningún bloque debe parecer pegado al anterior.
+
+CALIDAD DE INSTRUCCIONES:
+- Cada instrucción de actividad debe ser autónoma: el alumno puede trabajar sin explicación oral.
+- Evita consignas genéricas ("Contesta", "Lee el texto"). Especifica exactamente qué hacer y cómo.
+- Un solo verbo de acción por instrucción. Verbo siempre al inicio de la oración.
+
+TONO Y DIGNIDAD:
+- El tono debe ser claro y respetuoso, nunca condescendiente más allá de lo que el perfil requiere.
+- No añadas texto motivacional genérico ("¡Muy bien!", "¡Ánimo!") salvo que el perfil lo indique.
+- El nivel de lenguaje debe ser el más alto posible dentro de las restricciones del perfil.
+
+CONSISTENCIA INTERNA:
+- El vocabulario de la lectura debe ser el mismo en las actividades relacionadas.
+- Los formatos de actividad deben ser coherentes en todo el documento.
+- Si un pictograma se usa para una palabra, usarlo en todas las apariciones de esa palabra.
+
+TEACHERNOTES DE CALIDAD:
+- Incluye mínimo 3 observaciones pedagógicas específicas, accionables y personalizadas al perfil y contenido.
+- No incluyas observaciones genéricas o repetitivas entre ellas.`.trim();
