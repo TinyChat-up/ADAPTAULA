@@ -59,7 +59,8 @@ function detectsSecondaryLevel(text: string): boolean {
 // ─── Style injection helper ───────────────────────────────────────────────────
 
 function injectAndStripStyles(html: string): string {
-  const match = html.match(/<style>([\s\S]*?)<\/style>/i);
+  // Match <style> or <style id="..."> (the generated CSS has an id attribute)
+  const match = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
   if (!match) return html;
   const existing = document.getElementById("aa-document-styles");
   if (existing) existing.remove();
@@ -67,7 +68,7 @@ function injectAndStripStyles(html: string): string {
   el.id = "aa-document-styles";
   el.textContent = match[1];
   document.head.appendChild(el);
-  return html.replace(/<style>[\s\S]*?<\/style>/i, "").trim();
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/i, "").trim();
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

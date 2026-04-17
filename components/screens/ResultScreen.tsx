@@ -135,7 +135,7 @@ export default function ResultScreen({
           <p className="mb-4 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--aa-text-muted)" }}>
             Adaptación generada
           </p>
-          <div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+          <div className="document-content" dangerouslySetInnerHTML={{ __html: cleanHtml }} />
         </div>
 
         {/* Pro upsell banner — solo para usuarios free */}

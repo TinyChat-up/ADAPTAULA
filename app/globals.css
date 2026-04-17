@@ -124,3 +124,67 @@ body {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* ── Document content normalizer ─────────────────────────────────────────── */
+/* Wraps the AI-generated HTML in ResultScreen. Restores sensible defaults
+   for bare HTML elements that fall outside the .aa-* class structure.
+   Works because class+element specificity (0,1,1) beats the *{margin:0}
+   reset (0,0,0) in the injected document CSS.
+   .aa-* selectors are more specific still so they always win where present. */
+
+.document-content {
+  color: var(--aa-text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Bare headings outside .aa-header ---------------------------------------- */
+.document-content h1,
+.document-content h2,
+.document-content h3,
+.document-content h4 {
+  font-weight: 700;
+  color: var(--aa-text);
+  line-height: 1.3;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.document-content h1 { font-size: 1.45rem; }
+.document-content h2 { font-size: 1.2rem; }
+.document-content h3 { font-size: 1.05rem; }
+.document-content h4 { font-size: 1rem; }
+
+/* First heading needs no top gap */
+.document-content :is(h1, h2, h3, h4):first-child {
+  margin-top: 0;
+}
+
+/* Bare paragraphs ---------------------------------------------------------- */
+.document-content p {
+  line-height: 1.75;
+  margin-bottom: 0.8rem;
+}
+
+/* Lists -------------------------------------------------------------------- */
+.document-content ul,
+.document-content ol {
+  padding-left: 1.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.document-content li {
+  line-height: 1.6;
+  margin-bottom: 0.25rem;
+}
+
+/* Images must never overflow ----------------------------------------------- */
+.document-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Contain .aa-page inside the fixed-width wrapper -------------------------- */
+.document-content .aa-page {
+  max-width: 100%;
+}
