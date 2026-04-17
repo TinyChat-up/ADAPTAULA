@@ -355,35 +355,60 @@ export default function HomePage() {
     setScreen("upload");
   };
 
-  // ── PDF (hidden iframe print) ─────────────────────────────────────────────────
-  const handlePdf = () => {
+  // ── PDF (server-side via /api/export/pdf) ────────────────────────────────────
+  const handlePdf = async () => {
     if (!adaptResult || pdfBusy) return;
     if (userPlan !== "pro") { setShowExportModal(true); return; }
     setPdfBusy(true);
     try {
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;";
-      document.body.appendChild(iframe);
-      const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-      if (!doc) {
-        document.body.removeChild(iframe);
-        setPdfBusy(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setShowExportModal(true);
         return;
       }
-      doc.open();
-      doc.write(
-        `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>AdaptAula</title>` +
-        `<style media="print">@page{margin:0}body{margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>` +
-        `</head><body>${adaptResult.documentHtml}</body></html>`,
-      );
-      doc.close();
-      iframe.onload = () => {
-        setTimeout(() => {
-          iframe.contentWindow?.print();
-          setTimeout(() => { document.body.removeChild(iframe); setPdfBusy(false); }, 2000);
-        }, 300);
-      };
+
+      // Reuse the same saved record as DOCX to avoid duplicate inserts
+      let adaptationId = savedAdaptationIdRef.current;
+      if (!adaptationId) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("adaptations")
+          .insert({ result_html: adaptResult.documentHtml })
+          .select("id")
+          .single();
+        const row = inserted as Record<string, unknown> | null;
+        if (insertError || !row?.id) {
+          toast("No se pudo guardar la adaptación para la descarga.", "error");
+          return;
+        }
+        adaptationId = String(row.id);
+        savedAdaptationIdRef.current = adaptationId;
+      }
+
+      const res = await fetch("/api/export/pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ adaptationId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Error desconocido" })) as { error?: string };
+        toast(err.error ?? "No se pudo generar el PDF.", "error");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "adaptacion-adaptaula.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
+      toast("Error de red al descargar el PDF.", "error");
+    } finally {
       setPdfBusy(false);
     }
   };
@@ -488,7 +513,7 @@ export default function HomePage() {
           supportDegree={supportDegree}
           isPro={userPlan === "pro"}
           onReset={handleReset}
-          onPdf={handlePdf}
+          onPdf={() => void handlePdf()}
           onDocx={() => void handleDocx()}
           onToggleNotes={() => setNotesOpen((o) => !o)}
           onUpgrade={() => setScreen("subscription")}

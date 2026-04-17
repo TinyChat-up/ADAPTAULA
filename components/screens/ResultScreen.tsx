@@ -61,7 +61,7 @@ export default function ResultScreen({
         className="fixed inset-x-0 top-0 z-50 border-b"
         style={{ borderColor: "#ddd8d0", background: "rgba(250,247,242,0.92)", backdropFilter: "blur(12px)" }}
       >
-        <div className="mx-auto flex max-w-[900px] items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-[820px] items-center justify-between gap-4 px-4 py-3">
 
           {/* Left: back + context chips */}
           <div className="flex items-center gap-3 min-w-0">
@@ -130,8 +130,8 @@ export default function ResultScreen({
       </div>
 
       {/* ── Content ── */}
-      <div className="pt-[57px]">
-        <div className="mx-auto max-w-[820px] px-4 py-6">
+      <div className="pt-[61px]">
+        <div className="mx-auto max-w-[820px] px-4 py-8">
           <p className="mb-4 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--aa-text-muted)" }}>
             Adaptación generada
           </p>
