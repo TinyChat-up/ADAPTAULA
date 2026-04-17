@@ -84,115 +84,246 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f9ff] text-[#1a1c1c]">
-      <nav className="w-full border-b border-[#bccac1]/30 bg-white/90 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-8 py-4">
-          <Link href="/" className="text-2xl font-black tracking-tight text-[#0B4FB3]"><BrandLogo compact /></Link>
-          <Link
-            href="/"
-            className="rounded-full border border-[#bccac1]/40 px-5 py-2 text-sm font-semibold text-[#3d4943]"
-          >
-            Volver
-          </Link>
+    <div
+      className="flex min-h-screen flex-col items-center justify-center px-4 py-16"
+      style={{ background: "var(--aa-cream, #FAF7F2)" }}
+    >
+      <div
+        className="w-full max-w-[420px] rounded-2xl bg-white px-8 py-10"
+        style={{ boxShadow: "0 4px 24px rgba(44,59,45,0.08)" }}
+      >
+        {/* Logo */}
+        <div className="mb-8 flex justify-center">
+          <BrandLogo />
         </div>
-      </nav>
 
-      <main className="mx-auto flex max-w-7xl items-center justify-center px-8 py-16">
-        <section className="w-full max-w-md rounded-2xl border border-[#bccac1]/30 bg-white p-8 shadow-[0_20px_40px_rgba(26,28,28,0.05)]">
-          <h1 className="font-sans text-3xl font-extrabold tracking-tight">
-            {mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
-          </h1>
-          <p className="mt-2 text-sm text-[#3d4943]">
-            {mode === "login"
-              ? "Accede para crear y gestionar adaptaciones reales."
-              : "Regístrate para guardar estilos, historial y adaptaciones."}
-          </p>
+        {/* Mode toggle pill */}
+        <div
+          className="mb-6 flex w-full rounded-full p-1"
+          style={{ background: "#F0EDE8" }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setMode("login");
+              setErrorMessage("");
+              setInfoMessage("");
+            }}
+            className="flex-1 rounded-full py-2 text-sm font-semibold transition-colors"
+            style={
+              mode === "login"
+                ? { background: "var(--aa-green-dark, #4A7C59)", color: "#fff" }
+                : { color: "var(--aa-text-muted, #6B7A6C)" }
+            }
+          >
+            Iniciar sesión
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("register");
+              setErrorMessage("");
+              setInfoMessage("");
+            }}
+            className="flex-1 rounded-full py-2 text-sm font-semibold transition-colors"
+            style={
+              mode === "register"
+                ? { background: "var(--aa-green-dark, #4A7C59)", color: "#fff" }
+                : { color: "var(--aa-text-muted, #6B7A6C)" }
+            }
+          >
+            Registrarse
+          </button>
+        </div>
 
-          <div className="mt-6 inline-flex rounded-full bg-[#f3f3f3] p-1">
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className={`rounded-full px-4 py-2 text-sm font-bold ${
-                mode === "login" ? "bg-[#0B4FB3] text-white" : "text-[#3d4943]"
-              }`}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Email */}
+          <div>
+            <label
+              className="mb-1.5 block text-sm font-semibold"
+              style={{ color: "var(--aa-text, #2C3B2D)" }}
             >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("register")}
-              className={`rounded-full px-4 py-2 text-sm font-bold ${
-                mode === "register" ? "bg-[#0B4FB3] text-white" : "text-[#3d4943]"
-              }`}
-            >
-              Registro
-            </button>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@email.com"
+              className="w-full rounded-2xl px-4 py-3 text-sm outline-none transition-shadow"
+              style={{
+                border: "1.5px solid #c8dcc8",
+                color: "var(--aa-text, #2C3B2D)",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--aa-green, #7BAF7F)";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(123,175,127,0.15)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#c8dcc8";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-[#3d4943]">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full rounded-xl border border-[#bccac1]/40 px-4 py-3 text-sm outline-none focus:border-[#3eb489]"
-                placeholder="tu@email.com"
-              />
-            </div>
+          {/* Password */}
+          <div>
+            <label
+              className="mb-1.5 block text-sm font-semibold"
+              style={{ color: "var(--aa-text, #2C3B2D)" }}
+            >
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full rounded-2xl px-4 py-3 text-sm outline-none transition-shadow"
+              style={{
+                border: "1.5px solid #c8dcc8",
+                color: "var(--aa-text, #2C3B2D)",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--aa-green, #7BAF7F)";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(123,175,127,0.15)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#c8dcc8";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+          </div>
 
+          {/* Confirm password — register only */}
+          {mode === "register" ? (
             <div>
-              <label className="mb-1 block text-sm font-semibold text-[#3d4943]">Contraseña</label>
+              <label
+                className="mb-1.5 block text-sm font-semibold"
+                style={{ color: "var(--aa-text, #2C3B2D)" }}
+              >
+                Repetir contraseña
+              </label>
               <input
                 type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-[#bccac1]/40 px-4 py-3 text-sm outline-none focus:border-[#3eb489]"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
+                className="w-full rounded-2xl px-4 py-3 text-sm outline-none transition-shadow"
+                style={{
+                  border: "1.5px solid #c8dcc8",
+                  color: "var(--aa-text, #2C3B2D)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--aa-green, #7BAF7F)";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(123,175,127,0.15)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#c8dcc8";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
               />
             </div>
+          ) : null}
 
-            {mode === "register" ? (
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-[#3d4943]">
-                  Repetir contraseña
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="w-full rounded-xl border border-[#bccac1]/40 px-4 py-3 text-sm outline-none focus:border-[#3eb489]"
-                  placeholder="••••••••"
-                />
-              </div>
-            ) : null}
-
-            {errorMessage ? (
-              <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {infoMessage ? (
-              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                {infoMessage}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full rounded-full bg-[#0B4FB3] py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          {/* Error message */}
+          {errorMessage ? (
+            <div
+              className="rounded-xl px-4 py-3 text-sm font-medium"
+              style={{ background: "#FFF1F2", color: "#BE123C" }}
             >
-              {isSubmitting
-                ? "Procesando..."
-                : mode === "login"
-                  ? "Entrar"
-                  : "Crear cuenta"}
-            </button>
-          </form>
-        </section>
-      </main>
+              {errorMessage}
+            </div>
+          ) : null}
+
+          {/* Info message */}
+          {infoMessage ? (
+            <div
+              className="rounded-xl px-4 py-3 text-sm font-medium"
+              style={{ background: "#F0FDF4", color: "#166534" }}
+            >
+              {infoMessage}
+            </div>
+          ) : null}
+
+          {/* CTA button */}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-full py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: "var(--aa-green-dark, #4A7C59)" }}
+          >
+            {isSubmitting
+              ? "Procesando..."
+              : mode === "login"
+                ? "Entrar"
+                : "Crear cuenta"}
+          </button>
+        </form>
+
+        {/* Switch mode link */}
+        <p
+          className="mt-5 text-center text-sm"
+          style={{ color: "var(--aa-text-muted, #6B7A6C)" }}
+        >
+          {mode === "login" ? (
+            <>
+              ¿Sin cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("register");
+                  setErrorMessage("");
+                  setInfoMessage("");
+                }}
+                className="font-semibold underline-offset-2 hover:underline"
+                style={{ color: "var(--aa-green-dark, #4A7C59)" }}
+              >
+                Regístrate gratis
+              </button>
+            </>
+          ) : (
+            <>
+              ¿Ya tienes cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("login");
+                  setErrorMessage("");
+                  setInfoMessage("");
+                }}
+                className="font-semibold underline-offset-2 hover:underline"
+                style={{ color: "var(--aa-green-dark, #4A7C59)" }}
+              >
+                Inicia sesión
+              </button>
+            </>
+          )}
+        </p>
+
+        {/* Footer legal links */}
+        <p
+          className="mt-6 text-center text-xs"
+          style={{ color: "var(--aa-text-muted, #6B7A6C)" }}
+        >
+          Al registrarte aceptas nuestros{" "}
+          <Link
+            href="/legal/terms"
+            className="font-medium underline-offset-2 hover:underline"
+            style={{ color: "var(--aa-green-dark, #4A7C59)" }}
+          >
+            Términos
+          </Link>
+          {" "}y{" "}
+          <Link
+            href="/legal/privacy"
+            className="font-medium underline-offset-2 hover:underline"
+            style={{ color: "var(--aa-green-dark, #4A7C59)" }}
+          >
+            Privacidad
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
@@ -201,7 +332,10 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#f7f9ff] text-[#1a1c1c]">
+        <div
+          className="flex min-h-screen items-center justify-center text-sm"
+          style={{ background: "var(--aa-cream, #FAF7F2)", color: "var(--aa-text-muted, #6B7A6C)" }}
+        >
           Cargando acceso...
         </div>
       }

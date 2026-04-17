@@ -79,14 +79,16 @@ export default function HomePage() {
   // ── Screen ───────────────────────────────────────────────────────────────────
   const [screen, setScreen] = useState<Screen>("upload");
 
-  // ── Plan state (cargado una vez al montar) ────────────────────────────────────
+  // ── Plan + auth state (cargado una vez al montar) ────────────────────────────
   const [userPlan, setUserPlan] = useState<"free" | "pro" | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) { setUserPlan("free"); return; }
+        setUserEmail(session.user.email ?? null);
         const { data } = await supabase
           .from("subscriptions")
           .select("plan, status, current_period_end")
@@ -554,6 +556,7 @@ export default function HomePage() {
         onFileInput={handleFileInput}
         onContinue={handleContinue}
         canContinue={!!content}
+        userEmail={userEmail}
       />
     );
   }
