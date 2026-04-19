@@ -32,6 +32,7 @@ import {
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT, PREMIUM_SYSTEM_SUFFIX } from "@/lib/ai/systemPrompts";
 import { analyzeDocument, buildAnalysisContextBlock } from "@/lib/ai/documentAnalysis";
+import { parseModelJsonResponse } from "@/lib/ai/parseModelResponse";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
 import { getAIProvider } from "@/lib/ai/provider";
@@ -522,10 +523,22 @@ export async function POST(req: Request) {
 
         let raw: Record<string, unknown>;
         try {
-          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-          raw = JSON.parse(jsonMatch ? jsonMatch[0] : rawText) as Record<string, unknown>;
+          const parseResult = parseModelJsonResponse(rawText);
+          raw = parseResult.data;
+          if (parseResult.recoveryLevel > 0) {
+            console.warn("[ADAPT] JSON_RECOVERED", {
+              provider: providerName,
+              rawLength: rawText.length,
+              recoveryLevel: parseResult.recoveryLevel,
+              recoveryNote: parseResult.recoveryNote,
+            });
+          }
         } catch (parseErr) {
-          console.error("[ADAPT] JSON_PARSE_ERROR", { provider: providerName, rawLength: rawText.length, parseErr });
+          console.error("[ADAPT] JSON_PARSE_ERROR", {
+            provider: providerName,
+            rawLength: rawText.length,
+            parseErr: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          });
           throw new Error("El modelo devolvió una respuesta con formato inválido. Inténtalo de nuevo.");
         }
 

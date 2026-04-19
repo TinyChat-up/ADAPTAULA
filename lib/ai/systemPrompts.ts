@@ -22,7 +22,19 @@ import type { LearningProfile } from "@/lib/adaptationRules";
 // Al ser idéntico y estar al final, maximiza el solapamiento para caching.
 
 const OUTPUT_RULES = `
-SALIDA OBLIGATORIA: JSON estricto sin markdown, sin texto antes ni después.
+SALIDA OBLIGATORIA — JSON ESTRICTO:
+
+REGLAS DE FORMATO (CRÍTICAS — un error aquí rompe la respuesta):
+1. Responde EXCLUSIVAMENTE con el objeto JSON. La respuesta empieza con { y termina con }.
+2. NUNCA uses bloques de código markdown (ni \`\`\`json ni \`\`\` de ningún tipo).
+3. NUNCA añadas texto, explicaciones ni comentarios antes del { ni después del }.
+4. El valor de "documentHtml" es una string JSON. Dentro de esa string:
+   - Escapa SIEMPRE las comillas como \\" (nunca comillas literales sin escapar).
+   - Escapa los saltos de línea como \\n (nunca saltos literales dentro de la string).
+   - Escapa las barras invertidas como \\\\ si las usas.
+   - No incluyas caracteres de control (U+0000–U+001F) sin escapar.
+5. Cierra SIEMPRE todos los corchetes, llaves y comillas antes de terminar.
+
 Claves exactas:
 {
   "documentHtml": "<div class=\\"aa-page\\">...</div>",
