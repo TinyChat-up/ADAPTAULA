@@ -22,6 +22,7 @@ import {
   type Subject,
   type AdaptationType,
   type SupportDegree,
+  type LearningProfile,
 } from "@/lib/adaptationRules";
 import {
   extractKeywordsForPictograms,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/pictogramResolver";
 import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT, PREMIUM_SYSTEM_SUFFIX } from "@/lib/ai/systemPrompts";
+import { analyzeDocument, buildAnalysisContextBlock } from "@/lib/ai/documentAnalysis";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
 import { getAIProvider } from "@/lib/ai/provider";
@@ -360,10 +362,17 @@ export async function POST(req: Request) {
   const subject = (body.subject as Subject) ?? "otra";
   const adaptationTypeNew = (body.adaptationType as AdaptationType) ?? "simplificar";
   const supportDegree = (body.supportDegree as SupportDegree) ?? "medio";
+  // learningProfile llega directamente desde el formulario (v3+).
+  // Fallback a null para peticiones legacy que no lo incluyan.
+  const learningProfileDirect = (body.learningProfile as LearningProfile) ?? null;
   const studentInterests = Array.isArray(body.studentInterests)
     ? body.studentInterests.filter((i): i is string => typeof i === "string")
     : [];
   const educationalLevel = body.educationalLevel === "secundaria" ? "secundaria" : "primaria";
+  // Perfiles adicionales (para multi-perfil: ej. TEA + DI)
+  const additionalProfiles = Array.isArray(body.additionalProfiles)
+    ? (body.additionalProfiles as LearningProfile[]).filter(Boolean)
+    : [];
   const sourceText = typeof content === "string" ? content : "";
 
   // ── Estilo docente (solo Pro + styleId) ───────────────────────────────────
@@ -411,7 +420,12 @@ export async function POST(req: Request) {
         const config: AdaptationConfig = isNewFormFormat
           ? buildConfigFromForm({
               subject,
-              adaptationType: adaptationTypeNew,
+              // Si viene learningProfileDirect (formulario v3), úsalo.
+              // Fallback legacy: derivar de adaptationType como antes.
+              learningProfile: learningProfileDirect ?? (
+                adaptationTypeNew === "pictogramas" ? "tea" :
+                adaptationTypeNew === "autonomia"   ? "tdah" : "dislexia"
+              ),
               supportDegree,
               studentInterests,
             })
@@ -423,7 +437,7 @@ export async function POST(req: Request) {
               studentInterests,
             });
 
-        const rulesText = buildDynamicAdaptationRules(config);
+        const rulesText = buildDynamicAdaptationRules(config, educationalLevel, additionalProfiles);
         const subjectRulesText = SUBJECT_RULES[subject];
         const interestsBlock = buildInterestsBlock(studentInterests);
         const maxActivities = getMaxActivitiesPerPage(config.supportLevel);
@@ -431,21 +445,28 @@ export async function POST(req: Request) {
         const pictogramDensity = getPictogramDensity(config);
         const writingMetrics = getWritingMetrics(config);
 
-        // ── auth + pictogramas en paralelo ────────────────────────────────
+        // ── auth + pictogramas + análisis previo en paralelo ─────────────
         const keywords = extractKeywordsForPictograms(sourceText, {
           supportLevel: config.supportLevel,
           subject,
         });
 
-        const [authResult, resolvedPictograms] = await Promise.all([
+        const [authResult, resolvedPictograms, documentAnalysis] = await Promise.all([
           token
             ? supabase.auth.getUser(token)
             : Promise.resolve({ data: { user: null }, error: null }),
           resolvePictograms(keywords),
+          // Llamada 1: análisis del documento (falla silenciosamente si hay error)
+          analyzeDocument(sourceText, educationalLevel),
         ]);
 
         const userId = authResult.data.user?.id || "";
         const pictogramSuggestions = buildPictogramSuggestions(resolvedPictograms);
+
+        // Bloque de análisis previo (Llamada 1) — opcional, degrada gracefully
+        const analysisBlock = documentAnalysis
+          ? buildAnalysisContextBlock(documentAnalysis)
+          : "";
 
         // ── Prompts ───────────────────────────────────────────────────────
         const basePrompt = buildPrompt({
@@ -461,9 +482,10 @@ export async function POST(req: Request) {
           educationalLevel,
         });
 
-        const userPrompt = styleContextBlock
-          ? `${basePrompt}\n\n${styleContextBlock}`
-          : basePrompt;
+        // Ensamblar user prompt: base + análisis previo + estilo docente
+        const userPrompt = [basePrompt, analysisBlock, styleContextBlock]
+          .filter(Boolean)
+          .join("\n\n");
 
         const baseSystemPrompt = config.learningProfile
           ? getSystemPromptForProfile(config.learningProfile)
@@ -480,7 +502,11 @@ export async function POST(req: Request) {
           tier: generationTier,
           provider: providerName,
           hasStyleContext: Boolean(styleContextBlock),
+          hasAnalysis: Boolean(documentAnalysis),
+          analysisWarnings: documentAnalysis?.advertencias?.length ?? 0,
           profile: config.learningProfile,
+          subject,
+          educationalLevel,
         });
 
         // ── Llamada al proveedor IA ───────────────────────────────────────
@@ -545,6 +571,7 @@ export async function POST(req: Request) {
             teacherNotes,
             adaptationDecisions,
             pictogramConcepts: keywords,
+            documentAnalysis: documentAnalysis ?? null,
           }),
         );
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));

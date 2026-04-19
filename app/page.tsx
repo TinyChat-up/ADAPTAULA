@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/useToast";
-import type { Subject, AdaptationType, SupportDegree } from "@/lib/adaptationRules";
+import type { Subject, SupportDegree, LearningProfile } from "@/lib/adaptationRules";
 
 import UploadScreen from "@/components/screens/UploadScreen";
 import ConfigScreen from "@/components/screens/ConfigScreen";
@@ -18,7 +18,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type Screen = "upload" | "configure" | "generating" | "result" | "subscription";
 type Tab = "paste" | "file";
-type Perfil = "tea" | "tel" | "dislexia" | "di" | "tdah" | "retraso";
+type Perfil = LearningProfile;
 
 type FileState =
   | { status: "idle" }
@@ -33,15 +33,6 @@ type AdaptResult = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const PERFIL_TO_ADAPTATION: Record<Perfil, AdaptationType> = {
-  tea:      "pictogramas",
-  tel:      "simplificar",
-  dislexia: "simplificar",
-  di:       "pictogramas",
-  tdah:     "autonomia",
-  retraso:  "simplificar",
-};
 
 // ─── Secondary-level heuristic ───────────────────────────────────────────────
 
@@ -239,7 +230,7 @@ export default function HomePage() {
         body: JSON.stringify({
           content,
           subject,
-          adaptationType: PERFIL_TO_ADAPTATION[perfil],
+          learningProfile: perfil,
           supportDegree,
           studentInterests,
           educationalLevel,

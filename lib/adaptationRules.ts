@@ -368,22 +368,22 @@ APOYO ALTO
 
 export type Subject = "lengua" | "matematicas" | "naturales" | "ingles" | "otra";
 
+// AdaptationType se mantiene por compatibilidad con la API, pero ya no determina el perfil NEE.
+// El perfil NEE llega directamente desde el formulario como campo independiente.
 export type AdaptationType = "pictogramas" | "simplificar" | "autonomia";
 
 export type SupportDegree = "leve" | "medio" | "alto";
 
-// Mapeo del nuevo formulario al sistema interno
+// Mapeo del nuevo formulario al sistema interno.
+// CORRECCIÓN CRÍTICA: el perfil NEE llega directamente como parámetro `learningProfile`.
+// Ya no se deriva de adaptationType — ese mapeo causaba que TEL, DI y Retraso recibieran
+// reglas de dislexia o TEA en lugar de sus propias reglas clínicas.
 export function buildConfigFromForm(params: {
   subject: Subject;
-  adaptationType: AdaptationType;
+  learningProfile: LearningProfile;   // ← perfil directo desde el formulario
   supportDegree: SupportDegree;
   studentInterests: string[];
 }): AdaptationConfig {
-  const profileFromType: Record<AdaptationType, AdaptationConfig["learningProfile"]> = {
-    pictogramas: "tea",
-    simplificar: "dislexia",
-    autonomia:   "tdah",
-  };
   const levelFromDegree: Record<SupportDegree, AdaptationConfig["adaptationLevel"]> = {
     leve:  "ligero",
     medio: "guiado",
@@ -395,9 +395,9 @@ export function buildConfigFromForm(params: {
     alto:  "alto",
   };
   return {
-    learningProfile: profileFromType[params.adaptationType],
-    adaptationLevel: levelFromDegree[params.supportDegree],
-    supportLevel:    supportFromDegree[params.supportDegree],
+    learningProfile:  params.learningProfile,
+    adaptationLevel:  levelFromDegree[params.supportDegree],
+    supportLevel:     supportFromDegree[params.supportDegree],
     studentInterests: params.studentInterests,
   };
 }
@@ -407,80 +407,167 @@ export function buildConfigFromForm(params: {
 export const SUBJECT_RULES: Record<Subject, string> = {
 
   lengua: `
-ASIGNATURA: LENGUA
-- Adaptar textos de comprensión lectora manteniendo el hilo narrativo.
-- Simplificar vocabulario sin perder el significado esencial.
-- En escritura: dar modelos o inicios de frase si el apoyo es medio/alto.
-- En gramática: usar ejemplos concretos con objetos del entorno del alumno.
-- En dictados o copias: reducir la longitud, mantener las palabras clave.
+ASIGNATURA: LENGUA CASTELLANA
+Base normativa: UNE 153101:2018 EX · niveles MCER Instituto Cervantes
+
+TEXTOS DE COMPRENSIÓN LECTORA:
+- Dividir en fragmentos de máximo 3-4 líneas con subtítulo propio.
+- Preguntas SIEMPRE en el mismo orden en que aparecen las respuestas en el texto.
+- Tres niveles de Barrett escalados por perfil:
+  · Literal (todas las preguntas): ¿Qué dice el texto? Localizar la respuesta directa.
+  · Inferencial (solo en perfiles con mayor capacidad): ¿Qué quiere decir? ¿Por qué?
+  · Crítico (opcional en DI y TEL grave): ¿Qué opinas? ¿Estás de acuerdo?
+- Tipos de pregunta por perfil:
+  · DI / TEL: V-F con pictograma + opción múltiple 3 respuestas + unir con flechas.
+  · Dislexia / TDAH: opción múltiple 4 respuestas + completar huecos con banco de palabras.
+  · TEA: preguntas cerradas y literales; evitar abiertas sobre sentimientos sin estructura.
+
+PREGUNTAS Y ACTIVIDADES:
+- Nunca preguntas compuestas ("Explica X y di por qué Y" → dos preguntas separadas).
+- V-F siempre con justificación: "Si es FALSO, copia la frase correcta del texto".
+- Banco de palabras visible antes de los huecos, nunca después.
+- Comprensión en tres fases cuando apoyo sea medio/alto:
+  1. PRE: vocabulario clave + activación (¿Qué sabes de este tema?)
+  2. DURANTE: fragmento + pregunta inmediata intercalada
+  3. POST: preguntas en orden textual + esquema para completar
+
+ORTOGRAFÍA Y GRAMÁTICA:
+- En dislexia/disgrafía: NO penalizar ortografía si no se evalúa explícitamente.
+- Textos narrativos → organizador: Personajes / Lugar / Tiempo / Principio-Nudo-Desenlace.
+- Textos expositivos → esquema: IDEA PRINCIPAL → ideas secundarias → ejemplos.
+- Textos descriptivos → tabla de Atributos.
+- Gramática: priorizar uso funcional (¿para qué sirve?) sobre nomenclatura (¿cómo se llama?).
 `.trim(),
 
   matematicas: `
-ASIGNATURA: MATEMÁTICAS — REGLAS CRÍTICAS DE ADAPTACIÓN
+ASIGNATURA: MATEMÁTICAS — REGLAS CRÍTICAS
 
-PRINCIPIO FUNDAMENTAL:
+PRINCIPIO FUNDAMENTAL — NUNCA NEGOCIABLE:
 Adaptar el ACCESO, nunca el CONTENIDO matemático.
-Nunca cambiar números, operaciones ni nivel de dificultad.
+NUNCA cambiar números, operaciones, nivel de dificultad ni datos del enunciado.
 
-ESTRUCTURA OBLIGATORIA POR TIPO DE CONTENIDO:
+ESTRUCTURA OBLIGATORIA POR TIPO:
 
-1. ECUACIONES Y OPERACIONES PURAS (sin contexto de problema):
-   - Cada ecuación: <div class="aa-equation-block">2x + 5 = 17</div>
+1. ECUACIONES Y OPERACIONES PURAS (sin contexto narrativo):
+   - Cada ecuación en su propio bloque: <div class="aa-equation-block">2x + 5 = 17</div>
    - Espacio de desarrollo: <div class="aa-calc-box"></div>
-   - Línea de solución: <div class="aa-solution-line"><div class="aa-solution-blank"></div></div>
-   - Incluir ejemplo resuelto paso a paso antes de cada bloque nuevo
-   - NUNCA añadir pictogramas en ecuaciones abstractas (x², 2x+5=17, etc.)
-   - Máximo 10 ecuaciones por bloque visual, luego separador
+   - Línea de resultado: <div class="aa-solution-line"><div class="aa-solution-blank"></div></div>
+   - OBLIGATORIO: ejemplo resuelto paso a paso antes de cada tipo nuevo de operación.
+   - NUNCA pictogramas en ecuaciones abstractas (x², 2x+5=17, fracciones, etc.).
+   - Máximo 8-10 ecuaciones por bloque visual, luego separador.
 
-2. PROBLEMAS CON CONTEXTO (enunciados con objetos reales):
+2. PROBLEMAS CON CONTEXTO (enunciados con situación real):
    Estructura OBLIGATORIA para cada problema:
    <div class="aa-block aa-activity">
-     <p class="aa-instruction">[enunciado adaptado]</p>
+     <p class="aa-instruction">[enunciado simplificado — solo texto, datos conservados]</p>
      <div class="aa-example">
-       DATOS: [espacio]
-       OPERACIÓN: [espacio]
-       RESULTADO: [espacio]
+       📌 DATOS: [extraer los datos del enunciado en viñetas]
+       ✏️ OPERACIÓN: [espacio para la operación]
+       ✅ RESULTADO: [espacio para escribir la respuesta con unidad]
      </div>
    </div>
-   - Pictogramas SOLO si el perfil es TEA o DI Y el objeto existe en ARASAAC
-   - Si perfil es dislexia o TDAH: estructura visual clara SIN pictogramas
+   - Simplificar SOLO el texto narrativo, NUNCA los números ni datos.
+   - Orden cronológico estricto de los hechos del problema.
+   - Resaltar en negrita las palabras-clave matemáticas: "en total", "quedan", "el doble",
+     "la mitad", "repartir", "cada", "diferencia", "más que", "menos que".
+   - La pregunta siempre al final, en su propia línea, empezando por "¿Cuántos/Cuánto...?"
+   - Pictogramas SOLO si perfil es TEA o DI Y el objeto existe en ARASAAC (manzana, euro, pelota).
+   - Si perfil es dislexia o TDAH: estructura visual clara SIN pictogramas.
 
-3. RECORDATORIOS Y FÓRMULAS:
-   - Presentar en caja destacada aa-example
-   - Fórmula en línea propia, bien espaciada
-   - Nunca en párrafo corrido
+3. ESQUEMA PÓLYA SIMPLIFICADO (barra lateral o recuadro de apoyo):
+   ENTIENDO → PLANIFICO → RESUELVO → COMPRUEBO
+   En DI: añadir pictograma por paso.
 
 NUNCA:
-- Cambiar los números del enunciado original
-- Simplificar x² a x ni operaciones de segundo grado a primero
-- Añadir pictogramas en ecuaciones abstractas (solo en objetos reales de problemas)
-- Mezclar ecuaciones de distintos tipos en el mismo bloque visual
+- Cambiar los números del enunciado original.
+- Simplificar x² a x ni operaciones de un grado a otro.
+- Añadir pictogramas en ecuaciones abstractas.
+- Mezclar ecuaciones de distintos tipos en el mismo bloque.
+- Omitir el ejemplo resuelto antes de cada tipo nuevo.
 `.trim(),
 
   naturales: `
-ASIGNATURA: CONOCIMIENTO DEL MEDIO / NATURALES
-- Organizar el contenido en bloques temáticos con subtítulos claros.
-- Usar esquemas sencillos en lugar de párrafos densos cuando sea posible.
-- Los conceptos científicos se explican con ejemplos del entorno del alumno.
-- Pictogramas especialmente útiles: animales, plantas, partes del cuerpo, fenómenos naturales.
-- En actividades de clasificación: usar tablas o listas visuales.
-- Mantener la terminología científica básica pero explicarla siempre.
+ASIGNATURA: CIENCIAS NATURALES / CONOCIMIENTO DEL MEDIO
+
+PLANTILLA FIJA PARA CADA CONCEPTO (órgano, sistema, fenómeno, instrumento):
+┌─────────────────────────────────────────────┐
+│ ¿QUÉ es?        → definición ≤ 12 palabras  │
+│ ¿PARA QUÉ sirve? → función en 1 oración     │
+│ ¿CÓMO funciona?  → proceso en viñetas 1-2-3 │
+└─────────────────────────────────────────────┘
+
+RELACIONES CAUSALES:
+- Siempre como "CAUSA → EFECTO" con flecha visible.
+- Una causa, un efecto por flecha.
+- Patrón: "Si [causa], entonces [efecto]" — nunca en prosa continua.
+- Ciclos (agua, estaciones, nutrientes): diagrama circular con 4-6 fases, nunca texto corrido.
+
+VOCABULARIO CIENTÍFICO:
+- Mantener SIEMPRE la terminología correcta (fotosíntesis, evaporación, ecosistema...).
+- Glosario ilustrado obligatorio: palabra + imagen + definición ≤ 12 palabras.
+- Máximo 5 términos nuevos por unidad en Primaria, 8 en Secundaria.
+- Usar cognados como ancla cuando existan (fotosíntesis = photosynthesis).
+- Etiquetado de imágenes antes que texto corrido en anatomía, botánica y aparatos.
+
+TRANSFORMACIÓN DE TEXTO EXPOSITIVO:
+- Máximo 3 frases por párrafo + 1 pregunta guiada inmediata.
+- "Cloze científico": completar huecos con banco de palabras específico de la unidad.
+- Sustituir "se produce / se genera / tiene lugar" por verbos activos: "ocurre", "pasa", "hace".
+- Protocolos experimentales: MATERIALES (con imágenes) / PASOS (verbo + objeto, ≤8 palabras) /
+  OBSERVO (tabla de registro) / CONCLUYO (frase con hueco).
+
+ORGANIZADORES GRÁFICOS POR TIPO DE CONTENIDO:
+- Clasificaciones → árbol o mapa de llaves.
+- Procesos → diagrama de flujo con flechas.
+- Ciclos → circular con pictogramas en cada fase.
+- Partes del cuerpo/planta → imagen etiquetada.
+- Comparaciones → tabla de doble entrada.
 `.trim(),
 
   ingles: `
-ASIGNATURA: INGLÉS
-- Mantener el inglés en el contenido. No traducir al español el texto a adaptar.
-- Simplificar las instrucciones de actividades (pueden estar en español si apoyo es alto).
-- Reducir la longitud de textos en inglés manteniendo el vocabulario objetivo.
-- Vocabulario: palabra en inglés + pictograma si está disponible.
-- En gramática: dar el modelo de la estructura claramente antes de los ejercicios.
-- Espacios de escritura generosos (el alumno escribe en inglés, necesita más espacio).
+ASIGNATURA: INGLÉS COMO LENGUA EXTRANJERA
+
+PRINCIPIO FUNDAMENTAL: input comprensible (Krashen i+1).
+El input debe ser ligeramente superior al nivel actual; comprensible con apoyo contextual.
+
+REGLA 80/20: 80% contenido en inglés, 20% español como andamiaje.
+Instrucciones en español si apoyo es alto. Explicaciones gramaticales en español.
+Traducción de vocabulario abstracto en español. Contenido principal siempre en inglés.
+
+VOCABULARIO:
+- Glosario bilingüe obligatorio: English · imagen · español · pronunciación guiada.
+- Pronunciación simplificada al español como puente: "house → /jáus/", "water → /uóter/".
+  NO usar IPA — los alumnos con NEE no lo manejan.
+- Triple presentación: imagen + palabra escrita + equivalente en español.
+- Priorizar cognados: hospital/hospital, doctor/doctor, animal/animal.
+- High Frequency Words (listas Dolch/Oxford 3000): reconocimiento global antes de phonics
+  complejo, especialmente en dislexia.
+
+GRAMÁTICA — qué conservar y qué simplificar:
+- MANTENER: Present Simple, Past Simple regular, to be, have got, there is/are,
+  can/can't, imperativo, futuro con will y going to.
+- SIMPLIFICAR O RETRASAR: Present Perfect con expresiones complejas, Past Continuous,
+  Passive Voice, Condicionales 2º/3º, Reported Speech, phrasal verbs idiomáticos.
+- Para TEA/TEL: usar chunks fijos ("Hello, my name is ___", "Can I have ___, please?").
+
+READING COMPREHENSION:
+- Pre-teach 5-8 palabras clave antes del texto (nunca después).
+- Longitud de textos: 60 palabras en 3º-4º Primaria, 100-150 en 5º-6º, 150-250 en ESO.
+- Preguntas en mismo orden textual, V-F o opción múltiple de 3 opciones.
+- Nunca preguntas de inferencia compleja para DI o TEL.
+
+EVALUACIÓN:
+- Mayor peso a comprensión oral y expresión oral en dislexia.
+- NO penalizar spelling salvo que se evalúe específicamente.
+- Permitir diccionario bilingüe en actividades de producción escrita.
 `.trim(),
 
   otra: `
 ASIGNATURA: GENERAL
 - Adaptar el contenido manteniendo los objetivos curriculares esenciales.
 - Aplicar las reglas de perfil y nivel de apoyo seleccionados.
+- Organizar el contenido en bloques temáticos con subtítulos claros.
+- Usar esquemas y tablas en lugar de párrafos densos cuando sea posible.
 `.trim(),
 
 };
@@ -512,9 +599,111 @@ NUNCA:
 `.trim();
 }
 
+// ─── Reglas por etapa educativa ──────────────────────────────────────────────
+
+const EDUCATIONAL_LEVEL_RULES: Record<"primaria" | "secundaria", string> = {
+  primaria: `
+ETAPA: PRIMARIA (6-12 años)
+- Formato muy visual: imágenes, pictogramas, colores informativos.
+- Tipografía grande (mínimo 15-16px), interlineado 1.5, espaciado generoso.
+- Checklist con pictogramas, supervisión docente frecuente.
+- Actividades manipulativas cuando sea posible (señalar, rodear, unir).
+- Mensajes de refuerzo positivo al final de cada bloque completado.
+`.trim(),
+
+  secundaria: `
+ETAPA: SECUNDARIA / ESO (12-16 años)
+REGLA FUNDAMENTAL: NO infantilizar. El alumno tiene entre 12 y 16 años.
+
+CONTENIDO:
+- Mantener el rigor curricular de ESO. No simplificar el CONTENIDO, solo el ACCESO.
+- Vocabulario: conservar términos propios del nivel ESO, explicar los que sean barrera.
+- Nivel léxico: el más alto posible dentro de las restricciones del perfil NEE.
+- NO usar ejemplos de dibujos animados, juguetes ni contextos infantiles.
+- Usar contextos próximos a adolescentes: tecnología, deportes, redes, vida cotidiana.
+
+FORMATO:
+- Predominio textual pero estructurado: infografías, tablas, mapas conceptuales.
+- Tipografía 12-13px (no la letra grande de Primaria).
+- Máximo 2 colores informativos, sin decoraciones llamativas.
+
+AUTONOMÍA:
+- Checklist textual (sin pictogramas de animales ni emojis infantiles).
+- Metacognición explícita: "¿Qué he aprendido? ¿Qué me ha costado?".
+- Autoevaluación guiada al final.
+
+MATEMÁTICAS ESO — REGLA ESPECIAL:
+- NUNCA simplificar ecuaciones de 2º grado a 1º grado.
+- NUNCA eliminar sistemas de ecuaciones ni reducir su complejidad.
+- Solo adaptar el enunciado textual que rodea las operaciones.
+
+TEACHERNOTES para secundaria: incluir siempre nota sobre qué apoyos son ACI
+no significativa (formato/metodología) y cuáles requerirían dictamen orientación.
+`.trim(),
+};
+
+// ─── Resolución de conflictos multi-perfil ───────────────────────────────────
+// Cuando un alumno tiene varios perfiles NEE con reglas que pueden contradecirse.
+
+function buildMultiProfileConflictRules(profiles: LearningProfile[]): string {
+  if (profiles.length <= 1) return "";
+
+  const profileSet = new Set(profiles);
+  const rules: string[] = [];
+
+  rules.push(`RESOLUCIÓN DE CONFLICTOS MULTI-PERFIL (${profiles.join(" + ")})`);
+  rules.push("Cuando hay reglas contradictorias, aplica en este orden de prioridad:");
+  rules.push("di > tea > tel > tdah > dislexia > retraso");
+  rules.push("");
+
+  if (profileSet.has("tea") && (profileSet.has("dislexia") || profileSet.has("tdah"))) {
+    rules.push("TEA + DISLEXIA/TDAH:");
+    rules.push("- TIPOGRAFÍA: aplicar reglas de dislexia (fondo crema, sin justificado).");
+    rules.push("- ESTRUCTURA: mantener predictibilidad TEACCH (recuadros, numeración, anticipación).");
+    rules.push("- PICTOGRAMAS: máximo 1 por instrucción clave. NO saturar el documento.");
+    rules.push("- LENGUAJE: literal (TEA) + frases cortas chunked (dislexia/TDAH).");
+    rules.push("- CONTRAINDICADO: pictograma sobre cada palabra del enunciado.");
+    rules.push("");
+  }
+
+  if (profileSet.has("tea") && profileSet.has("di")) {
+    rules.push("TEA + DI:");
+    rules.push("- Canal principal: pictograma + texto breve (fila picto encima, texto debajo).");
+    rules.push("- Lenguaje DI (frases 5-8 palabras) con estructura TEACCH (una acción por paso).");
+    rules.push("- Anticipación explícita obligatoria al inicio.");
+    rules.push("- Una actividad por bloque visual, máximo.");
+    rules.push("");
+  }
+
+  if (profileSet.has("tdah") && profileSet.has("di")) {
+    rules.push("TDAH + DI:");
+    rules.push("- Producir MÁS ejercicios BREVES en lugar de menos ejercicios largos.");
+    rules.push("- Casilla de completado al final de CADA ejercicio (TDAH) + ejemplo resuelto (DI).");
+    rules.push("- Redundancia visual (DI) pero en bloques pequeños autónomos (TDAH).");
+    rules.push("");
+  }
+
+  if (profileSet.has("tel") && profileSet.has("di")) {
+    rules.push("TEL + DI:");
+    rules.push("- Vocabulario cotidiano A1 (DI) con apoyo fonológico (TEL).");
+    rules.push("- Frases 5-7 palabras máximo, orden SVO estricto.");
+    rules.push("- Pictograma en verbos de instrucción Y en sustantivos concretos clave.");
+    rules.push("");
+  }
+
+  rules.push("PRINCIPIO GENERAL: ante cualquier conflicto, aplicar la opción más restrictiva.");
+  rules.push("Documentar en teacherNotes qué regla de qué perfil ha prevalecido y por qué.");
+
+  return rules.join("\n");
+}
+
 // ─── Función principal: genera el bloque de reglas para el prompt ─────────────
 
-export function buildDynamicAdaptationRules(config: AdaptationConfig): string {
+export function buildDynamicAdaptationRules(
+  config: AdaptationConfig,
+  educationalLevel: "primaria" | "secundaria" = "primaria",
+  additionalProfiles: LearningProfile[] = [],
+): string {
   const base = `
 PRINCIPIOS BASE UNE 153101:2018 EX (siempre obligatorios)
 - Una idea por frase. Cada frase empieza en línea nueva cuando sea posible.
@@ -540,11 +729,21 @@ Aplica en este orden hasta que la actividad sea accesible:
 7. Transformar el formato (último recurso)
 `.trim();
 
+  // Perfiles secundarios para resolución de conflictos
+  const allProfiles = [config.learningProfile, ...additionalProfiles.filter(p => p !== config.learningProfile)];
+  const conflictRules = buildMultiProfileConflictRules(allProfiles);
+
   return [
     base,
     PROFILE_RULES[config.learningProfile],
+    // Perfiles secundarios (si los hay)
+    ...additionalProfiles
+      .filter(p => p !== config.learningProfile)
+      .map(p => `\n--- PERFIL SECUNDARIO: ${p.toUpperCase()} ---\n${PROFILE_RULES[p]}`),
+    conflictRules,
     LEVEL_RULES[config.adaptationLevel],
     SUPPORT_RULES[config.supportLevel],
+    EDUCATIONAL_LEVEL_RULES[educationalLevel],
     decisionOrder,
   ]
     .filter(Boolean)
