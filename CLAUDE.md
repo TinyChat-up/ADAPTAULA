@@ -3,7 +3,7 @@
 ---
 
 # AdaptAula — Fuente de verdad técnica
-**Fecha**: 2026-04-20 | **Build**: ✅ limpio | **Knip**: 9 exports pendientes (pre-existentes)
+**Fecha**: 2026-04-20 | **Build**: ✅ limpio | **Knip**: 9 exports pendientes (pre-existentes) | **Último commit**: `693dd5d`
 
 Todo el contenido está verificado directamente en el código del repositorio.
 
@@ -13,7 +13,7 @@ Todo el contenido está verificado directamente en el código del repositorio.
 
 AdaptAula adapta materiales educativos para alumnos con NEE (TEA, TEL, Dislexia, DI, TDAH, Retraso) usando IA generativa. El docente sube un PDF o pega texto, configura el perfil del alumno, y recibe una ficha adaptada en HTML lista para imprimir o exportar.
 
-**Estado actual**: Beta funcional con monetización real activa. Stripe checkout + webhook + billing portal operativos, proveedor IA diferenciado por plan, exportaciones Pro con enforcement servidor real (PDF + DOCX), arquitectura dos llamadas IA (análisis previo + adaptación), parser JSON robusto de 4 capas.
+**Estado actual**: Beta funcional con monetización real activa. Stripe checkout + webhook + billing portal operativos, proveedor IA diferenciado por plan, exportaciones Pro con enforcement servidor real (PDF + DOCX), arquitectura dos llamadas IA (análisis previo + adaptación), parser JSON robusto de 4 capas, capa de normalización estructural del documento post-generación.
 
 ---
 
@@ -432,6 +432,20 @@ id, adaptation_id, user_id, rating, comment, created_at
 
 `injectCssIntoHtml()` extrae el `<style>` del HTML y lo mueve al `<head>` via `injectAndStripStyles()`. Regex crítico: `/<style[^>]*>([\s\S]*?)<\/style>/i` (acepta atributos como `id=`).
 
+### Normalización estructural post-generación (`lib/document/normalizeDocumentHtml.ts`)
+
+Capa determinista insertada entre `sanitizeHtml` y `injectCssIntoHtml`. Filosofía Pretext: *preparar primero → maquetar después*. Falla silenciosamente (try/catch global devuelve original si algo lanza).
+
+| Transformación | Problema que resuelve |
+|---------------|----------------------|
+| `normalizeBrSequences` | `<br><br>` → `</p><p>` — la IA usa `<br>` en vez de párrafos |
+| `splitLongParagraphs` | Párrafos >250 chars sin HTML interior → dos párrafos en el primer límite seguro ≥100 chars |
+| `ensureDataBlockAttributes` | `.aa-block` sin `data-block` → `bloque-N` (requerido por IntersectionObserver de animaciones) |
+| `addLazyLoadingToPictograms` | `loading="lazy"` en `aa-picto-img` / `aa-picto-inline` |
+| `injectSubjectAttribute` | `data-subject="<asignatura>"` en `.aa-body` (forward compat para Sprint E.3) |
+
+`splitLongParagraphs` solo actúa sobre `[^<]{250,}` — párrafos de texto puro sin etiquetas internas. Hace un único corte conservador; nunca recursivo.
+
 ### Pictogramas (`lib/pictogramResolver.ts`)
 
 ```
@@ -472,8 +486,9 @@ route.ts:
   6. aiProvider.stream(systemPrompt, userPrompt, onProgress)  ← llamada 2
   7. parseModelJsonResponse(rawText)         ← parser 4 capas
   8. buildDocumentCss(config, writingMetrics)
-  9. injectCssIntoHtml(sanitizedHtml, css)
-  10. SSE "done" → { documentHtml, teacherNotes, adaptationDecisions }
+  9. normalizeDocumentHtml(sanitizedHtml, { subject })  ← normalización estructural
+  10. injectCssIntoHtml(normalizedHtml, css)             ← inyección CSS final
+  11. SSE "done" → { documentHtml, teacherNotes, adaptationDecisions }
 ```
 
 ---
@@ -504,7 +519,7 @@ route.ts:
 ### 🟡 Baja — cosmética o cobertura
 
 6. **`POPULAR_INTERESTS`** en adaptationRules.ts — export sin uso (knip).
-7. **`lib/document/`** — directorio vacío, eliminar.
+7. **`lib/document/`** — contiene `normalizeDocumentHtml.ts` (activo). No eliminar.
 8. **`lib/authService.ts`** — uso no confirmado. Verificar antes de borrar.
 9. **Cache ARASAAC** — sin cache persistente cross-request (solo revalidate Next.js).
 10. **Tests** — cero cobertura.
@@ -540,14 +555,16 @@ route.ts:
 - Normalizar `.aa-picto-row` para que tenga un máximo de 4 tarjetas por fila (responsive).
 - Añadir `alt` text correcto y `loading="lazy"` a todos los `<img>` de pictogramas.
 
-### Sprint E.3 — CSS por asignatura (Media — calidad visual)
+### Sprint E.3 — CSS por asignatura (Media — calidad visual) ✅ DESBLOQUEADO
 
 **Problema**: El documento tiene el mismo aspecto visual para matemáticas que para lengua.
 
 **Objetivo**: Cada asignatura tiene un esquema visual diferenciado.
 
+**Estado**: `data-subject="${subject}"` ya se inyecta en `.aa-body` vía `normalizeDocumentHtml`. Solo falta añadir los overrides CSS en `buildDocumentCss.ts`.
+
 **Implementación**:
-- Añadir `data-subject="${subject}"` al `.aa-body` en el template del prompt.
+- `data-subject` en `.aa-body` ya existe — no requiere cambio en prompts ni route.ts.
 - En `buildDocumentCss()`: añadir bloque de overrides por asignatura:
   - **Matemáticas**: `.aa-equation-block` con grid para alinear operaciones en columna, color accent azul/gris
   - **Lengua**: `.aa-vf-item` con border-left verde, espacio extra para justificación
