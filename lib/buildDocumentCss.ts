@@ -15,6 +15,7 @@ interface WritingMetrics {
 export function buildDocumentCss(
   config: AdaptationConfig,
   writingMetrics: WritingMetrics,
+  subject?: string,
 ): string {
   const isDislexia = config.learningProfile === "dislexia";
 
@@ -33,7 +34,7 @@ export function buildDocumentCss(
   // Fondo de tarjeta de actividad
   const activityBg = isDislexia ? "#FBF8F0" : "#FFFDF7";
 
-  return `
+  const baseCss = `
 /* ── Reset ── */
 *{box-sizing:border-box;margin:0;padding:0}
 
@@ -417,6 +418,76 @@ body{background:${bodyBg};padding:32px 16px;font-family:'Arial',sans-serif}
   }
 }
 `.trim();
+
+  const subjectOverrides = buildSubjectCssOverrides(subject);
+  return subjectOverrides ? `${baseCss}\n\n${subjectOverrides}` : baseCss;
+}
+
+// ─── Overrides visuales por asignatura ───────────────────────────────────────
+// Usa el atributo data-subject inyectado por normalizeDocumentHtml().
+// Si subject es undefined, vacío o no reconocido → devuelve string vacío (sin efecto).
+// Los overrides van al final del CSS base para que ganen en especificidad.
+
+export function buildSubjectCssOverrides(subject?: string): string {
+  switch (subject) {
+
+    // ── Matemáticas ──────────────────────────────────────────────────────────
+    // Sensación operativa y despejada: más aire entre bloques, instrucciones
+    // visibles, espacios de trabajo amplios y ordenados.
+    case "matematicas":
+      return `
+/* ── Overrides matemáticas ── */
+.aa-body[data-subject="matematicas"] .aa-block{margin-bottom:20px}
+.aa-body[data-subject="matematicas"] .aa-reading-block p{line-height:1.55;margin-bottom:8px}
+.aa-body[data-subject="matematicas"] .aa-instruction{font-weight:700;margin-bottom:10px;font-size:15px}
+.aa-body[data-subject="matematicas"] .aa-ruled-line{margin:4px 0 14px}
+.aa-body[data-subject="matematicas"] .aa-ruled-box{margin:6px 0 14px}
+.aa-body[data-subject="matematicas"] .aa-equation-block{margin-bottom:12px;font-size:16px}
+.aa-body[data-subject="matematicas"] .aa-calc-box{min-height:88px;margin:6px 0 14px}
+.aa-body[data-subject="matematicas"] .aa-solution-line{margin:2px 0 14px}
+.aa-body[data-subject="matematicas"] .aa-activity{padding:20px 24px}
+`.trim();
+
+    // ── Lengua ───────────────────────────────────────────────────────────────
+    // Sensación legible y fluida: más line-height en párrafos, mejor separación
+    // entre bloques de lectura, instrucciones claras pero no agresivas.
+    case "lengua":
+      return `
+/* ── Overrides lengua ── */
+.aa-body[data-subject="lengua"] .aa-reading-block p{line-height:1.95;margin-bottom:14px}
+.aa-body[data-subject="lengua"] .aa-block{margin-bottom:28px}
+.aa-body[data-subject="lengua"] .aa-instruction{font-weight:600;line-height:1.75;margin-bottom:14px}
+.aa-body[data-subject="lengua"] .aa-sub-question{line-height:1.8;margin:16px 0 8px}
+.aa-body[data-subject="lengua"] strong{font-weight:700}
+.aa-body[data-subject="lengua"] .aa-ruled-box{margin:10px 0 20px}
+`.trim();
+
+    // ── Naturales ────────────────────────────────────────────────────────────
+    // Balance entre lectura expositiva y actividades estructuradas.
+    case "naturales":
+      return `
+/* ── Overrides naturales ── */
+.aa-body[data-subject="naturales"] .aa-reading-block p{line-height:1.8;margin-bottom:12px}
+.aa-body[data-subject="naturales"] .aa-block{margin-bottom:24px}
+.aa-body[data-subject="naturales"] .aa-instruction{font-weight:600;margin-bottom:12px}
+.aa-body[data-subject="naturales"] .aa-table{margin:14px 0}
+`.trim();
+
+    // ── Inglés ───────────────────────────────────────────────────────────────
+    // Claridad léxica: más espacio alrededor de instrucciones bilingües.
+    case "ingles":
+      return `
+/* ── Overrides inglés ── */
+.aa-body[data-subject="ingles"] .aa-reading-block p{line-height:1.85;letter-spacing:0.01em}
+.aa-body[data-subject="ingles"] .aa-instruction{font-weight:600;margin-bottom:12px;line-height:1.7}
+.aa-body[data-subject="ingles"] .aa-block{margin-bottom:26px}
+.aa-body[data-subject="ingles"] .aa-ruled-line{margin:4px 0 16px}
+`.trim();
+
+    // "otra" y cualquier valor no reconocido → sin override
+    default:
+      return "";
+  }
 }
 
 // ─── Inyección del CSS en el HTML devuelto por el modelo ─────────────────────

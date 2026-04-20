@@ -555,7 +555,7 @@ export async function POST(req: Request) {
           throw new Error("El modelo no devolvió documentHtml");
         }
 
-        const css = buildDocumentCss(config, writingMetrics);
+        const css = buildDocumentCss(config, writingMetrics, subject);
         const documentHtml = injectCssIntoHtml(
           normalizeDocumentHtml(sanitizeHtml(rawHtml), { subject }),
           css,
