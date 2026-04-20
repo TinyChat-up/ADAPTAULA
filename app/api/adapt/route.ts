@@ -33,6 +33,7 @@ import { buildDocumentCss, injectCssIntoHtml } from "@/lib/buildDocumentCss";
 import { getSystemPromptForProfile, FALLBACK_SYSTEM_PROMPT, PREMIUM_SYSTEM_SUFFIX } from "@/lib/ai/systemPrompts";
 import { analyzeDocument, buildAnalysisContextBlock } from "@/lib/ai/documentAnalysis";
 import { parseModelJsonResponse } from "@/lib/ai/parseModelResponse";
+import { normalizeDocumentHtml } from "@/lib/document/normalizeDocumentHtml";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
 import { getAIProvider } from "@/lib/ai/provider";
@@ -555,7 +556,10 @@ export async function POST(req: Request) {
         }
 
         const css = buildDocumentCss(config, writingMetrics);
-        const documentHtml = injectCssIntoHtml(sanitizeHtml(rawHtml), css);
+        const documentHtml = injectCssIntoHtml(
+          normalizeDocumentHtml(sanitizeHtml(rawHtml), { subject }),
+          css,
+        );
         const adaptationDecisions = normalizeDecisions(
           raw.adaptation_decisions || raw.adaptationDecisions,
         );
