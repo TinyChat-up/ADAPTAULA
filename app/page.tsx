@@ -548,6 +548,8 @@ export default function HomePage() {
         onContinue={handleContinue}
         canContinue={!!content}
         userEmail={userEmail}
+        userPlan={userPlan}
+        onUpgrade={() => setScreen("subscription")}
       />
     );
   }

@@ -3,6 +3,7 @@
 import { type RefObject } from "react";
 import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
+import PlanStatusBanner from "@/components/ui/PlanStatusBanner";
 
 type Tab = "paste" | "file";
 type FileState =
@@ -26,6 +27,8 @@ interface Props {
   onContinue: () => void;
   canContinue: boolean;
   userEmail?: string | null;
+  userPlan?: "free" | "pro" | null;
+  onUpgrade?: () => void;
 }
 
 function DocumentIcon({ active }: { active: boolean }) {
@@ -60,6 +63,8 @@ export default function UploadScreen({
   onContinue,
   canContinue,
   userEmail,
+  userPlan,
+  onUpgrade,
 }: Props) {
   return (
     <div className="aa-screen flex flex-col items-center justify-center px-4 py-14">
@@ -89,12 +94,20 @@ export default function UploadScreen({
       </div>
 
       {/* Logo */}
-      <div className="mb-10 text-center">
+      <div className="mb-6 text-center">
         <BrandLogo />
         <p className="mt-2 text-sm" style={{ color: "var(--aa-text-muted)" }}>
           Adapta material escolar en segundos
         </p>
       </div>
+
+      {/* Plan status banner — solo si el plan ya se conoce (no undefined) */}
+      {userPlan !== undefined && onUpgrade && (
+        <PlanStatusBanner
+          currentPlan={userPlan ?? null}
+          onUpgrade={onUpgrade}
+        />
+      )}
 
       <div className="w-full max-w-[580px]">
         {/* Tab toggle */}
