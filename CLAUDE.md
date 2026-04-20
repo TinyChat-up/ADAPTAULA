@@ -3,7 +3,7 @@
 ---
 
 # AdaptAula — Fuente de verdad técnica
-**Fecha**: 2026-04-16 | **Build**: ✅ limpio | **Knip**: 0 archivos muertos, 9 exports pendientes
+**Fecha**: 2026-04-20 | **Build**: ✅ limpio | **Knip**: 9 exports pendientes (pre-existentes)
 
 Todo el contenido está verificado directamente en el código del repositorio.
 
@@ -13,7 +13,7 @@ Todo el contenido está verificado directamente en el código del repositorio.
 
 AdaptAula adapta materiales educativos para alumnos con NEE (TEA, TEL, Dislexia, DI, TDAH, Retraso) usando IA generativa. El docente sube un PDF o pega texto, configura el perfil del alumno, y recibe una ficha adaptada en HTML lista para imprimir o exportar.
 
-**Estado actual**: Beta funcional con monetización real activa. Stripe checkout + webhook operativos, proveedor IA diferenciado por plan, exportaciones Pro con enforcement en servidor.
+**Estado actual**: Beta funcional con monetización real activa. Stripe checkout + webhook + billing portal operativos, proveedor IA diferenciado por plan, exportaciones Pro con enforcement servidor real (PDF + DOCX), arquitectura dos llamadas IA (análisis previo + adaptación), parser JSON robusto de 4 capas.
 
 ---
 
@@ -49,6 +49,7 @@ SPA con máquina de estados (`screen`). Sin router de páginas entre pantallas.
 "upload"
   → pega texto o sube PDF/DOCX → POST /api/extract-text
   → handleContinue() → detecta nivel secundario (aviso) → "configure"
+  → nav top-right: "Mi cuenta" (auth) | "Iniciar sesión" (anon)
 
 "configure"
   → selecciona perfil NEE, asignatura, apoyo, intereses, nivel educativo
@@ -61,15 +62,21 @@ SPA con máquina de estados (`screen`). Sin router de páginas entre pantallas.
 "generating"
   → GeneratingScreen, barra de progreso real (0→100%)
   → SSE "done" → setAdaptResult → "result"
+  → SSE "error" → setAdaptError → "result" (renderiza ResultError)
 
-"result"
+"result" (con adaptResult)
   → ResultScreen: documento HTML, sticky header, banner Pro, notas docente
   → handlePdf():  if userPlan !== "pro" → ProGateModal "export-locked"
-                  si pro → iframe + browser print (client-side)
+                  si pro → POST /api/export/pdf (Bearer) → descarga blob
   → handleDocx(): if userPlan !== "pro" → ProGateModal "export-locked"
                   si pro → POST /api/export/docx → descarga blob
   → onUpgrade → "subscription"
   → onReset   → "upload"
+
+"result" (con adaptError)
+  → ResultError: icono warning, mensaje, botones "Intentar de nuevo" + "Volver"
+  → onRetry: limpia adaptError, vuelve a llamar handleGenerate()
+  → onBack:  vuelve a "configure"
 
 "subscription"
   → SubscriptionScreen → POST /api/checkout → { url } → Stripe hosted checkout
@@ -79,6 +86,9 @@ SPA con máquina de estados (`screen`). Sin router de páginas entre pantallas.
 Modales (fixed z-[200], encima de cualquier pantalla):
   ProGateModal "trial-exhausted" → sobre ConfigScreen
   ProGateModal "export-locked"   → sobre ResultScreen
+
+savedAdaptationIdRef: ref compartida entre handlePdf y handleDocx para evitar
+  insertar la misma adaptación dos veces en Supabase si el usuario descarga ambos.
 ```
 
 ---
@@ -111,6 +121,10 @@ Pago completado → Stripe → POST /api/webhooks/stripe
   → resuelve userId: metadata.userId → fallback por stripe_customer_id en DB
   → upsert tabla subscriptions con service-role
   → getUserPlan(userId) devuelve "pro" desde ese momento
+
+Usuario Pro → /account → POST /api/billing-portal (Bearer req.)
+  → stripe.billingPortal.sessions.create({ customer, return_url: /account })
+  → devuelve { url } → redirección a Stripe Customer Portal
 ```
 
 Eventos manejados: `checkout.session.completed`, `customer.subscription.{created,updated,deleted}`
@@ -125,10 +139,11 @@ Eventos manejados: `checkout.session.completed`, `customer.subscription.{created
 | Proveedor IA | Gemini 2.5 Flash | Gemini 2.5 Flash | GPT-4.1 |
 | System prompt | base | base | base + PREMIUM_SYSTEM_SUFFIX |
 | Estilo docente | ❌ | ❌ | ✅ (si styleId en request) |
-| Export PDF | ❌ modal | ❌ modal | ✅ client-side print |
+| Export PDF | ❌ modal | ❌ modal | ✅ /api/export/pdf (server-side) |
 | Export DOCX | ❌ modal | ❌ modal | ✅ /api/export/docx |
 | Historial /history | ❌ redirect login | ✅ | ✅ |
 | Estilos /styles | ❌ redirect login | ✅ | ✅ |
+| Portal Stripe | — | — | ✅ /account → billing-portal |
 
 **Gating client-side**: `handlePdf` y `handleDocx` usan `userPlan !== "pro"` (no `=== "free"`).
 Esto cubre `null` (plan cargando) — evita que usuarios free accedan durante la ventana de carga.
@@ -156,10 +171,52 @@ getAIProvider(plan: Plan): AIProvider
 - `response_format: { type: "json_object" }`, temperature 0.3, max_tokens 16384
 - Streaming via SDK oficial
 
+### Arquitectura dos llamadas (`lib/ai/documentAnalysis.ts`)
+
+```
+Llamada 1 — análisis previo (paralela a pictogramas + auth):
+  analyzeDocument(sourceText, educationalLevel)
+  → Gemini T=0.1, maxTokens 1024, timeout 12s, falla silenciosamente
+  → Devuelve DocumentAnalysis: tipo, nivel, complejidad, conceptos_clave,
+    vocabulario_complejo, estructura_detectada, advertencias, num_actividades
+  → buildAnalysisContextBlock(analysis) → bloque de texto al final del userPrompt
+
+Llamada 2 — adaptación pedagógica (proveedor por plan):
+  aiProvider.stream(systemPrompt, userPrompt, progressCallback)
+  → userPrompt = basePrompt + analysisBlock + styleContextBlock
+  → systemPrompt = profilePrompt + (premium: PREMIUM_SYSTEM_SUFFIX)
+```
+
 ### Prompts (`lib/ai/systemPrompts.ts`)
 - 6 system prompts específicos por perfil NEE + `FALLBACK_SYSTEM_PROMPT`
-- `PREMIUM_SYSTEM_SUFFIX`: añadido al system prompt en tier premium. Refuerza fidelidad al original, jerarquía visual, tono no condescendiente, teacherNotes de calidad (≥3).
-- `OUTPUT_RULES`: sufijo de salida JSON compartido entre todos los perfiles → maximiza caching implícito Gemini.
+- `PREMIUM_SYSTEM_SUFFIX`: añadido al system prompt en tier premium
+- `OUTPUT_RULES`: sufijo JSON compartido entre todos los perfiles (maximiza caching implícito Gemini). Contiene 5 reglas explícitas de formato: no fences markdown, escaping correcto de `"` y `\n` dentro de strings, cierre obligatorio de todos los tokens, no texto fuera del objeto JSON.
+
+### Corrección crítica de perfil NEE (`lib/adaptationRules.ts`)
+
+```
+ANTES (bug): adaptationType ("pictogramas", "autonomia"...) → profileMap → LearningProfile
+  → TEL recibía reglas de dislexia, DI recibía reglas de TEA
+
+AHORA (correcto): learningProfile llega directo desde page.tsx → buildConfigFromForm()
+  → page.tsx envía: body.learningProfile = perfil (string del estado React)
+  → route.ts lee: body.learningProfile as LearningProfile (con fallback legacy)
+  → buildConfigFromForm({ learningProfile }) → AdaptationConfig correcto
+```
+
+### Parser JSON robusto (`lib/ai/parseModelResponse.ts`)
+
+```typescript
+parseModelJsonResponse(rawText): ParseResult
+  Capa 0: JSON.parse directo               → happy path, sin overhead
+  Capa 1: strip fences markdown + trim     → ```json...```
+  Capa 2: extraer primer {...}             → texto antes/después del objeto
+  Capa 3: limpiar chars de control         → U+0000-U+001F literales en strings
+  Capa 4: repairTruncatedJson()            → cierra strings/arrays/objetos abiertos
+  → Si todo falla: error con rawLength + mensaje exacto
+
+Logging: [ADAPT] JSON_RECOVERED { recoveryLevel, recoveryNote } si capa > 0
+```
 
 ### Estilo docente en Pro
 
@@ -170,19 +227,13 @@ Si userPlan === "pro" && styleId en request:
   → Si falla: silent fallback — adaptación continúa sin contexto de estilo
 ```
 
-### Robustez de salida
-
-```typescript
-const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-raw = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
-// catch → error descriptivo, no crash genérico
-```
-
 ### Logging en desarrollo
 
 ```
-[ADAPT] { plan, tier, provider, hasStyleContext, profile }   // cada request
-[ADAPT] JSON_PARSE_ERROR { provider, rawLength, parseErr }   // solo si falla parse
+[ADAPT] { plan, tier, provider, hasStyleContext, hasAnalysis, analysisWarnings,
+          profile, subject, educationalLevel }          // cada request
+[ADAPT] JSON_RECOVERED { recoveryLevel, recoveryNote }  // si se usó fallback parser
+[ADAPT] JSON_PARSE_ERROR { provider, rawLength, parseErr } // solo si falla definitivo
 ```
 
 `next.config.ts` elimina `console.log` en production, conserva `.error` y `.warn`.
@@ -262,7 +313,7 @@ tone, key_observations, (+ otros campos de análisis Gemini)
 id, user_id, name/title, description, ...campos estilo docente
 ```
 
-#### `adaptation_feedback` — tabla inferida, sin uso activo
+#### `adaptation_feedback` — tabla existe en DB, sin uso activo en código
 ```
 id, adaptation_id, user_id, rating, comment, created_at
 ```
@@ -276,13 +327,17 @@ id, adaptation_id, user_id, rating, comment, created_at
 - CTA "Activar AdaptAula Pro" → `startProCheckout()` → `/api/checkout` → Stripe
 - Error de checkout mostrado inline. Loading state con texto "Redirigiendo a Stripe…"
 - Trust: "✓ Pago seguro vía Stripe · ✓ Cancela cuando quieras · ✓ Factura disponible"
-- Link "¿Ya eres Pro? Accede a tu cuenta →" y botón "Volver" (prop `onBack`)
 
 ### ProGateModal (`components/ui/ProGateModal.tsx`)
 - Props: `variant: "trial-exhausted" | "export-locked"`, `onUpgrade`, `onClose`
 - `z-[200]`, backdrop blur semitransparente, click-outside cierra
-- `"trial-exhausted"`: icono verde sparkle, "Ya has probado AdaptAula", features Pro, CTA "Ver plan Pro · 9,99 €/mes", secundario "Volver al inicio"
-- `"export-locked"`: icono naranja document, badge "Función Pro", CTA igual, secundario "Cerrar"
+- `"trial-exhausted"`: icono verde sparkle, "Ya has probado AdaptAula", CTA "Ver plan Pro · 9,99 €/mes"
+- `"export-locked"`: icono naranja document, badge "Función Pro", mismo CTA
+
+### ResultError (`components/ui/ResultError.tsx`)
+- Se renderiza cuando `screen === "result" && adaptError !== null`
+- Icono warning naranja, título, subtítulo, botones "Intentar de nuevo" y "Volver a configurar"
+- `onRetry` limpia `adaptError` y relanza `handleGenerate()`
 
 ### ResultScreen banner Pro
 - Visible solo cuando `!isPro && onUpgrade` (oculto para usuarios Pro)
@@ -292,7 +347,16 @@ id, adaptation_id, user_id, rating, comment, created_at
 - Usado en sticky header de ResultScreen (`hidden sm:block` en mobile)
 - Free: pill crema "Prueba gratuita" + link "Activar Pro →"
 - Pro: pill verde oscuro "★ Pro activo"
-- Plan cargado en mount de page.tsx desde `subscriptions` via Supabase browser client (RLS ok: usuario autenticado)
+
+### /account page (`app/account/page.tsx`)
+- "use client", carga sesión + plan Supabase en mount
+- Muestra: email, plan badge, fecha de renovación/fin
+- Botón "Gestionar suscripción" → POST /api/billing-portal → redirect Stripe
+- Botón "Cerrar sesión" → signOut() → router.push("/")
+
+### /login page (restyled)
+- Mismos aa-* tokens: fondo cream, card blanca, toggle verde, footer legal
+- Mantiene toda la lógica original (modo login/register, getCurrentUser redirect, Suspense)
 
 ---
 
@@ -300,92 +364,225 @@ id, adaptation_id, user_id, rating, comment, created_at
 
 | Endpoint | Auth | Plan check | Descripción |
 |----------|------|-----------|-------------|
-| `POST /api/adapt` | Opcional | 402 si trial agotado | Motor SSE, provider IA por plan |
+| `POST /api/adapt` | Opcional | 402 si trial agotado | Motor SSE, dos llamadas IA, provider por plan |
 | `POST /api/checkout` | Bearer req. | 409 si ya Pro | Crea Stripe Checkout Session |
 | `POST /api/webhooks/stripe` | Stripe sig. | — | Sincroniza subscriptions |
 | `POST /api/export/docx` | Bearer req. | 403 si free | Genera DOCX con pictogramas |
-| `POST /api/export/pdf` | Bearer req. | 403 si free | Genera PDF con pdf-lib ⚠️ ver nota |
+| `POST /api/export/pdf` | Bearer req. | 403 si free | Genera PDF con pdf-lib |
+| `POST /api/billing-portal` | Bearer req. | — | Crea sesión Stripe Customer Portal |
 | `POST /api/extract-text` | Sin auth | — | unpdf + mammoth, 10MB |
 | `POST /api/style-analysis` | Bearer req. | — | Gemini T=0.2, guarda style_analyses |
 | `GET /api/arasaac/search` | Sin auth | — | Proxy ARASAAC público |
-
-**⚠️ Nota sobre PDF**: `/api/export/pdf` existe con enforcement correcto, pero `handlePdf` en page.tsx usa iframe + browser print (client-side). La API no es llamada desde el flujo actual. El gating es solo frontend (`userPlan !== "pro"`). Ver Sprint D.1 en deuda técnica.
 
 ### Rutas de página activas (build)
 
 ```
 ○ /               SPA principal
+○ /account        gestión de cuenta y plan
 ○ /history        historial de adaptaciones
-○ /login          Supabase email/password
+○ /login          Supabase email/password (restyled)
 ○ /styles         gestión de estilos docente
+○ /legal/terms    términos de servicio (estático)
+○ /legal/privacy  política de privacidad (estático)
 ○ /admin/feedback redirect a /internal/feedback
 ƒ Proxy (Middleware) — proxy.ts activo
 ```
 
 ---
 
-## 11. Riesgos residuales aceptados
+## 11. Sistema de documentos generados
+
+### Estructura HTML generada por la IA
+
+```html
+<div class="aa-page">
+  <div class="aa-header">
+    <h1>Título</h1>
+    <div class="aa-meta">Documento adaptado · AdaptAula</div>
+  </div>
+  <div class="aa-body">
+    <div class="aa-block aa-reading-block" data-block="lectura-1">
+      <span class="aa-subtitle">Sección</span>
+      <p>Texto adaptado.</p>
+      <!-- Alto apoyo: <div class="aa-picto-row">...</div> -->
+    </div>
+    <hr class="aa-separator">
+    <h2 class="aa-section-title">Actividades</h2>
+    <div class="aa-block aa-activity" data-block="actividad-1">
+      <div class="aa-activity-number">Actividad 1</div>
+      <p class="aa-instruction">Instrucción.</p>
+      <!-- V-F, tabla, ruled-box, calc-box, etc. -->
+    </div>
+  </div>
+</div>
+```
+
+**Restricciones duras**: NO `<style>` en HTML (CSS inyectado servidor), cada `.aa-block` requiere `data-block`, máximo 1/2/3 actividades por bloque según apoyo.
+
+### CSS generado server-side (`lib/buildDocumentCss.ts`)
+
+`buildDocumentCss(config, writingMetrics)` genera ~65 clases `.aa-*` embebidas en `<style id="aa-document-styles">` dentro del HTML. El CSS usa valores dinámicos según perfil:
+
+| Métrica | Fuente | Efecto |
+|---------|--------|--------|
+| `fontSize` | `getWritingMetrics(config)` | 15–19px según perfil+apoyo |
+| `lineHeight` | idem | 36/44/52px — alinea ruled lines |
+| `boxMinHeight` | idem | 72/96/120px — cajas de escritura |
+| `bodyBg` | perfil | Dislexia: `#FFF8E7` · TEA: `#FAFAF5` · otros: `#F5F0E8` |
+
+`injectCssIntoHtml()` extrae el `<style>` del HTML y lo mueve al `<head>` via `injectAndStripStyles()`. Regex crítico: `/<style[^>]*>([\s\S]*?)<\/style>/i` (acepta atributos como `id=`).
+
+### Pictogramas (`lib/pictogramResolver.ts`)
+
+```
+extractKeywordsForPictograms(text, { supportLevel, subject })
+  → tokenización + stop words + blacklist abstractos (70+ términos math)
+  → top N: alto=12, medio=7, bajo=4 (math: ×0.67)
+
+resolvePictograms(keywords)
+  → ARASAAC API pública: /v1/pictograms/es/search/{word}
+  → lotes de 5 con throttle 150ms
+  → URL: https://static.arasaac.org/pictograms/{id}/{id}_500.png
+  → revalidate 86400s (cache Next.js)
+
+buildPictogramSuggestions(resolved)
+  → texto para el prompt: lista "palabra → <img src=URL>"
+  → la IA coloca los <img> en el HTML según modo (card/inline)
+```
+
+**Modos de pictograma** (decididos por la IA según `supportLevel`):
+- **Alto**: `.aa-picto-card` (imagen 64×64px + palabra debajo) en `.aa-picto-row`
+- **Medio/Bajo**: `.aa-picto-inline` (40×40px, vertical-align middle) dentro del texto
+
+### Pipeline completo de generación
+
+```
+page.tsx → POST /api/adapt
+  ↓
+route.ts:
+  1. Rate limit + trial check
+  2. buildConfigFromForm({ learningProfile, subject, supportDegree, studentInterests })
+  3. Promise.all([
+       auth.getUser(token),
+       resolvePictograms(keywords),          ← ARASAAC
+       analyzeDocument(sourceText, level),   ← Gemini llamada 1
+     ])
+  4. buildPrompt({ config, rulesText, pictogramSuggestions, ... })
+  5. userPrompt = basePrompt + analysisBlock + styleContextBlock
+  6. aiProvider.stream(systemPrompt, userPrompt, onProgress)  ← llamada 2
+  7. parseModelJsonResponse(rawText)         ← parser 4 capas
+  8. buildDocumentCss(config, writingMetrics)
+  9. injectCssIntoHtml(sanitizedHtml, css)
+  10. SSE "done" → { documentHtml, teacherNotes, adaptationDecisions }
+```
+
+---
+
+## 12. Riesgos residuales aceptados
 
 | Riesgo | Severidad | Decisión |
 |--------|-----------|---------|
 | Trial anónimo bypasseable (borrar cookie) | Baja | **Aceptado** — soft limit intencionado |
 | `getAdaptationUsage` falla silenciosa → 0 | Baja | **Aceptado** — fail-open para errores transitorios de DB |
 | Rate limit in-memory, se resetea en cold start | Media | **Pendiente** — requiere Redis para fix real |
-| PDF export sin enforcement servidor en UI | Media | **Pendiente** — Sprint D.1 lo resuelve |
 | Doble `auth.getUser(token)` en adapt route | Info | **Aceptado** — redundante pero sin impacto funcional |
 | Progreso SSE estimado (`ESTIMATED_CHARS=5000`) | Info | **Aceptado** — UX menor, salto de ~50% a 100% si respuesta corta |
+| Pictograma placement via IA (sin validación servidor) | Media | **Pendiente** — ver Sprint E.2 |
 
 ---
 
-## 12. Deuda técnica
-
-### 🔴 Alta — afecta correctitud o seguridad
-
-1. **PDF export desconectado del servidor**: `handlePdf` usa iframe print sin API call. No hay enforcement real de plan para PDF. Sprint D.1.
+## 13. Deuda técnica
 
 ### 🟠 Media — afecta mantenibilidad
 
-2. **`adaptationsService.ts` schema divergente**: adapt/route.ts inserta 8 campos directamente; el servicio soporta schema rico (~30 campos). La historia lee via el servicio, el flujo principal bypasea. Si se extiende el historial puede haber inconsistencias.
-3. **5 exports muertos en `adaptationsService.ts`**: `createAdaptation`, `getAdaptationById`, `getNextVersionNumber`, `getAdaptationChain`, `markAdaptationAsFinal` — knip confirmado. Eliminar o conectar.
-4. **3 exports muertos en `arasaac.ts`**: `mergePictogramConcepts`, `resolveArasaacPictograms`, `enrichDocumentWithArasaac` — knip confirmado.
+1. **`adaptationsService.ts` schema divergente**: adapt/route.ts inserta 8 campos directamente; el servicio soporta schema rico (~30 campos). La historia lee via el servicio, el flujo principal bypasea.
+2. **5 exports muertos en `adaptationsService.ts`**: `createAdaptation`, `getAdaptationById`, `getNextVersionNumber`, `getAdaptationChain`, `markAdaptationAsFinal` — knip confirmado.
+3. **3 exports muertos en `arasaac.ts`**: `mergePictogramConcepts`, `resolveArasaacPictograms`, `enrichDocumentWithArasaac` — knip confirmado.
+4. **CSS hardcodeado en `buildDocumentCss.ts`**: colores, tamaños y fuentes como literales de string. Dificulta un panel de personalización futuro.
+5. **No hay CSS por asignatura en el HTML**: la asignatura se pasa al prompt pero no como `data-subject` en el DOM → imposible hacer override CSS por asignatura sin cambiar el template.
 
 ### 🟡 Baja — cosmética o cobertura
 
-5. **`POPULAR_INTERESTS`** en adaptationRules.ts — export sin uso.
-6. **`lib/document/`** — directorio vacío, puede eliminarse.
-7. **`lib/authService.ts`** — uso no confirmado. Verificar antes de borrar.
-8. **Cache ARASAAC** — cada request consulta la API pública. Sin cache persistente.
-9. **Tests** — cero cobertura.
+6. **`POPULAR_INTERESTS`** en adaptationRules.ts — export sin uso (knip).
+7. **`lib/document/`** — directorio vacío, eliminar.
+8. **`lib/authService.ts`** — uso no confirmado. Verificar antes de borrar.
+9. **Cache ARASAAC** — sin cache persistente cross-request (solo revalidate Next.js).
+10. **Tests** — cero cobertura.
+11. **Pictogram cards overflow mobile**: `.aa-picto-card` min-width 80px fijo, no responsive.
 
 ---
 
-## 13. Próximos sprints recomendados
+## 14. Próximos sprints recomendados
 
-### Sprint D.1 — PDF server-side (Alta)
-Conectar `handlePdf` en page.tsx a `/api/export/pdf` en lugar del iframe. La API ya existe con plan check correcto. Eliminar el iframe. Enforcement real para Pro.
+### Sprint E.1 — Intereses del alumno integrados en el documento ⭐ (Alta — diferenciador)
 
-### Sprint D.2 — Limpiar exports muertos (Media)
+**Problema**: `studentInterests` llega al prompt solo como "usa para ejemplos", pero no influye en los pictogramas ni en el contenido concreto.
+
+**Objetivo**: Si el alumno tiene interés en "pokemon", "fútbol" o "coches", ese interés debe aparecer:
+1. **En los ejemplos del texto adaptado**: "María tiene 3 cartas de Pokémon" en vez de "María tiene 3 manzanas"
+2. **En los pictogramas**: complementar ARASAAC con imágenes temáticas cuando el interés es concreto
+3. **En los enunciados de actividades**: el contexto de las preguntas usa el universo del interés
+
+**Implementación sugerida**:
+- En `buildPrompt()`: añadir bloque explícito `CONTEXTO DE INTERESES` con instrucciones concretas para cada actividad, no solo para "ejemplos". Indicar que las actividades deben usar el universo del interés como contexto.
+- Para imágenes de intereses: añadir una lista curada de URLs de imágenes libres (Wikipedia Commons / ARASAAC temático) por categoría de interés. Inyectar en `buildPictogramSuggestions()` como "pictogramas de interés" separados de los ARASAAC.
+- Crear `lib/interestImages.ts`: mapa `{ "pokemon": [...urls], "futbol": [...urls], "dinosaurios": [...urls] }` con 5-8 imágenes libres por categoría.
+
+### Sprint E.2 — Pictogramas programáticos + validación servidor (Alta — calidad)
+
+**Problema**: La colocación de pictogramas depende enteramente de la IA, sin validación posterior.
+
+**Objetivo**: Garantizar que todos los pictogramas disponibles se usan y están bien colocados.
+
+**Implementación sugerida**:
+- Post-procesar el HTML devuelto por la IA: verificar que cada palabra en `resolvedPictograms` aparece como `<img>` en el HTML.
+- Para los que faltan: inyectarlos programáticamente en el primer párrafo que mencione la palabra.
+- Normalizar `.aa-picto-row` para que tenga un máximo de 4 tarjetas por fila (responsive).
+- Añadir `alt` text correcto y `loading="lazy"` a todos los `<img>` de pictogramas.
+
+### Sprint E.3 — CSS por asignatura (Media — calidad visual)
+
+**Problema**: El documento tiene el mismo aspecto visual para matemáticas que para lengua.
+
+**Objetivo**: Cada asignatura tiene un esquema visual diferenciado.
+
+**Implementación**:
+- Añadir `data-subject="${subject}"` al `.aa-body` en el template del prompt.
+- En `buildDocumentCss()`: añadir bloque de overrides por asignatura:
+  - **Matemáticas**: `.aa-equation-block` con grid para alinear operaciones en columna, color accent azul/gris
+  - **Lengua**: `.aa-vf-item` con border-left verde, espacio extra para justificación
+  - **Naturales**: `.aa-reading-block` con fondo ligeramente más cálido, tablas de comparación
+  - **Inglés**: badge bilingüe en `.aa-instruction` (ES/EN), vocabulario en pill verde claro
+- Esto no requiere cambios en la IA, solo en `buildDocumentCss.ts` y el template del prompt.
+
+### Sprint E.4 — Limpiar exports muertos (Media)
+
 ```bash
-# Confirmar con knip antes de eliminar:
 npm run knip
 # Eliminar exports sin uso en adaptationsService.ts, arasaac.ts, adaptationRules.ts
-# Verificar lib/authService.ts y lib/document/ antes de borrar
+# Verificar lib/authService.ts y eliminar lib/document/ (directorio vacío)
 ```
 
-### Sprint D.3 — Portal Stripe (Media)
-Customer portal para ver facturas, cancelar, cambiar método de pago.
-`/api/billing-portal` → `stripe.billingPortal.sessions.create({ customer, return_url })`.
+### Sprint E.5 — Rate limit persistente (Media)
 
-### Sprint D.4 — Rate limit persistente (Media)
-Migrar `lib/rateLimit.ts` de Map in-memory a Upstash Redis o tabla Supabase.
+Migrar `lib/rateLimit.ts` de Map in-memory a tabla Supabase o Upstash Redis.
 Impacto: rate limit sobrevive cold starts en Vercel serverless.
 
-### Sprint D.5 — Feedback de adaptaciones (Baja)
+### Sprint E.6 — Feedback de adaptaciones (Baja)
+
 Añadir widget 👍/👎 en ResultScreen. La tabla `adaptation_feedback` existe en DB.
+
+### Sprint E.7 — Pretext (Evaluado — No prioritario)
+
+[**Evaluado 2026-04-20**] `pretext` (github.com/chenglou/pretext) es una librería MIT de medición de texto sin DOM (para layout sin `getBoundingClientRect`). Su valor en AdaptAula sería:
+- Validar server-side que los párrafos caben en `.aa-ruled-box` antes de devolver el HTML
+- Mejorar precisión del PDF export (layout de paginación)
+
+**Decisión**: No integrar ahora. Las ruled lines ya funcionan con la estimación CSS actual. El valor es incremental y requiere font metrics en Node (dependencia `canvas`). Reconsiderar cuando el PDF server-side sea el flujo principal (post Sprint D.1).
 
 ---
 
-## 14. Notas operativas
+## 15. Notas operativas
 
 ### Variables de entorno completas
 
@@ -396,7 +593,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=         # requerida — subscriptionService usa service role
 
 # IA
-GEMINI_API_KEY=                    # requerida
+GEMINI_API_KEY=                    # requerida (análisis previo + free tier)
 GEMINI_MODEL=gemini-2.5-flash      # opcional, default en lib/ai/model.ts
 OPENAI_API_KEY=                    # opcional — sin ella, Pro usa Gemini como fallback
 OPENAI_MODEL=gpt-4.1               # opcional, default gpt-4.1
@@ -443,20 +640,20 @@ ORDER BY created_at DESC LIMIT 1;
 
 ```bash
 npm run knip
-# Estado actual: 0 unused files, 9 unused exports
-# Objetivo: 0 findings
+# Estado actual: 0 unused files, 9 unused exports (pre-existentes, deuda técnica documentada)
+# Objetivo: 0 findings (Sprint E.4)
 ```
 
 ### Build de referencia
 
 ```
 ✓ Compiled successfully
-○ 6 static routes + ƒ 8 API routes + ƒ Proxy (Middleware)
+○ 9 static routes + ƒ 9 API routes + ƒ Proxy (Middleware)
 ```
 
 ---
 
-## 15. Invariantes del sistema (NO romper)
+## 16. Invariantes del sistema (NO romper)
 
 Estas reglas no son preferencias — son restricciones que, si se violan, rompen la monetización
 o la seguridad del producto. Aplicar en cualquier sprint futuro.
@@ -469,3 +666,5 @@ o la seguridad del producto. Aplicar en cualquier sprint futuro.
 | 4 | **La lógica pedagógica de `adapt/route.ts` no se toca sin validación manual** | Cambios en prompts o reglas pueden degradar silenciosamente la calidad para NEE |
 | 5 | Pro siempre usa `OpenAIProvider` si `OPENAI_API_KEY` está disponible | Sin esto, Pro paga pero recibe calidad free — fallo de producto crítico |
 | 6 | **`ProGateModal` es la única vía de bloqueo UX** (no errores crudos) | Consistencia de conversión — mensajes de error genéricos rompen el funnel |
+| 7 | `learningProfile` llega **directo** desde el formulario a `buildConfigFromForm()` | No derivar de `adaptationType` — ese mapeo causaba perfiles NEE incorrectos |
+| 8 | `parseModelJsonResponse()` es el **único punto de parseo** de respuestas IA | No hacer JSON.parse directo en route.ts — el parser robusto maneja los casos edge de Gemini |
