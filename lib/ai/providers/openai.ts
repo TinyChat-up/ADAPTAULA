@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import type { AIProvider } from "@/lib/ai/provider";
 
 // Default premium model for Pro users. Override via OPENAI_MODEL env var.
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 export class OpenAIProvider implements AIProvider {
   private readonly client: OpenAI;
