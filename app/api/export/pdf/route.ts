@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getUserPlan } from "@/lib/subscriptionService";
-import puppeteer from "puppeteer";
+import chromium from "@sparticuz/chromium";
+import puppeteer from "puppeteer-core";
 import {
   buildAdaptationFromHtml,
   htmlToPlainText,
@@ -118,12 +119,10 @@ ${adaptation.contentHtml}
 
     // ── Render with Puppeteer ─────────────────────────────────────────────────
     const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     });
     try {
       const page = await browser.newPage();

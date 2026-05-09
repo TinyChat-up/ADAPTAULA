@@ -108,6 +108,16 @@ export default function ResultScreen({
   // ── Document container ref ────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Set innerHTML imperatively so React never touches the content on re-renders.
+  // dangerouslySetInnerHTML is intentionally NOT used on the div — using it
+  // alongside changing sibling props (style, contentEditable) causes React to
+  // clear innerHTML during reconciliation whenever any component state changes.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !cleanHtml) return;
+    el.innerHTML = cleanHtml;
+  }, [cleanHtml]);
+
   // Apply toolbar styles directly to the DOM node (no extra re-render needed)
   useEffect(() => {
     const el = containerRef.current;
@@ -356,7 +366,6 @@ export default function ResultScreen({
               className="document-body"
               contentEditable={isEditing}
               suppressContentEditableWarning={true}
-              dangerouslySetInnerHTML={{ __html: cleanHtml }}
               style={{
                 outline: isEditing ? "1px dashed #E8834A" : "none",
                 borderRadius: isEditing ? 6 : 0,
