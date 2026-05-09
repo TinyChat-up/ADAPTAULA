@@ -7,10 +7,8 @@ const nextConfig: NextConfig = {
       : false,
   },
   serverExternalPackages: ['unpdf', 'puppeteer-core', '@sparticuz/chromium'],
-  experimental: {
-    outputFileTracingExcludes: {
-      '/api/export/pdf': ['**/@sparticuz/chromium/**/*.br'],
-    },
+  outputFileTracingExcludes: {
+    '/api/export/pdf': ['**/@sparticuz/chromium/**/*.br'],
   },
 };
 
