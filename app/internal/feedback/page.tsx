@@ -13,7 +13,10 @@ type InternalFeedbackPageProps = {
 type FeedbackRow = {
   id: string;
   created_at: string;
-  rating: string;
+  rating: number | null;
+  usable: string | null;
+  positive_dimensions: string[] | null;
+  improvement_dimensions: string[] | null;
   comment: string | null;
   adaptation_id: string;
   user_id: string;
@@ -136,12 +139,12 @@ export default async function InternalFeedbackPage(props: InternalFeedbackPagePr
 
   let feedbackQuery = supabase
     .from("adaptation_feedback")
-    .select("id, created_at, rating, comment, adaptation_id, user_id")
+    .select("id, created_at, rating, usable, positive_dimensions, improvement_dimensions, comment, adaptation_id, user_id")
     .order("created_at", { ascending: false })
     .limit(200);
 
   if (rating) {
-    feedbackQuery = feedbackQuery.eq("rating", rating);
+    feedbackQuery = feedbackQuery.eq("rating", Number(rating));
   }
   if (cutoffIso) {
     feedbackQuery = feedbackQuery.gte("created_at", cutoffIso);
@@ -224,9 +227,11 @@ export default async function InternalFeedbackPage(props: InternalFeedbackPagePr
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
               >
                 <option value="">Todos</option>
-                <option value="useful">Sí, me sirve</option>
-                <option value="partial">Más o menos</option>
-                <option value="not_useful">No, no está como quiero</option>
+                <option value="1">1 ★</option>
+                <option value="2">2 ★★</option>
+                <option value="3">3 ★★★</option>
+                <option value="4">4 ★★★★</option>
+                <option value="5">5 ★★★★★</option>
               </select>
             </div>
             <div>
@@ -305,11 +310,13 @@ export default async function InternalFeedbackPage(props: InternalFeedbackPagePr
             </span>
           </div>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid grid-cols-[160px_140px_1fr_220px_220px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
+            <div className="grid grid-cols-[150px_120px_120px_1fr_1fr_200px_200px_100px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-500">
               <span>Fecha</span>
               <span>Rating</span>
+              <span>Usable</span>
+              <span>Positivo</span>
+              <span>Mejorar</span>
               <span>Comentario</span>
-              <span>Adaptation</span>
               <span>User</span>
               <span>Ejemplo</span>
             </div>
@@ -319,15 +326,38 @@ export default async function InternalFeedbackPage(props: InternalFeedbackPagePr
               <ul>
                 {feedbackRows.map((row) => {
                   const key = `${row.adaptation_id}:${row.user_id}`;
+                  const stars = row.rating != null
+                    ? "★".repeat(row.rating) + "☆".repeat(5 - row.rating)
+                    : "-";
+                  const usableBadge: Record<string, string> = {
+                    yes: "bg-emerald-100 text-emerald-800",
+                    partial: "bg-amber-100 text-amber-800",
+                    no: "bg-rose-100 text-rose-800",
+                  };
+                  const usableLabel: Record<string, string> = {
+                    yes: "Sí", partial: "Ajustes", no: "No",
+                  };
                   return (
                     <li
                       key={row.id}
-                      className="grid grid-cols-[160px_140px_1fr_220px_220px_120px] gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0"
+                      className="grid grid-cols-[150px_120px_120px_1fr_1fr_200px_200px_100px] gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0"
                     >
                       <span className="text-slate-600">{formatDate(row.created_at)}</span>
-                      <span className="font-semibold text-slate-800">{row.rating}</span>
+                      <span className="font-semibold tracking-widest text-amber-500">{stars}</span>
+                      <span>
+                        {row.usable ? (
+                          <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-bold ${usableBadge[row.usable] ?? "bg-slate-100 text-slate-600"}`}>
+                            {usableLabel[row.usable] ?? row.usable}
+                          </span>
+                        ) : "-"}
+                      </span>
+                      <span className="text-xs text-slate-600">
+                        {row.positive_dimensions?.length ? row.positive_dimensions.join(", ") : "-"}
+                      </span>
+                      <span className="text-xs text-slate-600">
+                        {row.improvement_dimensions?.length ? row.improvement_dimensions.join(", ") : "-"}
+                      </span>
                       <span className="text-slate-700">{row.comment || "-"}</span>
-                      <span className="truncate font-mono text-xs text-slate-500">{row.adaptation_id}</span>
                       <span className="truncate font-mono text-xs text-slate-500">{row.user_id}</span>
                       <span
                         className={`inline-flex w-fit items-center rounded-full px-2 py-1 text-xs font-bold ${

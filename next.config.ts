@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       ? { exclude: ['error', 'warn'] }
       : false,
   },
-  serverExternalPackages: ['unpdf'],
+  serverExternalPackages: ['unpdf', 'puppeteer'],
 };
 
 export default nextConfig;

@@ -9,9 +9,11 @@ import {
 } from "docx";
 import {
   fetchPictogramAsset,
-  loadAdaptationForExport,
+  buildAdaptationFromHtml,
   parseStructuredContentForExport,
   toSafeSlug,
+  htmlToPlainText,
+  type ExportAdaptationData,
 } from "@/lib/export/adaptationExport";
 import { getUserPlan } from "@/lib/subscriptionService";
 import { createClient } from "@supabase/supabase-js";
@@ -46,11 +48,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const loaded = await loadAdaptationForExport(req);
-    if ("error" in loaded) {
-      return NextResponse.json({ error: loaded.error }, { status: loaded.status });
+    const reqBody = await req.json() as { html?: string; adaptationId?: string };
+
+    let adaptation: ExportAdaptationData;
+    if (typeof reqBody.html === "string" && reqBody.html) {
+      adaptation = buildAdaptationFromHtml(reqBody.html);
+    } else if (reqBody.adaptationId) {
+      const { data, error } = await supabase
+        .from("adaptations")
+        .select("id, result_html, adaptation_type, student_profile, ai_notes, created_at")
+        .eq("id", reqBody.adaptationId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error || !data) {
+        return NextResponse.json({ error: "Adaptación no encontrada." }, { status: 404 });
+      }
+      const row = data as Record<string, unknown>;
+      const contentHtml = String(row.result_html || "");
+      if (!contentHtml) {
+        return NextResponse.json({ error: "Adaptación sin contenido exportable." }, { status: 400 });
+      }
+      adaptation = {
+        id: String(row.id),
+        title: "Adaptación AdaptAula",
+        outputFormat: "Material adaptado",
+        adaptationType: String(row.adaptation_type || "No definido"),
+        studentProfile: String(row.student_profile || "No definido"),
+        styleName: "",
+        versionNumber: 1,
+        createdAt: String(row.created_at || ""),
+        contentHtml,
+        contentPlain: htmlToPlainText(contentHtml),
+        pictogramData: [],
+        aiNotes: String(row.ai_notes || ""),
+      };
+    } else {
+      return NextResponse.json({ error: "Falta html o adaptationId." }, { status: 400 });
     }
-    const { adaptation } = loaded;
 
     const createdDate = adaptation.createdAt
       ? new Intl.DateTimeFormat("es-ES", {

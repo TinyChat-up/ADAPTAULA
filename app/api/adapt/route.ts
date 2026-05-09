@@ -202,6 +202,56 @@ ${hasTdah ? `CASILLA DE COMPLETADO (al final de cada actividad):
 <div class="aa-done-row"><span class="aa-checkbox"></span><span>He terminado ✓</span></div>` : ""}
 
 ═══════════════════════════════════════════════
+ELEMENTOS VISUALES — ÚSALOS CUANDO APORTEN CLARIDAD PEDAGÓGICA
+═══════════════════════════════════════════════
+
+CONCEPTO / DEFINICIÓN CLAVE:
+<div class="aa-concept-box">
+  <span class="aa-concept-label">palabra o concepto</span>
+  <span class="aa-concept-def">Definición en una frase corta y sencilla.</span>
+</div>
+
+SECUENCIA DE PASOS (proceso, instrucciones, algoritmo):
+<div class="aa-flow">
+  <div class="aa-flow-step"><span class="aa-step-num">1</span><span class="aa-step-text">Primer paso.</span></div>
+  <div class="aa-flow-arrow">↓</div>
+  <div class="aa-flow-step"><span class="aa-step-num">2</span><span class="aa-step-text">Segundo paso.</span></div>
+  <div class="aa-flow-arrow">↓</div>
+  <div class="aa-flow-step"><span class="aa-step-num">3</span><span class="aa-step-text">Tercer paso.</span></div>
+</div>
+
+CAUSA → EFECTO:
+<div class="aa-cause-effect">
+  <div class="aa-cause">Texto de la CAUSA</div>
+  <div class="aa-effect-arrow">→</div>
+  <div class="aa-effect">Texto del EFECTO</div>
+</div>
+
+GLOSARIO (definir términos nuevos):
+<div class="aa-glossary-item"><span class="aa-gloss-term">término</span><span class="aa-gloss-def">definición simple</span></div>
+<div class="aa-glossary-item"><span class="aa-gloss-term">otro término</span><span class="aa-gloss-def">definición simple</span></div>
+
+INFORMACIÓN IMPORTANTE / AVISO:
+<div class="aa-highlight-box">
+  <span class="aa-highlight-icon">💡</span>
+  <p>Texto importante que el alumno no debe pasar por alto.</p>
+</div>
+
+TABLA DE COMPARACIÓN O CLASIFICACIÓN (usa aa-table para contenido estructurado):
+<table class="aa-table">
+  <tr><td class="aa-cell-label">Categoría A</td><td class="aa-cell-ruled"></td></tr>
+  <tr><td class="aa-cell-label">Categoría B</td><td class="aa-cell-ruled"></td></tr>
+</table>
+
+CUÁNDO USAR CADA ELEMENTO:
+- aa-concept-box → definir un término nuevo antes de usarlo
+- aa-flow → cualquier proceso con pasos ordenados (ciclos, experimentos, algoritmos)
+- aa-cause-effect → relaciones causales en ciencias, historia, problemas
+- aa-glossary-item → vocabulario al inicio de la sección o al final del documento
+- aa-highlight-box → reglas, fórmulas, normas que no se deben olvidar
+- aa-table → clasificaciones, comparaciones, datos en columnas
+
+═══════════════════════════════════════════════
 ESTRUCTURA DEL DOCUMENTO — SIN <style>
 ═══════════════════════════════════════════════
 
@@ -249,21 +299,48 @@ ${isHighSupport ? "Añade filas de pictogramas después de cada párrafo de lect
 ${hasTdah ? "Incluye la casilla de completado al final de cada actividad." : ""}
 INCLUYE ABSOLUTAMENTE TODAS las actividades del original. Ninguna puede faltar.
 
-═══════════════════════════════════════════════
-PROCESO
+OBLIGATORIO:
+- ADAPTA absolutamente TODAS las actividades del original. Ninguna puede faltar.
+${isHighSupport ? "- Añade filas de pictogramas (aa-picto-row) después de cada párrafo de lectura." : ""}
+- NO incluyas ningún bloque <style>. El CSS ya está inyectado.
+- Devuelve SOLO el objeto JSON con: documentHtml, adaptation_decisions, teacherNotes.
+${params.educationalLevel === "secundaria" ? `
+NIVEL SECUNDARIA/ESO: Mantén el rigor curricular completo. Adapta el ACCESO, nunca el CONTENIDO.
+` : ""}`.trim();
+}
+
+// ─── Prompt optimizado para NVIDIA/Llama ──────────────────────────────────────
+// Misma instrucción pedagógica que buildPrompt, pero con mandato JSON explícito
+// al principio y reglas de escape al final para corregir el comportamiento de Llama.
+
+function buildNvidiaPrompt(params: Parameters<typeof buildPrompt>[0]): string {
+  const jsonMandate = `IMPORTANT: You must respond with a single raw JSON object only.
+No markdown, no backticks, no code fences, no prose before or after the JSON.
+Your response must start with { and end with }.
+Do not wrap your response in \`\`\`json ... \`\`\` or any other formatting.`;
+
+  const base = buildPrompt(params);
+
+  const jsonSchema = `═══════════════════════════════════════════════
+REQUIRED JSON OUTPUT FORMAT
 ═══════════════════════════════════════════════
 
-1. ANALIZA el original completamente.
-2. ADAPTA la lectura en bloques cortos con subtítulos.
-${isHighSupport ? "3. Añade filas de pictogramas después de cada párrafo de lectura." : ""}
-3. ADAPTA TODAS las actividades. Ninguna puede faltar.
-4. GENERA el HTML con la estructura exacta descrita (sin <style>).
-5. Devuelve JSON con documentHtml, adaptation_decisions y teacherNotes.
-${params.educationalLevel === "secundaria" ? `
-═══════════════════════════════════════════════
-NIVEL EDUCATIVO: Secundaria/ESO (11-16 años). Mantén el rigor matemático y el vocabulario propio de ESO. No simplifiques las operaciones ni el contenido curricular. Solo adapta el ACCESO (estructura, apoyos visuales, chunking) no el CONTENIDO.
-═══════════════════════════════════════════════
-` : ""}`.trim();
+Your entire response must be ONLY this JSON object — nothing else:
+
+{
+  "documentHtml": "<div class=\\"aa-page\\">... full adapted HTML here ...</div>",
+  "adaptation_decisions": ["decision about what was adapted", "another decision"],
+  "teacherNotes": ["note for the teacher", "another note"]
+}
+
+JSON string escaping rules (CRITICAL):
+- documentHtml is a JSON string — use \\" for any double-quote character inside it
+- Use \\n for line breaks if needed inside strings
+- Do NOT output literal backslash-quote (\\\\") sequences; use only single \\"-escaping
+- Keys and string values must be wrapped in double quotes (not single quotes)
+- The response must be parseable by JSON.parse() with no pre-processing`;
+
+  return `${jsonMandate}\n\n${base}\n\n${jsonSchema}`;
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────
@@ -370,7 +447,7 @@ export async function POST(req: Request) {
   const studentInterests = Array.isArray(body.studentInterests)
     ? body.studentInterests.filter((i): i is string => typeof i === "string")
     : [];
-  const educationalLevel = body.educationalLevel === "secundaria" ? "secundaria" : "primaria";
+  const educationalLevel = (body.educationalLevel === "secundaria" ? "secundaria" : "primaria") as "primaria" | "secundaria";
   // Perfiles adicionales (para multi-perfil: ej. TEA + DI)
   const additionalProfiles = Array.isArray(body.additionalProfiles)
     ? (body.additionalProfiles as LearningProfile[]).filter(Boolean)
@@ -471,7 +548,7 @@ export async function POST(req: Request) {
           : "";
 
         // ── Prompts ───────────────────────────────────────────────────────
-        const basePrompt = buildPrompt({
+        const promptParams = {
           sourceText,
           config,
           rulesText,
@@ -482,7 +559,11 @@ export async function POST(req: Request) {
           pictogramDensity,
           pictogramSuggestions,
           educationalLevel,
-        });
+        };
+        // Pro (NVIDIA/Llama) uses a JSON-mandate wrapper; Free (Gemini) uses the base prompt.
+        const basePrompt = userPlan === "pro"
+          ? buildNvidiaPrompt(promptParams)
+          : buildPrompt(promptParams);
 
         // Ensamblar user prompt: base + análisis previo + estilo docente
         const userPrompt = [basePrompt, analysisBlock, styleContextBlock]
@@ -498,7 +579,7 @@ export async function POST(req: Request) {
           : baseSystemPrompt;
 
         // ── Logging ───────────────────────────────────────────────────────
-        const providerName = userPlan === "pro" && process.env.OPENAI_API_KEY ? "openai" : "gemini";
+        const providerName = userPlan === "pro" ? "nvidia" : "gemini";
         console.log("[ADAPT]", {
           plan: userPlan,
           tier: generationTier,

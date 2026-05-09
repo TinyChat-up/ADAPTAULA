@@ -75,17 +75,25 @@ export function parseModelJsonResponse(rawText: string): ParseResult {
     return { data: JSON.parse(rawText) as Record<string, unknown>, recoveryLevel: 0, recoveryNote: "" };
   } catch { /* continuar */ }
 
-  // ── Capa 1: quitar fences markdown + trim ─────────────────────────────────
+  // ── Capa 1: desescapar comillas Llama ─────────────────────────────────────
+  // Llama a veces envuelve el JSON con escapes: {\"key\": \"value\"} o
+  // usa doble-escape \\" dentro de strings. Normalizar antes de continuar.
+  const unescaped = rawText.replace(/\\\\"/g, '\\"').replace(/\\"/g, '"');
+  try {
+    return { data: JSON.parse(unescaped) as Record<string, unknown>, recoveryLevel: 1, recoveryNote: "unescaped llama quote escaping" };
+  } catch { /* continuar */ }
+
+  // ── Capa 2: quitar fences markdown + trim ─────────────────────────────────
   const stripped = rawText
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
 
   try {
-    return { data: JSON.parse(stripped) as Record<string, unknown>, recoveryLevel: 1, recoveryNote: "stripped markdown fences" };
+    return { data: JSON.parse(stripped) as Record<string, unknown>, recoveryLevel: 2, recoveryNote: "stripped markdown fences" };
   } catch { /* continuar */ }
 
-  // ── Capa 2: extraer primer {...} ──────────────────────────────────────────
+  // ── Capa 3: extraer primer {...} ──────────────────────────────────────────
   // Greedy: desde el primer { hasta el último } del texto
   const brace = stripped.indexOf("{");
   const lastBrace = stripped.lastIndexOf("}");
@@ -94,24 +102,24 @@ export function parseModelJsonResponse(rawText: string): ParseResult {
     : stripped;
 
   try {
-    return { data: JSON.parse(extracted) as Record<string, unknown>, recoveryLevel: 2, recoveryNote: "extracted {…} block" };
+    return { data: JSON.parse(extracted) as Record<string, unknown>, recoveryLevel: 3, recoveryNote: "extracted {…} block" };
   } catch { /* continuar */ }
 
-  // ── Capa 3: limpiar caracteres de control ─────────────────────────────────
+  // ── Capa 4: limpiar caracteres de control ─────────────────────────────────
   const cleaned = stripControlChars(extracted);
 
   try {
-    return { data: JSON.parse(cleaned) as Record<string, unknown>, recoveryLevel: 3, recoveryNote: "stripped control chars" };
+    return { data: JSON.parse(cleaned) as Record<string, unknown>, recoveryLevel: 4, recoveryNote: "stripped control chars" };
   } catch { /* continuar */ }
 
-  // ── Capa 4: reparar JSON truncado ─────────────────────────────────────────
+  // ── Capa 5: reparar JSON truncado ─────────────────────────────────────────
   const repaired = repairTruncatedJson(cleaned);
 
   try {
-    return { data: JSON.parse(repaired) as Record<string, unknown>, recoveryLevel: 4, recoveryNote: "repaired truncated json (closed open strings/braces)" };
+    return { data: JSON.parse(repaired) as Record<string, unknown>, recoveryLevel: 5, recoveryNote: "repaired truncated json (closed open strings/braces)" };
   } catch (finalErr) {
     throw new Error(
-      `JSON irrecuperable tras 4 capas de reparación. ` +
+      `JSON irrecuperable tras 5 capas de reparación. ` +
       `rawLength=${rawText.length} extractedLength=${extracted.length} ` +
       `finalError=${finalErr instanceof Error ? finalErr.message : String(finalErr)}`,
     );

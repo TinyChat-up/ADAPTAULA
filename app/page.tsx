@@ -53,11 +53,20 @@ function injectAndStripStyles(html: string): string {
   // Match <style> or <style id="..."> (the generated CSS has an id attribute)
   const match = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
   if (!match) return html;
+
+  // Strip global selectors that would override page layout (*, body, html).
+  // The document CSS is designed for standalone rendering; these rules fight
+  // Tailwind's mx-auto centering and reset the page's own styles.
+  const css = match[1]
+    .replace(/\*\s*\{[^}]*\}/g, "")
+    .replace(/\bhtml\b\s*\{[^}]*\}/g, "")
+    .replace(/\bbody\b\s*\{[^}]*\}/g, "");
+
   const existing = document.getElementById("aa-document-styles");
   if (existing) existing.remove();
   const el = document.createElement("style");
   el.id = "aa-document-styles";
-  el.textContent = match[1];
+  el.textContent = css;
   document.head.appendChild(el);
   return html.replace(/<style[^>]*>[\s\S]*?<\/style>/i, "").trim();
 }
@@ -118,7 +127,7 @@ export default function HomePage() {
         : "";
 
   // ── Configure state ───────────────────────────────────────────────────────────
-  const [perfil, setPerfil] = useState<Perfil>("dislexia");
+  const [perfiles, setPerfiles] = useState<Perfil[]>(["dislexia"]);
   const [subject, setSubject] = useState<Subject>("lengua");
   const [supportDegree, setSupportDegree] = useState<SupportDegree>("medio");
   const [interestsInput, setInterestsInput] = useState("");
@@ -230,7 +239,8 @@ export default function HomePage() {
         body: JSON.stringify({
           content,
           subject,
-          learningProfile: perfil,
+          learningProfile: perfiles[0],
+          additionalProfiles: perfiles.slice(1),
           supportDegree,
           studentInterests,
           educationalLevel,
@@ -334,7 +344,7 @@ export default function HomePage() {
     setPastedText("");
     setFileState({ status: "idle" });
     setTab("file");
-    setPerfil("dislexia");
+    setPerfiles(["dislexia"]);
     setSubject("lengua");
     setSupportDegree("medio");
     setInterestsInput("");
@@ -361,30 +371,13 @@ export default function HomePage() {
         return;
       }
 
-      // Reuse the same saved record as DOCX to avoid duplicate inserts
-      let adaptationId = savedAdaptationIdRef.current;
-      if (!adaptationId) {
-        const { data: inserted, error: insertError } = await supabase
-          .from("adaptations")
-          .insert({ result_html: adaptResult.documentHtml })
-          .select("id")
-          .single();
-        const row = inserted as Record<string, unknown> | null;
-        if (insertError || !row?.id) {
-          toast("No se pudo guardar la adaptación para la descarga.", "error");
-          return;
-        }
-        adaptationId = String(row.id);
-        savedAdaptationIdRef.current = adaptationId;
-      }
-
       const res = await fetch("/api/export/pdf", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ adaptationId }),
+        body: JSON.stringify({ html: adaptResult.documentHtml }),
       });
 
       if (!res.ok) {
@@ -398,8 +391,12 @@ export default function HomePage() {
       const a = document.createElement("a");
       a.href = url;
       a.download = "adaptacion-adaptaula.pdf";
+      // Must be in the DOM for Firefox to initiate the download.
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      // Defer revoke so the browser has time to start the download.
+      setTimeout(() => URL.revokeObjectURL(url), 150);
     } catch {
       toast("Error de red al descargar el PDF.", "error");
     } finally {
@@ -426,7 +423,7 @@ export default function HomePage() {
       if (!adaptationId) {
         const { data: inserted, error: insertError } = await supabase
           .from("adaptations")
-          .insert({ result_html: adaptResult.documentHtml })
+          .insert({ result_html: adaptResult.documentHtml, user_id: session.user.id })
           .select("id")
           .single();
         const row = inserted as Record<string, unknown> | null;
@@ -460,8 +457,10 @@ export default function HomePage() {
       const a = document.createElement("a");
       a.href = url;
       a.download = "adaptacion-adaptaula.docx";
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 150);
     } catch {
       setDocxError("Error de red al descargar el DOCX.");
     } finally {
@@ -474,7 +473,7 @@ export default function HomePage() {
   if (screen === "generating") {
     return (
       <GeneratingScreen
-        perfil={perfil}
+        perfil={perfiles[0]}
         subject={subject}
         supportDegree={supportDegree}
         progress={generationProgress > 0 ? generationProgress : undefined}
@@ -502,7 +501,7 @@ export default function HomePage() {
           docxBusy={docxBusy}
           docxError={docxError}
           notesOpen={notesOpen}
-          perfil={perfil}
+          perfil={perfiles[0]}
           subject={subject}
           supportDegree={supportDegree}
           isPro={userPlan === "pro"}
@@ -558,14 +557,14 @@ export default function HomePage() {
   return (
     <ErrorBoundary onError={(err) => toast(err.message, "error")}>
       <ConfigScreen
-        perfil={perfil}
+        perfiles={perfiles}
         subject={subject}
         supportDegree={supportDegree}
         interestsInput={interestsInput}
         educationalLevel={educationalLevel}
         configError={configError}
         showSecondaryWarning={showSecondaryWarning}
-        onPerfilChange={setPerfil}
+        onPerfilesChange={setPerfiles}
         onSubjectChange={setSubject}
         onSupportDegreeChange={setSupportDegree}
         onInterestsChange={setInterestsInput}

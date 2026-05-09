@@ -243,6 +243,29 @@ export async function fetchPictogramAsset(url: string) {
   };
 }
 
+/**
+ * Builds ExportAdaptationData directly from an HTML string.
+ * Used by the export routes when the client sends the HTML inline,
+ * bypassing any Supabase schema dependency.
+ */
+export function buildAdaptationFromHtml(html: string): ExportAdaptationData {
+  const contentPlain = htmlToPlainText(html);
+  return {
+    id: "",
+    title: "Adaptación AdaptAula",
+    outputFormat: "Material adaptado",
+    adaptationType: "Adaptación pedagógica",
+    studentProfile: "NEE",
+    styleName: "",
+    versionNumber: 1,
+    createdAt: new Date().toISOString(),
+    contentHtml: html,
+    contentPlain,
+    pictogramData: [],
+    aiNotes: "",
+  };
+}
+
 export function toSafeSlug(value: string) {
   return value
     .toLowerCase()
@@ -310,11 +333,10 @@ export async function loadAdaptationForExport(req: Request) {
     return { error: "Falta adaptationId.", status: 400 as const };
   }
 
+  // Only select columns that exist in the actual adaptations table schema.
   const adaptationResult = await supabase
     .from("adaptations")
-    .select(
-      "id, title, content_type, adaptation_type, student_profile, style_snapshot, style_id, result_html, adapted_content, pictogram_data, ai_notes, version_number, created_at",
-    )
+    .select("id, title, result_html, subject, support_degree, needs, mode, original_filename, created_at")
     .eq("id", adaptationId)
     .eq("user_id", userResult.data.user.id)
     .maybeSingle();
@@ -328,25 +350,18 @@ export async function loadAdaptationForExport(req: Request) {
   }
 
   const row = adaptationResult.data as Record<string, unknown>;
-  const title = asString(row.title) || "Adaptación";
-  const outputFormat = asString(row.content_type) || "Material adaptado";
-  const adaptationType = asString(row.adaptation_type) || "No definido";
-  const studentProfile = asString(row.student_profile) || "No definido";
-  const versionNumber = Number(row.version_number || 1) || 1;
+  const title = asString(row.title) || asString(row.original_filename) || "Adaptación";
+  const outputFormat = asString(row.subject) || "Material adaptado";
+  const adaptationType = asString(row.needs) || asString(row.mode) || "No definido";
+  const studentProfile = asString(row.needs) || "No definido";
+  const versionNumber = 1;
   const createdAt = asString(row.created_at);
-  const aiNotes = asString(row.ai_notes);
-  const snapshot =
-    row.style_snapshot && typeof row.style_snapshot === "object"
-      ? (row.style_snapshot as Record<string, unknown>)
-      : null;
-  const styleName =
-    (snapshot && asString(snapshot.name)) ||
-    (asString(row.style_id) ? "Estilo aplicado" : "");
+  const aiNotes = "";
+  const styleName = "";
 
-  const contentRaw =
-    asString(row.result_html) || asString(row.adapted_content) || "";
+  const contentRaw = asString(row.result_html);
   const contentPlain = htmlToPlainText(contentRaw);
-  const pictogramData = parsePictogramData(row.pictogram_data);
+  const pictogramData: ExportPictogram[] = [];
 
   if (!contentPlain) {
     return {

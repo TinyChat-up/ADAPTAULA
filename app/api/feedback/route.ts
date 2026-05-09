@@ -4,8 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 export async function POST(req: Request) {
   try {
     const body = await req.json() as {
-      rating: 1 | -1;
-      tags?: string[];
+      rating: number;
+      usable?: "yes" | "partial" | "no";
+      positive_dimensions?: string[];
+      improvement_dimensions?: string[];
+      improvement_notes?: string;
       comment?: string;
       adaptationId?: string;
       subject?: string;
@@ -34,7 +37,10 @@ export async function POST(req: Request) {
 
     const { error } = await supabaseService.from("adaptation_feedback").insert({
       rating: body.rating,
-      tags: body.tags ?? [],
+      usable: body.usable ?? null,
+      positive_dimensions: body.positive_dimensions ?? [],
+      improvement_dimensions: body.improvement_dimensions ?? [],
+      improvement_notes: body.improvement_notes ?? null,
       comment: body.comment ?? null,
       adaptation_id: body.adaptationId ?? null,
       user_id: userId,

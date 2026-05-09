@@ -393,6 +393,157 @@ body{background:${bodyBg};padding:32px 16px;font-family:'Arial',sans-serif}
   color:#1A1A1A;
 }
 
+/* ── CAJA DE CONCEPTO (definición o término clave) ── */
+.aa-concept-box{
+  display:flex;
+  flex-direction:column;
+  border:2px solid #4A7C59;
+  border-left:5px solid #4A7C59;
+  border-radius:0 10px 10px 0;
+  padding:12px 16px;
+  margin:10px 0 18px;
+  background:#F0F7F2;
+}
+.aa-concept-label{
+  font-size:15px;
+  font-weight:700;
+  color:#2D5A3D;
+  margin-bottom:4px;
+}
+.aa-concept-def{
+  font-size:14px;
+  color:#2D2D2D;
+  line-height:1.55;
+}
+
+/* ── SECUENCIA DE PASOS (flujo / proceso) ── */
+.aa-flow{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  margin:10px 0 18px;
+}
+.aa-flow-step{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  background:#FFFDF7;
+  border:1.5px solid #C8DFD0;
+  border-radius:10px;
+  padding:10px 14px;
+}
+.aa-step-num{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:28px;
+  height:28px;
+  background:#4A7C59;
+  color:white;
+  font-size:14px;
+  font-weight:700;
+  border-radius:50%;
+  flex-shrink:0;
+}
+.aa-step-text{
+  font-size:14px;
+  color:#2D2D2D;
+  line-height:1.5;
+  padding-top:4px;
+}
+.aa-flow-arrow{
+  text-align:center;
+  font-size:18px;
+  color:#4A7C59;
+  font-weight:700;
+  padding:2px 0;
+  line-height:1.2;
+}
+
+/* ── CAUSA → EFECTO ── */
+.aa-cause-effect{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:10px 0 18px;
+}
+.aa-cause{
+  flex:1;
+  min-width:120px;
+  background:#FEF3E8;
+  border:1.5px solid #E8834A;
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:14px;
+  color:#2D2D2D;
+  text-align:center;
+  font-weight:500;
+}
+.aa-effect-arrow{
+  font-size:22px;
+  color:#4A7C59;
+  font-weight:700;
+  flex-shrink:0;
+}
+.aa-effect{
+  flex:1;
+  min-width:120px;
+  background:#F0F7F2;
+  border:1.5px solid #4A7C59;
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:14px;
+  color:#2D2D2D;
+  text-align:center;
+  font-weight:500;
+}
+
+/* ── GLOSARIO ── */
+.aa-glossary-item{
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  padding:8px 12px;
+  border-bottom:1px solid #EDE8E0;
+}
+.aa-gloss-term{
+  font-size:14px;
+  font-weight:700;
+  color:#E8834A;
+  min-width:100px;
+  flex-shrink:0;
+}
+.aa-gloss-def{
+  font-size:14px;
+  color:#2D2D2D;
+  line-height:1.5;
+}
+
+/* ── RECUADRO DE INFORMACIÓN IMPORTANTE ── */
+.aa-highlight-box{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  background:#FFFBF0;
+  border:1.5px solid #F5D078;
+  border-left:4px solid #E8A020;
+  border-radius:0 10px 10px 0;
+  padding:12px 16px;
+  margin:10px 0 18px;
+}
+.aa-highlight-icon{
+  font-size:18px;
+  flex-shrink:0;
+  line-height:1.4;
+}
+.aa-highlight-box p{
+  font-size:14px;
+  color:#2D2D2D;
+  line-height:1.5;
+  margin:0;
+}
+
 /* ── PRINT — idéntico a la web ── */
 @media print{
   body{background:${bodyBg};padding:0}
@@ -412,7 +563,11 @@ body{background:${bodyBg};padding:32px 16px;font-family:'Arial',sans-serif}
   .aa-checkbox,
   .aa-calc-box,
   .aa-equation-block,
-  .aa-solution-line .aa-solution-blank{
+  .aa-solution-line .aa-solution-blank,
+  .aa-concept-box,
+  .aa-flow-step,
+  .aa-cause,.aa-effect,
+  .aa-highlight-box{
     -webkit-print-color-adjust:exact;
     print-color-adjust:exact;
   }

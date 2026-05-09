@@ -17,13 +17,13 @@ export interface AIProvider {
 /**
  * Returns the appropriate AI provider for the given plan.
  *
- * free → NVIDIA Llama 3.3 70B (NIM API, OpenAI-compatible)
- * pro  → Gemini 2.5 Flash (Google AI API)
+ * free → Gemini 2.5 Flash (Google AI API)
+ * pro  → NVIDIA NIM Llama Nemotron (OpenAI-compatible)
  */
 export function getAIProvider(plan: Plan): AIProvider {
-  if (plan === "free") {
+  if (plan === "pro") {
     return new NvidiaProvider();
   }
-  // pro → Gemini 2.5 Flash
+  // free → Gemini 2.5 Flash
   return new GeminiProvider();
 }
