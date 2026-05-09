@@ -10,7 +10,7 @@
     "knip": "knip"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^123.0.0",
+    "@sparticuz/chromium-min": "^148.0.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.100.0",
     "docx": "^9.6.1",

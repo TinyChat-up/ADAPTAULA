@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getUserPlan } from "@/lib/subscriptionService";
-import chromium from "@sparticuz/chromium";
+import chromium from "@sparticuz/chromium-min";
 import puppeteer from "puppeteer-core";
 import {
   buildAdaptationFromHtml,
@@ -118,13 +118,14 @@ ${adaptation.contentHtml}
 </html>`;
 
     // ── Render with Puppeteer ─────────────────────────────────────────────────
-    const executablePath = await chromium.executablePath();
+    const executablePath = await chromium.executablePath(
+      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
+    );
 
     const browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
       executablePath,
-      headless: chromium.headless,
+      headless: true,
     });
     try {
       const page = await browser.newPage();
