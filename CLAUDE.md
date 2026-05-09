@@ -685,3 +685,208 @@ o la seguridad del producto. Aplicar en cualquier sprint futuro.
 | 6 | **`ProGateModal` es la única vía de bloqueo UX** (no errores crudos) | Consistencia de conversión — mensajes de error genéricos rompen el funnel |
 | 7 | `learningProfile` llega **directo** desde el formulario a `buildConfigFromForm()` | No derivar de `adaptationType` — ese mapeo causaba perfiles NEE incorrectos |
 | 8 | `parseModelJsonResponse()` es el **único punto de parseo** de respuestas IA | No hacer JSON.parse directo en route.ts — el parser robusto maneja los casos edge de Gemini |
+
+---
+
+## AUDITORÍA 2026-05-09
+
+### 1. npx knip --reporter compact
+
+```
+Unused files (4)
+components/ui/FeedbackWidget.tsx
+components/ui/PlanBadge.tsx
+components/ui/PlanStatusBanner.tsx
+lib/ai/providers/openai.ts
+
+Unused dependencies (2)
+package.json: openai, pdf-lib
+
+Unused exports (4)
+lib/adaptationRules.ts: POPULAR_INTERESTS
+lib/adaptationsService.ts: createAdaptation, getAdaptationById, getNextVersionNumber, getAdaptationChain, markAdaptationAsFinal
+lib/arasaac.ts: mergePictogramConcepts, resolveArasaacPictograms, enrichDocumentWithArasaac
+lib/export/adaptationExport.ts: loadAdaptationForExport
+```
+
+**Novedades respecto a auditoría anterior:**
+- `lib/ai/providers/openai.ts` ahora detectado como archivo muerto (no importado desde `provider.ts` — Nvidia/NVIDIA provider lo sustituyó en el flujo Pro)
+- `openai` y `pdf-lib` como dependencias no usadas (migración a Puppeteer + chromium)
+- `loadAdaptationForExport` en `adaptationExport.ts` — export nuevo sin uso activo
+
+---
+
+### 2. Árbol de archivos (app/api/, lib/ai/, app/components/, lib/)
+
+```
+app/api/
+  adapt/route.ts
+  adaptations/route.ts
+  arasaac/search/route.ts
+  billing-portal/route.ts
+  checkout/route.ts
+  export/docx/route.ts
+  export/pdf/route.ts          ← Puppeteer + @sparticuz/chromium (migrado 2026-05-09)
+  extract-text/route.ts
+  feedback/route.ts            ← nuevo (Sprint E.6)
+  style-analysis/route.ts
+  user-plan/route.ts
+  webhooks/stripe/route.ts
+
+app/components/
+  feedback/FeedbackPanel.tsx   ← nuevo (Sprint E.6) — modal slide-up post-descarga
+
+lib/
+  adaptationRules.ts
+  adaptationsService.ts        ← deuda técnica (exports muertos)
+  arasaac.ts                   ← deuda técnica (exports muertos)
+  authService.ts
+  buildDocumentCss.ts
+  document/normalizeDocumentHtml.ts
+  export/adaptationExport.ts
+  extractDocumentText.ts
+  extractPdfText.ts
+  pictogramResolver.ts
+  rateLimit.ts
+  stylesService.ts
+  subscriptionService.ts
+  supabaseClient.ts
+
+lib/ai/
+  documentAnalysis.ts
+  model.ts
+  parseModelResponse.ts
+  provider.ts
+  providers/gemini.ts
+  providers/nvidia.ts          ← nuevo proveedor (NVIDIA/Llama)
+  providers/openai.ts          ← archivo muerto (sustituido por nvidia.ts en Pro)
+  systemPrompts.ts
+```
+
+---
+
+### 3. Prompt de adaptación completo (buildPrompt + buildNvidiaPrompt en app/api/adapt/route.ts)
+
+```
+DOCUMENTO ORIGINAL
+${sourceText}
+
+CONFIGURACIÓN
+Perfil: ${learningProfile} | Nivel: ${adaptationLevel} | Apoyo: ${supportLevel}
+${studentInterests?.length ? `Intereses (solo para ejemplos): ${interests.join(", ")}` : ""}
+
+REGLAS PEDAGÓGICAS OBLIGATORIAS
+${rulesText}
+
+${subjectRulesText}
+
+${interestsBlock}
+
+═══════════════════════════════════════════════
+SISTEMA DE PICTOGRAMAS — MODO [TARJETA|INLINE]
+═══════════════════════════════════════════════
+
+[Si apoyo ALTO — MODO TARJETA]:
+  <div class="aa-picto-card"><img class="aa-picto-img" src="URL" alt="palabra"><span class="aa-picto-word">palabra</span></div>
+  <div class="aa-picto-row">[tarjetas]</div>
+
+[Si apoyo bajo/medio — MODO INLINE]:
+  <img class="aa-picto-inline" src="URL_ARASAAC" alt="palabra">
+
+PICTOGRAMAS DISPONIBLES (usa SOLO estos):
+${pictogramSuggestions}
+
+NO uses pictograma si la palabra no está en la lista.
+NO pongas pictogramas en preguntas (¿...?) ni en palabras abstractas.
+
+═══════════════════════════════════════════════
+ESPACIOS DE ESCRITURA
+═══════════════════════════════════════════════
+
+LÍNEA SIMPLE:     <div class="aa-ruled-line"></div>
+CAJA PAUTA:       <div class="aa-ruled-box"></div>
+CAJA GRANDE:      <div class="aa-ruled-box aa-ruled-box--large"></div>
+INICIO DADO:      <div class="aa-ruled-box"><span class="aa-starter">Texto...</span></div>
+VERDADERO/FALSO:  <div class="aa-vf-item">...</div>
+TABLA:            <table class="aa-table"><tr><td class="aa-cell-label">...</td><td class="aa-cell-ruled"></td></tr></table>
+EJEMPLO RESUELTO: <div class="aa-example">...</div>
+[Si TDAH] CASILLA: <div class="aa-done-row"><span class="aa-checkbox"></span><span>He terminado ✓</span></div>
+
+═══════════════════════════════════════════════
+ELEMENTOS VISUALES
+═══════════════════════════════════════════════
+
+CONCEPTO:         <div class="aa-concept-box"><span class="aa-concept-label">...</span><span class="aa-concept-def">...</span></div>
+SECUENCIA:        <div class="aa-flow"><div class="aa-flow-step">...</div><div class="aa-flow-arrow">↓</div>...</div>
+CAUSA→EFECTO:     <div class="aa-cause-effect"><div class="aa-cause">...</div><div class="aa-effect-arrow">→</div><div class="aa-effect">...</div></div>
+GLOSARIO:         <div class="aa-glossary-item"><span class="aa-gloss-term">...</span><span class="aa-gloss-def">...</span></div>
+AVISO:            <div class="aa-highlight-box"><span class="aa-highlight-icon">💡</span><p>...</p></div>
+
+═══════════════════════════════════════════════
+ESTRUCTURA DEL DOCUMENTO — SIN <style>
+═══════════════════════════════════════════════
+
+<div class="aa-page">
+  <div class="aa-header"><h1>Título</h1><div class="aa-meta">Documento adaptado · AdaptAula</div></div>
+  <div class="aa-body">
+    <div class="aa-block aa-reading-block" data-block="lectura-1">
+      <span class="aa-subtitle">...</span>
+      <p>...</p>
+      [Si alto: <div class="aa-picto-row">...</div>]
+    </div>
+    <hr class="aa-separator">
+    <h2 class="aa-section-title">Actividades</h2>
+    <div class="aa-block aa-activity" data-block="actividad-1">
+      <div class="aa-activity-number">Actividad 1</div>
+      <p class="aa-instruction">...</p>
+    </div>
+  </div>
+</div>
+
+OBLIGATORIO:
+- ADAPTA absolutamente TODAS las actividades. Ninguna puede faltar.
+- NO incluyas ningún bloque <style>
+- Devuelve SOLO el objeto JSON: { documentHtml, adaptation_decisions, teacherNotes }
+[Si secundaria]: Mantén el rigor curricular completo. Adapta el ACCESO, nunca el CONTENIDO.
+
+buildNvidiaPrompt(): igual que buildPrompt() + mandato JSON explícito al inicio
+  ("Your response must start with { and end with }") + bloque REQUIRED JSON OUTPUT FORMAT
+  con reglas de escape críticas para Llama (\\" para comillas, \\n para saltos).
+```
+
+---
+
+### 4. package.json (dependencies y devDependencies)
+
+```json
+{
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.0",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.100.0",
+    "docx": "^9.6.1",
+    "mammoth": "^1.12.0",
+    "next": "16.2.1",
+    "openai": "^6.34.0",
+    "pdf-lib": "^1.17.1",
+    "puppeteer-core": "^22.0.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "stripe": "^22.0.1",
+    "unpdf": "^1.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "knip": "^6.4.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+```
+
+**Nota**: `openai` y `pdf-lib` marcadas como unused por knip. `openai` está en package.json pero `lib/ai/providers/openai.ts` no se importa desde `provider.ts` (el proveedor Pro actual es `nvidia.ts`). Candidatas a limpiar en Sprint E.4.

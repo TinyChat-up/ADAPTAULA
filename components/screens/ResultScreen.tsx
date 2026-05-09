@@ -142,6 +142,13 @@ export default function ResultScreen({
     prevDocxBusy.current = docxBusy;
   }, [docxBusy]);
 
+  // ── Feedback metadata ─────────────────────────────────────────────────────────
+  const ADAPTATION_LEVEL_MAP: Record<SupportDegree, string> = {
+    leve: "ligero", medio: "guiado", alto: "funcional",
+  };
+  const adaptationLevel = ADAPTATION_LEVEL_MAP[supportDegree];
+  const aiProvider = isPro ? "gpt-4.1" : "gemini";
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
   function getDocStyles(): DocStyles {
     return { fontSize, fontFamily, lineHeight };
@@ -548,6 +555,8 @@ export default function ResultScreen({
               subject={subject}
               supportDegree={supportDegree}
               learningProfile={perfil}
+              adaptationLevel={adaptationLevel}
+              aiProvider={aiProvider}
               onComplete={() => setShowFeedback(false)}
             />
           </div>

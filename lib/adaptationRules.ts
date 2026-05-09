@@ -574,12 +574,6 @@ ASIGNATURA: GENERAL
 
 // ─── Intereses del alumno ─────────────────────────────────────────────────────
 
-export const POPULAR_INTERESTS = [
-  "Pokémon", "Minecraft", "Fútbol", "Dinosaurios", "Princesas",
-  "Superhéroes", "Animales", "Coches", "Música", "Espacio",
-  "Unicornios", "Artes marciales",
-];
-
 export function buildInterestsBlock(interests: string[]): string {
   if (!interests || interests.length === 0) return "";
   return `

@@ -7,6 +7,8 @@ export interface FeedbackPanelProps {
   subject?: string;
   supportDegree?: string;
   learningProfile?: string;
+  adaptationLevel?: string;
+  aiProvider?: string;
   onComplete?: () => void;
 }
 
@@ -107,6 +109,8 @@ export default function FeedbackPanel({
   subject,
   supportDegree,
   learningProfile,
+  adaptationLevel,
+  aiProvider,
   onComplete,
 }: FeedbackPanelProps) {
   const [step, setStep] = useState(1);
@@ -140,6 +144,8 @@ export default function FeedbackPanel({
           subject,
           supportDegree,
           learningProfile,
+          adaptationLevel,
+          aiProvider,
         }),
       });
       if (!res.ok) {

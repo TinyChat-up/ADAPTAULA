@@ -118,10 +118,12 @@ ${adaptation.contentHtml}
 </html>`;
 
     // ── Render with Puppeteer ─────────────────────────────────────────────────
+    const executablePath = await chromium.executablePath();
+
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: chromium.headless,
     });
     try {

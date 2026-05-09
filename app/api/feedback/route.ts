@@ -14,6 +14,8 @@ export async function POST(req: Request) {
       subject?: string;
       supportDegree?: string;
       learningProfile?: string;
+      adaptationLevel?: string;
+      aiProvider?: string;
     };
 
     const authHeader = req.headers.get("authorization");
@@ -47,6 +49,8 @@ export async function POST(req: Request) {
       subject: body.subject ?? null,
       support_degree: body.supportDegree ?? null,
       learning_profile: body.learningProfile ?? null,
+      adaptation_level: body.adaptationLevel ?? null,
+      ai_provider: body.aiProvider ?? null,
     });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
