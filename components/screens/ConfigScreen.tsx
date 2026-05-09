@@ -11,63 +11,54 @@ const ASIGNATURAS: { value: Subject; label: string; icon: string }[] = [
   { value: "otra",        label: "Otra",         icon: "📚" },
 ];
 
-type PerfilConfig = {
-  value: LearningProfile;
-  label: string;
-  fullName: string;
-  desc: string;
-  color: string;
-  bg: string;
-};
-
-const PERFILES: PerfilConfig[] = [
+const PERFILES_NEE = [
   {
-    value: "tea",
-    label: "TEA",
-    fullName: "Espectro Autista",
-    desc: "Estructura visual, literalidad, predictibilidad",
+    id: "tdah" as LearningProfile,
+    sigla: "TDAH",
+    descripcion: "Le cuesta mantener la atención y terminar las tareas",
+    detalle: "Fragmentación en pasos cortos, checkboxes y máximo 3 actividades",
+    color: "#E8834A",
+    bg: "#FFF5EF",
+  },
+  {
+    id: "dislexia" as LearningProfile,
+    sigla: "Dislexia",
+    descripcion: "Tiene dificultades para leer y escribir con fluidez",
+    detalle: "Párrafos cortos, sílabas clave destacadas y espaciado generoso",
     color: "#4A7C59",
     bg: "#F0F7F2",
   },
   {
-    value: "tdah",
-    label: "TDAH",
-    fullName: "Déficit de Atención",
-    desc: "Chunking, checkpoints de completado, variedad",
-    color: "#C07800",
-    bg: "#FFFBEE",
+    id: "tea" as LearningProfile,
+    sigla: "TEA",
+    descripcion: "Necesita rutinas claras y lenguaje muy literal",
+    detalle: "Estructura predecible, pictogramas en cada instrucción y anticipación",
+    color: "#7B6FA0",
+    bg: "#F4F2F9",
   },
   {
-    value: "dislexia",
-    label: "Dislexia",
-    fullName: "Dificultad lectora",
-    desc: "Tipografía adaptada, fondo crema, espaciado",
-    color: "#C04A1A",
-    bg: "#FFF5F0",
+    id: "tel" as LearningProfile,
+    sigla: "TEL",
+    descripcion: "Le cuesta comprender y expresarse con el lenguaje oral y escrito",
+    detalle: "Frases de máximo 10 palabras, sujeto explícito y vocabulario clave en caja",
+    color: "#4A7C8F",
+    bg: "#F0F6F8",
   },
   {
-    value: "di",
-    label: "DI",
-    fullName: "Discapacidad Intelectual",
-    desc: "Vocabulario básico, máximo andamiaje visual",
-    color: "#2B6CB0",
-    bg: "#EBF4FF",
+    id: "di" as LearningProfile,
+    sigla: "DI",
+    descripcion: "Necesita vocabulario sencillo y ejemplos muy concretos",
+    detalle: "Máximo 2 actividades, ejemplo resuelto previo y frases de 8 palabras",
+    color: "#8F6B4A",
+    bg: "#F8F3EE",
   },
   {
-    value: "tel",
-    label: "TEL",
-    fullName: "Trastorno del Lenguaje",
-    desc: "Frases simples, apoyos fonológicos, ejemplos",
-    color: "#6B3FA0",
-    bg: "#F5EEFF",
-  },
-  {
-    value: "retraso",
-    label: "Retraso",
-    fullName: "Retraso Madurativo",
-    desc: "Desfase temporal, andamiaje progresivo",
-    color: "#A0416B",
-    bg: "#FFF0F6",
+    id: "retraso" as LearningProfile,
+    sigla: "Ret. Mad.",
+    descripcion: "Su desarrollo está por debajo del nivel esperado para su edad",
+    detalle: "Nivel -2 años, contextos cercanos y pictogramas en todo el documento",
+    color: "#6B8F4A",
+    bg: "#F2F7EE",
   },
 ];
 
@@ -120,14 +111,14 @@ export default function ConfigScreen({
   perfiles,
   subject,
   supportDegree,
-  interestsInput: _interestsInput,
+  interestsInput,
   educationalLevel: _educationalLevel,
   configError,
   showSecondaryWarning,
   onPerfilesChange,
   onSubjectChange,
   onSupportDegreeChange,
-  onInterestsChange: _onInterestsChange,
+  onInterestsChange,
   onEducationalLevelChange: _onEducationalLevelChange,
   onBack,
   onGenerate,
@@ -196,8 +187,6 @@ export default function ConfigScreen({
     );
   }
 
-  const primaryPerfil = perfiles[0];
-
   return (
     <div className="flex min-h-screen flex-col" style={{ background: "#FEFCF9" }}>
       {/* ── Nav top ── */}
@@ -260,6 +249,24 @@ export default function ConfigScreen({
             })}
           </div>
 
+          {/* Intereses del alumno */}
+          <div className="mt-4 space-y-1.5">
+            <label className="text-xs font-medium text-[#6B7A6C] uppercase tracking-wide">
+              Intereses del alumno
+              <span className="ml-1 font-normal normal-case">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={interestsInput}
+              onChange={(e) => onInterestsChange(e.target.value)}
+              placeholder="Ej: dinosaurios, fútbol, Pokémon..."
+              className="w-full rounded-lg border border-[#E8E0D5] bg-white px-3 py-2 text-sm text-[#2C3B2D] placeholder:text-[#B0A898] focus:outline-none focus:border-[#E8834A] transition-colors"
+            />
+            <p className="text-[11px] text-[#6B7A6C]">
+              La IA usará estos intereses para personalizar los ejemplos de las actividades
+            </p>
+          </div>
+
           <Divider />
 
           {/* SECTION 2 — Perfil NEE */}
@@ -280,80 +287,57 @@ export default function ConfigScreen({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {PERFILES.map(({ value, label, fullName, desc, color, bg }) => {
-              const sel = perfiles.includes(value);
-              const isPrimary = value === primaryPerfil;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => togglePerfil(value)}
-                  className="text-left relative"
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    border: sel ? `1.5px solid ${color}` : "0.5px solid #E2DDD5",
-                    background: sel ? bg : "#fff",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {/* Selected indicator */}
-                  {sel && (
-                    <span
-                      className="absolute top-2 right-2 flex items-center justify-center"
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        background: color,
-                      }}
-                    >
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                  )}
-
-                  <div className="flex items-center gap-2 mb-1 pr-5">
-                    <span
-                      className="inline-flex items-center justify-center shrink-0"
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "2px 7px",
-                        borderRadius: 20,
-                        background: sel ? color : "#EDE8E0",
-                        color: sel ? "#fff" : "#5A5248",
-                        letterSpacing: "0.03em",
-                      }}
-                    >
-                      {label}
-                    </span>
-                    {sel && isPrimary && perfiles.length > 1 && (
-                      <span
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: color,
-                          letterSpacing: "0.04em",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        principal
-                      </span>
-                    )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PERFILES_NEE.map((perfil) => (
+              <button
+                key={perfil.id}
+                type="button"
+                onClick={() => togglePerfil(perfil.id)}
+                style={{
+                  borderColor: perfiles.includes(perfil.id) ? perfil.color : "#E8E0D5",
+                  backgroundColor: perfiles.includes(perfil.id) ? perfil.bg : "#FFFFFF",
+                }}
+                className={`relative w-full text-left rounded-xl border-2 p-4 transition-all ${perfiles.includes(perfil.id) ? "shadow-sm" : "hover:border-[#C8BFB5]"}`}
+              >
+                {/* Checkmark cuando está seleccionado */}
+                {perfiles.includes(perfil.id) && (
+                  <div
+                    className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+                    style={{ backgroundColor: perfil.color }}
+                  >
+                    ✓
                   </div>
+                )}
 
-                  <p style={{ fontSize: 12, fontWeight: 500, color: sel ? "#2C2620" : "#3A3028", marginBottom: 2 }}>
-                    {fullName}
-                  </p>
-                  <p style={{ fontSize: 10, color: sel ? "#5A5248" : "#A09888", lineHeight: 1.4 }}>
-                    {desc}
-                  </p>
-                </button>
-              );
-            })}
+                {/* Badge "principal" si hay más de uno y es el primero */}
+                {perfiles.length > 1 && perfiles[0] === perfil.id && (
+                  <span
+                    className="inline-block text-[9px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mb-2"
+                    style={{ backgroundColor: perfil.color, color: "#FFFFFF" }}
+                  >
+                    Principal
+                  </span>
+                )}
+
+                {/* Descripción funcional — texto principal */}
+                <p className="text-sm font-semibold text-[#2C3B2D] leading-snug pr-6">
+                  {perfil.descripcion}
+                </p>
+
+                {/* Línea explicativa — 11px */}
+                <p className="text-[11px] text-[#6B7A6C] mt-1 leading-tight">
+                  {perfil.detalle}
+                </p>
+
+                {/* Sigla NEE — pequeña, abajo a la derecha */}
+                <span
+                  className="inline-block mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: perfil.bg, color: perfil.color, border: `1px solid ${perfil.color}30` }}
+                >
+                  {perfil.sigla}
+                </span>
+              </button>
+            ))}
           </div>
 
           {perfiles.length > 1 && (
@@ -361,7 +345,7 @@ export default function ConfigScreen({
               className="mt-2 px-1"
               style={{ fontSize: 10, color: "#8A8070" }}
             >
-              El primer perfil seleccionado ({PERFILES.find(p => p.value === primaryPerfil)?.label}) es el principal. Los demás son perfiles secundarios.
+              El primer perfil seleccionado ({PERFILES_NEE.find(p => p.id === perfiles[0])?.sigla}) es el principal. Los demás son perfiles secundarios.
             </p>
           )}
 
