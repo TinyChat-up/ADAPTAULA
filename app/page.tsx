@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/useToast";
 import type { Subject, SupportDegree, LearningProfile } from "@/lib/adaptationRules";
@@ -8,7 +8,7 @@ import type { Subject, SupportDegree, LearningProfile } from "@/lib/adaptationRu
 import UploadScreen from "@/components/screens/UploadScreen";
 import ConfigScreen from "@/components/screens/ConfigScreen";
 import GeneratingScreen from "@/components/screens/GeneratingScreen";
-import ResultScreen from "@/components/screens/ResultScreen";
+import ResultScreen, { type DocStyles } from "@/components/screens/ResultScreen";
 import ResultError from "@/components/ui/ResultError";
 import SubscriptionScreen from "@/components/screens/SubscriptionScreen";
 import ProGateModal from "@/components/ui/ProGateModal";
@@ -47,28 +47,28 @@ function detectsSecondaryLevel(text: string): boolean {
   return signals.some((r) => r.test(text));
 }
 
-// ─── Style injection helper ───────────────────────────────────────────────────
+// ─── Style helpers ────────────────────────────────────────────────────────────
 
-function injectAndStripStyles(html: string): string {
-  // Match <style> or <style id="..."> (the generated CSS has an id attribute)
+/** Strip <style> tag from HTML — pure, no DOM side-effects. */
+function stripStyleTag(html: string): string {
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/i, "").trim();
+}
+
+/** Inject document CSS into <head>, stripping global overrides (*, html, body). */
+function injectDocumentCss(html: string): void {
   const match = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-  if (!match) return html;
-
-  // Strip global selectors that would override page layout (*, body, html).
-  // The document CSS is designed for standalone rendering; these rules fight
-  // Tailwind's mx-auto centering and reset the page's own styles.
+  if (!match) return;
   const css = match[1]
     .replace(/\*\s*\{[^}]*\}/g, "")
     .replace(/\bhtml\b\s*\{[^}]*\}/g, "")
     .replace(/\bbody\b\s*\{[^}]*\}/g, "");
-
-  const existing = document.getElementById("aa-document-styles");
-  if (existing) existing.remove();
-  const el = document.createElement("style");
-  el.id = "aa-document-styles";
+  let el = document.getElementById("aa-document-styles");
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "aa-document-styles";
+    document.head.appendChild(el);
+  }
   el.textContent = css;
-  document.head.appendChild(el);
-  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/i, "").trim();
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -140,7 +140,6 @@ export default function HomePage() {
 
   // ── Result state ──────────────────────────────────────────────────────────────
   const [adaptResult, setAdaptResult] = useState<AdaptResult | null>(null);
-  const [cleanHtml, setCleanHtml] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [adaptError, setAdaptError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -148,10 +147,17 @@ export default function HomePage() {
   const [docxError, setDocxError] = useState("");
   const savedAdaptationIdRef = useRef<string | null>(null);
 
-  // Inject / clean up styles when entering or leaving result screen
+  // Derive cleanHtml synchronously so it's never stale on any render.
+  // The <style> tag is stripped here; CSS is injected to <head> by the effect below.
+  const cleanHtml = useMemo(
+    () => (adaptResult ? stripStyleTag(adaptResult.documentHtml) : ""),
+    [adaptResult],
+  );
+
+  // Inject / remove document CSS when entering or leaving the result screen.
   useEffect(() => {
     if (screen === "result" && adaptResult) {
-      setCleanHtml(injectAndStripStyles(adaptResult.documentHtml));
+      injectDocumentCss(adaptResult.documentHtml);
     } else {
       document.getElementById("aa-document-styles")?.remove();
     }
@@ -353,14 +359,13 @@ export default function HomePage() {
     setEducationalLevel("primaria");
     setShowSecondaryWarning(false);
     setAdaptResult(null);
-    setCleanHtml("");
     setDocxError("");
     savedAdaptationIdRef.current = null;
     setScreen("upload");
   };
 
   // ── PDF (server-side via /api/export/pdf) ────────────────────────────────────
-  const handlePdf = async () => {
+  const handlePdf = async (styles?: DocStyles) => {
     if (!adaptResult || pdfBusy) return;
     if (userPlan !== "pro") { setShowExportModal(true); return; }
     setPdfBusy(true);
@@ -377,7 +382,12 @@ export default function HomePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ html: adaptResult.documentHtml }),
+        body: JSON.stringify({
+          html: adaptResult.documentHtml,
+          fontSize: styles?.fontSize,
+          fontFamily: styles?.fontFamily,
+          lineHeight: styles?.lineHeight,
+        }),
       });
 
       if (!res.ok) {
@@ -506,7 +516,7 @@ export default function HomePage() {
           supportDegree={supportDegree}
           isPro={userPlan === "pro"}
           onReset={handleReset}
-          onPdf={() => void handlePdf()}
+          onPdf={(styles) => void handlePdf(styles)}
           onDocx={() => void handleDocx()}
           onToggleNotes={() => setNotesOpen((o) => !o)}
           onUpgrade={() => setScreen("subscription")}

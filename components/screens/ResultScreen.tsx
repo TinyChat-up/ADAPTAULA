@@ -1,10 +1,17 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import FeedbackPanel from "@/app/components/feedback/FeedbackPanel";
 import type { Subject, SupportDegree } from "@/lib/adaptationRules";
 
 type Perfil = "tea" | "tel" | "dislexia" | "di" | "tdah" | "retraso";
+
+export interface DocStyles {
+  fontSize: number;
+  fontFamily: string;
+  lineHeight: string;
+}
 
 const PERFIL_LABELS: Record<Perfil, string> = {
   tea: "TEA", tel: "TEL", dislexia: "Dislexia",
@@ -18,6 +25,18 @@ const DEGREE_LABELS: Record<SupportDegree, string> = {
   leve: "Apoyo leve", medio: "Apoyo medio", alto: "Apoyo alto",
 };
 
+const FONT_FAMILIES = [
+  { label: "Sans-serif",   value: "Arial, sans-serif" },
+  { label: "Serif",        value: "Georgia, serif" },
+  { label: "OpenDyslexic", value: "OpenDyslexic, sans-serif" },
+] as const;
+
+const LINE_HEIGHTS = [
+  { label: "Normal",     value: "1.5" },
+  { label: "Amplio",     value: "1.8" },
+  { label: "Muy amplio", value: "2.2" },
+] as const;
+
 interface Props {
   cleanHtml: string;
   teacherNotes: string[];
@@ -30,7 +49,7 @@ interface Props {
   supportDegree: SupportDegree;
   isPro?: boolean;
   onReset: () => void;
-  onPdf: () => void;
+  onPdf: (styles: DocStyles) => void;
   onDocx: () => void;
   onToggleNotes: () => void;
   onUpgrade?: () => void;
@@ -43,6 +62,23 @@ function DownloadIcon() {
     </svg>
   );
 }
+
+const BTN_BASE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 22,
+  height: 22,
+  borderRadius: 6,
+  border: "0.5px solid #E2DDD5",
+  background: "#fff",
+  color: "#5A5248",
+  fontSize: 14,
+  lineHeight: 1,
+  cursor: "pointer",
+  transition: "all 0.15s",
+  flexShrink: 0,
+};
 
 export default function ResultScreen({
   cleanHtml,
@@ -62,6 +98,44 @@ export default function ResultScreen({
   onUpgrade,
 }: Props) {
   const chips = [SUBJECT_LABELS[subject], PERFIL_LABELS[perfil], DEGREE_LABELS[supportDegree]];
+
+  // ── Toolbar state ─────────────────────────────────────────────────────────────
+  const [fontSize,   setFontSize]   = useState(16);
+  const [fontFamily, setFontFamily] = useState<string>("Arial, sans-serif");
+  const [lineHeight, setLineHeight] = useState<string>("1.5");
+  const [isEditing,  setIsEditing]  = useState(false);
+
+  // ── Document container ref ────────────────────────────────────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Apply toolbar styles directly to the DOM node (no extra re-render needed)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.style.fontSize   = `${fontSize}px`;
+    el.style.fontFamily = fontFamily;
+    el.style.lineHeight = lineHeight;
+  }, [fontSize, fontFamily, lineHeight]);
+
+  // ── Feedback panel: show after a download completes ──────────────────────────
+  const [showFeedback, setShowFeedback] = useState(false);
+  const prevPdfBusy  = useRef(false);
+  const prevDocxBusy = useRef(false);
+
+  useEffect(() => {
+    if (prevPdfBusy.current && !pdfBusy) setShowFeedback(true);
+    prevPdfBusy.current = pdfBusy;
+  }, [pdfBusy]);
+
+  useEffect(() => {
+    if (prevDocxBusy.current && !docxBusy) setShowFeedback(true);
+    prevDocxBusy.current = docxBusy;
+  }, [docxBusy]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function getDocStyles(): DocStyles {
+    return { fontSize, fontFamily, lineHeight };
+  }
 
   return (
     <div className="flex min-h-screen flex-col" style={{ background: "#FEFCF9", position: "relative", overflow: "hidden" }}>
@@ -96,10 +170,7 @@ export default function ResultScreen({
             </svg>
             Nueva
           </button>
-          <div
-            className="hidden sm:block"
-            style={{ width: 1, height: 14, background: "#E2DDD5" }}
-          />
+          <div className="hidden sm:block" style={{ width: 1, height: 14, background: "#E2DDD5" }} />
           <div className="hidden sm:flex items-center gap-1.5">
             {chips.map((chip, i) => (
               <span
@@ -120,7 +191,7 @@ export default function ResultScreen({
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={onPdf}
+            onClick={() => onPdf(getDocStyles())}
             disabled={pdfBusy}
             className="flex items-center gap-1.5 text-white disabled:opacity-50"
             style={{ fontSize: 11, fontWeight: 500, padding: "7px 14px", borderRadius: 7, background: "#4A7C59", transition: "all 0.15s" }}
@@ -147,11 +218,112 @@ export default function ResultScreen({
 
           {/* Section label */}
           <p
-            className="mb-4"
+            className="mb-3"
             style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.09em", color: "#B0A898" }}
           >
             Adaptación generada
           </p>
+
+          {/* ── Editing toolbar ── */}
+          <div
+            className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5"
+            style={{ background: "#fff", border: "0.5px solid #E2DDD5", borderRadius: 12 }}
+          >
+            {/* Font size */}
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#A09888", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                Tamaño
+              </span>
+              <button type="button" style={BTN_BASE} onClick={() => setFontSize((s) => Math.max(12, s - 1))}>−</button>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "#2C2620", minWidth: 30, textAlign: "center" }}>
+                {fontSize}px
+              </span>
+              <button type="button" style={BTN_BASE} onClick={() => setFontSize((s) => Math.min(22, s + 1))}>+</button>
+            </div>
+
+            <div style={{ width: 1, height: 16, background: "#E2DDD5", flexShrink: 0 }} />
+
+            {/* Font family */}
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#A09888", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                Fuente
+              </span>
+              <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                style={{
+                  fontSize: 11,
+                  padding: "3px 8px",
+                  borderRadius: 7,
+                  border: "0.5px solid #E2DDD5",
+                  background: "#fff",
+                  color: "#2C2620",
+                  cursor: "pointer",
+                }}
+              >
+                {FONT_FAMILIES.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ width: 1, height: 16, background: "#E2DDD5", flexShrink: 0 }} />
+
+            {/* Line height */}
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#A09888", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                Interlineado
+              </span>
+              <div className="flex gap-1">
+                {LINE_HEIGHTS.map((lh) => {
+                  const active = lineHeight === lh.value;
+                  return (
+                    <button
+                      key={lh.value}
+                      type="button"
+                      onClick={() => setLineHeight(lh.value)}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: active ? 600 : 400,
+                        padding: "3px 9px",
+                        borderRadius: 9999,
+                        border: active ? "1.5px solid #E8834A" : "0.5px solid #E2DDD5",
+                        background: active ? "rgba(232,131,74,0.06)" : "#fff",
+                        color: active ? "#B85A20" : "#5A5248",
+                        transition: "all 0.15s",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {lh.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Edit toggle — pushed to the right */}
+            <div style={{ marginLeft: "auto" }}>
+              <button
+                type="button"
+                onClick={() => setIsEditing((e) => !e)}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: "4px 12px",
+                  borderRadius: 7,
+                  border: isEditing ? "1.5px solid #4A7C59" : "0.5px solid #E2DDD5",
+                  background: isEditing ? "rgba(74,124,89,0.06)" : "#fff",
+                  color: isEditing ? "#4A7C59" : "#5A5248",
+                  transition: "all 0.15s",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isEditing ? "✓ Listo" : "✏️ Editar texto"}
+              </button>
+            </div>
+          </div>
 
           {/* ── Document card — A4-style ── */}
           <div
@@ -166,28 +338,31 @@ export default function ResultScreen({
           >
             {/* Card meta header */}
             <div className="mb-5 flex flex-wrap items-center gap-2">
-              <span
-                style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "#F0F7F2", color: "#4A7C59", border: "0.5px solid #C8DFD0" }}
-              >
+              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "#F0F7F2", color: "#4A7C59", border: "0.5px solid #C8DFD0" }}>
                 {SUBJECT_LABELS[subject]}
               </span>
-              <span
-                style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: "#FAF8F5", color: "#5A5248", border: "0.5px solid #E2DDD5" }}
-              >
+              <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: "#FAF8F5", color: "#5A5248", border: "0.5px solid #E2DDD5" }}>
                 Perfil {PERFIL_LABELS[perfil]}
               </span>
-              <span
-                style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: "#FAF8F5", color: "#5A5248", border: "0.5px solid #E2DDD5" }}
-              >
+              <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 20, background: "#FAF8F5", color: "#5A5248", border: "0.5px solid #E2DDD5" }}>
                 {DEGREE_LABELS[supportDegree]}
               </span>
             </div>
             <div style={{ height: 1, background: "#F2EDE6", marginBottom: 32 }} />
 
-            {/* Document HTML */}
+            {/* Document HTML — editable when isEditing */}
             <div
+              ref={containerRef}
               className="document-body"
+              contentEditable={isEditing}
+              suppressContentEditableWarning={true}
               dangerouslySetInnerHTML={{ __html: cleanHtml }}
+              style={{
+                outline: isEditing ? "1px dashed #E8834A" : "none",
+                borderRadius: isEditing ? 6 : 0,
+                padding: isEditing ? 6 : 0,
+                transition: "outline 0.15s, padding 0.15s",
+              }}
             />
           </div>
 
@@ -238,15 +413,6 @@ export default function ResultScreen({
               {docxError}
             </div>
           )}
-
-          {/* Feedback panel */}
-          <div className="mt-8 max-w-[860px] mx-auto">
-            <FeedbackPanel
-              subject={subject}
-              supportDegree={supportDegree}
-              learningProfile={perfil}
-            />
-          </div>
 
           {/* Teacher notes */}
           {teacherNotes.length > 0 && (
@@ -301,7 +467,7 @@ export default function ResultScreen({
         <div className="mx-auto flex max-w-[860px] items-center justify-center gap-3 px-6 py-3.5">
           <button
             type="button"
-            onClick={onPdf}
+            onClick={() => onPdf(getDocStyles())}
             disabled={pdfBusy}
             className="flex items-center gap-2 text-white disabled:opacity-50"
             style={{ fontSize: 12, fontWeight: 500, padding: "10px 26px", borderRadius: 9, background: "#4A7C59", transition: "all 0.15s" }}
@@ -322,8 +488,64 @@ export default function ResultScreen({
         </div>
       </div>
 
+      {/* ── Feedback slide-up panel ── */}
+      {showFeedback && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 200,
+            background: "rgba(44,38,32,0.35)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowFeedback(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 560,
+              background: "#FEFCF9",
+              borderRadius: "16px 16px 0 0",
+              border: "0.5px solid #E2DDD5",
+              borderBottom: "none",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              animation: "slideUp 0.22s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "0.5px solid #EDE8E0" }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 500, color: "#2C2620" }}>
+                ¿Cómo ha ido la adaptación?
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowFeedback(false)}
+                className="flex items-center justify-center"
+                style={{ width: 28, height: 28, borderRadius: 7, border: "0.5px solid #E2DDD5", background: "#fff", color: "#8A8070", transition: "all 0.15s" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FeedbackPanel
+              subject={subject}
+              supportDegree={supportDegree}
+              learningProfile={perfil}
+              onComplete={() => setShowFeedback(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <style>{`
-        /* Document body typography */
         .document-body {
           font-size: 16px;
           line-height: 1.75;
@@ -337,6 +559,10 @@ export default function ResultScreen({
         .document-body ol { padding-left: 1.4em; margin-bottom: 0.85em; }
         .document-body li { margin-bottom: 0.3em; }
 
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to   { transform: translateY(0); }
+        }
         @keyframes inkBg1 {
           0%,100% { transform: translate(0,0) scale(1); border-radius: 42% 58% 55% 45% / 50% 45% 55% 50%; }
           33%  { transform: translate(20px,-15px) scale(1.1); border-radius: 55% 45% 40% 60% / 45% 55% 50% 50%; }
