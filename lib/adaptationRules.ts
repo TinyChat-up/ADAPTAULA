@@ -575,21 +575,47 @@ ASIGNATURA: GENERAL
 // ─── Intereses del alumno ─────────────────────────────────────────────────────
 
 export function buildInterestsBlock(interests: string[]): string {
-  if (!interests || interests.length === 0) return "";
+  if (!interests.length) return "";
+
+  const lista = interests.map(i => `"${i}"`).join(", ");
+  const ejemplos = interests.slice(0, 2);
+  const e1 = ejemplos[0] ?? "su interés";
+  const e2 = ejemplos[1] ?? e1;
+
   return `
-INTERESES DEL ALUMNO — USA SOLO EN EJEMPLOS Y CONTEXTOS (nunca en el contenido principal)
-Intereses: ${interests.join(", ")}.
+═══════════════════════════════════════════════
+PERSONALIZACIÓN POR INTERESES DEL ALUMNO
+═══════════════════════════════════════════════
 
-CÓMO USARLOS (reglas estrictas):
-✓ Sustituir personajes genéricos por personajes de su interés en los EJEMPLOS.
-  "Si tienes 3 manzanas..." → "Si Pikachu tiene 3 pociones..."
-✓ Usar objetos de su interés como elementos de conteo o comparación.
-✓ Contextualizar una actividad en su mundo si encaja naturalmente.
+El alumno tiene estos intereses: ${lista}
 
-NUNCA:
-✗ Cambiar el objetivo de aprendizaje por introducir el interés.
-✗ Convertir todo el documento en una temática del interés.
-✗ Forzar el interés donde no encaje naturalmente.
+INSTRUCCIONES DE USO — OBLIGATORIAS:
+
+1. EJEMPLOS NUMÉRICOS: sustituye objetos genéricos por elementos de su interés.
+   ✗ "María tiene 3 manzanas"
+   ✓ "María tiene 3 cartas de ${e1}"
+
+2. PERSONAJES EN PROBLEMAS: usa personajes o figuras de su interés como protagonistas.
+   ✗ "Un niño va a la tienda y compra..."
+   ✓ "Un jugador de ${e2} va a la tienda y compra..."
+
+3. CONTEXTO DE ACTIVIDADES: si una actividad tiene contexto libre, usa su universo.
+   ✗ "Escribe una frase sobre un animal"
+   ✓ "Escribe una frase sobre ${e1}"
+
+4. ENUNCIADOS DE LECTURA: si hay texto de lectura adaptable, ambiéntalo en su interés.
+   ✗ "Había una vez un pueblo con una tienda..."
+   ✓ "Había una vez un equipo de ${e2} que tenía que resolver un problema..."
+
+5. MÍNIMO OBLIGATORIO: los intereses deben aparecer en AL MENOS 2 actividades o
+   ejemplos del documento. Si el contenido no lo permite de forma natural,
+   crea un ejemplo introductorio que use el interés antes de la primera actividad.
+
+LÍMITES:
+- No fuerces el interés donde rompa el sentido curricular
+- No cambies el objetivo pedagógico de ninguna actividad
+- Si hay pictogramas disponibles relacionados con el interés, úsalos
+- En matemáticas: úsalos solo en enunciados de problemas, nunca en operaciones abstractas
 `.trim();
 }
 
