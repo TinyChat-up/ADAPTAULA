@@ -3,7 +3,7 @@
 ---
 
 # AdaptAula — Fuente de verdad técnica
-**Fecha**: 2026-04-20 | **Build**: ✅ limpio | **Knip**: 9 exports pendientes (pre-existentes) | **Último commit**: `693dd5d`
+**Fecha**: 2026-05-13 | **Build**: ✅ limpio | **Knip**: 3 exports pendientes + knip.json sin excluir worktrees | **Último commit**: `da6ca10`
 
 Todo el contenido está verificado directamente en el código del repositorio.
 
@@ -508,22 +508,33 @@ route.ts:
 
 ## 13. Deuda técnica
 
+### 🔴 Alta — bug activo que afecta funcionalidad
+
+0. **`educationalLevel` siempre `"primaria"` en producción**: `handleContinue()` en `app/page.tsx` muestra el aviso de secundaria pero nunca llama `setEducationalLevel("secundaria")`. `onDismissWarning` solo oculta el aviso. Resultado: `EDUCATIONAL_LEVEL_RULES["secundaria"]` (NO infantilizar, rigor ESO, sin pictogramas infantiles) **nunca se aplica al prompt**, aunque el documento sea de ESO. Fix: añadir `setEducationalLevel("secundaria")` en `handleContinue` cuando `detectsSecondaryLevel` es true.
+
 ### 🟠 Media — afecta mantenibilidad
 
 1. **`adaptationsService.ts` schema divergente**: adapt/route.ts inserta 8 campos directamente; el servicio soporta schema rico (~30 campos). La historia lee via el servicio, el flujo principal bypasea.
-2. **5 exports muertos en `adaptationsService.ts`**: `createAdaptation`, `getAdaptationById`, `getNextVersionNumber`, `getAdaptationChain`, `markAdaptationAsFinal` — knip confirmado.
-3. **3 exports muertos en `arasaac.ts`**: `mergePictogramConcepts`, `resolveArasaacPictograms`, `enrichDocumentWithArasaac` — knip confirmado.
-4. **CSS hardcodeado en `buildDocumentCss.ts`**: colores, tamaños y fuentes como literales de string. Dificulta un panel de personalización futuro.
-5. **No hay CSS por asignatura en el HTML**: la asignatura se pasa al prompt pero no como `data-subject` en el DOM → imposible hacer override CSS por asignatura sin cambiar el template.
+2. **`knip.json` sin exclusión de worktrees**: `.claude/worktrees/eager-kalam-82d0ee/` no está en `"ignore"` → 64 falsos positivos que ocultan los issues reales. Fix: añadir `"ignore": [".claude/**"]`.
+3. **CSS hardcodeado en `buildDocumentCss.ts`**: colores, tamaños y fuentes como literales de string. Dificulta un panel de personalización futuro.
+4. **`/api/user-plan`** existe y está bien implementada (service-role correcto) pero ningún cliente la llama. El frontend lee subscriptions directo del browser client con solo `status=active` (omite `trialing`). Un usuario en `trialing` ve "free" en la UI pero recibe Pro del servidor.
 
 ### 🟡 Baja — cosmética o cobertura
 
-6. **`POPULAR_INTERESTS`** en adaptationRules.ts — export sin uso (knip).
+5. **`POPULAR_INTERESTS`** en adaptationRules.ts — export sin uso.
+6. **`buildCountGroupHtml`, `buildColorGridHtml`** en `lib/ai/countingObjects.ts` — exportados pero no importados en ningún sitio.
 7. **`lib/document/`** — contiene `normalizeDocumentHtml.ts` (activo). No eliminar.
-8. **`lib/authService.ts`** — uso no confirmado. Verificar antes de borrar.
-9. **Cache ARASAAC** — sin cache persistente cross-request (solo revalidate Next.js).
-10. **Tests** — cero cobertura.
-11. **Pictogram cards overflow mobile**: `.aa-picto-card` min-width 80px fijo, no responsive.
+8. **Cache ARASAAC** — sin cache persistente cross-request (solo revalidate Next.js).
+9. **Tests** — cero cobertura.
+10. **Pictogram cards overflow mobile**: `.aa-picto-card` min-width 80px fijo, no responsive.
+
+### ✅ Resueltos (auditoría 2026-05-13)
+- `lib/ai/providers/openai.ts` — ya eliminado del árbol
+- exports muertos en `arasaac.ts` (`mergePictogramConcepts`, etc.) — ya eliminados
+- exports muertos en `adaptationsService.ts` (`createAdaptation`, etc.) — ya eliminados
+- `loadAdaptationForExport` en `adaptationExport.ts` — ya eliminado
+- `lib/ai/countingObjects.ts` — IDs ARASAAC verificados, todos 200 OK
+- `FeedbackPanel` — no es archivo muerto, importado en ResultScreen
 
 ---
 
@@ -572,12 +583,16 @@ route.ts:
   - **Inglés**: badge bilingüe en `.aa-instruction` (ES/EN), vocabulario en pill verde claro
 - Esto no requiere cambios en la IA, solo en `buildDocumentCss.ts` y el template del prompt.
 
-### Sprint E.4 — Limpiar exports muertos (Media)
+### Sprint E.4 — Limpiar deuda técnica (Media)
 
 ```bash
-npm run knip
-# Eliminar exports sin uso en adaptationsService.ts, arasaac.ts, adaptationRules.ts
-# Verificar lib/authService.ts y eliminar lib/document/ (directorio vacío)
+# 1. Añadir "ignore": [".claude/**"] en knip.json para eliminar 64 falsos positivos
+# 2. Eliminar export de buildCountGroupHtml, buildColorGridHtml en lib/ai/countingObjects.ts
+#    (o conectarlos al pipeline de export DOCX/PDF)
+# 3. Eliminar export POPULAR_INTERESTS en lib/adaptationRules.ts
+# 4. Conectar /api/user-plan desde page.tsx (o eliminar la ruta)
+# 5. Fix bug educationalLevel (ver Auditoría 2026-05-13 §4)
+# 6. Alinear schema adaptationsService.ts con los 8 campos que inserta adapt/route.ts
 ```
 
 ### Sprint E.5 — Rate limit persistente (Media)
@@ -657,15 +672,22 @@ ORDER BY created_at DESC LIMIT 1;
 
 ```bash
 npm run knip
-# Estado actual: 0 unused files, 9 unused exports (pre-existentes, deuda técnica documentada)
-# Objetivo: 0 findings (Sprint E.4)
+# NOTA: knip.json no excluye .claude/worktrees/ → genera 64 falsos positivos de archivos del worktree
+# Fix pendiente: añadir "ignore": [".claude/**"] en knip.json
+#
+# Issues reales (2026-05-13):
+#   Unused exports (2):
+#     buildCountGroupHtml  lib/ai/countingObjects.ts:35
+#     buildColorGridHtml   lib/ai/countingObjects.ts:48
+#   + POPULAR_INTERESTS en lib/adaptationRules.ts (no detectado por ignoreExportsUsedInFile)
 ```
 
 ### Build de referencia
 
 ```
 ✓ Compiled successfully
-○ 9 static routes + ƒ 9 API routes + ƒ Proxy (Middleware)
+○ 10 static routes + ƒ 12 API routes + ƒ Proxy (Middleware)
+  (23 páginas totales)
 ```
 
 ---
@@ -681,42 +703,36 @@ o la seguridad del producto. Aplicar en cualquier sprint futuro.
 | 2 | **Nunca usar browser client para leer `subscriptions` en API routes** | `auth.uid()` es null en Node.js — RLS devuelve vacío, plan siempre "free" |
 | 3 | El gating siempre usa `userPlan !== "pro"` (no `=== "free"`) | Cubre `null` (loading) y evita que free acceda durante la ventana de carga |
 | 4 | **La lógica pedagógica de `adapt/route.ts` no se toca sin validación manual** | Cambios en prompts o reglas pueden degradar silenciosamente la calidad para NEE |
-| 5 | Pro siempre usa `OpenAIProvider` si `OPENAI_API_KEY` está disponible | Sin esto, Pro paga pero recibe calidad free — fallo de producto crítico |
+| 5 | Pro siempre usa `NvidiaProvider` (Llama Nemotron via NVIDIA NIM) | Sin esto, Pro paga pero recibe calidad free — fallo de producto crítico |
 | 6 | **`ProGateModal` es la única vía de bloqueo UX** (no errores crudos) | Consistencia de conversión — mensajes de error genéricos rompen el funnel |
 | 7 | `learningProfile` llega **directo** desde el formulario a `buildConfigFromForm()` | No derivar de `adaptationType` — ese mapeo causaba perfiles NEE incorrectos |
 | 8 | `parseModelJsonResponse()` es el **único punto de parseo** de respuestas IA | No hacer JSON.parse directo en route.ts — el parser robusto maneja los casos edge de Gemini |
 
 ---
 
-## AUDITORÍA 2026-05-09
+## AUDITORÍA 2026-05-13
 
-### 1. npx knip --reporter compact
+### 1. Estado del build y TypeScript
 
 ```
-Unused files (4)
-components/ui/FeedbackWidget.tsx
-components/ui/PlanBadge.tsx
-components/ui/PlanStatusBanner.tsx
-lib/ai/providers/openai.ts
-
-Unused dependencies (2)
-package.json: openai, pdf-lib
-
-Unused exports (4)
-lib/adaptationRules.ts: POPULAR_INTERESTS
-lib/adaptationsService.ts: createAdaptation, getAdaptationById, getNextVersionNumber, getAdaptationChain, markAdaptationAsFinal
-lib/arasaac.ts: mergePictogramConcepts, resolveArasaacPictograms, enrichDocumentWithArasaac
-lib/export/adaptationExport.ts: loadAdaptationForExport
+✓ Compiled successfully (Turbopack)
+✓ TypeScript: 0 errores (npx tsc --noEmit)
+✓ 23/23 páginas generadas
 ```
 
-**Novedades respecto a auditoría anterior:**
-- `lib/ai/providers/openai.ts` ahora detectado como archivo muerto (no importado desde `provider.ts` — Nvidia/NVIDIA provider lo sustituyó en el flujo Pro)
-- `openai` y `pdf-lib` como dependencias no usadas (migración a Puppeteer + chromium)
-- `loadAdaptationForExport` en `adaptationExport.ts` — export nuevo sin uso activo
+### 2. knip — estado real
 
----
+**Problema**: `knip.json` no tiene `"ignore": [".claude/**"]` → genera 64 falsos positivos del worktree `.claude/worktrees/eager-kalam-82d0ee/` que ocultan los issues reales.
 
-### 2. Árbol de archivos (app/api/, lib/ai/, app/components/, lib/)
+Issues reales encontrados manualmente:
+```
+Unused exports (3):
+  buildCountGroupHtml   lib/ai/countingObjects.ts:35   ← exportado, sin importar
+  buildColorGridHtml    lib/ai/countingObjects.ts:48   ← exportado, sin importar
+  POPULAR_INTERESTS     lib/adaptationRules.ts         ← no detectado por ignoreExportsUsedInFile
+```
+
+### 3. Árbol de archivos verificado (2026-05-13)
 
 ```
 app/api/
@@ -726,22 +742,30 @@ app/api/
   billing-portal/route.ts
   checkout/route.ts
   export/docx/route.ts
-  export/pdf/route.ts          ← Puppeteer + @sparticuz/chromium (migrado 2026-05-09)
+  export/pdf/route.ts          ← Puppeteer + @sparticuz/chromium
   extract-text/route.ts
-  feedback/route.ts            ← nuevo (Sprint E.6)
+  feedback/route.ts
   style-analysis/route.ts
-  user-plan/route.ts
+  user-plan/route.ts           ← ⚠️ implementada pero ningún cliente la llama
   webhooks/stripe/route.ts
 
 app/components/
-  feedback/FeedbackPanel.tsx   ← nuevo (Sprint E.6) — modal slide-up post-descarga
+  feedback/FeedbackPanel.tsx   ← activo, importado en ResultScreen
 
 lib/
   adaptationRules.ts
-  adaptationsService.ts        ← deuda técnica (exports muertos)
-  arasaac.ts                   ← deuda técnica (exports muertos)
-  authService.ts
-  buildDocumentCss.ts
+  adaptationsService.ts        ← deuda técnica: schema ~30 campos vs 8 que inserta adapt/route.ts
+  ai/countingObjects.ts        ← nuevo (Sprint matemáticas), IDs ARASAAC verificados 200 OK
+  ai/documentAnalysis.ts
+  ai/model.ts
+  ai/parseModelResponse.ts
+  ai/provider.ts               ← Gemini (free) + NVIDIA Llama (pro)
+  ai/providers/gemini.ts
+  ai/providers/nvidia.ts       ← proveedor Pro activo
+  ai/systemPrompts.ts
+  arasaac.ts                   ← solo types: ArasaacPictogram, VisualSupportLevel
+  authService.ts               ← activo: history, account, login, AuthNavButton
+  buildDocumentCss.ts          ← incluye CSS nuevos aa-count-group, aa-color-grid, aa-match-table
   document/normalizeDocumentHtml.ts
   export/adaptationExport.ts
   extractDocumentText.ts
@@ -751,142 +775,60 @@ lib/
   stylesService.ts
   subscriptionService.ts
   supabaseClient.ts
-
-lib/ai/
-  documentAnalysis.ts
-  model.ts
-  parseModelResponse.ts
-  provider.ts
-  providers/gemini.ts
-  providers/nvidia.ts          ← nuevo proveedor (NVIDIA/Llama)
-  providers/openai.ts          ← archivo muerto (sustituido por nvidia.ts en Pro)
-  systemPrompts.ts
 ```
 
----
+### 4. Bug crítico — educationalLevel siempre "primaria"
 
-### 3. Prompt de adaptación completo (buildPrompt + buildNvidiaPrompt en app/api/adapt/route.ts)
+**Localización**: `app/page.tsx`, función `handleContinue()` (línea ~221)
 
-```
-DOCUMENTO ORIGINAL
-${sourceText}
+```typescript
+// BUG: detecta secundaria y muestra aviso, pero NUNCA actualiza el estado
+const handleContinue = () => {
+  if (detectsSecondaryLevel(content)) setShowSecondaryWarning(true);
+  setScreen("configure");
+  // ← falta: setEducationalLevel("secundaria")
+};
 
-CONFIGURACIÓN
-Perfil: ${learningProfile} | Nivel: ${adaptationLevel} | Apoyo: ${supportLevel}
-${studentInterests?.length ? `Intereses (solo para ejemplos): ${interests.join(", ")}` : ""}
-
-REGLAS PEDAGÓGICAS OBLIGATORIAS
-${rulesText}
-
-${subjectRulesText}
-
-${interestsBlock}
-
-═══════════════════════════════════════════════
-SISTEMA DE PICTOGRAMAS — MODO [TARJETA|INLINE]
-═══════════════════════════════════════════════
-
-[Si apoyo ALTO — MODO TARJETA]:
-  <div class="aa-picto-card"><img class="aa-picto-img" src="URL" alt="palabra"><span class="aa-picto-word">palabra</span></div>
-  <div class="aa-picto-row">[tarjetas]</div>
-
-[Si apoyo bajo/medio — MODO INLINE]:
-  <img class="aa-picto-inline" src="URL_ARASAAC" alt="palabra">
-
-PICTOGRAMAS DISPONIBLES (usa SOLO estos):
-${pictogramSuggestions}
-
-NO uses pictograma si la palabra no está en la lista.
-NO pongas pictogramas en preguntas (¿...?) ni en palabras abstractas.
-
-═══════════════════════════════════════════════
-ESPACIOS DE ESCRITURA
-═══════════════════════════════════════════════
-
-LÍNEA SIMPLE:     <div class="aa-ruled-line"></div>
-CAJA PAUTA:       <div class="aa-ruled-box"></div>
-CAJA GRANDE:      <div class="aa-ruled-box aa-ruled-box--large"></div>
-INICIO DADO:      <div class="aa-ruled-box"><span class="aa-starter">Texto...</span></div>
-VERDADERO/FALSO:  <div class="aa-vf-item">...</div>
-TABLA:            <table class="aa-table"><tr><td class="aa-cell-label">...</td><td class="aa-cell-ruled"></td></tr></table>
-EJEMPLO RESUELTO: <div class="aa-example">...</div>
-[Si TDAH] CASILLA: <div class="aa-done-row"><span class="aa-checkbox"></span><span>He terminado ✓</span></div>
-
-═══════════════════════════════════════════════
-ELEMENTOS VISUALES
-═══════════════════════════════════════════════
-
-CONCEPTO:         <div class="aa-concept-box"><span class="aa-concept-label">...</span><span class="aa-concept-def">...</span></div>
-SECUENCIA:        <div class="aa-flow"><div class="aa-flow-step">...</div><div class="aa-flow-arrow">↓</div>...</div>
-CAUSA→EFECTO:     <div class="aa-cause-effect"><div class="aa-cause">...</div><div class="aa-effect-arrow">→</div><div class="aa-effect">...</div></div>
-GLOSARIO:         <div class="aa-glossary-item"><span class="aa-gloss-term">...</span><span class="aa-gloss-def">...</span></div>
-AVISO:            <div class="aa-highlight-box"><span class="aa-highlight-icon">💡</span><p>...</p></div>
-
-═══════════════════════════════════════════════
-ESTRUCTURA DEL DOCUMENTO — SIN <style>
-═══════════════════════════════════════════════
-
-<div class="aa-page">
-  <div class="aa-header"><h1>Título</h1><div class="aa-meta">Documento adaptado · AdaptAula</div></div>
-  <div class="aa-body">
-    <div class="aa-block aa-reading-block" data-block="lectura-1">
-      <span class="aa-subtitle">...</span>
-      <p>...</p>
-      [Si alto: <div class="aa-picto-row">...</div>]
-    </div>
-    <hr class="aa-separator">
-    <h2 class="aa-section-title">Actividades</h2>
-    <div class="aa-block aa-activity" data-block="actividad-1">
-      <div class="aa-activity-number">Actividad 1</div>
-      <p class="aa-instruction">...</p>
-    </div>
-  </div>
-</div>
-
-OBLIGATORIO:
-- ADAPTA absolutamente TODAS las actividades. Ninguna puede faltar.
-- NO incluyas ningún bloque <style>
-- Devuelve SOLO el objeto JSON: { documentHtml, adaptation_decisions, teacherNotes }
-[Si secundaria]: Mantén el rigor curricular completo. Adapta el ACCESO, nunca el CONTENIDO.
-
-buildNvidiaPrompt(): igual que buildPrompt() + mandato JSON explícito al inicio
-  ("Your response must start with { and end with }") + bloque REQUIRED JSON OUTPUT FORMAT
-  con reglas de escape críticas para Llama (\\" para comillas, \\n para saltos).
+// BUG: dismiss solo oculta el aviso, nivel sigue siendo "primaria"
+onDismissWarning={() => setShowSecondaryWarning(false)}
 ```
 
----
+**Impacto**: `EDUCATIONAL_LEVEL_RULES["secundaria"]` ("NO infantilizar", rigor ESO, sin pictogramas infantiles, metacognición) **nunca entra en el prompt**. Documentos de ESO reciben reglas de Primaria.
 
-### 4. package.json (dependencies y devDependencies)
-
-```json
-{
-  "dependencies": {
-    "@sparticuz/chromium": "^123.0.0",
-    "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.100.0",
-    "docx": "^9.6.1",
-    "mammoth": "^1.12.0",
-    "next": "16.2.1",
-    "openai": "^6.34.0",
-    "pdf-lib": "^1.17.1",
-    "puppeteer-core": "^22.0.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "stripe": "^22.0.1",
-    "unpdf": "^1.4.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.1",
-    "knip": "^6.4.1",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+**Fix**:
+```typescript
+const handleContinue = () => {
+  if (detectsSecondaryLevel(content)) {
+    setShowSecondaryWarning(true);
+    setEducationalLevel("secundaria"); // ← añadir
   }
-}
+  setScreen("configure");
+};
+// onBackFromWarning debe resetear: setEducationalLevel("primaria")
 ```
 
-**Nota**: `openai` y `pdf-lib` marcadas como unused por knip. `openai` está en package.json pero `lib/ai/providers/openai.ts` no se importa desde `provider.ts` (el proveedor Pro actual es `nvidia.ts`). Candidatas a limpiar en Sprint E.4.
+### 5. Inconsistencia plan trialing — frontend vs backend
+
+`page.tsx` lee subscriptions con `.eq("status", "active")`.
+`getUserPlan()` usa `.in("status", ["active", "trialing"])`.
+Un usuario en `trialing` ve "free" en el badge pero recibe funcionalidad Pro del servidor.
+
+**Fix**: cambiar la query del cliente a `.in("status", ["active", "trialing"])`.
+
+### 6. Consistencia frontend ↔ backend verificada
+
+| Campo | Frontend envía | Backend lee | Estado |
+|-------|---------------|-------------|--------|
+| `subject` | `"lengua"\|"matematicas"\|"naturales"\|"ingles"\|"otra"` | `body.subject as Subject` | ✅ |
+| `learningProfile` | `"tdah"\|"dislexia"\|"tea"\|"tel"\|"di"\|"retraso"` | `body.learningProfile as LearningProfile` | ✅ |
+| `supportDegree` | `"leve"\|"medio"\|"alto"` | `body.supportDegree as SupportDegree` | ✅ |
+| `educationalLevel` | `"primaria"\|"secundaria"` (siempre "primaria", ver bug §4) | `body.educationalLevel` | ⚠️ bug |
+| `additionalProfiles` | `LearningProfile[]` | `body.additionalProfiles as LearningProfile[]` | ✅ |
+| `studentInterests` | `string[]` (split por coma) | array filter | ✅ |
+
+### 7. IDs ARASAAC verificados (HTTP 200 todos)
+
+pelota:3241, manzana:2462, libro:25191, lapiz:2440, flor:7104, estrella:2752,
+arbol:3057, casa:6964, perro:7202, gato:7114, pez:2520, coche:2339,
+globo:2408, sol:7252, luna:2933, mariposa:26200, cohete:2344,
+cuadrado:4616, circulo:4603, triangulo:2604

@@ -93,7 +93,7 @@ export default function HomePage() {
           .from("subscriptions")
           .select("plan, status, current_period_end")
           .eq("user_id", session.user.id)
-          .eq("status", "active")
+          .in("status", ["active", "trialing"])
           .maybeSingle();
         const row = data as { plan?: string; current_period_end?: string } | null;
         if (row?.plan === "pro") {
@@ -219,7 +219,10 @@ export default function HomePage() {
 
   // ── Navigate upload → configure ───────────────────────────────────────────────
   const handleContinue = () => {
-    if (detectsSecondaryLevel(content)) setShowSecondaryWarning(true);
+    if (detectsSecondaryLevel(content)) {
+      setShowSecondaryWarning(true);
+      setEducationalLevel("secundaria");
+    }
     setScreen("configure");
   };
 
@@ -582,7 +585,7 @@ export default function HomePage() {
         onBack={() => { setScreen("upload"); setConfigError(""); }}
         onGenerate={() => void handleGenerate()}
         onDismissWarning={() => setShowSecondaryWarning(false)}
-        onBackFromWarning={() => { setShowSecondaryWarning(false); setScreen("upload"); setConfigError(""); }}
+        onBackFromWarning={() => { setShowSecondaryWarning(false); setEducationalLevel("primaria"); setScreen("upload"); setConfigError(""); }}
       />
       {showTrialModal && (
         <ProGateModal

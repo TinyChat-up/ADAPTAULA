@@ -31,23 +31,3 @@ export const COUNTING_OBJECTS: Record<string, CountingObject> = {
 export function getArasaacUrl(id: number): string {
   return `https://static.arasaac.org/pictograms/${id}/${id}_500.png`;
 }
-
-export function buildCountGroupHtml(
-  objectKey: string,
-  count: number
-): string {
-  const obj = COUNTING_OBJECTS[objectKey];
-  if (!obj) return "";
-  const url = getArasaacUrl(obj.id);
-  const items = Array.from({ length: count }, () =>
-    `<div class="aa-count-item"><img class="aa-count-img" src="${url}" alt="${obj.label}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="aa-count-emoji" style="display:none">${obj.emoji}</span></div>`
-  ).join("");
-  return `<div class="aa-count-group">${items}</div>`;
-}
-
-export function buildColorGridHtml(total: number, target: number): string {
-  const cells = Array.from({ length: total }, (_, i) =>
-    `<div class="aa-color-cell${i < target ? " aa-color-cell--example" : ""}"></div>`
-  ).join("");
-  return `<div class="aa-color-grid">${cells}</div>`;
-}

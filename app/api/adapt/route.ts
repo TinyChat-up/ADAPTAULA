@@ -167,14 +167,21 @@ function buildSupportLevelBlock(supportDegree: SupportDegree, subject: Subject):
       return `
 ═══════════════════════════════════════════════
 INSTRUCCIÓN DE FIDELIDAD AL ORIGINAL — NIVEL LEVE
+ESTA INSTRUCCIÓN TIENE PRIORIDAD SOBRE CUALQUIER REGLA DE APOYO ANTERIOR.
 ═══════════════════════════════════════════════
-El nivel de apoyo es LEVE. Esto significa:
+El nivel de apoyo es LEVE. Esto NO significa "sin apoyo visual". Significa:
+
+OBLIGATORIO — conservar la estructura:
 - CONSERVA exactamente las mismas actividades del documento original, en el mismo orden
 - CONSERVA el mismo tipo de ejercicio (si el original pide "rodea", el adaptado pide "rodea")
 - CONSERVA la misma cantidad de ítems por actividad
-- Solo MEJORA: claridad de instrucciones, tamaño de letra, espaciado, y añade imágenes de conteo donde ayuden
 - NO inventes actividades nuevas ni cambies la naturaleza del ejercicio
-- Si el original tenía objetos para contar, usa aa-count-group con las imágenes del banco`.trim();
+
+OBLIGATORIO — añadir apoyo visual con imágenes:
+- En TODAS las actividades de conteo: usa aa-count-group con imágenes del banco de objetos
+- Las imágenes hacen el conteo concreto y accesible — son obligatorias, no opcionales
+- Si el original pedía contar objetos abstractos (números solos), acompaña cada número con su grupo visual
+- Mejora la claridad de las instrucciones con lenguaje simple y directo`.trim();
 
     case "medio":
       return `
@@ -676,7 +683,7 @@ export async function POST(req: Request) {
         // Ensamblar user prompt: base + análisis previo + estilo docente + objetos de conteo + fidelidad (matemáticas)
         const countingObjectsBlock = subject === "matematicas" ? buildCountingObjectsBlock() : "";
         const supportLevelBlock = buildSupportLevelBlock(supportDegree, subject);
-        const userPrompt = [basePrompt, analysisBlock, styleContextBlock, countingObjectsBlock, supportLevelBlock]
+        const userPrompt = [basePrompt, analysisBlock, styleContextBlock, supportLevelBlock, countingObjectsBlock]
           .filter(Boolean)
           .join("\n\n");
 
