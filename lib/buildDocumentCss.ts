@@ -544,6 +544,90 @@ body{background:${bodyBg};padding:32px 16px;font-family:'Arial',sans-serif}
   margin:0;
 }
 
+/* ── GRUPO DE CONTEO — fichas de matemáticas ── */
+.aa-count-group{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:12px 0 8px;
+  align-items:flex-end;
+}
+.aa-count-item{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.aa-count-img{
+  width:52px;
+  height:52px;
+  object-fit:contain;
+}
+.aa-count-emoji{
+  font-size:36px;
+  line-height:1;
+}
+
+/* ── CUADRÍCULA DE COLOREAR ── */
+.aa-color-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:12px 0 16px;
+}
+.aa-color-cell{
+  width:40px;
+  height:40px;
+  border:2.5px solid #4A7C59;
+  border-radius:5px;
+  background:white;
+}
+.aa-color-cell--example{
+  background:#B8E0C4;
+}
+
+/* ── TABLA DE UNIR ── */
+.aa-match-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0 10px;
+  margin:10px 0 18px;
+}
+.aa-match-number{
+  font-size:28px;
+  font-weight:700;
+  color:#E8842A;
+  width:60px;
+  text-align:center;
+  vertical-align:middle;
+}
+.aa-match-word{
+  font-size:14px;
+  font-weight:600;
+  color:#2D2D2D;
+  width:80px;
+  vertical-align:middle;
+  padding-left:4px;
+}
+.aa-match-line{
+  width:48px;
+  vertical-align:middle;
+  text-align:center;
+  color:#C4A882;
+  font-size:20px;
+}
+.aa-match-group{
+  vertical-align:middle;
+  padding-left:8px;
+}
+.aa-match-group .aa-count-group{
+  margin:0;
+  gap:6px;
+}
+.aa-match-group .aa-count-img{
+  width:36px;
+  height:36px;
+}
+
 /* ── PRINT — idéntico a la web ── */
 @media print{
   body{background:${bodyBg};padding:0}
@@ -567,7 +651,11 @@ body{background:${bodyBg};padding:32px 16px;font-family:'Arial',sans-serif}
   .aa-concept-box,
   .aa-flow-step,
   .aa-cause,.aa-effect,
-  .aa-highlight-box{
+  .aa-highlight-box,
+  .aa-count-img,
+  .aa-color-cell,
+  .aa-color-cell--example,
+  .aa-match-table{
     -webkit-print-color-adjust:exact;
     print-color-adjust:exact;
   }
@@ -601,6 +689,9 @@ export function buildSubjectCssOverrides(subject?: string): string {
 .aa-body[data-subject="matematicas"] .aa-calc-box{min-height:88px;margin:6px 0 14px}
 .aa-body[data-subject="matematicas"] .aa-solution-line{margin:2px 0 14px}
 .aa-body[data-subject="matematicas"] .aa-activity{padding:20px 24px}
+.aa-body[data-subject="matematicas"] .aa-count-group{gap:8px;margin:10px 0 6px}
+.aa-body[data-subject="matematicas"] .aa-color-cell{width:36px;height:36px}
+.aa-body[data-subject="matematicas"] .aa-match-number{font-size:24px}
 `.trim();
 
     // ── Lengua ───────────────────────────────────────────────────────────────

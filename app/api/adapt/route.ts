@@ -37,6 +37,7 @@ import { normalizeDocumentHtml } from "@/lib/document/normalizeDocumentHtml";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { hasFreeTrialRemaining, getUserPlan, FREE_TRIAL_COOKIE, type Plan } from "@/lib/subscriptionService";
 import { getAIProvider } from "@/lib/ai/provider";
+import { COUNTING_OBJECTS, getArasaacUrl } from "@/lib/ai/countingObjects";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,34 @@ Este documento debe reflejar el estilo pedagógico habitual del docente:
 ${parts.join("\n")}
 
 Aplica este estilo como referencia de personalización. Si hay conflicto con las reglas del perfil NEE, las reglas del perfil prevalecen siempre.`;
+}
+
+// ─── Banco de objetos contables para fichas de matemáticas ───────────────────
+
+function buildCountingObjectsBlock(): string {
+  const lines = Object.entries(COUNTING_OBJECTS)
+    .map(([key, obj]) => {
+      const url = getArasaacUrl(obj.id);
+      return `- ${key} (${obj.emoji}): <img class="aa-count-img" src="${url}" alt="${obj.label}" loading="lazy">`;
+    })
+    .join("\n");
+
+  return `
+═══════════════════════════════════════════════
+OBJETOS DISPONIBLES PARA ACTIVIDADES DE CONTEO
+═══════════════════════════════════════════════
+Cuando generes grupos de objetos para contar, usa SOLO estas imágenes.
+Repite el <img> tantas veces como indique la cantidad:
+
+${lines}
+
+EJEMPLO de grupo de 3 pelotas:
+<div class="aa-count-group">
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+</div>
+<div class="aa-ruled-line"></div>`.trim();
 }
 
 // ─── Construcción del user prompt ─────────────────────────────────────────────
@@ -565,8 +594,9 @@ export async function POST(req: Request) {
           ? buildNvidiaPrompt(promptParams)
           : buildPrompt(promptParams);
 
-        // Ensamblar user prompt: base + análisis previo + estilo docente
-        const userPrompt = [basePrompt, analysisBlock, styleContextBlock]
+        // Ensamblar user prompt: base + análisis previo + estilo docente + objetos de conteo (matemáticas)
+        const countingObjectsBlock = subject === "matematicas" ? buildCountingObjectsBlock() : "";
+        const userPrompt = [basePrompt, analysisBlock, styleContextBlock, countingObjectsBlock]
           .filter(Boolean)
           .join("\n\n");
 

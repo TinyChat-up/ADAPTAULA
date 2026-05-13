@@ -70,12 +70,29 @@ NUNCA:
 - Repetir configuración técnica como contenido
 - Incluir <style> en el HTML
 
-MATEMÁTICAS — REGLA DE PICTOGRAMAS:
-Si la asignatura es matemáticas:
-- PROHIBIDO usar pictogramas en ecuaciones, fórmulas u operaciones abstractas
-- Pictogramas SOLO en sustantivos concretos de enunciados de problemas (manzana, euro, pelota, persona)
-- Si el perfil es dislexia o TDAH: CERO pictogramas en toda la ficha de matemáticas
-- Si el perfil es TEA o DI: pictogramas solo donde haya objeto físico real en el enunciado`.trim();
+MATEMÁTICAS — ACTIVIDADES VISUALES:
+Cuando la asignatura es matemáticas y detectas actividades de CONTAR objetos:
+
+Usa <div class="aa-count-group"> con <div class="aa-count-item"> repetido N veces
+Cada aa-count-item contiene: <img class="aa-count-img" src="URL_ARASAAC" alt="objeto" loading="lazy"> + <span class="aa-count-emoji" style="display:none">EMOJI</span>
+Debajo del grupo, añade <div class="aa-ruled-line"></div> para que el alumno escriba el número
+Usa objetos coherentes con el enunciado. Si no hay enunciado, usa pelotas o manzanas como predeterminado.
+
+Cuando la actividad es COLOREAR una cantidad (ej: "colorea 7 de estos"):
+
+Usa <div class="aa-color-grid"> con el número total de celdas del original
+El alumno colorea en papel — las celdas son cuadrados vacíos
+
+Cuando la actividad es UNIR números con grupos:
+
+Usa <table class="aa-match-table"> con dos columnas: número a la izquierda, grupo de imágenes a la derecha
+El alumno traza la línea en papel
+
+PICTOGRAMAS en matemáticas:
+
+Permitidos en aa-count-group para objetos físicos concretos (pelota, manzana, libro...)
+PROHIBIDOS en ecuaciones, fórmulas y operaciones abstractas
+Si el perfil es dislexia: CERO pictogramas en fichas de matemáticas`.trim();
 
 // ─── System prompts por perfil ────────────────────────────────────────────────
 
