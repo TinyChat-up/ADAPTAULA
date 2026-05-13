@@ -124,7 +124,86 @@ EJEMPLO de grupo de 3 pelotas:
   <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
   <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
 </div>
-<div class="aa-ruled-line"></div>`.trim();
+<div class="aa-ruled-line"></div>
+
+EJEMPLO de cuadrícula para "colorea 4 de 10":
+<div class="aa-color-grid">
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+  <div class="aa-color-cell"></div>
+</div>
+
+EJEMPLO de tabla para "une el número con el grupo":
+<table class="aa-match-table">
+  <tr>
+    <td class="aa-match-number">3</td>
+    <td class="aa-match-word">tres</td>
+    <td class="aa-match-line">···</td>
+    <td class="aa-match-group">
+      <div class="aa-count-group">
+        <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"></div>
+        <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"></div>
+        <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"></div>
+      </div>
+    </td>
+  </tr>
+</table>`.trim();
+}
+
+// ─── Fidelidad al original según nivel de apoyo (solo matemáticas) ───────────
+
+function buildSupportLevelBlock(supportDegree: SupportDegree, subject: Subject): string {
+  if (subject !== "matematicas") return "";
+
+  switch (supportDegree) {
+    case "leve":
+      return `
+═══════════════════════════════════════════════
+INSTRUCCIÓN DE FIDELIDAD AL ORIGINAL — NIVEL LEVE
+═══════════════════════════════════════════════
+El nivel de apoyo es LEVE. Esto significa:
+- CONSERVA exactamente las mismas actividades del documento original, en el mismo orden
+- CONSERVA el mismo tipo de ejercicio (si el original pide "rodea", el adaptado pide "rodea")
+- CONSERVA la misma cantidad de ítems por actividad
+- Solo MEJORA: claridad de instrucciones, tamaño de letra, espaciado, y añade imágenes de conteo donde ayuden
+- NO inventes actividades nuevas ni cambies la naturaleza del ejercicio
+- Si el original tenía objetos para contar, usa aa-count-group con las imágenes del banco`.trim();
+
+    case "medio":
+      return `
+═══════════════════════════════════════════════
+INSTRUCCIÓN DE FIDELIDAD AL ORIGINAL — NIVEL MEDIO
+═══════════════════════════════════════════════
+El nivel de apoyo es MEDIO. Esto significa:
+- CONSERVA las mismas actividades del documento original pero puedes simplificar la cantidad
+- AÑADE apoyos visuales: grupos de objetos contables (aa-count-group), cuadrículas de colorear (aa-color-grid), tablas de unir (aa-match-table)
+- AÑADE ejemplos resueltos (aa-example) antes de cada tipo de actividad nuevo
+- PUEDES reducir el número de ítems si hay demasiados para el perfil
+- NO cambies el concepto matemático que trabaja cada actividad`.trim();
+
+    case "alto":
+      return `
+═══════════════════════════════════════════════
+INSTRUCCIÓN DE CREACIÓN — NIVEL ALTO
+═══════════════════════════════════════════════
+El nivel de apoyo es ALTO. Esto significa:
+- NO intentes reproducir el original — crea una ficha nueva que trabaje el MISMO concepto matemático
+- El concepto a trabajar es el que detectas en el documento original (contar, sumar, restar, etc.)
+- Estructura la ficha con máximo 3 actividades, de menor a mayor dificultad
+- OBLIGATORIO: cada actividad tiene un ejemplo resuelto (aa-example) antes
+- OBLIGATORIO: usa aa-count-group con imágenes reales para actividades de conteo
+- OBLIGATORIO: usa aa-color-grid para actividades de colorear cantidades
+- OBLIGATORIO: añade aa-done-row al final de cada actividad
+- El lenguaje debe ser el más simple posible para el perfil NEE seleccionado
+- Termina con aa-highlight-box de cierre positivo`.trim();
+  }
 }
 
 // ─── Construcción del user prompt ─────────────────────────────────────────────
@@ -594,9 +673,10 @@ export async function POST(req: Request) {
           ? buildNvidiaPrompt(promptParams)
           : buildPrompt(promptParams);
 
-        // Ensamblar user prompt: base + análisis previo + estilo docente + objetos de conteo (matemáticas)
+        // Ensamblar user prompt: base + análisis previo + estilo docente + objetos de conteo + fidelidad (matemáticas)
         const countingObjectsBlock = subject === "matematicas" ? buildCountingObjectsBlock() : "";
-        const userPrompt = [basePrompt, analysisBlock, styleContextBlock, countingObjectsBlock]
+        const supportLevelBlock = buildSupportLevelBlock(supportDegree, subject);
+        const userPrompt = [basePrompt, analysisBlock, styleContextBlock, countingObjectsBlock, supportLevelBlock]
           .filter(Boolean)
           .join("\n\n");
 
