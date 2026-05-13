@@ -120,9 +120,9 @@ ${lines}
 
 EJEMPLO de grupo de 3 pelotas:
 <div class="aa-count-group">
-  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
-  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
-  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/6802/6802_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
+  <div class="aa-count-item"><img class="aa-count-img" src="https://static.arasaac.org/pictograms/3241/3241_500.png" alt="pelota" loading="lazy"><span class="aa-count-emoji" style="display:none">⚽</span></div>
 </div>
 <div class="aa-ruled-line"></div>`.trim();
 }
