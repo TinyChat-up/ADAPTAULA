@@ -1,0 +1,106 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Primera llamada real de material_generator@v2 sobre Primaria: planner v2 congelado → PlanReview humano → generator v2. Una llamada, sin reparación ni regeneración. Evidencia congelada: no se cambió prompt, esquema, validador ni política de contexto.",
+  "inputs": {
+    "analysis_fingerprint": "ee73a9df84a71d6f21695b87e56a3bbcc2a073636c9acbc4114edcdd3e459ddd",
+    "context_policy": 2,
+    "context_fingerprint": "04c0fcbd7bcfc3f4f3357079139d641fc47fc2a00cdd50b0d83acca057a93ba9",
+    "raw_plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22",
+    "planner_evidence": "planner-v2-primaria.json",
+    "plan_review": "review-primaria.json"
+  },
+  "plan_review": {
+    "ids_checked": {
+      "dec_1": "document / checklist",
+      "dec_2": "act_3 / step_list+self_check",
+      "dec_3": "act_5 / self_check",
+      "dec_4": "act_2 / segment sin apoyos"
+    },
+    "outcome": {
+      "dec_1": "applied",
+      "dec_2": "rejected",
+      "dec_3": "applied",
+      "dec_4": "applied"
+    },
+    "effective_decisions": [
+      "dec_1",
+      "dec_3",
+      "dec_4"
+    ],
+    "effective_validation": "sin bloqueos",
+    "rejected_sent_to_generator": 0,
+    "note": "dec_4 es efectiva pero el generador no la recibe: decisionsToGenerateV2 no escribe nada para un segment sobre una consigna breve sin apoyos; act_2 queda tal cual en el documento. dec_1 se aprobó con restricciones de proceso (la redacción 'uno por actividad como mucho' empujó a 5 elementos)."
+  },
+  "generator": {
+    "prompt": "material_generator@v2",
+    "schema": "generated_segments@2",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "worst_case_usd": 0.0514,
+    "budget_usd": 0.06,
+    "decisions_sent": [
+      "dec_1",
+      "dec_3"
+    ]
+  },
+  "metrics": {
+    "input_tokens": 923,
+    "cache_write_tokens": 3756,
+    "cache_read_tokens": 0,
+    "output_tokens": 279,
+    "cost_usd": 0.014026,
+    "latency_ms": 3256,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "parse": {
+    "outcome": "schema",
+    "issues": [
+      "segments.0.supports.0.items: Too big: expected array to have <=4 items"
+    ],
+    "first_time_valid": false
+  },
+  "consequence": "Sin borrador normalizable no hay documento, ni auditoría determinista, ni medida de redundancia, ni trazabilidad: la cadena se detiene. Sin reparación ni regeneración (regla del encargo).",
+  "raw_output_hypothetical_audit": {
+    "note": "Lectura del JSON bruto, NO una auditoría del documento (no existe).",
+    "segments": [
+      "dec_1 → document: checklist de 5 elementos (cap del esquema: 4)",
+      "dec_3 → act_5: checklist de 2 elementos"
+    ],
+    "blocks_for_act_1_act_3_act_4": 0,
+    "blocks_for_rejected_decision": 0,
+    "inferred_values_in_text": 0,
+    "sentence_starters_or_worked_examples": 0,
+    "dec_1_quality": "Los 5 elementos son solo etiquetas 'Actividad 1…5': organiza, pero no hay verbo de proceso (empezar, revisar, comprobar); utilidad ejecutiva baja; no copia consignas. Rompe el cap de 4 porque el planner pidió 'una casilla por actividad (1 a 5)' con 5 actividades.",
+    "dec_3_quality": "Dos comprobaciones sobre la propia frase. El segundo elemento ('explica por qué las dos fracciones son equivalentes') repite la consigna y nombra la equivalencia que la tarea ya enuncia; no explica ni da la razón, pero es redundante.",
+    "raw_visible_words_act_5_hypothetical": "12 originales + ≈19 de apoyo → ≈ ×2.6 (dentro del presupuesto de 24 palabras)"
+  },
+  "safety": {
+    "inferred_leaks": 0,
+    "protected_essential_lost": "no evaluable (sin documento); ningún bloque sobre destinos protegidos",
+    "visual_necessary_lost": "no evaluable (sin documento); el borrador no toca vis_1/vis_2",
+    "objective_changes": "no evaluable (sin documento)",
+    "rejected_decisions_applied": 0,
+    "unauthorized_blocks": 0,
+    "math_procedure_leaked": false,
+    "broken_trace": "no evaluable (sin documento)"
+  },
+  "cost_chain_primaria_usd": {
+    "analysis_v3": 0.042626,
+    "planner_v2": 0.022663,
+    "generator_v2": 0.014026,
+    "total": 0.079315,
+    "note": "No incluye el planner v1 histórico ($0.029683) ni otras llamadas anteriores."
+  },
+  "observations_not_fixed": [
+    "Hueco de contrato: el planner no conoce los topes estructurales del generador (checklist ≤ 4 elementos) y propuso 'una casilla por actividad' en una ficha de 5 actividades; el generador v2 tampoco tiene una salida válida para un checklist global de 5 actividades.",
+    "Mi restricción de revisión para dec_1 ('uno por actividad como mucho') pudo empujar a 5 elementos; no explica por sí sola el fallo, el esquema ya lo limitaba a 4.",
+    "Un generador v2 sin reparación pierde toda la respuesta por un solo tope superado (como P1 en el planner v1): sin evidencia real aún de la capa de tolerancia del pipeline completo.",
+    "Una sola llamada: no concluye sobre el comportamiento del generador en matemáticas."
+  ],
+  "next_step_recommended": "No activar nada. Decidir primero cómo se resuelve el tope de elementos de un checklist global (planner, esquema/prompt del generador o restricción de revisión) y autorizar entonces, como mucho, una segunda llamada."
+}

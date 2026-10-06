@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22",
+  "reviewer": {
+    "kind": "eval",
+    "label": "eval-primaria"
+  },
+  "reviewed_at": "2026-10-05T14:00:00Z",
+  "entries": [
+    {
+      "decision_id": "dec_1",
+      "action": "approved",
+      "reason": "Lista de control global: organiza el inicio y la revisión sin tocar contenido.",
+      "restrictions": [
+        "Elementos de proceso (empezar, revisar si respondí, comprobar que no falta ninguna), uno por actividad como mucho.",
+        "No copiar ni resumir la consigna de ninguna actividad; sin contenido matemático.",
+        "Solo hablar de casillas si el bloque checklist las presenta como tales."
+      ]
+    },
+    {
+      "decision_id": "dec_2",
+      "action": "rejected",
+      "reason": "Consigna ya breve, sin barrera concreta; los pasos repiten la tarea."
+    },
+    {
+      "decision_id": "dec_3",
+      "action": "approved",
+      "reason": "Solo recuerda qué se espera; no explica la equivalencia.",
+      "restrictions": [
+        "Solo recordar los requisitos de la consigna (una explicación propia).",
+        "No explicar la equivalencia ni mencionar cómo se obtiene.",
+        "Sin comienzos de frase ni ejemplos."
+      ]
+    },
+    {
+      "decision_id": "dec_4",
+      "action": "approved",
+      "reason": "Solo organización espacial de las dos comparaciones.",
+      "restrictions": [
+        "Conservar exactamente los dos pares de fracciones y los signos pedidos.",
+        "Una comparación por línea con su recuadro; sin explicar >, < o =, sin estrategia, sin pasos, sin ejemplo, sin respuestas."
+      ]
+    }
+  ]
+}

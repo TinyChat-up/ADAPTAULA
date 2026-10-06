@@ -1,0 +1,20 @@
+{
+  "_instructions": "Copia o rellena este archivo para UNA ficha y UN análisis. Puntúa de 1 (muy mal) a 5 (muy bien). null = no aplica (N/A) en visual/matemáticas. Las preguntas Sí/No son true/false. No pegues contenido identificativo del alumnado.",
+  "case_id": "",
+  "run": "",
+  "reviewer": "",
+  "reviewed_at": "",
+  "ratings": {
+    "overall_fidelity": null,
+    "activity_detection": null,
+    "pedagogical_goal": null,
+    "protected_elements": null,
+    "visual_understanding": null,
+    "math_understanding": null
+  },
+  "invented_information": null,
+  "omitted_essential_information": null,
+  "usable_as_adaptation_base": null,
+  "important_errors": "",
+  "notes": ""
+}

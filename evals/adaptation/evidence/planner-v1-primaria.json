@@ -1,0 +1,70 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Evidencia congelada del experimento real de adaptation_planner@v1 sobre Primaria (fracciones, mismo perfil ejecutivo, política de contexto 1). El JSON NO valida contra AdaptationPlan v1: no hay plan normalizable, no hubo PlanReview ni generador. Solo huellas, estados y métricas: el bruto está en evals/adaptation/private/ (git-ignorado).",
+  "analysis": {
+    "fresh_v3_analysis_cost_usd": 0.042626,
+    "prompt": "material_analyzer@v3",
+    "reason": "no existía ningún análisis v3 de esta ficha; el guardado era material_analyzer@v1 / schema 2 y, elevado a v3, perdía los datos de las actividades 2 y 3 (autorizado por el usuario)",
+    "fingerprint": "ee73a9df84a71d6f21695b87e56a3bbcc2a073636c9acbc4114edcdd3e459ddd"
+  },
+  "planner": {
+    "prompt": "adaptation_planner@v1",
+    "prompt_sha256": "f994adbf0168a0e178be19d7f6b84fb836014d22d44381b150255b3839c56346",
+    "schema": {
+      "key": "adaptation_plan",
+      "version": 1,
+      "draft_schema_fingerprint": "36f7d812e1a474aafe4805c06a4c46dfea7a4d643a153766eecff7202389a4cc"
+    }
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "context_policy": 1,
+    "context_fingerprint": "e7b14931a17d16c3e015c635cb95771f8f242a2832af0bce3bc88adc2b66c627",
+    "result_file": "2026-10-05T13-25-05-695Z-planner-v1-primaria-ejecutivas.json"
+  },
+  "metrics": {
+    "input_tokens": 2835,
+    "cache_write_tokens": 3641,
+    "cache_read_tokens": 0,
+    "output_tokens": 1491,
+    "cost_usd": 0.029683,
+    "latency_ms": 9047,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "parse": {
+    "outcome": "schema",
+    "issues": [
+      "decisions.0.flags: Invalid input: expected array, received undefined"
+    ]
+  },
+  "decisions_in_raw_output": 8,
+  "hypothetical_audit": {
+    "note": "Con flags=[] rellenado SOLO para auditar (no es el resultado del pipeline): 6 valid, 0 review, 2 blocked (dec_6 y dec_8 por citar dimensiones no activas: operation_steps y scaffolding_level).",
+    "counts": {
+      "valid": 6,
+      "review": 0,
+      "blocked": 2
+    }
+  },
+  "outcome": {
+    "json_valid_first_try": false,
+    "inferred_answers_leaked": 0,
+    "generator_run": false,
+    "plan_review_made": false
+  },
+  "observations_not_fixed": [
+    "P1 · el modelo omitió el campo obligatorio `flags` en la primera decisión (7 de 8 decisiones lo traían): el contrato lo exige, sin valor por defecto. En el pipeline se habría gastado la única reparación; aquí no está permitida.",
+    "P2 · H1 reproducida con dimensiones del grupo matemático (`operation_steps`, `scaffolding_level`) que el perfil no tiene: el material de matemáticas las invita; el validador las bloquea correctamente.",
+    "P3 · H4 (3 de 3 materiales): una decisión repite `max_tasks_per_page = 3` («Máximo 3 por página»).",
+    "P4 · H5 muy marcada: lista de pasos en las cinco actividades, reescritura de una instrucción general ya clara, ejemplo resuelto análogo, recordatorio del significado de los signos y comienzos de frase para una explicación que es producción propia.",
+    "P5 · apoyos que enseñan el procedimiento matemático («contar partes», «localizar la fracción», ejemplo resuelto): justo lo que el experimento quería evitar.",
+    "P6 · hueco del validador: sentence_starters con uses_task_data=true no se comprueba (solo worked_example, guiding_questions y step_list sobre operaciones)."
+  ]
+}

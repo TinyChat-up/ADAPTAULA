@@ -1,0 +1,73 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js (y los directorios de build de los E2E)
+/.next/
+/.next-*/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+*.log
+*.swp
+*~
+
+# editores y herramientas locales (configuración personal, no del proyecto)
+.vscode/
+.idea/
+.claude/
+.turbo/
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files: nunca se versiona ninguno (secretos); solo la plantilla .env.example
+.env
+.env.local
+.env.*.local
+.env*
+!.env.example
+
+
+# supabase local
+supabase/.branches
+supabase/.temp
+# generado con `pnpm db:setup-sql`
+supabase/setup.sql
+
+# evals
+evals/results/
+# Fichas reales anonimizadas y todo lo que se genere a partir de ellas (resultados, análisis, valoraciones). Nunca versionar.
+evals/material-analysis/private/
+# Resultados del planificador real sobre fichas privadas.
+evals/adaptation/private/
+
+# playwright
+/test-results/
+/playwright-report/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

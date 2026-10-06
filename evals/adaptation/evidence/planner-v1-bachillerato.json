@@ -1,0 +1,89 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Evidencia congelada del experimento real de adaptation_planner@v1 sobre Bachillerato (mismo perfil funcional que en Geografía). Solo huellas, estados y métricas: el resultado bruto está en evals/adaptation/private/ (git-ignorado).",
+  "planner": {
+    "prompt": "adaptation_planner@v1",
+    "prompt_sha256": "f994adbf0168a0e178be19d7f6b84fb836014d22d44381b150255b3839c56346",
+    "schema": {
+      "key": "adaptation_plan",
+      "version": 1,
+      "draft_schema_fingerprint": "36f7d812e1a474aafe4805c06a4c46dfea7a4d643a153766eecff7202389a4cc"
+    }
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "result_file": "2026-10-05T12-39-47-391Z-planner-v1-bachillerato-ejecutivas.json",
+    "analysis_fingerprint": "db832763ba994b6579f291286f4fcb20a947fa5ef4ba6d31710acf03d15e82b8",
+    "context_fingerprint": "746c367edb56afff0dd2a8d1ceae9503d7f3c16dc6e0723f57e4a45aa00b17f7",
+    "raw_plan_fingerprint": "5d5a8d461493fb310d2918489f7c29b848c6a0ddbf6da3c118b59f993ce6ab6a"
+  },
+  "metrics": {
+    "input_tokens": 3651,
+    "cache_write_tokens": 3641,
+    "cache_read_tokens": 0,
+    "output_tokens": 1549,
+    "cost_usd": 0.031895,
+    "latency_ms": 9994,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "classification": {
+    "counts": {
+      "valid": 6,
+      "review": 2,
+      "blocked": 0
+    },
+    "decisions": [
+      {
+        "id": "dec_1",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_2",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_3",
+        "status": "review",
+        "issues": [
+          "review:needs_conflict"
+        ]
+      },
+      {
+        "id": "dec_4",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_5",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_6",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_7",
+        "status": "review",
+        "issues": [
+          "review:needs_conflict"
+        ]
+      },
+      {
+        "id": "dec_8",
+        "status": "valid",
+        "issues": []
+      }
+    ]
+  }
+}

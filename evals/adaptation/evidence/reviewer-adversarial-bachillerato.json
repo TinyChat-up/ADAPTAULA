@@ -1,0 +1,158 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Validación adversarial real y controlada de pedagogical_reviewer@v1: una llamada sobre una copia determinista del MaterialDocument REAL de Bachillerato (generator v2). Sin cambios de prompt, schema, fusión ni scoring tras ver el resultado.",
+  "lock": {
+    "frozen_at": "2026-10-05T14:46:15.231Z",
+    "manifest_sha256": "da070a81d133e1f63676c38f0be3d373e793d37c816b428636b55e93f182f895",
+    "expectations_sha256": "5ec5456f43e690d7036c638b458900090b7e0831fb49905e2a848c29b1a3770b",
+    "base_document_fingerprint": "681c1174c5eea4ca99d79a81b048d54d589d9bd46a2941fd7359405c7d3b5ee6",
+    "adversarial_document_fingerprint": "7c35c52be12d0609f393db1b7ef12d38059e182401720c1d2cafecbfc5a8542b"
+  },
+  "base": {
+    "document_fingerprint_prefix": "681c1174c5ee",
+    "rebuilt_identical_from_history": true,
+    "historical_files_modified": false
+  },
+  "mutations": {
+    "mut_A_semantic_leak": {
+      "target": "act_3",
+      "block": "blk_0019",
+      "decision": "dec_9"
+    },
+    "mut_B_indirect_hint": {
+      "target": "act_4",
+      "block": "blk_0020",
+      "decision": "dec_10"
+    },
+    "mut_C_infantilization": {
+      "target": "act_5",
+      "block": "blk_0021",
+      "decision": "dec_11"
+    },
+    "mut_D_semantic_redundancy": {
+      "target": "act_1",
+      "block": "blk_0022",
+      "decision": "dec_12"
+    },
+    "mut_E_safe_control": {
+      "target": "act_2",
+      "block": "blk_0023",
+      "decision": "dec_13"
+    }
+  },
+  "deterministic_before_ai": {
+    "changed_checks_per_mutation": "ninguno",
+    "deterministic_fails": 0,
+    "open_to_semantic_review": "A por la pregunta semántica ya abierta sobre act_3 (respuesta inferred textual); B, C, D y el control no los ve ningún check determinista",
+    "all_count_as_semantic_evidence": true
+  },
+  "review_context": {
+    "fingerprint_prefix": "1a15e52b1004",
+    "blocks": 21,
+    "internal_reference_only_answers": 1,
+    "required_semantic_targets": [
+      "act_3"
+    ],
+    "pii_or_diagnosis": 0,
+    "expectations_visible_to_model": 0
+  },
+  "reviewer": {
+    "prompt": "pedagogical_reviewer@v1",
+    "prompt_sha256": "98a169e7feeccc1fda23c002f36363d42eb2ad95e8c4d9ad635dcf5f1d04aba7",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "max_output_tokens": 2500,
+    "worst_case_usd": 0.0412,
+    "budget_usd": 0.05
+  },
+  "metrics": {
+    "input_tokens": 5043,
+    "cache_write_tokens": 2372,
+    "cache_read_tokens": 0,
+    "output_tokens": 768,
+    "cost_usd": 0.023696,
+    "latency_ms": 5847,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "parse": {
+    "outcome": "ok",
+    "first_time_valid": true,
+    "rejected_findings": 0,
+    "pending_required_judgments": 0,
+    "out_of_scope_findings": 0
+  },
+  "scores_frozen_rules": {
+    "mut_A_semantic_leak": "HIT (FAIL)",
+    "mut_B_indirect_hint": "HIT (FAIL)",
+    "mut_C_infantilization": "HIT (FAIL en age_appropriate y no_infantilization)",
+    "mut_D_semantic_redundancy": "HIT (WARN)",
+    "mut_E_safe_control": "CORRECT (ningún hallazgo sobre el bloque)"
+  },
+  "merge": {
+    "verdict": "blocked",
+    "blocks_to_revise": [
+      "blk_0019",
+      "blk_0020",
+      "blk_0021"
+    ],
+    "semantic_question_act_3": "respondida por la IA con FAIL (cerrada como hallazgo, no como PASS)",
+    "structural_warn_closed_by_ai": false,
+    "note": "El documento adversarial no tenía ningún WARN estructural abierto que la IA pudiera intentar cerrar; el comportamiento de precedencia está cubierto por tests y por el run de Primaria."
+  },
+  "human_audit": [
+    {
+      "finding": "answers_not_leaked FAIL act_3 + mut A",
+      "audit": "CORRECT",
+      "note": "Identifica el valor adversativo sin palabras clave."
+    },
+    {
+      "finding": "answers_not_leaked FAIL act_4 + mut B",
+      "audit": "CORRECT",
+      "note": "La mutación era más resolutiva de lo previsto (da el registro implícito y los dos rasgos), así que el FAIL es defendible aunque el mínimo esperado fuera WARN."
+    },
+    {
+      "finding": "no_infantilization FAIL mut C",
+      "audit": "CORRECT",
+      "note": "Tono lúdico impropio de 16-18 años; sin señal trivial."
+    },
+    {
+      "finding": "age_appropriate FAIL mut C",
+      "audit": "CORRECT",
+      "note": "Mismo problema visto desde la adecuación a la edad (duplicado coherente)."
+    },
+    {
+      "finding": "functional_supports_applied WARN mut D (+ dos checklists base)",
+      "audit": "CORRECT",
+      "note": "Redundancia semántica real; los dos bloques base citados repiten la consigna."
+    },
+    {
+      "finding": "functional_supports_applied WARN act_5 consigna repetida (base)",
+      "audit": "CORRECT",
+      "note": "Verdadero positivo sobre el documento real: la redacción de act_5 aparece en el párrafo orientativo, la lista y la consigna."
+    },
+    {
+      "finding": "functional_supports_applied WARN decisiones rechazadas (human review)",
+      "audit": "TOO_STRICT",
+      "note": "Señala decisiones que el equipo rechazó a propósito y afirma que la carga de tareas sigue alta pese a la paginación de la presentación; atenuado por requires_human_review."
+    }
+  ],
+  "audit_counts": {
+    "CORRECT": 6,
+    "TOO_STRICT": 1,
+    "TOO_LENIENT": 0,
+    "WRONG": 0
+  },
+  "limits_of_the_evidence": [
+    "Un único documento y una única llamada; el modelo no es determinista.",
+    "B y C eran claros para un lector atento; la sensibilidad en casos frontera (pistas leves, tono apenas coloquial) sigue sin medirse.",
+    "El documento adversarial no tenía un WARN estructural abierto; que la IA no puede cerrarlo se apoya en tests y en el run de Primaria, no en este run."
+  ],
+  "cost": {
+    "reviewer_adversarial_usd": 0.023696,
+    "note": "Eval independiente; no se suma a la cadena limpia de Primaria. Gasto total del revisor en ambos runs reales: 0.042098."
+  },
+  "verdict": "pedagogical_reviewer@v1 candidato a pipeline experimental: SÍ (no producción)"
+}

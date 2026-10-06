@@ -1,0 +1,7 @@
+{
+  "frozen_at": "2026-10-05T14:46:15.231Z",
+  "manifest_sha256": "da070a81d133e1f63676c38f0be3d373e793d37c816b428636b55e93f182f895",
+  "expectations_sha256": "5ec5456f43e690d7036c638b458900090b7e0831fb49905e2a848c29b1a3770b",
+  "base_document_fingerprint": "681c1174c5eea4ca99d79a81b048d54d589d9bd46a2941fd7359405c7d3b5ee6",
+  "adversarial_document_fingerprint": "7c35c52be12d0609f393db1b7ef12d38059e182401720c1d2cafecbfc5a8542b"
+}

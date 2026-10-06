@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "purpose": "Copia adversarial determinista del MaterialDocument real de Bachillerato (generator v2) para evaluar a pedagogical_reviewer@v1. Los históricos no se modifican.",
+  "source": {
+    "analysis_fingerprint": "db832763ba994b6579f291286f4fcb20a947fa5ef4ba6d31710acf03d15e82b8",
+    "context_policy": 1,
+    "raw_plan_fingerprint": "5d5a8d461493fb310d2918489f7c29b848c6a0ddbf6da3c118b59f993ce6ab6a",
+    "historical_review_fingerprint": "5d5a8d461493fb310d2918489f7c29b848c6a0ddbf6da3c118b59f993ce6ab6a",
+    "base_document_fingerprint": "681c1174c5eea4ca99d79a81b048d54d589d9bd46a2941fd7359405c7d3b5ee6"
+  },
+  "adversarial": {
+    "document_fingerprint": "7c35c52be12d0609f393db1b7ef12d38059e182401720c1d2cafecbfc5a8542b",
+    "plan_fingerprint": "170fd68be6076e61016ed7d7cd3fda0af3131f3b96798405ae8082f516bba496",
+    "added_blocks": 5,
+    "added_decisions": [
+      "dec_9",
+      "dec_10",
+      "dec_11",
+      "dec_12",
+      "dec_13"
+    ]
+  },
+  "mutations": [
+    {
+      "mutation_id": "mut_A_semantic_leak",
+      "risk": "semantic_leak",
+      "target": "act_3",
+      "block_id": "blk_0019",
+      "decision_id": "dec_9",
+      "support_kind": "reminder",
+      "block": {
+        "type": "help_box",
+        "variant": "reminder",
+        "text": "Fíjate en cómo la idea que aparece después se enfrenta a la anterior."
+      },
+      "intent": "Revela la relación (valor adversativo) sin usar oposición, contraste ni adversativa: un buscador de subcadenas no puede verlo."
+    },
+    {
+      "mutation_id": "mut_B_indirect_hint",
+      "risk": "indirect_hint",
+      "target": "act_4",
+      "block_id": "blk_0020",
+      "decision_id": "dec_10",
+      "support_kind": "key_idea",
+      "block": {
+        "type": "help_box",
+        "variant": "key_idea",
+        "text": "En este texto no hay expresiones coloquiales y las frases son largas y muy elaboradas: eso es lo que tienes que mencionar al justificar."
+      },
+      "intent": "Da de antemano el registro y el tipo de rasgos que el alumno debía decidir: reduce el razonamiento sin ser una respuesta completa."
+    },
+    {
+      "mutation_id": "mut_C_infantilization",
+      "risk": "infantilization",
+      "target": "act_5",
+      "block_id": "blk_0021",
+      "decision_id": "dec_11",
+      "support_kind": "reminder",
+      "block": {
+        "type": "help_box",
+        "variant": "reminder",
+        "text": "Vamos a jugar a ser escritores: primero piensa tu idea y luego completa cada paso como un reto."
+      },
+      "intent": "Tono impropio de Bachillerato sin emoji, diminutivo ni «niño»: exige juicio semántico."
+    },
+    {
+      "mutation_id": "mut_D_semantic_redundancy",
+      "risk": "semantic_redundancy",
+      "target": "act_1",
+      "block_id": "blk_0022",
+      "decision_id": "dec_12",
+      "support_kind": "reminder",
+      "block": {
+        "type": "help_box",
+        "variant": "reminder",
+        "text": "Tu resumen tiene que ser corto, con tus propias palabras y sin copiar las frases del texto tal como están."
+      },
+      "intent": "Reformula sin copiar lo que la consigna ya dice: más carga y ninguna función nueva."
+    },
+    {
+      "mutation_id": "mut_E_safe_control",
+      "risk": "safe_control",
+      "target": "act_2",
+      "block_id": "blk_0023",
+      "decision_id": "dec_13",
+      "support_kind": "planner",
+      "block": {
+        "type": "planner",
+        "title": "Mis notas",
+        "slots": [
+          {
+            "label": "Mis ideas",
+            "lines": 2
+          },
+          {
+            "label": "Orden de mi respuesta",
+            "lines": 2
+          },
+          {
+            "label": "Lo que reviso",
+            "lines": 1
+          }
+        ]
+      },
+      "intent": "Control negativo: un planificador vacío de proceso, sin contenido de respuesta ni repetición de la consigna. No debe generar un hallazgo material."
+    }
+  ],
+  "deterministic_detection": [
+    {
+      "mutation_id": "mut_A_semantic_leak",
+      "changed": [],
+      "fails": [],
+      "opens_semantic_review": true,
+      "counts_as_semantic_evidence": true
+    },
+    {
+      "mutation_id": "mut_B_indirect_hint",
+      "changed": [],
+      "fails": [],
+      "opens_semantic_review": true,
+      "counts_as_semantic_evidence": true
+    },
+    {
+      "mutation_id": "mut_C_infantilization",
+      "changed": [],
+      "fails": [],
+      "opens_semantic_review": true,
+      "counts_as_semantic_evidence": true
+    },
+    {
+      "mutation_id": "mut_D_semantic_redundancy",
+      "changed": [],
+      "fails": [],
+      "opens_semantic_review": true,
+      "counts_as_semantic_evidence": true
+    },
+    {
+      "mutation_id": "mut_E_safe_control",
+      "changed": [],
+      "fails": [],
+      "opens_semantic_review": true,
+      "counts_as_semantic_evidence": true
+    }
+  ]
+}

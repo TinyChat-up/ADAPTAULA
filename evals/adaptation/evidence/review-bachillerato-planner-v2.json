@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "plan_fingerprint": "4232de590c21308b00e2c6f26dd571ed3722ee7d38a82767f6f8830876a0b778",
+  "reviewer": {
+    "kind": "eval",
+    "label": "eval-bachillerato-v2"
+  },
+  "reviewed_at": "2026-10-05T15:30:00Z",
+  "entries": [
+    {
+      "decision_id": "dec_1",
+      "action": "rejected",
+      "reason": "Consigna de 10 palabras sin barrera concreta: no justifica segmentación."
+    },
+    {
+      "decision_id": "dec_2",
+      "action": "approved",
+      "reason": "Fases generales de proceso y planificador vacío en el texto argumentativo integrado.",
+      "restrictions": [
+        "Solo fases generales de proceso (planificar, redactar, revisar) y un planificador con huecos vacíos.",
+        "No proponer tesis, argumentos, conclusión ni ideas sobre el tema; sin comienzos de frase con contenido.",
+        "No repetir todos los requisitos de la consigna en cada apoyo.",
+        "El texto sigue siendo una única producción integrada."
+      ]
+    },
+    {
+      "decision_id": "dec_3",
+      "action": "rejected",
+      "reason": "Apila checklist y recordatorio sobre act_5, que ya recibe apoyo de dec_2; repite requisitos."
+    },
+    {
+      "decision_id": "dec_4",
+      "action": "approved",
+      "reason": "Checklist solo de estructura y revisión de las partes exigidas.",
+      "restrictions": [
+        "Solo recordar que la respuesta debe contener las partes exigidas.",
+        "No identificar la tesis, no dar argumentos ni reformularlos, sin contenido de respuesta.",
+        "Puede declinarse en skipped si solo repite la consigna."
+      ]
+    },
+    {
+      "decision_id": "dec_5",
+      "action": "approved",
+      "reason": "Checklist ligero de revisión del propio trabajo.",
+      "restrictions": [
+        "No elegir formal o informal ni sugerir rasgos lingüísticos ni dar ejemplos de rasgos.",
+        "Máximo dos elementos; puede declinarse en skipped si solo repite la consigna."
+      ]
+    },
+    {
+      "decision_id": "dec_6",
+      "action": "rejected",
+      "reason": "Lista global de cinco actividades que explica qué se espera en cada una: checklist redundante."
+    },
+    {
+      "decision_id": "dec_7",
+      "action": "approved",
+      "reason": "Intención de organización y presentación: la ejecuta el renderer, no el generador textual."
+    }
+  ]
+}

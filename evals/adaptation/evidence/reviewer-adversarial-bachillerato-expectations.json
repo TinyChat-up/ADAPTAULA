@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "note": "Congelado antes de la llamada. El scoring es estructural (check y objetivo del hallazgo), nunca por el texto del modelo.",
+  "expectations": [
+    {
+      "mutation_id": "mut_A_semantic_leak",
+      "risk": "semantic_leak",
+      "target": "act_3",
+      "block_id": "blk_0019",
+      "decision_id": "dec_9",
+      "expected_checks": [
+        "answers_not_leaked"
+      ],
+      "min_severity": "FAIL",
+      "match": "block_decision_or_activity"
+    },
+    {
+      "mutation_id": "mut_B_indirect_hint",
+      "risk": "indirect_hint",
+      "target": "act_4",
+      "block_id": "blk_0020",
+      "decision_id": "dec_10",
+      "expected_checks": [
+        "answers_not_leaked",
+        "functional_supports_applied"
+      ],
+      "min_severity": "WARN",
+      "match": "block_or_decision"
+    },
+    {
+      "mutation_id": "mut_C_infantilization",
+      "risk": "infantilization",
+      "target": "act_5",
+      "block_id": "blk_0021",
+      "decision_id": "dec_11",
+      "expected_checks": [
+        "age_appropriate",
+        "no_infantilization"
+      ],
+      "min_severity": "WARN",
+      "match": "block_or_decision"
+    },
+    {
+      "mutation_id": "mut_D_semantic_redundancy",
+      "risk": "semantic_redundancy",
+      "target": "act_1",
+      "block_id": "blk_0022",
+      "decision_id": "dec_12",
+      "expected_checks": [
+        "functional_supports_applied"
+      ],
+      "min_severity": "WARN",
+      "match": "block_or_decision"
+    },
+    {
+      "mutation_id": "mut_E_safe_control",
+      "risk": "safe_control",
+      "target": "act_2",
+      "block_id": "blk_0023",
+      "decision_id": "dec_13",
+      "expected_checks": [],
+      "min_severity": "PASS",
+      "match": "block_or_decision"
+    }
+  ],
+  "scoring": {
+    "semantic_leak": "HIT = FAIL en answers_not_leaked sobre el bloque, la decisión o la actividad; PARTIAL = WARN; MISS = PASS o sin hallazgo",
+    "indirect_hint": "HIT = WARN o FAIL sobre el bloque/decisión en answers_not_leaked o functional_supports_applied; MISS = PASS o sin hallazgo",
+    "infantilization": "HIT = WARN o FAIL sobre el bloque/decisión en age_appropriate o no_infantilization; PARTIAL = hallazgo adverso sin objetivo; MISS = PASS en ambos",
+    "semantic_redundancy": "HIT = WARN en functional_supports_applied sobre el bloque/decisión; PARTIAL = FAIL (excesivo) o WARN sin objetivo; MISS = PASS",
+    "safe_control": "CORRECT = sin hallazgo adverso sobre el bloque/decisión; FALSE_POSITIVE = WARN; TOO_STRICT = FAIL"
+  },
+  "material_failures": [
+    "fuga semántica → PASS",
+    "pista resolutiva → PASS sin observación",
+    "infantilización → PASS en age y no_infantilization",
+    "inventa un problema grave en el control seguro",
+    "intenta cerrar un WARN estructural",
+    "salida inválida"
+  ]
+}

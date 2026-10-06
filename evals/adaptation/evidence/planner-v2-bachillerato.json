@@ -1,0 +1,234 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Segunda validación real de adaptation_planner@v2 (contexto política 2, perfil ejecutivo) sobre el análisis v3 ya guardado de Bachillerato. Una llamada, sin reparación ni regeneración; sin PlanReview, generator ni reviewer; sin cambios de código tras la llamada.",
+  "analysis": {
+    "prompt": "material_analyzer@v3",
+    "fingerprint": "db832763ba994b6579f291286f4fcb20a947fa5ef4ba6d31710acf03d15e82b8",
+    "reused_without_reanalysis": true,
+    "reading_text_chars": 2164,
+    "activities": 5,
+    "protected_elements": 8,
+    "inferred_internal": [
+      "act_3"
+    ]
+  },
+  "planner": {
+    "prompt": "adaptation_planner@v2",
+    "prompt_sha256": "1007c10dfeab94efde695ea787312f7dd9dd821088953c73c15669a924ea4b8b",
+    "draft_schema": "DraftAdaptationPlan v2",
+    "canonical_plan": "AdaptationPlan v1",
+    "schema_note": "el esquema no tiene campo de dimensiones; solo 4 nombres coinciden con claves de estrategia (enum de estrategias)"
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "context_policy": 2,
+    "context_fingerprint": "c4b7ac7d6a23e09f76fcd6f3f159a866fe191d4e32af0af4311fe324f7fbc828",
+    "raw_plan_fingerprint": "4232de590c21308b00e2c6f26dd571ed3722ee7d38a82767f6f8830876a0b778",
+    "needs": [
+      "instruction_chunking",
+      "planning_support",
+      "working_memory_support",
+      "checklist_support",
+      "predictable_structure",
+      "explicit_expectations"
+    ],
+    "number_of_visible_tasks_in_needs": false,
+    "result_file": "2026-10-05T15-01-45-939Z-planner-v2-bachillerato-ejecutivas.json",
+    "budget_usd": 0.06,
+    "worst_case_usd": 0.0573
+  },
+  "metrics": {
+    "input_tokens": 3602,
+    "cache_write_tokens": 3783,
+    "cache_read_tokens": 0,
+    "output_tokens": 1278,
+    "cost_usd": 0.029442,
+    "latency_ms": 8125,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "baseline_v1_same_material": {
+    "decisions": 8,
+    "valid": 6,
+    "review": 2,
+    "blocked": 0,
+    "input_tokens": 3651,
+    "cache_write_tokens": 3641,
+    "output_tokens": 1549,
+    "cost_usd": 0.031895,
+    "latency_ms": 9994,
+    "context_policy": 1
+  },
+  "parse": {
+    "outcome": "ok",
+    "first_time_valid": true,
+    "flags_omitted": true
+  },
+  "validation": {
+    "valid": true,
+    "counts": {
+      "valid": 4,
+      "review": 3,
+      "blocked": 0
+    },
+    "issues": [
+      "dec_1 review needs_conflict (producto integrado)",
+      "dec_2 review needs_conflict (producto integrado)",
+      "dec_3 review answer_revealed (reminder sobre datos de la tarea, por tipo de apoyo)"
+    ]
+  },
+  "decisions_in_raw_output": 7,
+  "decision_audit": [
+    {
+      "id": "dec_1",
+      "target": "act_1",
+      "action": "segment",
+      "supports": [
+        "step_list",
+        "checklist(uses_task_data)"
+      ],
+      "intensity": "substantial",
+      "status": "review",
+      "classification": "QUESTIONABLE",
+      "note": "Segmenta con intensidad sustancial una consigna de 10 palabras sin barrera concreta: el patrón de sobre-adaptación de v1. Los pasos son de proceso (leer, redactar, revisar), sin contenido."
+    },
+    {
+      "id": "dec_2",
+      "target": "act_5",
+      "action": "segment",
+      "supports": [
+        "step_list",
+        "planner"
+      ],
+      "intensity": "substantial",
+      "status": "review",
+      "classification": "ACCEPTABLE",
+      "note": "Fases de proceso y planificador vacío en una consigna con cuatro requisitos y producto integrado conservado; intensidad algo alta y se acumula con dec_3."
+    },
+    {
+      "id": "dec_3",
+      "target": "act_5",
+      "action": "add_support",
+      "supports": [
+        "checklist(uses_task_data)",
+        "reminder(uses_task_data)"
+      ],
+      "intensity": "moderate",
+      "status": "review",
+      "classification": "QUESTIONABLE",
+      "note": "Cuarto y quinto apoyo sobre act_5 (tras steps y planner): lista y recordatorio repiten los requisitos de la consigna; sobre-apoyo."
+    },
+    {
+      "id": "dec_4",
+      "target": "act_2",
+      "action": "add_support",
+      "supports": [
+        "checklist(uses_task_data)"
+      ],
+      "intensity": "moderate",
+      "status": "valid",
+      "classification": "ACCEPTABLE",
+      "note": "Comprobación de las tres partes, permitida por el planteamiento del encargo; riesgo de repetir la consigna."
+    },
+    {
+      "id": "dec_5",
+      "target": "act_4",
+      "action": "add_support",
+      "supports": [
+        "checklist(uses_task_data)"
+      ],
+      "intensity": "light",
+      "status": "valid",
+      "classification": "ACCEPTABLE",
+      "note": "Recordatorio ligero de lo que se entrega (registro y dos rasgos) sin elegir ni proponer nada."
+    },
+    {
+      "id": "dec_6",
+      "target": "document",
+      "action": "add_support",
+      "supports": [
+        "checklist",
+        "reminder"
+      ],
+      "intensity": "moderate",
+      "status": "valid",
+      "classification": "QUESTIONABLE",
+      "note": "«Lista inicial de las cinco actividades… explicitar qué se espera en cada una»: el patrón de etiquetas por actividad que ya falló en Primaria (tope de 4 elementos, valor ejecutivo bajo) y repite cada consigna."
+    },
+    {
+      "id": "dec_7",
+      "target": "document",
+      "action": "reorganize",
+      "supports": [],
+      "intensity": "moderate",
+      "status": "valid",
+      "classification": "ACCEPTABLE",
+      "note": "Intención de maquetación (estructura repetida, texto base junto a las actividades): se enruta a deferred_to_renderer; no es paginación ni toca el texto fuente."
+    }
+  ],
+  "decisions_untouched": [
+    "act_3"
+  ],
+  "classification_counts": {
+    "GOOD": 0,
+    "ACCEPTABLE": 4,
+    "QUESTIONABLE": 3,
+    "WRONG": 0
+  },
+  "success_criteria": {
+    "schema_valid_first_time": true,
+    "out_of_context_dimensions": 0,
+    "h4_reproduced": false,
+    "inferred_leaks": 0,
+    "protected_essential_lost": 0,
+    "objective_changed": 0,
+    "answer_written_for_student": false,
+    "act_3_revealed": false,
+    "written_production_reduced": false,
+    "reading_text_touched": false
+  },
+  "desirable": {
+    "fewer_decisions_than_v1": "7 frente a 8 (marginal)",
+    "less_routine_segmentation": "NO (segmentación sustancial de una consigna de 10 palabras)",
+    "act_3_untouched": true,
+    "functional_executive_supports": "parcial",
+    "planreview_useful_without_redoing_majority": "sí: 3 de 7 a rechazar o editar"
+  },
+  "h_status": {
+    "H1": "RESOLVED",
+    "H4": "RESOLVED",
+    "H5": "PARTIAL"
+  },
+  "comparison": {
+    "primaria_v2": {
+      "decisions": 4,
+      "valid": 3,
+      "review": 1,
+      "blocked": 0,
+      "output_tokens": 761,
+      "cost_usd": 0.022663,
+      "latency_s": 5.9
+    },
+    "bachillerato_v2": {
+      "decisions": 7,
+      "valid": 4,
+      "review": 3,
+      "blocked": 0,
+      "output_tokens": 1278,
+      "cost_usd": 0.029442,
+      "latency_s": 8.1
+    }
+  },
+  "observations_not_fixed": [
+    "La segmentación de una consigna breve (act_1) y el apilado de apoyos en act_5 reaparecen: H5 no está resuelta; sin cambiar el prompt tras verlo.",
+    "El checklist global enumera las actividades otra vez; el preflight de capacidades solo lo bloquearía si la revisión exigiera más de 4 elementos.",
+    "Dos materiales con modelo real: no es producción."
+  ],
+  "recommendation": "Planner v2 como default experimental: SÍ (con PlanReview obligatorio); no producción."
+}

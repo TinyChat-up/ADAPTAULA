@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "plan_fingerprint": "5d5a8d461493fb310d2918489f7c29b848c6a0ddbf6da3c118b59f993ce6ab6a",
+  "reviewer": {
+    "kind": "eval",
+    "label": "eval-bachillerato"
+  },
+  "reviewed_at": "2026-10-05T12:45:00Z",
+  "entries": [
+    {
+      "decision_id": "dec_1",
+      "action": "rejected",
+      "reason": "Duplica presentation.max_tasks_per_page (3 por página), que el sistema ya resuelve."
+    },
+    {
+      "decision_id": "dec_2",
+      "action": "approved",
+      "reason": "Guía inicial con el orden de trabajo: organiza e inicia sin tocar contenido.",
+      "restrictions": [
+        "Solo el orden de trabajo (leer el texto, actividades 1-4, redacción final), sin contenido de ninguna actividad."
+      ]
+    },
+    {
+      "decision_id": "dec_3",
+      "action": "approved",
+      "reason": "Pasos de proceso y comprobación de extensión; el resumen sigue siendo propio y único.",
+      "restrictions": [
+        "Los pasos son de proceso (localizar, redactar, comprobar), sin ideas del texto ni resumen parcial.",
+        "Sin comienzos de frase.",
+        "Mantener 70-90 palabras y no copiar frases completas."
+      ]
+    },
+    {
+      "decision_id": "dec_4",
+      "action": "approved",
+      "reason": "Separa los dos pedidos sin dar pistas de contenido.",
+      "restrictions": [
+        "El recordatorio habla del requisito (palabras propias, dos argumentos), nunca de la tesis ni de los argumentos.",
+        "Sin ejemplos ni pistas de contenido."
+      ]
+    },
+    {
+      "decision_id": "dec_5",
+      "action": "rejected",
+      "reason": "Consigna ya corta y literal: reformularla arriesga sugerir la respuesta sobre la relación que introduce el conector."
+    },
+    {
+      "decision_id": "dec_6",
+      "action": "approved",
+      "reason": "Dos pasos y lista de requisitos sin elegir el registro ni los rasgos.",
+      "restrictions": [
+        "No nombrar el registro ni ningún rasgo lingüístico.",
+        "La lista comprueba requisitos (registro indicado, dos rasgos), no contenido."
+      ]
+    },
+    {
+      "decision_id": "dec_7",
+      "action": "approved",
+      "reason": "Fases planificar, redactar y revisar con planificador vacío; el texto final sigue siendo del alumno.",
+      "restrictions": [
+        "Planificador con huecos vacíos y etiquetas estructurales (tesis, argumentos, conclusión), sin ejemplos ni frases hechas.",
+        "Conservar literalmente la cuestión, 150-180 palabras, tesis, al menos dos argumentos y conclusión.",
+        "Sin inicios de frase ni listas de contenido."
+      ]
+    },
+    {
+      "decision_id": "dec_8",
+      "action": "rejected",
+      "reason": "keep no ejecuta nada y la integración que pide la nota no está expresada como acción (duplicación heredada del análisis)."
+    }
+  ]
+}

@@ -1,0 +1,256 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Primera validación del pipeline integrado sobre Bachillerato con componentes ya implementados: planner v2 congelado → PlanReview humano → preflight de ejecución → generator v2 → MaterialDocument → revisión determinista → reviewer v1. Dos llamadas reales (generator, reviewer), sin reparación ni regeneración, sin cambios de prompt, schema, validador, política ni enrutado.",
+  "inputs": {
+    "analysis_fingerprint": "db832763ba994b6579f291286f4fcb20a947fa5ef4ba6d31710acf03d15e82b8",
+    "context_policy": 2,
+    "raw_plan_fingerprint": "4232de590c21308b00e2c6f26dd571ed3722ee7d38a82767f6f8830876a0b778",
+    "planner_evidence": "planner-v2-bachillerato.json",
+    "plan_review": "review-bachillerato-planner-v2.json"
+  },
+  "plan_review": {
+    "ids_checked": {
+      "dec_1": "act_1",
+      "dec_2": "act_5 (step_list+planner)",
+      "dec_3": "act_5 (checklist+reminder)",
+      "dec_4": "act_2",
+      "dec_5": "act_4",
+      "dec_6": "document (checklist+reminder)",
+      "dec_7": "document (reorganize)"
+    },
+    "outcome": {
+      "dec_1": "rejected",
+      "dec_2": "applied",
+      "dec_3": "rejected",
+      "dec_4": "applied",
+      "dec_5": "applied",
+      "dec_6": "rejected",
+      "dec_7": "applied"
+    },
+    "effective_decisions": [
+      "dec_2",
+      "dec_4",
+      "dec_5",
+      "dec_7"
+    ],
+    "effective_validation": "sin bloqueos"
+  },
+  "execution_routing": {
+    "dec_2": "ai_generation",
+    "dec_4": "ai_generation",
+    "dec_5": "ai_generation",
+    "dec_7": "deferred_to_renderer",
+    "unsupported": 0,
+    "rejected_in_request": 0,
+    "deferred_in_request": 0
+  },
+  "generator": {
+    "prompt": "material_generator@v2",
+    "schema": "generated_segments@2",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 3000,
+    "worst_case_usd": 0.0429,
+    "decisions_sent": [
+      "dec_2",
+      "dec_4",
+      "dec_5"
+    ],
+    "result_file": "2026-10-05T15-08-40-242Z-generator-v2-bachillerato-pipeline.json"
+  },
+  "generator_metrics": {
+    "input_tokens": 1568,
+    "cache_write_tokens": 3756,
+    "cache_read_tokens": 0,
+    "output_tokens": 591,
+    "reasoning_tokens": null,
+    "cost_usd": 0.018436,
+    "latency_ms": 4400,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false,
+    "parse": "ok"
+  },
+  "generation": {
+    "requested": [
+      "dec_2",
+      "dec_4",
+      "dec_5"
+    ],
+    "generated": [
+      "dec_2",
+      "dec_4",
+      "dec_5"
+    ],
+    "ignored": [],
+    "declined": [],
+    "skipped": [],
+    "issues": [
+      "rewrite_lost_requirements (dec_2): la reescritura de act_5 perdía la cuestión, «al menos» y los argumentos: se conservó la consigna original",
+      "unsupported_action (dec_7): diferida, se conserva el original"
+    ]
+  },
+  "document": {
+    "fingerprint_prefix": "30d316339fbf",
+    "act_1": "intacta",
+    "act_2": "original + checklist de 2 elementos (dec_4)",
+    "act_3": "intacta",
+    "act_4": "original + checklist de 2 elementos (dec_5)",
+    "act_5": "consigna original + lista de fases + planificador vacío (dec_2)",
+    "reading_text_identical": true,
+    "answer_key_entries": 0
+  },
+  "redundancy": {
+    "act_1": {
+      "original": 10,
+      "final": 11,
+      "ratio": 1.1
+    },
+    "act_2": {
+      "original": 16,
+      "final": 33,
+      "ratio": 2.06
+    },
+    "act_3": {
+      "original": 13,
+      "final": 14,
+      "ratio": 1.08
+    },
+    "act_4": {
+      "original": 17,
+      "final": 29,
+      "ratio": 1.71
+    },
+    "act_5": {
+      "original": 31,
+      "final": 43,
+      "ratio": 1.39
+    },
+    "previous_bachillerato_v2_run": {
+      "act_1": 3.5,
+      "act_2": 2.0,
+      "act_3": 1.08,
+      "act_4": 1.94,
+      "act_5": 2.71
+    },
+    "note": "El +1 de las actividades intactas es la etiqueta. Otro PlanReview: no se espera igualdad."
+  },
+  "deterministic_review": {
+    "verdict": "approved_with_warnings",
+    "warns": {
+      "answers_not_leaked": "semántico abierto sobre act_3 (respuesta inferred textual)",
+      "functional_supports_applied": "predictable_structure sin aplicar (consecuencia de dec_7 diferida)",
+      "traceability_complete": "dec_7 sin bloque (diferida)"
+    },
+    "skipped": [
+      "age_appropriate"
+    ]
+  },
+  "reviewer": {
+    "prompt": "pedagogical_reviewer@v1",
+    "prompt_sha256": "98a169e7feeccc1fda23c002f36363d42eb2ad95e8c4d9ad635dcf5f1d04aba7",
+    "max_output_tokens": 2000,
+    "worst_case_usd": 0.0336,
+    "review_context_fingerprint_prefix": "ab8861c95adf",
+    "blocks": 13,
+    "result_file": "2026-10-05T15-09-23-928Z-reviewer-v1-bachillerato-pipeline.json"
+  },
+  "reviewer_metrics": {
+    "input_tokens": 3681,
+    "cache_write_tokens": 2372,
+    "cache_read_tokens": 0,
+    "output_tokens": 739,
+    "reasoning_tokens": null,
+    "cost_usd": 0.020682,
+    "latency_ms": 5593,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false,
+    "parse": "ok",
+    "rejected_findings": 0,
+    "pending_required_judgments": 0
+  },
+  "merge_outcome": {
+    "verdict": "approved_with_warnings",
+    "answers_not_leaked": "PASS (ai) · act_3 y los cuatro apoyos",
+    "age_appropriate": "PASS (ai)",
+    "no_infantilization": "PASS (det.) + PASS (ai)",
+    "functional_supports_applied": "WARN determinista estructural (no cerrable) + 3 WARN IA",
+    "traceability_complete": "WARN determinista (dec_7): se mantiene",
+    "structural_warn_closed_by_ai": false
+  },
+  "ai_findings_audit": [
+    {
+      "finding": "answers_not_leaked act_3 PASS",
+      "audit": "CORRECT"
+    },
+    {
+      "finding": "answers_not_leaked blk_0010-0013 PASS",
+      "audit": "CORRECT"
+    },
+    {
+      "finding": "functional WARN checklists act_2/act_4 repiten la consigna",
+      "audit": "CORRECT"
+    },
+    {
+      "finding": "functional WARN act_5 fases genéricas y plan que repite requisitos",
+      "audit": "CORRECT (algo estricto: el planificador vacío era un apoyo permitido)"
+    },
+    {
+      "finding": "functional WARN necesidad de segmentar act_1 sin cubrir (dec_1, dec_3, dec_6 rechazadas) + estructura dependiente del renderer (dec_7)",
+      "audit": "TOO_STRICT",
+      "note": "R1: penaliza una necesidad por decisiones rechazadas a propósito (act_1 es una consigna breve y clara); la parte de dec_7 sí es correcta. El check determinista no marcaba instruction_chunking."
+    },
+    {
+      "finding": "age_appropriate PASS",
+      "audit": "CORRECT"
+    },
+    {
+      "finding": "no_infantilization PASS",
+      "audit": "CORRECT"
+    }
+  ],
+  "audit_counts": {
+    "CORRECT": 6,
+    "TOO_STRICT": 1,
+    "TOO_LENIENT": 0,
+    "WRONG": 0
+  },
+  "R1": "REPRODUCED (tercera aparición en revisor real: Primaria con matices coherentes con el WARN determinista, adversarial, y ahora; sin efecto en el veredicto porque ya había WARN estructural)",
+  "pipeline_success": {
+    "plan_review_viable": true,
+    "unsupported": 0,
+    "generator_valid": true,
+    "reviewer_valid": true,
+    "inferred_leaks": 0,
+    "protected_loss": 0,
+    "objective_change": 0,
+    "answers_written_for_student": 0,
+    "rejected_applied": 0,
+    "deferred_preserved": true,
+    "trace_intact_except_deferred": true,
+    "lower_redundancy_than_previous": "sí en act_1, act_4 y act_5; igual en act_2 y act_3",
+    "majority_supports_useful": "NO: los checklists de act_2 y act_4 repiten la consigna"
+  },
+  "cost": {
+    "incremental_generator": 0.018436,
+    "incremental_reviewer": 0.020682,
+    "incremental_total": 0.039118,
+    "clean_chain_bachillerato": {
+      "analysis_v3_eval_run": 0.055006,
+      "planner_v2": 0.029442,
+      "generator_v2": 0.018436,
+      "reviewer_v1": 0.020682,
+      "total": 0.123566
+    },
+    "note": "El coste del análisis es el del run guardado de material_analyzer@v3 sobre esta ficha (identificable, único). No incluye v1 ni pruebas adversariales."
+  },
+  "defaults_recommendation": {
+    "planner_v2": "SÍ experimental",
+    "generator_v2": "SÍ experimental (confirmado)",
+    "reviewer_v1": "SÍ experimental (confirmado, con R1 registrado)"
+  }
+}

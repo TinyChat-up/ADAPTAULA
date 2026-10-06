@@ -1,0 +1,211 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Evidencia congelada del experimento real de material_generator@v1 sobre Bachillerato. Solo huellas, estados y métricas: el resultado bruto está en evals/adaptation/private/ (git-ignorado).",
+  "generator": {
+    "prompt": "material_generator@v1",
+    "prompt_sha256": "356ee726f04bf33370c8423cdf4b994b4f04c7231b18c7d2fd8b9725e483238a",
+    "schema": {
+      "key": "generated_segments",
+      "version": 1,
+      "draft_schema_fingerprint": "b99919ba70097d6d56f076e669cdd59ba0a43de8d0979f66455241ed0d60ba82"
+    }
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "result_file": "2026-10-05T12-41-18-127Z-generator-v1-bachillerato-revisado.json",
+    "review_fingerprint": "b68fef15285a7237783c7c655df647e4d65b40c23e70b41c38b8a839f00f5088",
+    "human_review": [
+      {
+        "id": "dec_1",
+        "outcome": "rejected",
+        "modified": []
+      },
+      {
+        "id": "dec_2",
+        "outcome": "applied",
+        "modified": []
+      },
+      {
+        "id": "dec_3",
+        "outcome": "applied",
+        "modified": []
+      },
+      {
+        "id": "dec_4",
+        "outcome": "applied",
+        "modified": []
+      },
+      {
+        "id": "dec_5",
+        "outcome": "rejected",
+        "modified": []
+      },
+      {
+        "id": "dec_6",
+        "outcome": "applied",
+        "modified": []
+      },
+      {
+        "id": "dec_7",
+        "outcome": "applied",
+        "modified": []
+      },
+      {
+        "id": "dec_8",
+        "outcome": "rejected",
+        "modified": []
+      }
+    ]
+  },
+  "metrics": {
+    "input_tokens": 2841,
+    "cache_write_tokens": 3192,
+    "cache_read_tokens": 0,
+    "output_tokens": 1467,
+    "cost_usd": 0.028332,
+    "latency_ms": 8670,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "generation": {
+    "requested": [
+      "dec_2",
+      "dec_3",
+      "dec_4",
+      "dec_6",
+      "dec_7"
+    ],
+    "generated": [
+      "dec_2",
+      "dec_3",
+      "dec_4",
+      "dec_6",
+      "dec_7"
+    ],
+    "ignored": [],
+    "declined": [],
+    "proposed_blocks": 11,
+    "accepted_blocks": 11,
+    "discarded_blocks": 0,
+    "issues": []
+  },
+  "expansion_words_per_activity": [
+    {
+      "id": "act_1",
+      "transformed": true,
+      "original_words": 10,
+      "final_words": 71,
+      "multiplier": 7.1
+    },
+    {
+      "id": "act_2",
+      "transformed": true,
+      "original_words": 16,
+      "final_words": 57,
+      "multiplier": 3.56
+    },
+    {
+      "id": "act_3",
+      "transformed": false,
+      "original_words": 13,
+      "final_words": 14,
+      "multiplier": 1.08
+    },
+    {
+      "id": "act_4",
+      "transformed": true,
+      "original_words": 17,
+      "final_words": 66,
+      "multiplier": 3.88
+    },
+    {
+      "id": "act_5",
+      "transformed": true,
+      "original_words": 31,
+      "final_words": 133,
+      "multiplier": 4.29
+    }
+  ],
+  "review_verdict": "approved",
+  "audit": [
+    {
+      "name": "todas las actividades originales siguen presentes",
+      "ok": true
+    },
+    {
+      "name": "ningún bloque procede de una decisión no aplicada (rechazada, bloqueada o sin revisar)",
+      "ok": true
+    },
+    {
+      "name": "el generador no propuso nada fuera de lo autorizado",
+      "ok": true
+    },
+    {
+      "name": "cada bloque generado es de un tipo que su decisión autoriza",
+      "ok": true
+    },
+    {
+      "name": "lo que no tiene decisión efectiva se copia idéntico del análisis",
+      "ok": true
+    },
+    {
+      "name": "las zonas de respuesta coinciden con las del original (salvo decisión que las cambie)",
+      "ok": true
+    },
+    {
+      "name": "trazabilidad completa (todo bloque remite al original o a una decisión)",
+      "ok": true
+    },
+    {
+      "name": "ninguna respuesta inferida aparece (ni en la clave)",
+      "ok": true
+    },
+    {
+      "name": "los datos necesarios se conservan",
+      "ok": true
+    },
+    {
+      "name": "los elementos protegidos se conservan",
+      "ok": true
+    },
+    {
+      "name": "las restricciones y condiciones se conservan",
+      "ok": true
+    },
+    {
+      "name": "las consignas están completas",
+      "ok": true
+    },
+    {
+      "name": "las formas de respuesta mantienen lo evaluado",
+      "ok": true
+    },
+    {
+      "name": "sin infantilización",
+      "ok": true
+    },
+    {
+      "name": "todas las decisiones aprobadas se ejecutaron o se rechazaron de forma estructurada",
+      "ok": true
+    }
+  ],
+  "outcome": {
+    "json_valid_first_try": true,
+    "unauthorized_blocks_proposed": 0,
+    "inferred_answers_leaked": 0,
+    "protected_essential_lost": 0,
+    "rejected_decisions_applied": 0,
+    "approved_decisions_ignored": 0
+  },
+  "observations_not_fixed": [
+    "B1 · la redundancia se reproduce: todas las actividades transformadas pasan a ×3,6-×7,1 palabras visibles (consigna + pasos + requisitos + apoyo repiten lo mismo).",
+    "B2 · el validador determinista no puede detectar la respuesta inferred de act_3 porque es una frase sin números (answerSignatures no devuelve firmas): answers_not_leaked marca PASS sin poder evaluarla. La comprobación de términos se hizo a mano.",
+    "B3 · el ensamblador pone los textos de una página antes que sus actividades: el fragmento ctt_3/ctt_4 de la actividad 5 (duplicado heredado del análisis) aparece antes de la actividad 4."
+  ]
+}

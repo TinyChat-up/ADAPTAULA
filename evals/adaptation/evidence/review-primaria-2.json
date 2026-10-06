@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22",
+  "reviewer": {
+    "kind": "eval",
+    "label": "eval-primaria-r2"
+  },
+  "reviewed_at": "2026-10-05T15:00:00Z",
+  "entries": [
+    {
+      "decision_id": "dec_1",
+      "action": "edited",
+      "reason": "Sigue siendo un checklist global ejecutivo, sin la semántica de una casilla por actividad.",
+      "edits": {
+        "note": "Lista de control de proceso del trabajo: empezar, completar y revisar. Sin enumerar actividades."
+      },
+      "restrictions": [
+        "Checklist de proceso, máximo 4 elementos.",
+        "No enumerar las actividades 1-5 ni nombrarlas una a una.",
+        "No repetir ni resumir consignas; sin contenido matemático.",
+        "Centrarse únicamente en iniciar, completar y revisar el trabajo.",
+        "Si no aporta una utilidad real distinta, declinarlo en skipped."
+      ]
+    },
+    {
+      "decision_id": "dec_2",
+      "action": "rejected",
+      "reason": "Consigna ya breve, sin barrera concreta; los pasos repiten la tarea."
+    },
+    {
+      "decision_id": "dec_3",
+      "action": "approved",
+      "reason": "Solo un recordatorio ejecutivo no resolutivo en la explicación.",
+      "restrictions": [
+        "Solo una comprobación ejecutiva breve y no resolutiva (qué se pide, si se ha respondido).",
+        "No explicar la equivalencia ni dar la razón matemática.",
+        "Sin comienzos de frase ni frase-respuesta.",
+        "No repetir innecesariamente toda la consigna.",
+        "Si no aporta nada distinto y útil, declinarlo en skipped."
+      ]
+    },
+    {
+      "decision_id": "dec_4",
+      "action": "approved",
+      "reason": "Organización espacial de las dos comparaciones: la ejecuta el renderer, no el generador textual.",
+      "restrictions": [
+        "Conservar exactamente los dos pares de fracciones y los signos pedidos.",
+        "Solo organización espacial: sin explicar >, < o =, sin estrategia, sin pasos, sin ejemplo, sin respuestas."
+      ]
+    }
+  ]
+}

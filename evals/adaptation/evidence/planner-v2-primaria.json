@@ -1,0 +1,178 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Única llamada real de adaptation_planner@v2 (contexto política 2, perfil ejecutivo) sobre la ficha de Primaria, con el análisis v3 ya generado. Sin reparación, sin regeneración, sin PlanReview real, sin generador. Evidencia congelada: no se cambió código después de la llamada.",
+  "analysis": {
+    "prompt": "material_analyzer@v3",
+    "fingerprint": "ee73a9df84a71d6f21695b87e56a3bbcc2a073636c9acbc4114edcdd3e459ddd",
+    "reused_without_reanalysis": true
+  },
+  "planner": {
+    "prompt": "adaptation_planner@v2",
+    "prompt_sha256": "1007c10dfeab94efde695ea787312f7dd9dd821088953c73c15669a924ea4b8b",
+    "draft_schema": "DraftAdaptationPlan v2",
+    "canonical_plan": "AdaptationPlan v1",
+    "planner_v1_frozen_sha256": "f994adbf0168a0e178be19d7f6b84fb836014d22d44381b150255b3839c56346"
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 4000,
+    "context_policy": 2,
+    "context_fingerprint": "04c0fcbd7bcfc3f4f3357079139d641fc47fc2a00cdd50b0d83acca057a93ba9",
+    "needs": [
+      "instruction_chunking",
+      "planning_support",
+      "working_memory_support",
+      "checklist_support",
+      "predictable_structure",
+      "explicit_expectations"
+    ],
+    "result_file": "2026-10-05T13-45-50-031Z-planner-v2-primaria-ejecutivas.json",
+    "budget_usd": 0.06,
+    "worst_case_usd": 0.0553,
+    "raw_plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22"
+  },
+  "metrics": {
+    "input_tokens": 2798,
+    "cache_write_tokens": 3783,
+    "cache_read_tokens": 0,
+    "output_tokens": 761,
+    "cost_usd": 0.022663,
+    "latency_ms": 5922,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "baseline_v1_same_material": {
+    "input_tokens": 2835,
+    "cache_write_tokens": 3641,
+    "output_tokens": 1491,
+    "cost_usd": 0.029683,
+    "latency_ms": 9047,
+    "parse": "schema (flags omitido)",
+    "decisions": 8,
+    "context_policy": 1
+  },
+  "parse": {
+    "outcome": "ok",
+    "issues": [],
+    "flags_omitted_in_every_decision": true,
+    "first_time_valid": true
+  },
+  "validation": {
+    "valid": true,
+    "counts": {
+      "valid": 3,
+      "review": 1,
+      "blocked": 0
+    },
+    "issues": [
+      "dec_2 review answer_revealed (step_list con uses_task_data: true)"
+    ]
+  },
+  "decisions_in_raw_output": 4,
+  "decision_audit": [
+    {
+      "id": "dec_1",
+      "target": "document",
+      "action": "add_support",
+      "supports": [
+        "checklist"
+      ],
+      "needs": [
+        "planning_support",
+        "working_memory_support",
+        "checklist_support"
+      ],
+      "classification": "GOOD",
+      "status": "valid",
+      "note": "Lista de control global, una casilla por actividad: apoyo ejecutivo puro, sin contenido de la tarea."
+    },
+    {
+      "id": "dec_2",
+      "target": "act_3",
+      "action": "segment",
+      "supports": [
+        "step_list (uses_task_data true)",
+        "self_check (uses_task_data true)"
+      ],
+      "needs": [
+        "instruction_chunking",
+        "predictable_structure",
+        "explicit_expectations"
+      ],
+      "classification": "QUESTIONABLE",
+      "status": "review",
+      "note": "Segmenta una consigna breve (11 palabras) sin una barrera concreta; los pasos de proceso repiten las dos salidas que la propia consigna pide (operación y respuesta con unidad) y no dicen cómo resolver ni explican la operación; el validador lo deja en review por tipo de apoyo y datos de la tarea. Es el único punto que un docente debería editar."
+    },
+    {
+      "id": "dec_3",
+      "target": "act_5",
+      "action": "add_support",
+      "supports": [
+        "self_check (uses_task_data true)"
+      ],
+      "needs": [
+        "planning_support",
+        "explicit_expectations"
+      ],
+      "classification": "ACCEPTABLE",
+      "status": "valid",
+      "note": "Recuerda qué se espera (una frase propia). Sin comienzos de frase, sin razón dada, sin descomposición. Algo redundante con una consigna de 12 palabras."
+    },
+    {
+      "id": "dec_4",
+      "target": "act_2",
+      "action": "segment",
+      "supports": [],
+      "needs": [
+        "instruction_chunking",
+        "predictable_structure"
+      ],
+      "classification": "ACCEPTABLE",
+      "status": "valid",
+      "note": "Organización espacial (una comparación por línea con su recuadro); no toca el significado de los signos ni la estrategia de comparación."
+    }
+  ],
+  "activities_left_untouched": [
+    "act_1",
+    "act_4"
+  ],
+  "per_activity": {
+    "act_1": "sin decisión; no indica qué contar",
+    "act_2": "estructura espacial; sin estrategia ni significado de signos",
+    "act_3": "pasos de proceso (review); sin explicación de la resta, sin ejemplo análogo, sin necesidad matemática inventada",
+    "act_4": "sin decisión; no indica cómo localizar",
+    "act_5": "recordatorio de expectativa; sin razón, sin comienzos de frase, sin descomposición"
+  },
+  "success_criteria": {
+    "schema_valid_first_time": true,
+    "out_of_context_dimensions": 0,
+    "h4_reproduced": false,
+    "inferred_answers_leaked": 0,
+    "protected_essential_lost": 0,
+    "objective_changed": 0,
+    "resolutive_math_procedure": false,
+    "example_teaching_solution": false,
+    "majority_good_or_acceptable": true,
+    "less_over_adaptation_than_v1": true,
+    "adapting_every_activity_by_routine": false,
+    "planreview_could_yield_useful_plan": true
+  },
+  "size_vs_v1_same_context_inputs": {
+    "system_plus_schema_chars_v1": 9325,
+    "system_plus_schema_chars_v2": 9417,
+    "user_input_chars_v1": 6617,
+    "user_input_chars_v2": 6499,
+    "note": "El tamaño total es prácticamente el mismo: v2 gana en la entrada específica del material (sin presentation ni la necesidad duplicada) y pierde un poco en el prompt; el ahorro real está en la salida (761 frente a 1491 tokens)."
+  },
+  "observations_not_fixed": [
+    "El modelo todavía segmentó una consigna breve (act_3) pese a la regla 'no segmentar sin barrera concreta'. Un único caso: no basta para cambiar el prompt.",
+    "Declaró uses_task_data: true en step_list/self_check: honesto, y el validador lo llevó a review por tipo de apoyo.",
+    "Una sola ficha y una sola llamada: no hay evidencia de v2 en Geografía ni en Bachillerato con modelo real."
+  ],
+  "next_step_recommended": "PlanReview real sobre este plan (aprobar dec_1, dec_3, dec_4; editar o rechazar dec_2) y después generator v2 sobre Primaria. No hecho."
+}

@@ -1,0 +1,230 @@
+import type { ReactNode } from "react";
+import type { RenderMode, RenderNode } from "@/lib/render/model";
+import { Chart } from "./chart";
+import { Paragraphs, Runs } from "./inline";
+import { Response } from "./responses";
+
+type Of<K extends RenderNode["kind"]> = Extract<RenderNode, { kind: K }>;
+interface Props<K extends RenderNode["kind"]> {
+  node: Of<K>;
+  mode: RenderMode;
+}
+
+const HELP_TITLE = { key_idea: "Idea clave", reminder: "Recuerda", tip: "Consejo", strategy: "Estrategia" } as const;
+
+function Heading({ node }: Props<"heading">) {
+  const Tag = node.level === 1 ? "h1" : node.level === 2 ? "h2" : "h3";
+  return <Tag className={`ms-h ms-h${node.level}`}>{node.text}</Tag>;
+}
+
+function Activity({ node }: Props<"activity">) {
+  return (
+    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined}>
+      <div className="ms-activity-head">
+        {node.label ? <span className="ms-num">{node.label}</span> : null}
+        <div className="ms-prompt">
+          <Paragraphs paragraphs={node.prompt} />
+          {node.steps.length > 0 ? (
+            <ol className="ms-steps">
+              {node.steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          ) : null}
+          {node.requirements.length > 0 ? (
+            <ul className="ms-reqs">
+              {node.requirements.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+      <div className="ms-answer">
+        <Response response={node.response} />
+      </div>
+    </section>
+  );
+}
+
+function Image({ node, mode }: Props<"image">) {
+  if (node.state === "available") {
+    return (
+      <figure className="ms-figure">
+        {/* eslint-disable-next-line @next/next/no-img-element -- a private, already-authorised asset URL; sizing is the sheet's */}
+        <img src={node.src} alt={node.alt} />
+        {node.caption ? <figcaption className="ms-caption">{node.caption}</figcaption> : null}
+      </figure>
+    );
+  }
+  // Student sheet: never a stand-in image and never a pretence that it exists. The teacher view marks the gap.
+  if (mode !== "teacher_preview") return null;
+  return (
+    <div className="ms-missing" role="note">
+      {node.state === "pending" ? "Imagen prevista (todavía no existe)" : node.essential ? "Falta una imagen necesaria del material original" : "Falta una imagen del material original"}
+      {node.caption ? ` · ${node.caption}` : ""}
+    </div>
+  );
+}
+
+function Unknown({ node, mode }: Props<"unknown">) {
+  return mode === "teacher_preview" ? (
+    <div className="ms-missing" role="alert">
+      Bloque que el visor no conoce («{node.type}»): contenido sin mostrar.
+    </div>
+  ) : null;
+}
+
+/** One renderer per node kind. A kind without an entry is a compile error, not a silent gap. */
+export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => ReactNode } = {
+  heading: Heading,
+  paragraph: ({ node }) => (
+    <div className="ms-text">
+      <Paragraphs paragraphs={node.paragraphs} />
+    </div>
+  ),
+  reading_text: ({ node }) => (
+    <div className="ms-reading">
+      {node.title ? <h3 className="ms-h ms-h3">{node.title}</h3> : null}
+      {node.paragraphs.map((p, i) => (
+        <p key={i} className="ms-para">
+          {p.label ? <span className="ms-seg">{p.label}</span> : null}
+          <Runs runs={p.runs} />
+        </p>
+      ))}
+    </div>
+  ),
+  instruction: ({ node }) => (
+    <div className="ms-instruction">
+      <Paragraphs paragraphs={node.paragraphs} />
+      {node.steps.length > 0 ? (
+        <ol className="ms-steps">
+          {node.steps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  ),
+  activity: Activity,
+  list: ({ node }) => {
+    const Tag = node.ordered ? "ol" : "ul";
+    return (
+      <Tag className="ms-list">
+        {node.items.map((runs, i) => (
+          <li key={i}>
+            <Runs runs={runs} />
+          </li>
+        ))}
+      </Tag>
+    );
+  },
+  table: ({ node }) => (
+    <figure className="ms-tablewrap">
+      {node.caption ? <figcaption className="ms-caption">{node.caption}</figcaption> : null}
+      <table className="ms-table" data-wide={node.headers.length > 6 || undefined}>
+        {node.unit ? <caption className="ms-sr">Unidad: {node.unit}</caption> : null}
+        <thead>
+          <tr>
+            {node.headers.map((h, i) => (
+              <th key={i} scope="col">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {node.rows.map((r, ri) => (
+            <tr key={ri}>
+              {r.map((c, ci) => (
+                <td key={ci}>{c}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {node.unit ? <p className="ms-note">Unidad: {node.unit}</p> : null}
+    </figure>
+  ),
+  chart: ({ node }) => <Chart node={node} />,
+  image: Image,
+  help_box: ({ node }) => (
+    <aside className="ms-help" data-variant={node.variant}>
+      <p className="ms-help-title">{node.title ?? HELP_TITLE[node.variant]}</p>
+      <Paragraphs paragraphs={node.paragraphs} />
+    </aside>
+  ),
+  checklist: ({ node }) => (
+    <section className="ms-checklist" data-keep={node.keepTogether || undefined}>
+      {node.title ? <p className="ms-help-title">{node.title}</p> : null}
+      <ul>
+        {node.items.map((it, i) => (
+          <li key={i}>
+            <span className="ms-box" aria-hidden />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ),
+  vocabulary: ({ node }) => (
+    <section className="ms-vocab" data-keep>
+      {node.title ? <p className="ms-help-title">{node.title}</p> : null}
+      <dl>
+        {node.items.map((it, i) => (
+          <div key={i}>
+            <dt>{it.term}</dt>
+            <dd>{it.definition}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  ),
+  worked_example: ({ node }) => (
+    <section className="ms-example" data-keep>
+      <p className="ms-help-title">{node.title ?? "Ejemplo"}</p>
+      <Paragraphs paragraphs={node.problem} />
+      <ol className="ms-steps">
+        {node.steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+      <p>
+        <strong>{node.result}</strong>
+      </p>
+    </section>
+  ),
+  sentence_starters: ({ node }) => (
+    <ul className="ms-starters">
+      {node.items.map((s, i) => (
+        <li key={i}>{s} …</li>
+      ))}
+    </ul>
+  ),
+  planner: ({ node }) => (
+    <section className="ms-planner">
+      {node.title ? <p className="ms-help-title">{node.title}</p> : null}
+      {node.slots.map((slot, i) => (
+        <div key={i} className="ms-slot-block" data-keep>
+          <p className="ms-slot-label">{slot.label}</p>
+          <div className="ms-lines" aria-hidden>
+            {Array.from({ length: slot.lines }, (_, l) => (
+              <div key={l} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  ),
+  math: ({ node }) => (
+    <p className="ms-math" data-display={node.display}>
+      <code aria-label={node.spoken}>{node.latex}</code>
+    </p>
+  ),
+  unknown: Unknown,
+};
+
+export function NodeView({ node, mode }: { node: RenderNode; mode: RenderMode }) {
+  const render = NODE_RENDERERS[node.kind] as (props: { node: RenderNode; mode: RenderMode }) => ReactNode;
+  return <>{render({ node, mode })}</>;
+}

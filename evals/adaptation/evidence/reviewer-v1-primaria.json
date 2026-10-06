@@ -1,0 +1,136 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Primera llamada real de pedagogical_reviewer@v1 sobre el MaterialDocument v1 del segundo run exitoso de generator v2 en Primaria. Una llamada, sin reparación ni regeneración; sin tocar prompt, schema ni fusión después de verla. Sin planner, generator ni análisis.",
+  "inputs": {
+    "analysis_fingerprint": "ee73a9df84a71d6f21695b87e56a3bbcc2a073636c9acbc4114edcdd3e459ddd",
+    "context_policy": 2,
+    "raw_plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22",
+    "plan_review": "review-primaria-2.json",
+    "generator_evidence": "generator-v2-primaria-run2.json",
+    "document_fingerprint_prefix": "874aaaa01076",
+    "document_rebuilt_identical_from_its_generation": true,
+    "deterministic_review_before": "approved_with_warnings (answers_not_leaked semántico, functional_supports_applied, traceability_complete)"
+  },
+  "reviewer": {
+    "prompt": "pedagogical_reviewer@v1",
+    "prompt_sha256": "98a169e7feeccc1fda23c002f36363d42eb2ad95e8c4d9ad635dcf5f1d04aba7",
+    "schema": "pedagogical_review_findings@1",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 2000,
+    "worst_case_usd": 0.0305,
+    "budget_usd": 0.05
+  },
+  "review_context": {
+    "fingerprint_prefix": "de9a13075d46",
+    "blocks": 10,
+    "must_answer": [
+      "answers_not_leaked",
+      "functional_supports_applied",
+      "age_appropriate",
+      "no_infantilization"
+    ],
+    "required_semantic_targets": [
+      "act_2",
+      "act_4"
+    ],
+    "internal_reference_only_answers": 2,
+    "deterministic_checks_sent": "solo los 4 que juzga",
+    "pii_or_diagnosis": 0
+  },
+  "metrics": {
+    "input_tokens": 2281,
+    "cache_write_tokens": 2372,
+    "cache_read_tokens": 0,
+    "output_tokens": 791,
+    "reasoning_tokens": null,
+    "cost_usd": 0.018402,
+    "latency_ms": 5700,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "parse": {
+    "outcome": "ok",
+    "first_time_valid": true,
+    "rejected_findings": 0,
+    "pending_required_judgments": 0
+  },
+  "merge_outcome": {
+    "verdict": "approved_with_warnings",
+    "answers_not_leaked": "PASS (ai) · act_2, act_4 y los dos bloques añadidos, cada uno con su hallazgo",
+    "age_appropriate": "PASS (ai)",
+    "no_infantilization": "PASS (det.) + PASS (ai)",
+    "functional_supports_applied": "WARN determinista (estructural, no cerrable) + 3 WARN IA",
+    "traceability_complete": "WARN determinista (dec_4 deferred_to_renderer): se mantiene",
+    "fail_softened_by_ai": false
+  },
+  "ai_findings_audit": [
+    {
+      "finding": "answers_not_leaked act_2 PASS",
+      "audit": "CORRECT",
+      "note": "No hay contenido añadido en act_2; la consigna original solo presenta los pares y los signos."
+    },
+    {
+      "finding": "answers_not_leaked act_4 PASS",
+      "audit": "CORRECT",
+      "note": "Nada añadido; no se indica dónde ubicar la posición."
+    },
+    {
+      "finding": "answers_not_leaked blk_0009/blk_0010 PASS (pistas indirectas)",
+      "audit": "CORRECT",
+      "note": "Las listas son genéricas, sin razonamiento ni pistas."
+    },
+    {
+      "finding": "functional_supports_applied WARN dec_2/dec_4/act_2/act_3 (human review)",
+      "audit": "CORRECT",
+      "note": "Describe la necesidad de fragmentar sin cubrir (rechazada + diferida) sin afirmar que se ejecutó; coherente con el WARN determinista."
+    },
+    {
+      "finding": "functional_supports_applied WARN checklist global genérica",
+      "audit": "CORRECT",
+      "note": "Calibrado: WARN, no FAIL; coincide con la valoración propia (útil pero genérica, un elemento débil). Podría discutirse como algo estricto."
+    },
+    {
+      "finding": "functional_supports_applied WARN apoyo de act_5 redundante",
+      "audit": "CORRECT",
+      "note": "Dirección y severidad acertadas (repite la consigna, función baja); la expresión «redundantes entre sí» es imprecisa (son dos comprobaciones distintas)."
+    },
+    {
+      "finding": "age_appropriate blk_0009/blk_0010 PASS",
+      "audit": "CORRECT",
+      "note": "Primera persona sencilla, adecuada a 9-12 años y sin ser pueril."
+    },
+    {
+      "finding": "no_infantilization PASS",
+      "audit": "CORRECT",
+      "note": "Sin expresiones condescendientes."
+    }
+  ],
+  "audit_counts": {
+    "CORRECT": 8,
+    "TOO_STRICT": 0,
+    "TOO_LENIENT": 0,
+    "WRONG": 0
+  },
+  "limits_of_the_evidence": [
+    "Un único documento limpio: casi todo son PASS justificados, lo que no demuestra que el revisor no sea complaciente. Falta un caso adversarial real (fuga literal, semántica, pista indirecta) con el modelo.",
+    "Los casos de fuga e infantilización solo se han validado offline (hallazgos guionizados) sobre la fusión, no sobre el juicio del modelo.",
+    "Primaria únicamente: ESO/Bachillerato exigirán un tono más estricto."
+  ],
+  "cost": {
+    "analysis_v3": 0.042626,
+    "planner_v2": 0.022663,
+    "generator_v2_success": 0.014156,
+    "reviewer_v1": 0.018402,
+    "clean_chain_until_review": 0.097847,
+    "historical_real_spend_including_failed_generator": 0.111873
+  },
+  "defaults_recommendation": {
+    "planner_v2": "NO (falta una segunda validación real)",
+    "generator_v2_experimental": "SÍ (con el preflight de rutas)",
+    "reviewer_v1": "no activo; apto para continuar, tras un caso adversarial"
+  }
+}

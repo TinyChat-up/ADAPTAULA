@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Tokens de diseño de Adaptaula (docs/UX.md). Contrastes verificados WCAG AA sobre --color-surface. */
+@theme {
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e2e6ec;
+  --color-foreground: #172033;
+  --color-muted-foreground: #556070;
+  --color-primary: #2453c2;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #0f766e;
+  --color-accent-soft: #e6f4f2;
+  --color-success: #15803d;
+  /* Texto sobre fondos teñidos de success (success/10): #15803d solo da 4,1:1 sobre ese tinte. */
+  --color-success-strong: #14532d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --radius-card: 0.625rem;
+  --radius-control: 0.5rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

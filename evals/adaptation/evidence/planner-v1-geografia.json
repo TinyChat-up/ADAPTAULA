@@ -1,0 +1,107 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Evidencia congelada del primer experimento real de adaptation_planner@v1. Solo huellas, estados y métricas: el resultado bruto está en evals/adaptation/private/ (git-ignorado).",
+  "planner": {
+    "prompt": "adaptation_planner@v1",
+    "prompt_sha256": "f994adbf0168a0e178be19d7f6b84fb836014d22d44381b150255b3839c56346",
+    "schema": {
+      "key": "adaptation_plan",
+      "version": 1,
+      "draft_schema_fingerprint": "36f7d812e1a474aafe4805c06a4c46dfea7a4d643a153766eecff7202389a4cc"
+    }
+  },
+  "run": {
+    "provider": "anthropic",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 8000,
+    "result_file": "2026-10-05T11-56-03-652Z-planner-v1-geografia-ejecutivas.json",
+    "analysis_fingerprint": "fef56eeed6859fa770345b86568be787924a245462411a45f88b86133cad1d33",
+    "context_fingerprint": "612817ad036f9ae1a60655aecaf87efb3250e4dd7c8a01f2c560524b6b759a46",
+    "raw_plan_fingerprint": "78781846798ad8d7941c160c3fee746ea70343c7f67fdd91ccfa61c2bbd03cf0"
+  },
+  "metrics": {
+    "input_tokens": 3808,
+    "cache_write_tokens": 3641,
+    "cache_read_tokens": 0,
+    "output_tokens": 1612,
+    "cost_usd": 0.032838,
+    "latency_ms": 9556,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "classification": {
+    "counts": {
+      "valid": 4,
+      "review": 3,
+      "blocked": 1
+    },
+    "decisions": [
+      {
+        "id": "dec_1",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_2",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_3",
+        "status": "blocked",
+        "issues": [
+          "block:unjustified_change",
+          "review:cognitive_demand_reduced"
+        ]
+      },
+      {
+        "id": "dec_4",
+        "status": "review",
+        "issues": [
+          "review:cognitive_demand_reduced"
+        ]
+      },
+      {
+        "id": "dec_5",
+        "status": "review",
+        "issues": [
+          "review:cognitive_demand_reduced"
+        ]
+      },
+      {
+        "id": "dec_6",
+        "status": "valid",
+        "issues": []
+      },
+      {
+        "id": "dec_7",
+        "status": "review",
+        "issues": [
+          "review:cognitive_demand_reduced"
+        ]
+      },
+      {
+        "id": "dec_8",
+        "status": "valid",
+        "issues": []
+      }
+    ]
+  },
+  "outcome": {
+    "json_valid_first_try": true,
+    "inferred_answers_leaked": 0,
+    "protected_essential_lost": 0,
+    "material_pedagogical_degradations": 0
+  },
+  "debt_and_hypotheses_not_fixed": [
+    "H1 · el planificador citó una dimensión (operation_steps) que no estaba entre las necesidades activas: ¿el enum de 69 dimensiones en el esquema lo invita? Evaluar con más fichas antes de tocar el prompt o el contrato.",
+    "H2 · uses_task_data es autodeclarado y el validador no puede verificarlo (dec_5 lo declaró falso con una nota específica de la tarea).",
+    "H3 · cognitive_demand_reduced salta ante cualquier segmentación sustancial de un destino con operación o razonamiento esencial (3 de 3 decisiones en review): posible falso positivo.",
+    "H4 · una decisión duplicaba lo que ya resuelve presentation.max_tasks_per_page: ¿quitar de needs las dimensiones que la presentación cubre del todo?",
+    "H5 · algo de sobre-adaptación al seguir mecánicamente el nivel alto de apoyo (pasos de procedimiento matemático, preguntas guía en consignas cortas, inicios de frase)."
+  ]
+}

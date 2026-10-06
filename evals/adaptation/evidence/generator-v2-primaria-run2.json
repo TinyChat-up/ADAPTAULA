@@ -1,0 +1,176 @@
+{
+  "frozen_at": "2026-10-05",
+  "purpose": "Segunda llamada real de material_generator@v2 sobre Primaria, tras resolver los dos problemas de integración (enrutado de ejecución + preflight de capacidades). Una llamada, sin reparación ni regeneración; sin cambios de prompt, schema, validador ni política de contexto tras verla.",
+  "supersedes_failed_run": "generator-v2-primaria.json (histórico, intacto: $0.014026)",
+  "inputs": {
+    "analysis_fingerprint": "ee73a9df84a71d6f21695b87e56a3bbcc2a073636c9acbc4114edcdd3e459ddd",
+    "context_policy": 2,
+    "context_fingerprint": "04c0fcbd7bcfc3f4f3357079139d641fc47fc2a00cdd50b0d83acca057a93ba9",
+    "raw_plan_fingerprint": "5495015c955e0abb64cf4bd7d049840b3c0f7f1bea570bb4d3010bed71f98f22",
+    "plan_review": "review-primaria-2.json (nueva; review-primaria.json histórica, SHA 0e9aa2d4…)"
+  },
+  "execution_routes": {
+    "dec_1": "ai_generation (checklist global, editada: proceso, máx. 4, sin enumerar actividades)",
+    "dec_2": "rejected (sin ruta)",
+    "dec_3": "ai_generation (self_check→checklist en act_5, puede declinarse en skipped)",
+    "dec_4": "deferred_to_renderer (organización espacial de act_2: no hay estructura para hacerlo sin partir el texto; original conservado, registrada como pendiente, no ejecutada)"
+  },
+  "generator": {
+    "prompt": "material_generator@v2",
+    "schema": "generated_segments@2",
+    "alias": "STANDARD",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "max_output_tokens": 3000,
+    "worst_case_usd": 0.0416,
+    "budget_usd": 0.05,
+    "decisions_sent": [
+      "dec_1",
+      "dec_3"
+    ],
+    "checklist_items_max_changed": false
+  },
+  "metrics": {
+    "input_tokens": 993,
+    "cache_write_tokens": 3756,
+    "cache_read_tokens": 0,
+    "output_tokens": 278,
+    "cost_usd": 0.014156,
+    "latency_ms": 2931,
+    "calls": 1,
+    "retries": 0,
+    "repairs": 0,
+    "truncated": false
+  },
+  "parse": {
+    "outcome": "ok",
+    "first_time_valid": true
+  },
+  "generation": {
+    "requested": [
+      "dec_1",
+      "dec_3"
+    ],
+    "generated": [
+      "dec_1",
+      "dec_3"
+    ],
+    "ignored": [],
+    "declined": [],
+    "skipped": [],
+    "unauthorized_blocks": 0,
+    "issues": [],
+    "preserved_without_executor": [
+      "dec_4 (deferred_to_renderer)"
+    ]
+  },
+  "document": {
+    "blocks_generated": 2,
+    "activities_untouched": [
+      "act_1",
+      "act_2",
+      "act_3",
+      "act_4"
+    ],
+    "act_5": "original + checklist de 2 elementos",
+    "visuals_preserved": [
+      "vis_1",
+      "vis_2"
+    ],
+    "answer_key_entries": 0
+  },
+  "audit": {
+    "all_deterministic_checks_ok": true,
+    "review_verdict": "approved_with_warnings",
+    "warns": {
+      "answers_not_leaked": "WARN needs_semantic_review (act_2, act_4: respuesta inferida textual no comprobable de forma determinista; nunca PASS falso)",
+      "functional_supports_applied": "WARN: instruction_chunking y predictable_structure sin aplicar (consecuencia de dec_4 diferida y dec_2 rechazada)",
+      "traceability_complete": "WARN: decisión sin bloque dec_4 (diferida, registrada)"
+    },
+    "skipped_checks": [
+      "age_appropriate (IA)"
+    ],
+    "inferred_leaks": 0,
+    "protected_essential_lost": 0,
+    "visual_necessary_lost": 0,
+    "objective_changes": 0,
+    "rejected_decisions_applied": 0,
+    "math_procedure_leaked": false,
+    "broken_trace": 0
+  },
+  "redundancy": {
+    "act_1": {
+      "original": 11,
+      "final": 12,
+      "ratio": 1.09,
+      "transformed": false
+    },
+    "act_2": {
+      "original": 18,
+      "final": 19,
+      "ratio": 1.06,
+      "transformed": false
+    },
+    "act_3": {
+      "original": 29,
+      "final": 30,
+      "ratio": 1.03,
+      "transformed": false
+    },
+    "act_4": {
+      "original": 12,
+      "final": 13,
+      "ratio": 1.08,
+      "transformed": false
+    },
+    "act_5": {
+      "original": 14,
+      "final": 31,
+      "ratio": 2.21,
+      "transformed": true,
+      "band": "alta"
+    },
+    "note": "El +1 de las actividades intactas es la etiqueta de la actividad, no contenido añadido. Comparación conceptual: Bachillerato v2 act_5 ×2.71 → Primaria act_5 ×2.21; las actividades intactas no se penalizan.",
+    "global_support": {
+      "checklist_words": 19
+    }
+  },
+  "decision_audit": [
+    {
+      "id": "dec_1",
+      "classification": "GOOD",
+      "note": "3 elementos de proceso (empezar, completar, revisar), 19 palabras con el título; sin enumerar actividades, sin copiar consignas, sin mencionar casillas ni contenido matemático. Un elemento débil: «Hice todo lo que pude» no es comprobable."
+    },
+    {
+      "id": "dec_3",
+      "classification": "ACCEPTABLE",
+      "note": "Dos comprobaciones (16 palabras): «una sola frase» restata el formato de la consigna y «responde a lo que se pregunta» es genérica; no menciona la equivalencia ni da razón, procedimiento ni comienzos de frase. Valor bajo: el modelo pudo declinarla en skipped."
+    },
+    {
+      "id": "dec_4",
+      "classification": "n/a (diferida)",
+      "note": "No se ejecutó ni se marca como ejecutada."
+    }
+  ],
+  "math_audit": {
+    "act_1": "PRESERVED",
+    "act_2": "PRESERVED (contenido intacto; organización espacial pendiente del renderer)",
+    "act_3": "PRESERVED",
+    "act_4": "PRESERVED",
+    "act_5": "SUPPORTED_SAFELY"
+  },
+  "cost": {
+    "analysis_v3": 0.042626,
+    "planner_v2": 0.022663,
+    "generator_v2_failed_first_run": 0.014026,
+    "generator_v2_this_run": 0.014156,
+    "historical_chain_total": 0.093471,
+    "clean_chain_reference_analysis_planner_generator_success": 0.079445,
+    "note": "La cadena limpia es una referencia observada de las tres llamadas que habría necesitado el flujo con el preflight, no un precio final. El run fallido queda en el histórico."
+  },
+  "observations_not_fixed": [
+    "La primera comprobación de act_5 restata el formato; el generador no usó skipped para ella.",
+    "dec_4 sigue sin ejecutor hasta que exista un renderer o una estructura de actividad con sub-ítems.",
+    "Una sola ficha: la reescritura de una consigna larga de matemáticas con v2 sigue sin evidencia real."
+  ]
+}
