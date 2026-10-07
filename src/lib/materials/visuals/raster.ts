@@ -162,3 +162,20 @@ export async function cropPng(page: RasterPage, rect: { left: number; top: numbe
 }
 
 export const encodePng = (page: RasterPage): Promise<Buffer> => page.canvas.encode("png");
+
+/**
+ * What actually rasterised, read at run time (not hard-coded). For audit only: the bytes of a valid render may differ between
+ * runtimes, so this never takes part in an asset's identity or in deciding whether an asset is correct. A version that cannot be
+ * read in this runtime is recorded as null.
+ */
+export function engineProvenance(): Record<string, string | null> {
+  const require = createRequire(path.join(process.cwd(), "package.json"));
+  const version = (name: string) => {
+    try {
+      return (require(`${name}/package.json`) as { version: string }).version;
+    } catch {
+      return null;
+    }
+  };
+  return { "pdfjs-dist": version("pdfjs-dist"), "@napi-rs/canvas": version("@napi-rs/canvas"), node: process.version, platform: process.platform, arch: process.arch };
+}

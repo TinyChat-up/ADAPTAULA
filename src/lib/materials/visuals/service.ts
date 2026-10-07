@@ -4,8 +4,8 @@ import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import type { VisualAssetFailure, VisualState } from "@/lib/render/visual-assets";
 import { NormalizedBoundsSchema, pixelRect, withMargin, type NormalizedBounds } from "./geometry";
-import { RasterError, cropPng, pageBox, pageCount, renderPage, sameBox, type PageBox } from "./raster";
-import { VISUAL_CROP_RECIPE, assetIdentity, assetPath, recipeFingerprint, type VisualLocator } from "./recipe";
+import { RasterError, cropPng, engineProvenance, pageBox, pageCount, renderPage, sameBox, type PageBox } from "./raster";
+import { VISUAL_CROP_RECIPE, assetIdentity, assetInstancePath, recipeFingerprint, type VisualLocator } from "./recipe";
 
 /**
  * Visual locators and their crops. The browser only ever sends a page and a rectangle; everything else (which material, which
@@ -56,11 +56,19 @@ export interface MaterialForVisuals {
   content_hash: string | null;
 }
 
+/**
+ * `identity` is the LOGICAL crop (locator + recipe); each asset row is one immutable PHYSICAL instance of it, with the sha-256 of
+ * its own bytes. A valid render is not guaranteed to be byte-identical in another runtime, so one identity may have several
+ * instances; the sha-256 only certifies the bytes of its own row. Lists of instances are always newest first:
+ * `created_at desc, id desc` (the order in which they are tried).
+ */
 export interface VisualDeps {
   /** Reads with the USER's rights (RLS): another workspace's material, locator, asset or object is simply not there. */
   reader: {
     material(id: string): Promise<MaterialForVisuals | null>;
+    /** Each locator with ALL its instances, newest first. */
     activeLocators(materialId: string, analysisFingerprint: string): Promise<Array<LocatorRow & { assets: AssetRow[] }>>;
+    asset(id: string): Promise<AssetRow | null>;
     readObject(path: string): Promise<Uint8Array | null>;
   };
   /** Server side (service role), only after the reader has authorised the material. */
@@ -70,9 +78,15 @@ export interface VisualDeps {
     createLocator(input: { workspaceId: string; materialId: string; analysisFingerprint: string; visualId: string; sourceSha256: string; page: number; bounds: NormalizedBounds; pageBox: PageBox; userId: string }): Promise<{ id: string; revision: number }>;
     locator(id: string): Promise<LocatorRow | null>;
     activeLocator(materialId: string, analysisFingerprint: string, visualId: string): Promise<LocatorRow | null>;
-    assetByIdentity(identity: string): Promise<AssetRow | null>;
+    /** Every instance of a logical crop, newest first. */
+    assetInstances(identity: string): Promise<AssetRow[]>;
     readObject(path: string): Promise<Uint8Array | null>;
-    putObject(path: string, png: Uint8Array): Promise<boolean>;
+    /**
+     * `create` never replaces an object: if the path is taken it answers `exists` and writes nothing. `repair` replaces the
+     * object; it is only used to put back the exact bytes an instance's row certifies (same sha-256).
+     */
+    putObject(path: string, png: Uint8Array, mode: "create" | "repair"): Promise<"stored" | "exists" | "failed">;
+    /** A second insert of the same (identity, sha256) — a concurrent producer of the same bytes — is not an error. */
     insertAsset(row: Omit<AssetRow, "id"> & { workspace_id: string; material_id: string; recipe_fingerprint: string; mime: "image/png"; provenance: Record<string, unknown> }): Promise<void>;
     setFailure(locatorId: string, failure: VisualAssetFailure | null): Promise<void>;
   };
@@ -123,7 +137,28 @@ async function loadSource(deps: VisualDeps, materialId: string, expectedSha: str
   return { ...source, bytes };
 }
 
-/** Produces (or confirms) the crop of a saved locator. Idempotent: same locator + recipe → same identity, same object, one row. */
+/**
+ * The first instance (newest first) whose object is readable AND holds exactly the bytes its own row certifies. A damaged or
+ * missing instance never hides a valid one; when none is valid, the problem reported is the newest instance's.
+ */
+async function verifiedInstance(read: (path: string) => Promise<Uint8Array | null>, instances: readonly AssetRow[]): Promise<{ instance: AssetRow; stored: Uint8Array } | { failure: "asset_missing" | "asset_corrupt" }> {
+  let failure: "asset_missing" | "asset_corrupt" | null = null;
+  for (const instance of instances) {
+    const stored = await read(instance.storage_path);
+    if (stored && sha256(stored) === instance.sha256) return { instance, stored };
+    failure ??= stored ? "asset_corrupt" : "asset_missing";
+  }
+  return { failure: failure ?? "asset_missing" };
+}
+
+/**
+ * Produces (or confirms) the crop of a saved locator. Idempotent and safe under concurrency:
+ *   · an instance of this logical crop that still verifies → done, nothing is rendered or written;
+ *   · otherwise render; if the bytes match an existing instance (its object was lost or damaged), put those exact bytes back at
+ *     ITS path; if not (e.g. another runtime), store a NEW instance at its own content-addressed path.
+ * A new render is never compared with an older instance as a condition of correctness, and no object is ever replaced by bytes
+ * other than the ones its row certifies.
+ */
 export async function produceVisualAsset(deps: VisualDeps, locatorId: string, preloaded?: { mime: string; bytes: Uint8Array }): Promise<{ ok: true } | { ok: false; failure: VisualAssetFailure }> {
   const row = await deps.admin.locator(locatorId);
   if (!row) return { ok: false, failure: "geometry_missing" };
@@ -131,18 +166,15 @@ export async function produceVisualAsset(deps: VisualDeps, locatorId: string, pr
     await deps.admin.setFailure(row.id, failure);
     return { ok: false as const, failure };
   };
+  const done = async () => {
+    await deps.admin.setFailure(row.id, null);
+    return { ok: true as const };
+  };
   const locator = toLocator(row);
   const identity = assetIdentity(locator);
-  const path = assetPath(row.workspace_id, row.material_id, identity);
 
-  const existing = await deps.admin.assetByIdentity(identity);
-  if (existing) {
-    const stored = await deps.admin.readObject(existing.storage_path);
-    if (stored && sha256(stored) === existing.sha256) {
-      await deps.admin.setFailure(row.id, null);
-      return { ok: true };
-    }
-  }
+  const instances = await deps.admin.assetInstances(identity);
+  if ("stored" in (await verifiedInstance((path) => deps.admin.readObject(path), instances))) return done();
 
   const source = preloaded ?? (await loadSource(deps, row.material_id, row.source_sha256));
   if (!source) return fail("source_missing");
@@ -161,30 +193,36 @@ export async function produceVisualAsset(deps: VisualDeps, locatorId: string, pr
     return fail(error instanceof RasterError ? error.code : "extraction_failed");
   }
   if (!isPng(png.png) || png.width <= 0 || png.height <= 0 || png.width > VISUAL_CROP_RECIPE.max_px || png.height > VISUAL_CROP_RECIPE.max_px) return fail("asset_corrupt");
+  const sha = sha256(png.png);
 
-  if (!(await deps.admin.putObject(existing?.storage_path ?? path, png.png))) return fail("extraction_failed");
-  if (existing) {
-    // Repaired a missing/corrupt object: deterministic, so the bytes match the recorded fingerprint again.
-    if (sha256(png.png) !== existing.sha256) return fail("asset_corrupt");
-  } else {
-    await deps.admin.insertAsset({
-      workspace_id: row.workspace_id,
-      material_id: row.material_id,
-      locator_id: row.id,
-      identity,
-      recipe_version: VISUAL_CROP_RECIPE.version,
-      recipe_fingerprint: recipeFingerprint(),
-      storage_path: path,
-      mime: "image/png",
-      width: png.width,
-      height: png.height,
-      bytes: png.png.length,
-      sha256: sha256(png.png),
-      provenance: { pixel_rect: rect, rasteriser: "pdfjs-dist@6.4.299+@napi-rs/canvas@1.0.10" },
-    });
+  const same = instances.find((i) => i.sha256 === sha);
+  if (same) return (await deps.admin.putObject(same.storage_path, png.png, "repair")) === "stored" ? done() : fail("extraction_failed");
+
+  const path = assetInstancePath(row.workspace_id, row.material_id, identity, sha);
+  const stored = await deps.admin.putObject(path, png.png, "create");
+  if (stored === "failed") return fail("extraction_failed");
+  if (stored === "exists") {
+    // Another producer of the same bytes got there first (or an earlier attempt stored the object but not its row). The path is
+    // named after the bytes it must hold: anything else there is a damaged object, and it is left as it is.
+    const there = await deps.admin.readObject(path);
+    if (!there || sha256(there) !== sha) return fail("asset_corrupt");
   }
-  await deps.admin.setFailure(row.id, null);
-  return { ok: true };
+  await deps.admin.insertAsset({
+    workspace_id: row.workspace_id,
+    material_id: row.material_id,
+    locator_id: row.id,
+    identity,
+    recipe_version: VISUAL_CROP_RECIPE.version,
+    recipe_fingerprint: recipeFingerprint(),
+    storage_path: path,
+    mime: "image/png",
+    width: png.width,
+    height: png.height,
+    bytes: png.png.length,
+    sha256: sha,
+    provenance: { pixel_rect: rect, engine: engineProvenance() },
+  });
+  return done();
 }
 
 export interface LocateInput {
@@ -248,8 +286,9 @@ export interface ResolvedVisuals {
 
 /**
  * The state of each visual of one material + analysis + source file, with the USER's rights. The current preview uses the ACTIVE
- * locator (a later correction shows up here); an asset only counts as ready if its object is readable AND matches its recorded
- * fingerprint: database metadata alone never makes a visual "ready".
+ * locator (a later correction shows up here). Among the instances of its logical crop, the newest that verifies is served
+ * (`created_at desc, id desc`): an object only counts if it is readable AND matches its own row's sha-256, so database metadata
+ * alone never makes a visual "ready", and a damaged instance does not hide a valid one.
  */
 export async function resolveVisuals(deps: VisualDeps, input: { materialId: string; analysisFingerprint: string; sourceSha256: string | null; visualIds: readonly string[]; withBytes?: boolean }): Promise<ResolvedVisuals> {
   const out: ResolvedVisuals = { states: {}, bytes: {} };
@@ -261,18 +300,31 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
       continue;
     }
     const provenance = { page: locator.page, revision: locator.revision, method: locator.method };
-    const asset = locator.assets.find((a) => a.recipe_version === VISUAL_CROP_RECIPE.version && a.identity === assetIdentity(toLocator(locator)));
-    if (!asset) {
+    const identity = assetIdentity(toLocator(locator));
+    const instances = locator.assets.filter((a) => a.recipe_version === VISUAL_CROP_RECIPE.version && a.identity === identity);
+    if (instances.length === 0) {
       out.states[visualId] = locator.last_failure ? { visualId, status: "extraction_failed", failure: locator.last_failure, provenance } : { visualId, status: "located_processing", provenance };
       continue;
     }
-    const stored = await deps.reader.readObject(asset.storage_path);
-    if (!stored) out.states[visualId] = { visualId, status: "extraction_failed", failure: "asset_missing", provenance };
-    else if (sha256(stored) !== asset.sha256) out.states[visualId] = { visualId, status: "extraction_failed", failure: "asset_corrupt", provenance };
+    const verified = await verifiedInstance((path) => deps.reader.readObject(path), instances);
+    if ("failure" in verified) out.states[visualId] = { visualId, status: "extraction_failed", failure: verified.failure, provenance };
     else {
       out.states[visualId] = { visualId, status: "ready", provenance };
-      if (input.withBytes) out.bytes[visualId] = stored;
+      if (input.withBytes) out.bytes[visualId] = verified.stored;
     }
   }
   return out;
+}
+
+/**
+ * Exact pin (what a historical export must record: instance id + sha-256). Returns the bytes of THAT instance or an explicit
+ * failure; it never falls back to another instance of the same logical crop.
+ */
+export async function readAssetInstance(deps: VisualDeps, pin: { assetId: string; sha256: string }): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; failure: "not_found" | "asset_missing" | "asset_corrupt" }> {
+  const instance = await deps.reader.asset(pin.assetId);
+  if (!instance || instance.sha256 !== pin.sha256) return { ok: false, failure: "not_found" };
+  const stored = await deps.reader.readObject(instance.storage_path);
+  if (!stored) return { ok: false, failure: "asset_missing" };
+  if (sha256(stored) !== pin.sha256) return { ok: false, failure: "asset_corrupt" };
+  return { ok: true, bytes: stored };
 }

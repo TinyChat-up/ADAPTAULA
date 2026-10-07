@@ -388,7 +388,8 @@ async function handleStorage(req, res, url, auth, rawBody) {
     if (auth.role !== "service_role") return json(403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
     const [, bucket, name] = m;
     const token = randomUUID();
-    uploadTokens.set(token, { bucket, path: decodeURIComponent(name) });
+    // Like Supabase: without `x-upsert: true` on the signed URL, an existing object is never replaced.
+    uploadTokens.set(token, { bucket, path: decodeURIComponent(name), upsert: req.headers["x-upsert"] === "true" });
     return json(200, { url: `/object/upload/sign/${bucket}/${name}?token=${token}` });
   }
   // PUT /object/upload/sign/<bucket>/<path>?token=…  → subida con el token
@@ -403,6 +404,7 @@ async function handleStorage(req, res, url, auth, rawBody) {
     if (!bucketRow) return json(404, { statusCode: "404", error: "Bucket not found", message: "Bucket not found" });
     if (bucketRow.file_size_limit && bytes.length > Number(bucketRow.file_size_limit)) return json(413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
     if (bucketRow.allowed_mime_types && !bucketRow.allowed_mime_types.includes(mime.split(";")[0])) return json(415, { statusCode: "415", error: "invalid_mime_type", message: `mime type ${mime} is not supported` });
+    if (!entry.upsert && objects.has(`${bucket}/${entry.path}`)) return json(400, { statusCode: "409", error: "Duplicate", message: "The resource already exists" });
     objects.set(`${bucket}/${entry.path}`, { bytes, mime });
     await serial(() => db.query("insert into storage.objects (bucket_id, name) values ($1, $2) on conflict do nothing", [bucket, entry.path]));
     uploadTokens.delete(url.searchParams.get("token"));
