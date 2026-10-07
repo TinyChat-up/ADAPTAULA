@@ -32,9 +32,10 @@ export type JobOutcome = "completed" | "failed" | "retry" | "skipped";
 const IMAGE_TYPES: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
 
 /**
- * Runs one analysis job to a terminal or retry state. Safe to call from anywhere, any number of times:
- * the database lets exactly one caller claim a job at a time (lease), and a worker that lost its lease
- * cannot overwrite the result of the one that took over (attempt fencing).
+ * THE processor of an analysis job: runs it to a terminal or retry state. Safe to call from anywhere, any number of times: the
+ * database lets exactly one caller claim a job at a time (lease), and a worker that lost its lease cannot overwrite the result of
+ * the one that took over (attempt fencing). Callers: `processMaterialAnalysis` (the teacher's request, awaited) and
+ * `recoverAnalysisJobs` (the daily recovery cron). The unit of quota was reserved when the job was enqueued, never here.
  */
 export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
   const admin = createAdminClient();
@@ -158,6 +159,37 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
     logger.error("analysis_job_error", { ...ids, code: decision.code, retryable: decision.retryable });
     return await fail(decision.code, decision.retryable);
   }
+}
+
+/**
+ * Runs the pending analysis of ONE material now and waits for it (`POST /api/materials/[id]/analysis/run`). `skipped` when there
+ * is nothing to run: no pending job, another run holds it, or it is waiting out a retry backoff.
+ */
+export async function processMaterialAnalysis(materialId: string): Promise<JobOutcome> {
+  const jobId = await findRecoverableJob(materialId);
+  return jobId ? runAnalysisJob(jobId) : "skipped";
+}
+
+/**
+ * Recovery only (daily cron): analysis jobs that nobody is running and that the teacher's own request did not finish (the
+ * function died, the tab closed before it started, a retry backoff passed). Older than `minAgeSeconds`, so a job that a request
+ * is about to run is left to it. A job with no attempts left is closed by the claim (and its unit refunded), never re-run.
+ */
+export async function recoverAnalysisJobs(options: { limit: number; minAgeSeconds: number }): Promise<{ found: number; outcomes: Record<JobOutcome, number> }> {
+  const admin = createAdminClient();
+  const cutoff = new Date(Date.now() - options.minAgeSeconds * 1000).toISOString();
+  const { data } = await admin
+    .from("adaptation_jobs")
+    .select("id, locked_until")
+    .eq("kind", "analyze")
+    .in("status", ["queued", "processing"])
+    .lt("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(options.limit * 5);
+  const free = (data ?? []).filter((j) => (j.locked_until ? new Date(j.locked_until).getTime() : 0) <= Date.now()).slice(0, options.limit);
+  const outcomes: Record<JobOutcome, number> = { completed: 0, failed: 0, retry: 0, skipped: 0 };
+  for (const job of free) outcomes[await runAnalysisJob(job.id)] += 1;
+  return { found: free.length, outcomes };
 }
 
 /** A job nobody is working on: waiting past its backoff, or whose lease expired (the worker died). */

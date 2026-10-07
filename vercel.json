@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/adaptations",
-      "schedule": "15 4 * * *"
+      "schedule": "30 3 * * *"
     }
   ]
 }

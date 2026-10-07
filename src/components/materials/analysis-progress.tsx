@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/layout";
+import { createRunDispatcher } from "@/lib/jobs/run-dispatcher";
 import { cn } from "@/lib/utils/cn";
 
 interface StatusPayload {
@@ -41,6 +42,20 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const settled = (status: string) => status === "analyzed" || status === "failed";
+
+    // The analysis runs now, in its own awaited request; polling only observes it (and re-asks if the job is left waiting).
+    const runner = createRunDispatcher<StatusPayload>({
+      run: async () => {
+        const response = await fetch(`/api/materials/${materialId}/analysis/run`, { method: "POST", cache: "no-store" });
+        return response.ok ? ((await response.json()) as StatusPayload) : null;
+      },
+      onResult: (next) => {
+        setPayload(next);
+        if (settled(next.status)) router.refresh();
+      },
+    });
+    runner.kick(true);
 
     async function poll() {
       try {
@@ -50,10 +65,11 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
         if (cancelled) return;
         setOffline(false);
         setPayload(next);
-        if (next.status === "analyzed" || next.status === "failed") {
+        if (settled(next.status)) {
           router.refresh();
           return;
         }
+        if (next.status === "queued" || next.status === "analyzing") runner.kick();
       } catch {
         if (!cancelled) setOffline(true);
       }
@@ -63,6 +79,7 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
     timer = setTimeout(poll, 800);
     return () => {
       cancelled = true;
+      runner.stop();
       clearTimeout(timer);
     };
   }, [materialId, router]);

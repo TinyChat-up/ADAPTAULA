@@ -12,6 +12,7 @@ let claim: unknown;
 let completeResult: unknown;
 let fileRows: unknown[];
 let sourceBytes: Uint8Array | null;
+let jobRows: Array<{ id: string; locked_until: string | null; status?: string }>;
 let provider: AIProvider;
 let analyzerVersion = 1;
 
@@ -29,11 +30,15 @@ function table(name: string) {
             ? { data: [{ slug: "primaria", name: "Educación Primaria" }], error: null }
             : name === "grades"
               ? { data: [{ slug: "5-primaria", name: "5.º de Primaria" }], error: null }
-              : { data: null, error: null };
+              : name === "adaptation_jobs"
+                ? { data: jobRows, error: null }
+                : { data: null, error: null };
   const builder: Record<string, unknown> = {
     select: () => builder,
     eq: () => builder,
     in: () => builder,
+    lt: () => builder,
+    order: () => builder,
     limit: () => builder,
     single: () => Promise.resolve(result),
     update: () => {
@@ -67,7 +72,7 @@ vi.mock("@/lib/ai/runtime", () => ({
   activeAnalyzer: () => getMaterialAnalyzer(analyzerVersion),
 }));
 
-const { runAnalysisJob } = await import("@/lib/materials/analysis-job");
+const { processMaterialAnalysis, recoverAnalysisJobs, runAnalysisJob } = await import("@/lib/materials/analysis-job");
 
 const rpcNamed = (name: string) => calls.rpc.filter((c) => c.name === name);
 
@@ -79,6 +84,7 @@ beforeEach(() => {
   sourceBytes = new TextEncoder().encode("%PDF-1.4 ficha");
   provider = new MockProvider();
   analyzerVersion = 1;
+  jobRows = [];
 });
 
 describe("runAnalysisJob", () => {
@@ -171,5 +177,58 @@ describe("runAnalysisJob", () => {
     provider = { name: "mock", generateStructured: () => Promise.reject(new TypeError("boom")) };
     expect(await runAnalysisJob(JOB.id)).toBe("retry");
     expect(rpcNamed("fail_analysis_job")[0]!.args).toMatchObject({ p_code: "unexpected" });
+  });
+});
+
+/**
+ * The analysis starts immediately in the teacher's own request (`processMaterialAnalysis`, awaited by
+ * `POST /api/materials/[id]/analysis/run`); the daily cron only recovers (`recoverAnalysisJobs`). Same processor, same claim.
+ */
+describe("immediate analysis and recovery", () => {
+  const past = () => new Date(Date.now() - 1000).toISOString();
+  const future = () => new Date(Date.now() + 60_000).toISOString();
+
+  it("a just-created job is run right away by the request: claimed, analyzed, recorded, completed", async () => {
+    jobRows = [{ id: JOB.id, locked_until: null, status: "queued" }];
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("completed");
+    expect(rpcNamed("claim_analysis_job")[0]!.args).toMatchObject({ p_job: JOB.id });
+    expect(calls.inserts.filter((i) => i.table === "ai_runs")).toHaveLength(1);
+  });
+
+  it("nothing pending, a job held by a live run, or one waiting out its backoff → nothing runs, no model call", async () => {
+    jobRows = [];
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("skipped");
+    jobRows = [{ id: JOB.id, locked_until: future(), status: "processing" }];
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("skipped");
+    expect(calls.rpc).toEqual([]);
+    expect(calls.inserts).toEqual([]);
+  });
+
+  it("two requests at once: the database lets one claim; the other makes no call and records nothing", async () => {
+    jobRows = [{ id: JOB.id, locked_until: null, status: "queued" }];
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("completed");
+    claim = null; // the job is now held (or finished): the claim refuses it
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("skipped");
+    expect(rpcNamed("complete_analysis_job")).toHaveLength(1);
+    expect(calls.inserts.filter((i) => i.table === "ai_runs")).toHaveLength(1);
+  });
+
+  it("a transient failure leaves a recoverable job: it goes back to the queue with its attempt counted (never stuck in processing)", async () => {
+    jobRows = [{ id: JOB.id, locked_until: null, status: "queued" }];
+    provider = { generateStructured: () => Promise.reject(new AIError("provider_unavailable", "503")) } as unknown as AIProvider;
+    expect(await processMaterialAnalysis(JOB.material_id)).toBe("retry");
+    expect(rpcNamed("fail_analysis_job")[0]!.args).toMatchObject({ p_job: JOB.id, p_attempt: 1, p_retryable: true });
+  });
+
+  it("the recovery cron runs only jobs nobody holds, oldest first, within its limit", async () => {
+    jobRows = [
+      { id: "aaaaaaaa-0000-4000-8000-000000000001", locked_until: future() },
+      { id: "aaaaaaaa-0000-4000-8000-000000000002", locked_until: past() },
+      { id: "aaaaaaaa-0000-4000-8000-000000000003", locked_until: null },
+    ];
+    const result = await recoverAnalysisJobs({ limit: 1, minAgeSeconds: 600 });
+    expect(result.found).toBe(1);
+    expect(rpcNamed("claim_analysis_job").map((c) => c.args.p_job)).toEqual(["aaaaaaaa-0000-4000-8000-000000000002"]);
+    expect(result.outcomes.completed).toBe(1);
   });
 });

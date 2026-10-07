@@ -44,7 +44,8 @@ export const ServerEnvSchema = z.object({
 
   CRON_SECRET: optional(z.string().min(16)),
   /** Adaptation jobs claimed per scheduler tick (each can be a long model call), and how old an adaptation must be before the reconciler repairs it. */
-  ADAPTATION_JOBS_PER_RUN: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(10).default(2)),
+  // Stages recovered per cron run: one stage can take most of the 300 s budget, and the normal path never waits for the cron.
+  ADAPTATION_JOBS_PER_RUN: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(10).default(1)),
   ADAPTATION_RECONCILE_MIN_AGE_SECONDS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(3600).default(60)),
 
   FLAG_MAX_PLAN_ENABLED: flag(false),

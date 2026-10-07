@@ -1,15 +1,17 @@
 import "server-only";
 import { logger } from "@/lib/logger";
 import { enqueueGeneration, enqueuePlanning, latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import type { StageName } from "./store";
 
 /**
- * The durable worker. It adds NO domain logic: the stages are `runPlanningStage` / `runGenerationStage` (which claim the
- * job with its lease, fence every write by attempt, record `ai_runs`, and complete or fail the job). This module only
- *   · finds work   — jobs a worker may claim (queued past their backoff, or with an expired lease),
- *   · repairs      — adaptations in a state that needs a job and have none (the reconciler),
- *   · reports      — a summary of what happened, with opaque ids only in the logs.
- * Nothing here relies on the process staying alive after a response: whatever is not finished is a durable job that the next
- * invocation (cron, a status poll, a developer script) finds again.
+ * Running the durable stage jobs. It adds NO domain logic: the stages are `runPlanningStage` / `runGenerationStage` (which claim the
+ * job atomically with its lease, fence every write by attempt, record `ai_runs`, and complete or fail the job). Two callers, ONE
+ * processor (`runStageJob`):
+ *   · `processAdaptationStage` — the normal path: the teacher's own request runs its adaptation's pending stage right away, awaited
+ *     (`POST /api/adaptations/[id]/run`). A second request, another tab or the cron racing it cannot run it twice: only one claim wins.
+ *   · `runAdaptationWorkerCycle` — recovery only (daily cron, developer script): jobs nobody is running (queued past their backoff,
+ *     or with an expired lease) and adaptations in a state that needs a job and have none (the reconciler).
+ * Nothing here relies on the process staying alive after a response: whatever is not finished is a durable job found again later.
  */
 
 export interface WorkerSummary {
@@ -58,6 +60,27 @@ export interface ProcessOptions {
   adaptationIds?: readonly string[];
 }
 
+/** The one processor of a stage job, whoever calls it. The stage functions claim the job themselves: a held job is `skipped`. */
+async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: StageName): Promise<StageOutcome> {
+  if (stage === "planning") return runPlanningStage(deps, adaptationId);
+  const review = await latestReviewFingerprint(deps.store, adaptationId);
+  return review ? runGenerationStage(deps, adaptationId, review) : { outcome: "rejected", status: "generation_queued", code: "plan_review_required" };
+}
+
+/**
+ * Runs the pending stage of ONE adaptation now and waits for it (the teacher's request). Null: there is no pending job (nothing was
+ * enqueued, or it already finished). Waiting out a retry backoff, held by another run, or with no attempts left → `skipped`, and
+ * no provider is called.
+ */
+export async function processAdaptationStage(deps: OrchestratorDeps, adaptationId: string): Promise<StageOutcome | null> {
+  const snapshot = await deps.store.getPipeline(adaptationId);
+  const job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
+  if (!job) return null;
+  const outcome = await runStageJob(deps, adaptationId, job.stage);
+  logger.info("adaptation_job_processed", { jobId: job.id, adaptationId, stage: job.stage, outcome: outcome.outcome, code: outcome.code ?? null, status: outcome.status, trigger: "request" });
+  return outcome;
+}
+
 export async function processAdaptationJobs(deps: OrchestratorDeps, options: ProcessOptions): Promise<WorkerSummary> {
   const summary = emptySummary();
   const scope = options.adaptationIds ? new Set(options.adaptationIds) : null;
@@ -67,14 +90,9 @@ export async function processAdaptationJobs(deps: OrchestratorDeps, options: Pro
     summary.claimed += 1;
     const ids = { jobId: job.jobId, adaptationId: job.adaptationId, stage: job.stage };
     try {
-      let outcome: StageOutcome;
-      if (job.stage === "planning") outcome = await runPlanningStage(deps, job.adaptationId);
-      else {
-        const review = await latestReviewFingerprint(deps.store, job.adaptationId);
-        outcome = review ? await runGenerationStage(deps, job.adaptationId, review) : { outcome: "rejected", status: "generation_queued", code: "plan_review_required" };
-      }
+      const outcome = await runStageJob(deps, job.adaptationId, job.stage);
       tally(summary, outcome);
-      logger.info("adaptation_job_processed", { ...ids, outcome: outcome.outcome, code: outcome.code ?? null, status: outcome.status });
+      logger.info("adaptation_job_processed", { ...ids, outcome: outcome.outcome, code: outcome.code ?? null, status: outcome.status, trigger: "recovery" });
     } catch (error) {
       summary.errors += 1;
       logger.error("adaptation_job_error", { ...ids, reason: error instanceof Error ? error.name : "unknown" });
@@ -115,7 +133,7 @@ export async function reconcileAdaptationJobs(deps: OrchestratorDeps, options: {
   return summary;
 }
 
-/** One scheduler tick: repair first, then work. Safe to invoke concurrently or twice in a row (leases + idempotent enqueue). */
+/** One recovery tick (daily cron): repair first, then work. Safe to invoke concurrently or twice in a row (leases + idempotent enqueue). */
 export async function runAdaptationWorkerCycle(deps: OrchestratorDeps, options: { limit: number; minAgeSeconds: number; adaptationIds?: readonly string[] }) {
   const reconciled = await reconcileAdaptationJobs(deps, { minAgeSeconds: options.minAgeSeconds, limit: options.limit * 2, ...(options.adaptationIds ? { adaptationIds: options.adaptationIds } : {}) });
   const processed = await processAdaptationJobs(deps, { limit: options.limit, ...(options.adaptationIds ? { adaptationIds: options.adaptationIds } : {}) });

@@ -1,12 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { stageOfGrade } from "@/lib/analysis/context";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
-import { runAnalysisJob } from "@/lib/materials/analysis-job";
 import { formatDay } from "@/lib/format/date";
 import { analysisQuotaMessage, describeServiceError } from "@/lib/materials/messages";
 import { getMaterialDetail, getSubjects, updateMaterialContext } from "@/lib/materials/repository";
@@ -72,6 +70,7 @@ export async function updateContextAction(materialId: string, input: unknown): P
 /**
  * "Analizar", "Reintentar" and "Volver a analizar". Re-analyzing a material that already has an analysis is an explicit
  * request to ignore the cache (forceReanalysis); analyzing a pending or failed one may reuse an identical earlier analysis.
+ * It only queues the job (fast): the progress screen this revalidation shows runs it at once (`/api/materials/[id]/analysis/run`).
  */
 export async function retryAnalysisAction(materialId: string): Promise<MaterialActionResult> {
   const ctx = await requireWorkspace();
@@ -85,10 +84,6 @@ export async function retryAnalysisAction(materialId: string): Promise<MaterialA
       if (usage) return { ok: false, message: analysisQuotaMessage(usage.analyses.limit, formatDay(usage.period_end)) };
     }
     return { ok: false, message: describeServiceError(requested.code) };
-  }
-  if (requested.kind === "queued") {
-    const { jobId } = requested;
-    after(() => runAnalysisJob(jobId));
   }
   revalidatePath(`/app/materiales/${materialId}`);
   revalidatePath("/app/materiales");

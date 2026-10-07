@@ -97,15 +97,21 @@ El workspace activo se guarda en una cookie (`aw`) y **siempre se valida en serv
 - `createAdminClient` (service role, `server-only`) **solo** en: webhooks de Stripe, procesador de jobs, contabilidad de uso, panel admin y tareas cron.
 - El cliente navegador (`anon key`) se usa para Auth y subidas directas con URL firmada. No consulta tablas de negocio directamente; la UI lee desde Server Components.
 
-### ADR-004 · Jobs de IA: tabla `adaptation_jobs` + ejecución en servidor con `after()`
-Un pipeline completo (análisis → plan → generación → revisión) puede tardar de 30 s a 3 min.
-- `POST /api/jobs` valida, comprueba entitlement, **reserva cuota**, crea el job y responde `202` al instante.
-- El trabajo se ejecuta en la misma función con `after()` (`maxDuration` = 300-800 s en Fluid Compute).
-- Cada paso persiste su resultado (`materials.analysis`, `adaptations.plan`, `adaptation_versions`), así que un reintento **reanuda** sin repetir pasos ya pagados.
-- Un cron (`/api/cron/jobs`, cada minuto) recupera jobs con el lease caducado (`locked_until`) y los reintenta hasta `max_attempts`; después los marca `failed` y devuelve la cuota.
-- La UI hace polling de `GET /api/jobs/:id` cada 2 s (más simple que Realtime; se puede cambiar sin tocar el pipeline).
+### ADR-004 · Jobs de IA: ejecución inmediata en la petición del usuario; el cron solo recupera
+> **User-triggered jobs run immediately. Vercel Cron is recovery-only.**
 
-Alternativas descartadas por ahora: Supabase Edge Functions (otro runtime y límites de tiempo), colas externas (más infraestructura). Si la durabilidad de `after()` + cron se queda corta, el siguiente paso es Vercel Workflow, porque cada paso ya es idempotente.
+Un paso de IA (análisis, planificación, generación + revisión) tarda de segundos a unos minutos. Los jobs siguen existiendo y son persistentes (`adaptation_jobs`): dan estado, idempotencia, exclusión entre procesadores, reintentos, recuperación, trazabilidad, cuotas y `ai_runs`.
+
+**Camino normal:** `acción del docente → crear job (cuota/entitlement ya reservados) → claim atómico → procesar en ese momento → completed / failed`.
+- El comando (Server Action o `POST /api/uploads/[id]/complete`) solo valida, reserva y **persiste el job**: es rápido.
+- La pantalla pide al instante su ejecución en una petición propia y **esperada** (`await`): `POST /api/materials/[id]/analysis/run` o `POST /api/adaptations/[id]/run` (`maxDuration = 300`). Son Route Handlers y no Server Actions porque Next.js despacha las Server Actions de un cliente **de una en una**: una etapa de minutos dentro de una acción dejaría en cola «Cancelar» y cualquier otra acción.
+- Los dos endpoints llaman al **mismo processor** que la recuperación: `runAnalysisJob` / `processAdaptationStage` → `runPlanningStage` / `runGenerationStage`. El claim es un `UPDATE` condicional en la base de datos (estado, lease, intentos), y cada escritura posterior está protegida por el número de intento (*fencing*). Por eso un doble clic, dos pestañas, un reintento HTTP o el cron a la vez producen **una sola ejecución**: una llamada al modelo y un conjunto de `ai_runs`.
+- No hay `after()`, `waitUntil`, promesas sin esperar ni estado en memoria. Nada depende de que una Function siga viva después de responder.
+- El sondeo de estado (`GET …/status`) solo lee. Si el job sigue pendiente (porque terminó una espera de reintento o murió la Function que lo ejecutaba), la pantalla vuelve a pedir la ejecución con calma, cada 15 s como mínimo y con una sola petición en vuelo por pestaña (`src/lib/jobs/run-dispatcher.ts`).
+
+**Recuperación:** `cron diario → jobs abandonados o con reintento pendiente → el mismo processor`. `/api/cron/materials` (03:00) y `/api/cron/adaptations` (03:30) no forman parte de la latencia del docente. Solo toman lo que nadie terminó: un lease caducado o una espera de reintento pasada, con una edad mínima para no competir con la petición del docente. Nunca reprocesan un job completado, retenido por otra ejecución, ambiguo o no reintentable. Así encajan en el plan Hobby de Vercel (solo crons diarios).
+
+Si la duración real llega a exigir un worker o una cola, se sustituye el *dispatcher* inmediato (los endpoints `run`) sin cambiar los processors. Alternativas descartadas por ahora: Supabase Edge Functions (otro runtime y otros límites) y colas externas (más infraestructura).
 
 ### ADR-005 · Subidas directas a Storage con URL firmada
 Las funciones de Vercel limitan el cuerpo de la petición a 4,5 MB. Por eso:
@@ -147,7 +153,7 @@ UI solo en español, con el copy junto a los componentes. Las lenguas cooficiale
 ### ADR-016 · Subida y análisis de materiales (fase 3)
 Subida en dos pasos (ADR-005) con validación **sobre los bytes**: `POST /api/uploads` (valida lo declarado, comprueba *rate limit*, crea `materials` + `material_files` y devuelve un token de subida firmada) → el navegador sube directamente a Storage → `POST /api/uploads/[id]/complete` (descarga el objeto en servidor, valida firma/tamaño/páginas, calcula SHA-256, reutiliza un análisis del mismo workspace o encola un job). Si algo falla, se borran fichero y registros.
 
-El análisis es un **job persistente** (`adaptation_jobs.kind = 'analyze'`) ejecutado con `after()` en la misma función (`maxDuration = 300`). Estados del material: `uploading → uploaded → queued → analyzing → analyzed | failed`. La exclusión entre procesadores la garantiza la base de datos (lease + token de intento, ver `docs/DATABASE.md`). **Recuperación sin cron frecuente:** el endpoint de estado (`GET /api/materials/[id]/status`, consultado cada 2 s por la pantalla de progreso) relanza un job cuyo lease caducó o cuya espera de reintento pasó; recargar la página o volver más tarde basta. Un cron **diario** solo limpia subidas huérfanas (así encaja en el plan gratuito de Vercel).
+El análisis es un **job persistente** (`adaptation_jobs.kind = 'analyze'`; la unidad de cuota se reserva al encolarlo). Lo ejecuta **en el momento** la pantalla de progreso, con `POST /api/materials/[id]/analysis/run` (petición esperada, `maxDuration = 300`, plazo propio del job de 270 s); ver ADR-004. Estados del material: `uploading → uploaded → queued → analyzing → analyzed | failed`. La exclusión entre procesadores la garantiza la base de datos (lease + token de intento, ver `docs/DATABASE.md`). El endpoint de estado (`GET /api/materials/[id]/status`, cada 2 s) solo lee. Si el job sigue pendiente (terminó una espera de reintento o murió la Function), la pantalla vuelve a pedir su ejecución, así que recargar o volver más tarde basta. El cron **diario** limpia las subidas huérfanas y recupera, con el mismo processor, los análisis que nadie terminó.
 
 El cliente `admin` (service role) se usa aquí para: URLs firmadas de subida y borrado de ficheros, ficheros y jobs (tablas sin escritura para usuarios), `ai_runs` y *rate limits*. Las lecturas y las ediciones del docente van por su propia sesión (RLS).
 

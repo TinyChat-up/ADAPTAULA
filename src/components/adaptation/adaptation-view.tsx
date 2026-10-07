@@ -10,6 +10,7 @@ import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status"
 import type { AdaptationContextView } from "@/lib/adaptation/presentation/context";
 import { actionErrorCopy, needLabels } from "@/lib/adaptation/presentation/copy";
 import { createPoller, shouldPoll, type Poller } from "@/lib/adaptation/presentation/poller";
+import { createRunDispatcher, type RunDispatcher } from "@/lib/jobs/run-dispatcher";
 import { screenFor } from "@/lib/adaptation/presentation/view-model";
 import { BlockedPanel, CancelControl, CancelledPanel, FailedPanel, GeneratePanel, ReadyPanel, StartPanel, WorkingPanel } from "./status-panels";
 import { PlanReviewForm, type SubmitReview } from "./plan-review-form";
@@ -62,6 +63,7 @@ export function AdaptationView({
 
   const statusRef = useRef(status);
   const pollerRef = useRef<Poller | null>(null);
+  const runnerRef = useRef<RunDispatcher | null>(null);
   const lock = useRef(false);
   const id = initial.id;
 
@@ -73,12 +75,26 @@ export function AdaptationView({
   }
 
   useEffect(() => {
+    // The pending stage runs now, in its own awaited request (a Route Handler: it must not queue behind other Server Actions).
+    // Polling only observes it, and re-asks gently if the job is left waiting (a retry backoff ended, a function died).
+    const runner = createRunDispatcher<AdaptationStatusDto>({
+      run: async () => {
+        const response = await fetch(`/api/adaptations/${id}/run`, { method: "POST", cache: "no-store" });
+        return response.ok ? ((await response.json()) as AdaptationStatusDto) : null;
+      },
+      onResult: (next) => adopt(next),
+    });
+    runnerRef.current = runner;
+    if (shouldPoll(statusRef.current)) runner.kick(true);
     const poller = createPoller({
       fetchStatus: async (signal) => {
         const response = await fetch(`/api/adaptations/${id}/status`, { cache: "no-store", signal });
         return response.ok ? ((await response.json()) as AdaptationStatusDto) : null;
       },
-      onStatus: (next) => adopt(next),
+      onStatus: (next) => {
+        adopt(next);
+        if (shouldPoll(next)) runner.kick();
+      },
       onConnection: (online) => setOffline(!online),
       isVisible: () => !document.hidden,
     });
@@ -91,6 +107,7 @@ export function AdaptationView({
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       poller.stop();
+      runner.stop();
     };
     // `adopt` only touches refs and stable setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +150,9 @@ export function AdaptationView({
     }
   }
 
+  /** A command just persisted a stage job: run it now (no wait for any scheduler). */
+  const runNow = () => runnerRef.current?.kick(true);
+
   const cancel = <CancelControl busy={busy} onCancel={() => void run(actions.cancel)} />;
   const screen = screenFor(status);
   const deferredIds = saved?.deferredDecisions ?? status.execution?.deferredDecisions ?? [];
@@ -152,9 +172,9 @@ export function AdaptationView({
 
       <div aria-live="polite">{notice ? <Alert tone={notice.tone} title={notice.text} /> : null}</div>
 
-      {screen === "start" ? <StartPanel busy={busy} onStart={() => void run(actions.start)} cancel={cancel} canCancel={status.canCancel} /> : null}
+      {screen === "start" ? <StartPanel busy={busy} onStart={() => void run(actions.start, runNow)} cancel={cancel} canCancel={status.canCancel} /> : null}
       {screen === "working" ? <WorkingPanel dto={status} offline={offline} cancel={cancel} /> : null}
-      {screen === "generate" ? <GeneratePanel busy={busy} onGenerate={() => void run(actions.generate, () => setSaved(null))} cancel={cancel} canCancel={status.canCancel} deferredCount={deferredIds.length} /> : null}
+      {screen === "generate" ? <GeneratePanel busy={busy} onGenerate={() => void run(actions.generate, () => { setSaved(null); runNow(); })} cancel={cancel} canCancel={status.canCancel} deferredCount={deferredIds.length} /> : null}
       {screen === "review" ? (
         plan === null ? (
           <Alert tone="warning" title="No hemos podido cargar la propuesta.">
@@ -182,7 +202,7 @@ export function AdaptationView({
       ) : null}
       {screen === "ready" ? <ReadyPanel dto={status} materialId={context.materialId} info={readyInfo} /> : null}
       {screen === "blocked" ? <BlockedPanel dto={status} materialId={context.materialId} busy={busy} onReopen={() => void run(actions.reopen, () => setSaved(null))} /> : null}
-      {screen === "failed" ? <FailedPanel dto={status} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }))} cancel={cancel} /> : null}
+      {screen === "failed" ? <FailedPanel dto={status} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }), runNow)} cancel={cancel} /> : null}
       {screen === "cancelled" ? <CancelledPanel materialId={context.materialId} /> : null}
     </div>
   );
