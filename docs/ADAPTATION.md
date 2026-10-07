@@ -377,7 +377,7 @@ Cualquier fallo → `failed` (reintentable) · `cancelled`. Las transiciones las
 
 **Deuda que sigue (no se toca):** restaurar elecciones a medias tras recargar, historial completo, volver atrás tras guardar la revisión, editor de MaterialDocument, renderer, PDF, imágenes, regeneración parcial.
 
-## Renderer determinista de `MaterialDocument v1` (Fase 5.1, `material_renderer@v1`)
+## Renderer determinista de `MaterialDocument v1` (Fase 5.1, `material_renderer@v1`; hoy `@v2`, ver «Exportación PDF»)
 
 **Auditoría del documento.** `MaterialDocument v1` tiene **16** tipos de bloque (`heading`, `paragraph`, `reading_text`, `instruction`, `activity`, `list`, `table`, `chart`, `image`, `help_box`, `checklist`, `vocabulary`, `worked_example`, `sentence_starters`, `planner`, `math`) y 11 tipos de respuesta (`lines`, `box`, `grid`, `table_cells`, `choice`, `fill_blank`, `match`, `order`, `true_false`, `oral_or_alternative`, `none`). Páginas lógicas (`pages[].blocks`), `presentation` semántica (`font_scale`, `line_spacing`, `spacing`, `contrast`, `decoration`, `max_tasks_per_page`, …), `admin_fields` (solo etiquetas), `answer_key` separado, `trace` por bloque. Las imágenes son `original` (`visual_ref`) o `requested` (futuras); los gráficos traen `series[].label` **nulo** salvo verificación. No se modifica nada del documento ni se le añade CSS.
 
@@ -387,7 +387,7 @@ Cualquier fallo → `failed` (reintentable) · `cancelled`. Las transiciones las
 
 **Decisiones diferidas.** Se leen del `execution_report` cuyo `plan_fingerprint` coincide con la revisión de la versión. El renderer ejecuta solo lo que puede sin tocar contenido: `segment`/`reorganize` sobre una actividad (o sobre `document`) → **`isolate`** (grupo visual propio: más espacio, regla superior, sin partirse). Resultado por decisión: `applied`, `unsupported` (otra acción u otro destino) o `not_applicable` (el destino ya no está). Si no se pueden leer, se informa como desconocido, nunca se supone. Se muestran solo en la vista docente.
 
-**Vista del alumno / vista docente.** Misma hoja; la docente añade, **fuera de la hoja** (se oculta al imprimir), un panel con versión, `material_renderer@v1`, estado de render, avisos de presentación, observaciones de la revisión pedagógica (en lenguaje docente) y detalles. Los huecos de imágenes solo se marcan en la vista docente. La clave de respuestas no existe en ningún árbol de render (una futura vista de soluciones sería otro constructor).
+**Vista del alumno / vista docente.** Misma hoja; la docente añade, **fuera de la hoja** (se oculta al imprimir), un panel con versión, la versión del renderer (`material_renderer@v2`), estado de render, avisos de presentación, observaciones de la revisión pedagógica (en lenguaje docente) y detalles. Los huecos de imágenes solo se marcan en la vista docente. La clave de respuestas no existe en ningún árbol de render (una futura vista de soluciones sería otro constructor).
 
 **Respuestas.** `lines` (con espacio extra si los requisitos fijan «150-180 palabras»: líneas = ⌈máx/11⌉, tope 40), `box`/`grid`/`table_cells` (altura por tamaño), `choice` (casillas redondas o cuadradas), `fill_blank` (huecos sin clave + banco de palabras), `match` (dos columnas con hueco para unir), `order` (casillas), `true_false` (V/F), `oral_or_alternative` (etiqueta + líneas), `none`. Planner: un bloque por apartado con sus líneas; checklist: casilla por elemento (si hay más de 12 se muestra entera y se registra).
 
@@ -397,15 +397,15 @@ Cualquier fallo → `failed` (reintentable) · `cancelled`. Las transiciones las
 
 **Paginación e impresión.** El `RenderModel` decide: límites de página lógica del documento, `max_tasks_per_page` (agrupa **sin quitar** actividades y arrastra un encabezado que quedaría huérfano), `keepTogether` (actividades de ≤14 filas, checklists de ≤8) e `isolate`. CSS decide: `break-inside`/`break-after`/`orphans`/`widows`, cabecera de tabla repetida, A4 con `@page` y `@media print` (oculta el chrome de la app `[data-app-chrome]`, los controles `.ms-chrome` y el panel docente; la hoja pasa a flujo normal). En pantalla cada página lógica es una hoja A4 que **crece** si su contenido es mayor (nunca recorta); en móvil la hoja se desplaza dentro de su marco (región enfocable por teclado) sin ensanchar la página. Todo texto parte palabras largas (`overflow-wrap:anywhere`).
 
-**Tokens.** `src/lib/render/tokens.ts`: A4, márgenes 18 mm, tipografía (Inter, ya cargada: sin fuentes nuevas) 11–12 pt × `font_scale`, interlineado, separación, altura de línea de respuesta y casillas por etapa (modulación prudente, sin tema infantil). Solo grises y negro: la ficha funciona en color, en escala de grises y con impresora escolar.
+**Tokens.** `src/lib/render/tokens.ts`: A4, márgenes 18 mm, tipografía (Inter; desde v2, copia local fijada de la hoja, la misma en pantalla y en PDF) 11–12 pt × `font_scale`, interlineado, separación, altura de línea de respuesta y casillas por etapa (modulación prudente, sin tema infantil). Solo grises y negro: la ficha funciona en color, en escala de grises y con impresora escolar.
 
 **RenderValidation** (técnica, no pedagógica; no toca la `PedagogicalReview`): `unknown_block_type`, `asset_missing`, `image_pending`, `deferred_*`, `chart_series_unverified`, `chart_table_only`, `asset_unsupported`, `math_source_only` (las fórmulas se muestran como texto con lectura en voz alta: no hay compositor LaTeX), `overflow_risk` (palabras larguísimas, tablas de >8 columnas, respuestas de ≥30 líneas), `structure_inconsistent`. Estado: `renderable` / `renderable_with_warnings` / `not_renderable`, independiente de la aprobación pedagógica.
 
-**Versión y persistencia.** `MATERIAL_RENDERER_VERSION = "material_renderer@v1"` (se muestra en la vista docente). **No hay migración:** el HTML se reconstruye de forma determinista y no se persiste; la versión del renderer y el `RenderValidation` se persistirán cuando exista una exportación (Fase 5.2) que necesite saber con qué renderer se produjo. Una versión histórica nunca cambia: el visor solo muestra la versión actual entregada.
+**Versión y persistencia.** `MATERIAL_RENDERER_VERSION = "material_renderer@v2"` desde la Fase 5.2A (se muestra en la vista docente; qué cambió, en «Exportación PDF»). **No hay migración:** el HTML se reconstruye de forma determinista y no se persiste; la versión del renderer y el `RenderValidation` se persistirán cuando exista una exportación (Fase 5.2) que necesite saber con qué renderer se produjo. Una versión histórica nunca cambia: el visor solo muestra la versión actual entregada.
 
 **Ruta.** `/app/adaptaciones/[id]/vista` (Server Component): autoriza con RLS (otra cuenta → 404), solo adaptaciones entregadas (bloqueada/fallida/sin terminar → «todavía no tiene una ficha entregada»), `?modo=alumno` cambia solo el modo de vista (nunca la cuenta ni la versión). Desde la pantalla «Listo» hay un enlace «Ver la ficha».
 
-**Límites.** Sin PDF, sin imágenes generadas, sin editor, sin recortes de visuales originales (ver arriba: es la deuda principal para fichas con figuras), sin composición de fórmulas, sin paginación física precisa (la hace el navegador al imprimir), un solo estilo de ficha.
+**Límites.** Sin exportación PDF para el docente todavía (el motor existe desde la 5.2A; ver «Exportación PDF»), sin imágenes generadas, sin editor, sin composición de fórmulas, sin paginación física propia (la hace el navegador al imprimir, también en el PDF), un solo estilo de ficha.
 
 ### Visuales originales: auditoría de geometría y decisión (2026-10-05)
 
@@ -482,6 +482,81 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 **Deuda menor (sin resolver):** cambiar la receta (`visual_crop@vN`) cambia la identidad lógica; `resolveVisuals` ignora las instancias de la receta anterior y el visual queda en `located_processing` hasta que alguien reintente su producción a mano. No hay regeneración automática de los recortes al cambiar de receta.
 
 **Límites.** Selección cómoda en escritorio; en móvil funciona con arrastre pero se recomienda pantalla grande. Imágenes subidas con orientación EXIF se muestran como están almacenadas (la herramienta y el recorte usan la misma imagen, así que coinciden). Sin herramienta para subir una imagen alternativa (feature distinta).
+
+## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
+
+**Estado.** Motor implementado y probado **en local**. **Validación en runtime de Vercel: PENDIENTE.** Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI: eso es la 5.2B/C. Cero llamadas a modelos.
+
+**Una sola maquetación.** `MaterialDocument` → `buildRenderModel()` → `RenderModel` → `renderPrintHtml()` (`src/lib/render/print/html.ts`) → Chromium → PDF. `renderPrintHtml` renderiza el **mismo** `MaterialSheet` de la vista con el **mismo** `material.css`; Chromium solo aplica `@page` y los `break-*` que ya existían. `pdf-lib` no dibuja nada: solo lee el PDF para validarlo.
+
+**Render de React en el servidor (spike con Next 16.3.8).** En un Route Handler (capa RSC, la misma de `after()`), Turbopack **rechaza `react-dom/server` en el build** («You're importing a component that imports react-dom/server»). En cambio, `react-dom/static` → `prerenderToNodeStream` compila y, en un build de producción (`next build` + `next start` con un Route Handler temporal, no commiteado), devolvió el HTML real de `MaterialSheet`. Lo que entra en el bundle es el renderer estático que trae Next (React 19.3 canary), no un *stub*. Riesgo declarado: la tabla de alias de Next marca esa entrada de la capa de servidor como «incorrecta». Una versión futura podría prohibirla, así que la ruta real de la 5.2B debe volver a comprobarlo en su propio smoke. Mismo spike: un `.css` referenciado con `new URL(…, import.meta.url)` **no** se traza (apunta a la ruta del código fuente). Por eso `material.css` y las fuentes se leen desde `process.cwd()` y deberán incluirse con `outputFileTracingIncludes`.
+
+**HTML autocontenido.** Documento completo: CSP en `<meta>` (`default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'`), el `material.css` real con sus `url("./fonts/…")` sustituidas por data URIs de los bytes verificados (cualquier otra `url(` o `@import` es un error), y `MaterialSheet` en modo `student`. El modo docente, otra versión del renderer, un visual sin fijar o con otros bytes son errores explícitos. No contiene scripts, enlaces, URLs `http(s)`, cookies, rutas `/api`, Supabase ni URLs firmadas. Tampoco el panel docente, la clave de respuestas, respuestas inferidas, ids ni trazas (tests en `tests/unit/print-html.test.ts`).
+
+**Visuales fijados.** El `RenderModel` de una exportación lleva `asset:<assetId>@<sha256>` como `src` (estable y parte de su *fingerprint*). Los bytes viajan aparte (`PinnedAsset`: id, sha-256, MIME, bytes) y solo `renderPrintHtml` los convierte en data URI, tras comprobar el checksum y la firma PNG. Si se aporta una instancia más reciente del mismo visual, se ignora. Si falta la fijada, error `asset_unpinned`: nunca hay sustitución. La 5.2A usa fixtures; la 5.2B leerá los bytes con `readAssetInstance`.
+
+**`material_renderer@v2`.** Sube de versión porque la salida impresa gana garantías nuevas:
+1. **Fuente local fijada.** Inter 4.1, tres caras estáticas oficiales (400/600/700) en WOFF2 con su licencia OFL, en `src/components/material/fonts/`. La familia «Adaptaula Inter» se declara en `material.css`, así que la pantalla (servida desde `/_next/static/media`, sin CDN) y el PDF usan los mismos ficheros. Las sumas sha-256 están fijadas en `sheet-assets.ts`: un fichero distinto hace fallar la impresión. `font_fingerprint` = huella de familia, versión y sumas. No se usa la fuente variable porque Chromium 153 la incrusta como **Type3**. La cursiva se sintetiza, igual que antes en la app (`next/font` solo cargaba el estilo normal).
+2. **Reset propio de especificidad cero** (`:where(.ms-root …)`): la hoja ya no depende del *preflight* de Tailwind, que el PDF no tiene. Corrige un fallo que existía: ese *preflight* pone `list-style: none`, así que en la app **los pasos numerados, las listas numeradas y la columna izquierda de «relacionar» salían sin número**. v2 los numera explícitamente.
+3. Las fórmulas usan la familia de la hoja (antes, la monoespaciada del sistema).
+4. Un visual se reduce al 75 % del alto útil de la página. Con el tope anterior (alto útil − 4em), el smoke mostró una página casi vacía y el pie de figura solo en otra página.
+5. **Números de página físicos** con márgenes de página CSS (`@page { @bottom-right { content: counter(page) " / " counter(pages) } }`). Probados en el Chromium exacto del motor: correctos y en el margen inferior derecho en todas las fixtures. Sin `headerTemplate`/`footerTemplate`. El pie «N / M» de pantalla cuenta páginas lógicas y se oculta al imprimir.
+6. Al imprimir, `html` y `body` sin margen.
+
+El E2E del visor pasa con v2 (escritorio y móvil), con comprobaciones nuevas de la fuente local cargada y de la numeración.
+
+**Motor (`PdfEngine`, `src/lib/render/print/engine.ts`).** Implementación Chromium: `playwright-core` **1.63.0** con `@sparticuz/chromium` **153.0.0** (MIT, Node `^22.17 || >=24`). Playwright 1.63 está hecho para Chromium 153 y el binario serverless reporta 153.0.8010.0. Funcionamiento:
+- **Un navegador por render.** Con `--single-process`, cerrar la última página termina el navegador (comprobado), y así ningún estado se comparte entre dos documentos.
+- Se usan los flags del paquete **menos** `--disable-web-security` y `--allow-running-insecure-content`. `--no-sandbox` queda (es inherente al Chromium serverless): por eso el documento no tiene scripts, lleva CSP y la red está cortada.
+- Contexto `offline`, `serviceWorkers: "block"` y `route("**/*")` que aborta todo: cualquier petición hace fallar el render (`network_attempted`). El test lo comprueba con un servidor local real, que recibe **0** peticiones.
+- El HTML entra por `setContent` y JavaScript sigue activo solo para las comprobaciones de Playwright: un `<script>` del documento **no** se ejecuta (CSP, probado).
+- Antes de `page.pdf()`, *readiness* sin esperas arbitrarias: `document.fonts.ready`, carga de cada peso de la familia esperada y familia computada de `.ms-root`, imágenes `complete` + `decode()`, `readyState` y estabilidad del alto entre fotogramas. Una fuente o una imagen que no llega es un fallo explícito (`font_not_ready`, `asset_not_ready`).
+- `page.pdf({ format: "A4", preferCSSPageSize: true, printBackground: true, tagged: true })`: el PDF sale **etiquetado** (`StructTreeRoot` + `MarkInfo`).
+- Procedencia leída en ejecución: versiones de Playwright, del paquete Chromium y del propio Chromium, Node, plataforma y arquitectura.
+
+**`PdfValidation`** (`validation.ts`, solo `pdf-lib`: ni pdf.js ni canvas en el bundle del motor). Es distinta de `PedagogicalReview` y de `RenderValidation`. Comprueba:
+- Que sea un PDF (`%PDF-`, `%%EOF`) que `pdf-lib` puede abrir y que no está cifrado.
+- Tamaño ≤ 20 MiB y entre 1 y 60 páginas, nunca menos que las páginas lógicas del modelo.
+- Cada página A4 ± 2 pt y sin rotación.
+- Ninguna página sin marcas (ni texto, ni imagen, ni dibujo).
+- Fuentes todas incrustadas, ninguna Type3, todas con el prefijo `Inter`: una fuente de respaldo aparecería aquí.
+- Al menos tantas imágenes como visuales fijados, y PDF etiquetado.
+
+Calcula el sha-256. En el smoke tarda 1–17 ms.
+
+**`pnpm smoke:pdf`** (en `pnpm check`, tras `smoke:raster`). Genera PDFs reales con el motor y el renderer de producción y los analiza a fondo: texto con pdf.js, cada página a PNG a 100 ppp con el rasterizador de visuales y métricas de tinta. Hay 20 fixtures:
+- básico (en frío y en caliente), caracteres españoles, instrucciones largas, tabla, gráfico de una serie y gráfico degradado a tabla;
+- visual necesario, visual recortado de un original con `/Rotate` y CropBox desplazado (recorte real del pipeline), visual más alto que una página;
+- respuesta corta, respuesta larga, checklist de 12, varias páginas lógicas, diez páginas;
+- hoja que llena **exactamente** una página (búsqueda binaria de líneas: ni página en blanco detrás ni entre hojas), salto cerca de un visual (pasa entero a la siguiente), salto cerca de una tabla (sigue con la cabecera repetida), tabla larga de 40 filas (cabecera en cada página, ninguna fila partida ni perdida), actividad larga.
+
+En cada una se comprueba: validación sin incidencias, A4, solo Inter, ninguna petición, ninguna página en blanco, número físico `N / M` en el margen inferior derecho, nada fuera de los márgenes, sin contenido docente ni clave. Más 4 tests negativos del motor (red, fuente, imagen, script). Pasa con Node 22.22 y con Node 24.21 (Linux x64, Ubuntu 24.04).
+
+**Regresión visual.** Sin *golden files* de imagen: `tests/pdf/baselines.json` (una línea por fixture) guarda el número de páginas y la proporción de tinta por página, y se compara con tolerancia de ±0,4 puntos. A eso se suman las comprobaciones estructurales: márgenes, posición del número, visuales enteros detectados por color y filas de tabla. Las líneas base generadas con Node 24 se cumplen con Node 22. Se regeneran con `UPDATE_PDF_BASELINES=1`.
+
+**Caracteres españoles.** Todos se dibujan con Inter incrustada, sin fuente de respaldo: ñ á é í ó ú ü ¿ ¡ º · … « » – — “ ”. **Limitación conocida:** «”» (U+201D) se extrae como «ˮ» (U+02EE) al copiar el texto, porque Inter comparte el glifo y el mapa de texto de Chromium nombra el código más bajo. Se ve bien; el test fija este comportamiento para que no cambie sin aviso.
+
+**Medidas locales** (orientativas: este contenedor, no Vercel):
+- Primer PDF en una instancia nueva: ≈2,1–2,4 s, porque extrae Chromium (≈207 MB en `/tmp`).
+- En caliente: 0,2–0,37 s por PDF (lanzar ≈35 ms, `setContent` ≈110–280 ms, *readiness* 25–70 ms, `page.pdf` 11–46 ms con 10 páginas), validación 1–17 ms.
+- RSS pico de Chromium: 161–183 MB. PDFs de 12–104 KB.
+- En disco: `@sparticuz/chromium/bin` 66,8 MB comprimidos (`chromium.br` 63,9 MB), `playwright-core` 12,8 MB, fuentes 0,3 MB. Unos 80 MB antes del resto del bundle.
+
+**Prueba en el runtime de producción de Next (local).** Con un Route Handler temporal (no commiteado) que llama a `renderPrintHtml` → motor → `validatePdf`, `next build` + `next start` devolvieron un PDF válido: ≈2,2 s el primero (extracción) y ≈0,2 s los siguientes. Su traza (`.nft.json`) tenía 303 ficheros y 13,7 MB (10,9 MB de `playwright-core`). Ya incluía `material.css` y las tres fuentes, pero **no** el binario de Chromium (`@sparticuz/chromium/bin`).
+
+**Lo que necesitará la Function de exportación (5.2B, sin hacer).**
+- `serverExternalPackages`: nada que añadir, porque Next 16 ya trata `playwright-core` y `@sparticuz/chromium` como externos por defecto.
+- `outputFileTracingIncludes` con `./node_modules/@sparticuz/chromium/bin/**` (66,8 MB). Total estimado de la Function: ≈80 MB.
+- Un smoke que lea su `.nft.json` y renderice desde una copia aislada, como `smoke:raster`.
+- Memoria ≥ 1 GB y `/tmp` para ≈210 MB.
+
+**Pendiente de verificar en Vercel (Preview):**
+- Que el binario arranca en el runtime real. `@sparticuz/chromium` solo añade sus librerías de Amazon Linux 2023 si detecta el entorno por variables de AWS.
+- Tamaño real de la Function, arranque en frío, memoria y tiempos.
+- Que `prerenderToNodeStream` funciona en la ruta real.
+- Los diccionarios de guionado (`hyphens: auto`) del binario serverless.
+
+**Deuda menor.** El paquete extrae también SwiftShader (≈6 MB) aunque los gráficos estén desactivados.
 
 ## Evals
 
