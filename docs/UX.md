@@ -70,7 +70,7 @@ Optimización del camino rápido: con un perfil guardado y el contexto autodetec
 
 **Comparador:** Original | Adaptado en paralelo (escritorio) o en tabs (móvil), con la lista "Cambios realizados".
 
-**Editor de perfil `/app/alumnos/[id]`:** información básica (alias con aviso de privacidad, etapa y curso; no se piden notas) → configuración orientativa opcional (preset) → 11 áreas seleccionables, y solo las elegidas muestran sus controles (Sin adaptación / Algo / Bastante / Mucho) → ajustes avanzados plegados → panel derecho fijo **"Así se aplicará"** con un resumen en lenguaje natural (p. ej. "Instrucciones breves · Máximo 3 tareas visibles · Ejemplo antes de ejercicios nuevos · Carga visual baja"). Los presets se aplican desde un selector y todo sigue siendo editable. Nunca se muestra JSON.
+**Editor de perfil `/app/alumnos/[id]`:** información básica (alias con aviso de privacidad, etapa y curso; no se piden notas) → punto de partida opcional (preset: atajo con nombre funcional, p. ej. «Lectura y decodificación»; precarga dimensiones, no es ni guarda un diagnóstico) → 11 áreas seleccionables, y solo las elegidas muestran sus controles (Sin adaptación / Algo / Bastante / Mucho) → ajustes avanzados plegados → panel derecho fijo **"Así se aplicará"** con un resumen en lenguaje natural (p. ej. "Instrucciones breves · Máximo 3 tareas visibles · Ejemplo antes de ejercicios nuevos · Carga visual baja"). Los presets se aplican desde un selector y todo sigue siendo editable. Nunca se muestra JSON.
 
 ## Sistema de diseño
 

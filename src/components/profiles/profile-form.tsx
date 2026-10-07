@@ -117,7 +117,7 @@ export function ProfileForm({
           <Card className="space-y-5">
             <TextField
               label="Alias o iniciales"
-              hint="Puedes utilizar un alias o iniciales. No necesitamos el nombre completo."
+              hint="Puedes utilizar un alias o iniciales. No necesitamos el nombre completo ni ningún dato médico."
               value={name}
               maxLength={DISPLAY_NAME_MAX}
               autoComplete="off"

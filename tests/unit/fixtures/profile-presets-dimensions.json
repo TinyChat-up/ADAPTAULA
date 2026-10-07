@@ -1,0 +1,153 @@
+{
+  "dislexia": {
+    "supports": {
+      "decoding_support": "high",
+      "reading_chunk_size": "high",
+      "text_length": "medium",
+      "sentence_length": "medium",
+      "line_spacing": "high",
+      "font_size": "medium",
+      "emphasis_support": "medium",
+      "vocabulary_support": "medium",
+      "reduced_copying": "medium",
+      "instruction_chunking": "medium"
+    },
+    "limits": null
+  },
+  "tdah": {
+    "supports": {
+      "instruction_chunking": "high",
+      "number_of_visible_tasks": "high",
+      "checklist_support": "high",
+      "visual_distraction_reduction": "medium",
+      "task_duration": "medium",
+      "planning_support": "medium",
+      "working_memory_support": "medium",
+      "transition_support": "low",
+      "key_idea_highlighting": "medium"
+    },
+    "limits": {
+      "max_visible_tasks": 3
+    }
+  },
+  "tea": {
+    "supports": {
+      "literal_language": "high",
+      "figurative_language_support": "high",
+      "explicit_expectations": "high",
+      "predictable_structure": "high",
+      "ambiguity_reduction": "high",
+      "transition_signals": "medium",
+      "visual_schedule": "medium",
+      "instruction_chunking": "medium",
+      "sensory_triggers": "medium",
+      "visual_density": "medium",
+      "predictable_feedback": "medium",
+      "choice_support": "low",
+      "anxiety_reduction": "low"
+    },
+    "limits": null
+  },
+  "lenguaje": {
+    "supports": {
+      "receptive_language_support": "high",
+      "vocabulary_support": "high",
+      "syntax_complexity": "medium",
+      "sentence_length": "medium",
+      "expressive_language_support": "medium",
+      "visual_support": "medium",
+      "instruction_chunking": "medium",
+      "worked_examples": "low"
+    },
+    "limits": null
+  },
+  "discalculia": {
+    "supports": {
+      "number_sense_support": "high",
+      "worked_examples": "high",
+      "operation_steps": "high",
+      "visual_math_support": "medium",
+      "reduced_copying": "medium",
+      "scaffolding_level": "medium",
+      "working_memory_support": "medium"
+    },
+    "limits": null
+  },
+  "cognitivas": {
+    "supports": {
+      "sentence_length": "high",
+      "vocabulary_complexity": "high",
+      "text_length": "high",
+      "instruction_chunking": "high",
+      "worked_examples": "high",
+      "number_of_visible_tasks": "high",
+      "scaffolding_level": "high",
+      "visual_support": "high",
+      "literal_language": "medium",
+      "predictable_structure": "medium",
+      "task_duration": "medium"
+    },
+    "limits": {
+      "max_instruction_words": 8
+    }
+  },
+  "altas-capacidades": {
+    "supports": {
+      "extension_tasks": "high",
+      "conceptual_depth": "high",
+      "reduced_repetition": "high",
+      "open_ended_tasks": "medium",
+      "real_world_connections": "medium",
+      "autonomous_inquiry": "medium"
+    },
+    "limits": null
+  },
+  "incorporacion-linguistica": {
+    "supports": {
+      "vocabulary_support": "high",
+      "receptive_language_support": "high",
+      "visual_support": "high",
+      "figurative_language_support": "high",
+      "sentence_length": "medium",
+      "syntax_complexity": "medium",
+      "vocabulary_complexity": "medium",
+      "background_knowledge_support": "medium"
+    },
+    "limits": null
+  },
+  "visual": {
+    "supports": {
+      "large_print": "high",
+      "font_size": "high",
+      "high_contrast": "medium",
+      "alt_text": "high",
+      "image_dependency": "high",
+      "spacing": "high",
+      "color_dependency": "high",
+      "screen_reader_compatibility": "medium",
+      "visual_density": "medium"
+    },
+    "limits": null
+  },
+  "auditiva": {
+    "supports": {
+      "written_instructions": "high",
+      "visual_support": "high",
+      "transcript_support": "high",
+      "audio_dependency_reduction": "high",
+      "vocabulary_support": "low"
+    },
+    "limits": null
+  },
+  "motrices": {
+    "supports": {
+      "writing_amount": "high",
+      "alternative_response": "high",
+      "selection_based_response": "high",
+      "fine_motor_demand": "high",
+      "reduced_copying": "medium",
+      "task_duration": "low"
+    },
+    "limits": null
+  }
+}
