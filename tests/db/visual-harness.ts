@@ -34,9 +34,10 @@ export function visualHarness(db: PGlite, user: User, shared?: Pick<VisualHarnes
       material: async (id) => (await asUser(() => db.query<never>("select id, workspace_id, analysis, content_hash from public.materials where id = $1", [id]))).rows[0] ?? null,
       activeLocators: async (materialId, analysisFingerprint) => {
         const locators = (await asUser(() => db.query<Record<string, unknown>>(`select ${LOCATOR_COLUMNS} from public.material_visual_locators where material_id = $1 and analysis_fingerprint = $2 and superseded_at is null`, [materialId, analysisFingerprint]))).rows.map(locatorRow);
-        const assets = (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where material_id = $1`, [materialId]))).rows;
+        const assets = (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where material_id = $1 order by created_at desc, id desc`, [materialId]))).rows;
         return locators.map((l) => ({ ...l, assets: assets.filter((a) => a.locator_id === l.id) }));
       },
+      asset: async (id) => (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where id = $1`, [id]))).rows[0] ?? null,
       readObject: async (path) => {
         const visible = (await asUser(() => db.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [BUCKET, path]))).rows.length > 0;
         return visible ? (objects.get(path) ?? null) : null;
@@ -64,21 +65,23 @@ export function visualHarness(db: PGlite, user: User, shared?: Pick<VisualHarnes
         const r = (await asService(() => db.query<Record<string, unknown>>(`select ${LOCATOR_COLUMNS} from public.material_visual_locators where material_id = $1 and analysis_fingerprint = $2 and visual_id = $3 and superseded_at is null`, [materialId, analysisFingerprint, visualId]))).rows[0];
         return r ? locatorRow(r) : null;
       },
-      assetByIdentity: async (identity) => (await asService(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where identity = $1`, [identity]))).rows[0] ?? null,
+      assetInstances: async (identity) => (await asService(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where identity = $1 order by created_at desc, id desc`, [identity]))).rows,
       readObject: async (path) => objects.get(path) ?? null,
-      putObject: async (path, png) => {
+      putObject: async (path, png, mode) => {
         if (failNextPut) {
           failNextPut = false;
-          return false;
+          return "failed";
         }
+        // Like Supabase Storage without upsert: an existing object is never replaced.
+        if (mode === "create" && objects.has(path)) return "exists";
         objects.set(path, png);
         await asService(() => db.query("insert into storage.objects (bucket_id, name) values ($1, $2) on conflict do nothing", [BUCKET, path]));
-        return true;
+        return "stored";
       },
       insertAsset: async (row) => {
         await asService(() =>
           db.query(
-            "insert into public.material_visual_assets (workspace_id, material_id, locator_id, identity, recipe_version, recipe_fingerprint, storage_path, mime, width, height, bytes, sha256, provenance) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict (identity) do nothing",
+            "insert into public.material_visual_assets (workspace_id, material_id, locator_id, identity, recipe_version, recipe_fingerprint, storage_path, mime, width, height, bytes, sha256, provenance) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict (identity, sha256) do nothing",
             [row.workspace_id, row.material_id, row.locator_id, row.identity, row.recipe_version, row.recipe_fingerprint, row.storage_path, row.mime, row.width, row.height, row.bytes, row.sha256, JSON.stringify(row.provenance)],
           ),
         );

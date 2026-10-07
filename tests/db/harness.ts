@@ -20,16 +20,22 @@ export function migrationFiles(): string[] {
     .map((f) => path.join(MIGRATIONS_DIR, f));
 }
 
-export async function createTestDb(): Promise<PGlite> {
+export async function applyMigration(db: PGlite, file: string) {
+  try {
+    await db.exec(readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(`Falló la migración ${path.basename(file)}: ${(error as Error).message}`);
+  }
+}
+
+/** `through`: stop after the migration whose file name starts with it (to test a later migration over existing data). */
+export async function createTestDb(options: { through?: string } = {}): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(SUPABASE_STUB);
-  for (const file of migrationFiles()) {
-    try {
-      await db.exec(readFileSync(file, "utf8"));
-    } catch (error) {
-      throw new Error(`Falló la migración ${path.basename(file)}: ${(error as Error).message}`);
-    }
-  }
+  const files = migrationFiles();
+  const last = options.through ? files.findIndex((f) => path.basename(f).startsWith(options.through!)) : files.length - 1;
+  if (last < 0) throw new Error(`No existe la migración ${options.through}`);
+  for (const file of files.slice(0, last + 1)) await applyMigration(db, file);
   await db.exec(readFileSync(SEED_FILE, "utf8"));
   return db;
 }

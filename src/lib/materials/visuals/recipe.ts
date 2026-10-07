@@ -56,5 +56,10 @@ export function assetIdentity(locator: VisualLocator, recipe = VISUAL_CROP_RECIP
   });
 }
 
-/** Deterministic object path: workspace first (the storage policy reads it), no names, no human-readable data. */
-export const assetPath = (workspaceId: string, materialId: string, identity: string) => `${workspaceId}/${materialId}/visuals/${identity}.png`;
+/**
+ * Object path of one physical instance, addressed by content: workspace first (the storage policy reads it), no names, no
+ * human-readable data. Different bytes of the same logical crop never share a path, so no instance can overwrite another.
+ * Instances stored before 017 keep the path recorded in their row (`<identity>.png`).
+ */
+export const assetInstancePath = (workspaceId: string, materialId: string, identity: string, sha256: string) =>
+  `${workspaceId}/${materialId}/visuals/${identity}/${sha256}.png`;

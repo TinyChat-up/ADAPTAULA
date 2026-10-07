@@ -13,6 +13,11 @@ const BUCKET = "generated-assets";
 const LOCATOR_COLUMNS = "id, workspace_id, material_id, analysis_fingerprint, visual_id, source_sha256, locator_version, revision, method, page, x, y, w, h, page_box, superseded_at, last_failure";
 const ASSET_COLUMNS = "id, locator_id, identity, recipe_version, storage_path, width, height, bytes, sha256";
 
+// Supabase Storage refuses to replace an existing object without upsert ("Duplicate", reported as 409).
+const isDuplicate = (error: unknown) => {
+  const e = error as { statusCode?: string | number; status?: number; message?: string } | null;
+  return !!e && (String(e.statusCode) === "409" || e.status === 409 || /already exists|duplicate/i.test(e.message ?? ""));
+};
 const toBytes = async (blob: Blob | null) => (blob ? new Uint8Array(await blob.arrayBuffer()) : null);
 const locatorOf = (r: Record<string, unknown>): LocatorRow => ({ ...(r as unknown as LocatorRow), x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) });
 
@@ -27,8 +32,12 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
       async activeLocators(materialId, analysisFingerprint) {
         const { data: locators } = await supabase.from("material_visual_locators").select(LOCATOR_COLUMNS).eq("material_id", materialId).eq("analysis_fingerprint", analysisFingerprint).is("superseded_at", null);
         if (!locators?.length) return [];
-        const { data: assets } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).in("locator_id", locators.map((l) => l.id));
+        const { data: assets } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).in("locator_id", locators.map((l) => l.id)).order("created_at", { ascending: false }).order("id", { ascending: false });
         return locators.map((l) => ({ ...locatorOf(l), assets: ((assets ?? []) as AssetRow[]).filter((a) => a.locator_id === l.id) }));
+      },
+      async asset(id) {
+        const { data } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).eq("id", id).maybeSingle();
+        return (data as AssetRow | null) ?? null;
       },
       async readObject(path) {
         const { data, error } = await supabase.storage.from(BUCKET).download(path);
@@ -69,24 +78,26 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
         const { data } = await admin.from("material_visual_locators").select(LOCATOR_COLUMNS).eq("material_id", materialId).eq("analysis_fingerprint", analysisFingerprint).eq("visual_id", visualId).is("superseded_at", null).maybeSingle();
         return data ? locatorOf(data) : null;
       },
-      async assetByIdentity(identity) {
-        const { data } = await admin.from("material_visual_assets").select(ASSET_COLUMNS).eq("identity", identity).maybeSingle();
-        return (data as AssetRow | null) ?? null;
+      async assetInstances(identity) {
+        const { data } = await admin.from("material_visual_assets").select(ASSET_COLUMNS).eq("identity", identity).order("created_at", { ascending: false }).order("id", { ascending: false });
+        return (data ?? []) as AssetRow[];
       },
       async readObject(path) {
         const { data, error } = await admin.storage.from(BUCKET).download(path);
         return error ? null : toBytes(data);
       },
-      async putObject(path, png) {
-        // Same signed-upload pattern as the originals; upsert because a retry may repair an object with identical bytes.
-        const signed = await admin.storage.from(BUCKET).createSignedUploadUrl(path, { upsert: true });
-        if (signed.error || !signed.data) return false;
-        const { error } = await admin.storage.from(BUCKET).uploadToSignedUrl(path, signed.data.token, png, { contentType: "image/png", upsert: true });
-        return !error;
+      async putObject(path, png, mode) {
+        // Same signed-upload pattern as the originals. Upsert (replace) only to put back the exact bytes a row certifies.
+        const upsert = mode === "repair";
+        const signed = await admin.storage.from(BUCKET).createSignedUploadUrl(path, { upsert });
+        if (signed.error || !signed.data) return isDuplicate(signed.error) ? "exists" : "failed";
+        const { error } = await admin.storage.from(BUCKET).uploadToSignedUrl(path, signed.data.token, png, { contentType: "image/png", upsert });
+        if (!error) return "stored";
+        return isDuplicate(error) ? "exists" : "failed";
       },
       async insertAsset(row) {
         const { error } = await admin.from("material_visual_assets").insert(row);
-        // Two producers finishing the same identity at once: the row already exists, which is the expected outcome.
+        // Two producers finishing the same (identity, sha256) at once: the row already exists, which is the expected outcome.
         if (error && error.code !== "23505") throw new Error("No se ha podido registrar el recorte.");
       },
       async setFailure(locatorId, failure) {
