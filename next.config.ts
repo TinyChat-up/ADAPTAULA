@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
+import { packageFiles } from "./next.tracing";
 
 /** Files the PDF rasteriser needs at run time that the tracer does not find by itself (checked by `scripts/smoke-raster.mjs`). */
-// The package.json too: the rasteriser resolves it at run time to find `standard_fonts/`.
-const RASTER_FILES = ["./node_modules/pdfjs-dist/package.json", "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", "./node_modules/pdfjs-dist/standard_fonts/**/*"];
+// The package.json too: the rasteriser resolves it at run time to find `standard_fonts/`. From the package's physical directory,
+// never through the `node_modules/pdfjs-dist` symlink of pnpm (next.tracing.ts).
+const RASTER_FILES = packageFiles("pdfjs-dist", ["package.json", "legacy/build/pdf.worker.mjs", "standard_fonts/**/*"]);
 
 const nextConfig: NextConfig = {
   // Los E2E arrancan su propio `next dev` con otro directorio de build para no chocar con el servidor de desarrollo del docente/dev.
