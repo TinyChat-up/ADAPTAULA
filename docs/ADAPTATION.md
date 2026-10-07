@@ -471,9 +471,9 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 
 **Límites de la evidencia y deuda abierta.**
 
-1. El deployment que funcionó usó Vercel CLI 54.14.0. Con Vercel CLI 62.1.0 el mismo código falló después de compilar con `patch_build_4xx` (paquete de despliegue inválido para una Serverless Function, atribuido a directorios con symlinks).
+1. El deployment que funcionó usó Vercel CLI 54.14.0. Con Vercel CLI 62.1.0 el mismo código falló después de compilar con `patch_build_4xx` (paquete de despliegue inválido para una Serverless Function, atribuido a directorios con symlinks). *Actualización:* resuelto: causa y corrección en «Despliegue» (*tracing* físico); con CLI 62.1.0 el deployment completa.
 2. La CLI 54.14.0 no interpretó correctamente el `pnpm-lock.yaml` de pnpm 12 y terminó instalando con npm. Es decir, la evidencia corresponde a un `node_modules` plano instalado con npm, no al árbol bloqueado de pnpm. `pdfjs-dist` y `@napi-rs/canvas` están fijados a versión exacta y se observaron esas versiones, pero el resto de dependencias no se instaló desde el lockfile.
-3. La combinación final **pnpm 12 + builder de Vercel de producción** no está demostrada con ninguna versión de CLI y sigue siendo deuda de infraestructura.
+3. La combinación final **pnpm 12 + builder de Vercel de producción** no estaba demostrada con ninguna versión de CLI. *Actualización:* un deployment **Preview** con CLI 62.1.0 y pnpm 12.8.1 completó con el *tracing* físico (ver 1). Un deployment con destino Production sigue sin haberse hecho.
 4. **Resuelto:** el cron `*/5 * * * *` de `/api/cron/adaptations` no era compatible con el plan Hobby. Ahora los jobs pedidos por el docente se ejecutan al momento en su propia petición y los dos crons son diarios y solo de recuperación (ADR-004).
 5. Los PNG de las fixtures PDF fueron deterministas dentro de cada runtime, pero **no** byte-idénticos entre el entorno local de validación (Linux, Node 22.22, glibc 2.39) y Vercel (Node 24.21, glibc 2.34). La fixture de imagen sí coincidió. La causa no está diagnosticada.
 6. **Resuelto (migración 017):** antes, `produceVisualAsset` comparaba el SHA-256 del PNG regenerado con el de la única fila de su identidad y devolvía `asset_corrupt` si diferían, después de haber sobrescrito ya el objeto. Una regeneración válida en otro runtime dejaba el visual atascado. Ahora cada PNG es una instancia física propia (ver **Asset**) y la regeneración entre runtimes crea una instancia nueva sin tocar las anteriores.
@@ -485,7 +485,7 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
 
-**Estado.** Motor implementado y probado **en local**. **Validación en runtime de Vercel: PENDIENTE.** Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI: eso es la 5.2B/C. Cero llamadas a modelos.
+**Estado.** Motor implementado y probado **en local** (smoke PDF 24/24). **Validación en runtime de Vercel: DEFERRED** (ver «Validación en Vercel»). Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI: eso es la 5.2B/C. Cero llamadas a modelos.
 
 **Una sola maquetación.** `MaterialDocument` → `buildRenderModel()` → `RenderModel` → `renderPrintHtml()` (`src/lib/render/print/html.ts`) → Chromium → PDF. `renderPrintHtml` renderiza el **mismo** `MaterialSheet` de la vista con el **mismo** `material.css`; Chromium solo aplica `@page` y los `break-*` que ya existían. `pdf-lib` no dibuja nada: solo lee el PDF para validarlo.
 
@@ -550,11 +550,10 @@ En cada una se comprueba: validación sin incidencias, A4, solo Inter, ninguna p
 - Un smoke que lea su `.nft.json` y renderice desde una copia aislada, como `smoke:raster`.
 - Memoria ≥ 1 GB y `/tmp` para ≈210 MB.
 
-**Pendiente de verificar en Vercel (Preview):**
-- Que el binario arranca en el runtime real. `@sparticuz/chromium` solo añade sus librerías de Amazon Linux 2023 si detecta el entorno por variables de AWS.
-- Tamaño real de la Function, arranque en frío, memoria y tiempos.
-- Que `prerenderToNodeStream` funciona en la ruta real.
-- Los diccionarios de guionado (`hyphens: auto`) del binario serverless.
+**Validación en Vercel.**
+- **Empaquetado: PASS.** Un deployment Preview real (Vercel CLI 62.1.0, Node 24.x, pnpm 12.8.1, Next.js 16.3.8, sin `VERCEL_CLI_VERSION` ni comando de instalación propio) llegó a `Deployment completed`. El error `invalid deployment package for a Serverless Function` quedó **resuelto** con el *tracing* físico (`next.tracing.ts`, ver Despliegue en «Visuales originales»): la causa, reproducida con `vercel build` local, eran entradas de `outputFileTracingIncludes` que atravesaban el symlink de pnpm (`node_modules/<paquete>`).
+- **Runtime de Chromium y PDF: DEFERRED, no PASS.** La validación se intentó con un endpoint temporal de humo (ya eliminado) y **no se completó**: respondió 500 vacío en todas las llamadas (incluido `POST`) en un proyecto de Vercel sin la configuración definitiva y sin variables de entorno de la app; las rutas bajo `proxy.ts` también daban 500. No se investigó la causa (no había acceso a los logs de runtime), así que no se sabe si el fallo era del endpoint, del proyecto o del motor. Se acepta como deuda hasta configurar bien el proyecto y sus variables. No bloquea seguir desarrollando. Si vuelve a hacer falta, se recrea un endpoint de humo.
+- **Sin comprobar en Vercel todavía:** que el binario de Chromium arranca en el runtime real (`@sparticuz/chromium` solo añade sus librerías de Amazon Linux 2023 si detecta el entorno por variables de AWS); tamaño real de la Function, arranque en frío, memoria y tiempos; que `prerenderToNodeStream` funciona en la ruta real; los diccionarios de guionado (`hyphens: auto`) del binario serverless.
 
 **Deuda menor.** El paquete extrae también SwiftShader (≈6 MB) aunque los gráficos estén desactivados.
 

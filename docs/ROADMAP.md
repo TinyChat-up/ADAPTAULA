@@ -65,7 +65,7 @@ Objetivo: dejar el análisis como contrato fiable de la Fase 4 antes de volver a
 - `MaterialRenderer` (todos los tipos de bloque, plantillas `estandar` y `secundaria-sobria` como mínimo, KaTeX).
 - Editor por bloques (edición, mover, duplicar, eliminar, regenerar), autoguardado, deshacer/rehacer, versiones.
 - Comparador; "¿Qué hemos adaptado?".
-- **Spike PDF** (ADR-007) y después la implementación: A4, saltos de página, cabeceras y números de página, exports cacheados. **5.2A (motor) hecha en local:** `material_renderer@v2`, `renderPrintHtml`, `PdfEngine` (Chromium serverless), `PdfValidation` y `pnpm smoke:pdf` (1, 3 y 10 páginas, entre otros casos). **Validación en runtime de Vercel: PENDIENTE.** Después vienen la 5.2B (exportación durable: tabla, pins, Storage, jobs y rutas) y la 5.2C (UX).
+- **Spike PDF** (ADR-007) y después la implementación: A4, saltos de página, cabeceras y números de página, exports cacheados. **5.2A (motor) hecha en local:** `material_renderer@v2`, `renderPrintHtml`, `PdfEngine` (Chromium serverless), `PdfValidation` y `pnpm smoke:pdf` (1, 3 y 10 páginas, entre otros casos). **Empaquetado en Vercel: PASS (CLI 62.1.0 + pnpm 12.8.1, *tracing* físico). Validación en runtime de Chromium/PDF en Vercel: DEFERRED** hasta configurar el proyecto y sus variables de entorno (ver `docs/ADAPTATION.md`). Después vienen la 5.2B (exportación durable: tabla, pins, Storage, jobs y rutas) y la 5.2C (UX).
 - Feedback 👍/👎.
 - **Tests:** unit (reducers del editor, mapeo de bloques); visual (snapshots del renderer); PDF de 1, 3 y 10 páginas (número de páginas, sin bloques cortados, texto seleccionable); E2E (editar → descargar).
 
@@ -96,7 +96,7 @@ Centros: multiusuario, roles, panel de centro, biblioteca compartida, facturaci�
 
 | Tema | Cuándo | Notas |
 |---|---|---|
-| Validación del PDF con Chromium en Vercel | Fase 5 (spike) | Alternativa: `@react-pdf/renderer` |
+| Validación del PDF con Chromium en Vercel | Fase 5 (spike) | **DEFERRED:** empaquetado PASS; runtime pendiente de la configuración definitiva del proyecto. Alternativa: `@react-pdf/renderer` |
 | Modelos OpenAI concretos (texto alternativo, imagen) | Fase 3 / Fase 2 del producto | Verificar IDs y precios en la documentación oficial |
 | Margen Pro/Max con costes reales | Fase 4 | Ajustar cuotas, routing o precios con datos de `ai_runs` |
 | Email transaccional (proveedor SMTP) | Fase 1 | Preferiblemente UE |

@@ -50,4 +50,4 @@ console.log("\nsmoke:pdf · lo que debe trazar la Function de exportación (5.2B
 for (const [name, bytes] of rows) console.log(`  · ${name.padEnd(56)} ${mb(bytes)}`);
 for (const f of readdirSync(bin)) console.log(`      bin/${f.padEnd(24)} ${mb(statSync(path.join(bin, f)).size)}`);
 console.log(`  · total aproximado                                         ${mb(rows.reduce((n, [, b]) => n + b, 0))}`);
-console.log("smoke:pdf · OK (validación en runtime de Vercel: PENDIENTE)");
+console.log("smoke:pdf · OK (validación en runtime de Vercel: DEFERRED)");
