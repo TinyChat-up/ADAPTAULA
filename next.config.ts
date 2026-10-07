@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
     // `scripts/smoke-raster.mjs` checks after every build that both traces really contain these files.
     "/api/materials/*/pages/*": RASTER_FILES,
     "/api/materials/*/visuals/*": RASTER_FILES,
-    // VALIDATION ONLY (fix/vercel-pnpm-tracing; removed before the production PR): the PDF smoke route. The serverless Chromium is
-    // read by path at run time and never traced on its own; physical directory, like every include.
-    "/api/preview-pdf-smoke": [...RASTER_FILES, ...packageFiles("@sparticuz/chromium", ["bin/*"])],
   },
 };
 

@@ -203,7 +203,7 @@ Funciones (solo `service_role`): `adaptation_transition_allowed`, `transition_ad
 
 ## Ejecución durable de etapas (migración 015)
 
-Sin tablas nuevas. `list_claimable_adaptation_jobs` (qué puede reclamar un worker: en cola fuera de su espera, o con el lease caducado, de adaptaciones no terminadas) y `list_adaptations_needing_job` (el reconciliador: `queued` sin job de planificación y `generation_queued` sin job de generación; nunca `awaiting_plan_review`, `blocked`, `failed`, `cancelled` ni `ready`). `transition_adaptation(cancelled)` ahora, en la misma transacción, libera la reserva (014) **y** pasa a `canceled` los jobs activos: un job en cola no puede arrancar y un worker que ya llamaba al proveedor pierde el lease, así que su resultado tardío no puede persistir, entregar ni consumir (queda registrado en `ai_runs`).
+Sin tablas nuevas. `list_claimable_adaptation_jobs` (qué puede reclamar un worker: en cola fuera de su espera, o con el lease caducado, de adaptaciones no terminadas) y `list_adaptations_needing_job` (**sin uso desde la ejecución inmediata**: listaba `queued` sin job de planificación y `generation_queued` sin job de generación, que son estados que esperan al docente («Empezar» / «Generar»); la recuperación ya no arranca nada). `transition_adaptation(cancelled)` ahora, en la misma transacción, libera la reserva (014) **y** pasa a `canceled` los jobs activos: un job en cola no puede arrancar y un worker que ya llamaba al proveedor pierde el lease, así que su resultado tardío no puede persistir, entregar ni consumir (queda registrado en `ai_runs`).
 
 ## Operación interna (solo service role)
 

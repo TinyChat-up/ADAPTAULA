@@ -105,7 +105,7 @@ describe("idempotency and concurrency", () => {
     await processAdaptationStage(t.orchestrator, t.id);
     await t.approve();
     await startGeneration(t.deps, t.actor, t.id);
-    const [mine, cron] = await Promise.all([processAdaptationStage(t.orchestrator, t.id), runAdaptationWorkerCycle(t.orchestrator, { limit: 5, minAgeSeconds: 0, adaptationIds: [t.id] })]);
+    const [mine, cron] = await Promise.all([processAdaptationStage(t.orchestrator, t.id), runAdaptationWorkerCycle(t.orchestrator, { limit: 5, adaptationIds: [t.id] })]);
     expect((mine?.outcome === "completed" ? 1 : 0) + cron.processed.completed).toBe(1);
     expect([t.spy.generator, t.spy.reviewer]).toEqual([1, 1]);
     expect(await consumed(t.id)).toBe(1);
@@ -160,7 +160,7 @@ describe("failures and retries keep their semantics", () => {
     await startGeneration(t.deps, t.actor, t.id);
     expect(await processAdaptationStage(t.orchestrator, t.id)).toMatchObject({ outcome: "failed" });
     expect(await processAdaptationStage(t.orchestrator, t.id)).toBeNull();
-    expect((await runAdaptationWorkerCycle(t.orchestrator, { limit: 5, minAgeSeconds: 0, adaptationIds: [t.id] })).processed.claimed).toBe(0);
+    expect((await runAdaptationWorkerCycle(t.orchestrator, { limit: 5, adaptationIds: [t.id] })).processed.claimed).toBe(0);
     expect(t.spy.generator).toBe(1);
     expect(await t.status()).toMatchObject({ status: "failed", canRetry: false });
     expect(await consumed(t.id)).toBe(0);
@@ -178,6 +178,35 @@ describe("failures and retries keep their semantics", () => {
 });
 
 describe("recovery cron", () => {
+  it("a retryable job: left alone while its backoff runs, recovered by the cron once it is over (one more call, one consumption)", async () => {
+    const t = await setup({ generator: async (inner, call, input) => { if (call === 1) throw new AIError("provider_unavailable", "503"); return inner.generate(input); } }, { retryBackoffSeconds: 600 });
+    await startPlanning(t.deps, t.actor, t.id);
+    await processAdaptationStage(t.orchestrator, t.id);
+    await t.approve();
+    await startGeneration(t.deps, t.actor, t.id);
+    expect(await processAdaptationStage(t.orchestrator, t.id)).toMatchObject({ outcome: "retry" });
+    expect((await runAdaptationWorkerCycle(t.orchestrator, { limit: 5, adaptationIds: [t.id] })).processed.claimed).toBe(0);
+    expect(t.spy.generator).toBe(1);
+    await db.query("update public.adaptation_jobs set locked_until = now() - interval '1 second' where adaptation_id = $1 and stage = 'generation'", [t.id]);
+    expect((await runAdaptationWorkerCycle(t.orchestrator, { limit: 5, adaptationIds: [t.id] })).processed).toMatchObject({ claimed: 1, completed: 1 });
+    expect(t.spy.generator).toBe(2);
+    expect(await t.status()).toMatchObject({ status: "ready", delivered: true });
+    expect(await consumed(t.id)).toBe(1);
+  });
+
+  it("an adaptation created and never started, or whose review is saved but Generar was never pressed, is NOT picked up", async () => {
+    const created = await setup();
+    const reviewed = await setup();
+    await startPlanning(reviewed.deps, reviewed.actor, reviewed.id);
+    await processAdaptationStage(reviewed.orchestrator, reviewed.id);
+    await reviewed.approve();
+    const summary = await runAdaptationWorkerCycle(created.orchestrator, { limit: 10, adaptationIds: [created.id, reviewed.id] });
+    expect(summary.processed.claimed).toBe(0);
+    expect([created.spy.planner, reviewed.spy.generator, reviewed.spy.reviewer]).toEqual([0, 0, 0]);
+    expect(await created.status()).toMatchObject({ status: "queued", nextAction: "start_planning" });
+    expect(await reviewed.status()).toMatchObject({ status: "generation_queued", nextAction: "start_generation" });
+  });
+
   it("recovers an abandoned job; ignores completed ones and ones a live run holds", async () => {
     const abandoned = await setup();
     await startPlanning(abandoned.deps, abandoned.actor, abandoned.id);

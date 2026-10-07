@@ -15,9 +15,9 @@ function walk(dir: string): string[] {
 const src = walk(path.join(ROOT, "src")).map((f) => ({ rel: path.relative(path.join(ROOT, "src"), f), text: readFileSync(f, "utf8") }));
 
 const SECRET = "cron-secret-0123456789-abcdef";
-const cycle = vi.fn(async () => ({ reconciled: { planningEnqueued: 1, generationEnqueued: 0, alreadyHadJob: 0, rejected: 0 }, processed: { claimed: 1, completed: 1, retryScheduled: 0, failed: 0, skipped: 0, ambiguous: 0, humanActionRequired: 0, rejected: 0, errors: 0 } }));
+const cycle = vi.fn(async () => ({ processed: { claimed: 1, completed: 1, retryScheduled: 0, failed: 0, skipped: 0, ambiguous: 0, humanActionRequired: 0, rejected: 0, errors: 0 } }));
 let secret: string | undefined = SECRET;
-vi.mock("@/lib/config/env.server", () => ({ serverEnv: () => ({ CRON_SECRET: secret, ADAPTATION_JOBS_PER_RUN: 2, ADAPTATION_RECONCILE_MIN_AGE_SECONDS: 60 }) }));
+vi.mock("@/lib/config/env.server", () => ({ serverEnv: () => ({ CRON_SECRET: secret, ADAPTATION_JOBS_PER_RUN: 2 }) }));
 vi.mock("@/lib/adaptation/orchestration/server", () => ({ orchestratorDeps: () => ({}) }));
 vi.mock("@/lib/adaptation/orchestration/worker", () => ({ runAdaptationWorkerCycle: (...args: unknown[]) => (cycle as (...a: unknown[]) => unknown)(...args) }));
 
@@ -46,7 +46,7 @@ describe("endpoint interno del worker", () => {
     const res = await call("POST", `Bearer ${SECRET}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(cycle).toHaveBeenCalledWith({}, { limit: 2, minAgeSeconds: 60 });
+    expect(cycle).toHaveBeenCalledWith({}, { limit: 2 });
     const body = JSON.stringify(await res.json());
     expect(body).not.toContain(SECRET);
     expect(body).toMatch(/completed/);

@@ -20,16 +20,16 @@ function authorized(request: Request): boolean {
 /**
  * Daily RECOVERY entry, never the normal path (Vercel Cron sends `Authorization: Bearer $CRON_SECRET`; a developer may POST the
  * same). User-triggered stages run immediately in the teacher's own request (`POST /api/adaptations/[id]/run`); this only finds
- * what nobody finished: adaptations in a state that needs a job and have none (the reconciler), and jobs nobody is running (past
- * their backoff, or with an expired lease), with the same processor. Completed, held, ambiguous or non-retryable jobs are never
- * re-run. It uses no user session and answers 401 to anyone without the secret, which is never logged. Safe to call twice or
+ * what nobody finished: jobs the teacher already started that nobody is running (past their backoff, or with an expired lease),
+ * with the same processor. It never starts anything: an adaptation without a job is waiting for the teacher's "Empezar".
+ * Completed, held, ambiguous or non-retryable jobs are never re-run. It uses no user session and answers 401 to anyone without the secret, which is never logged. Safe to call twice or
  * concurrently (atomic claim + idempotent enqueue). The response carries counts only, no content.
  */
 async function handle(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: { code: "unauthorized" } }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const env = serverEnv();
-  const result = await runAdaptationWorkerCycle(orchestratorDeps(), { limit: env.ADAPTATION_JOBS_PER_RUN, minAgeSeconds: env.ADAPTATION_RECONCILE_MIN_AGE_SECONDS });
-  logger.info("adaptation_worker_cycle", { ...result.processed, planningEnqueued: result.reconciled.planningEnqueued, generationEnqueued: result.reconciled.generationEnqueued });
+  const result = await runAdaptationWorkerCycle(orchestratorDeps(), { limit: env.ADAPTATION_JOBS_PER_RUN });
+  logger.info("adaptation_worker_cycle", { ...result.processed });
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
 }
 

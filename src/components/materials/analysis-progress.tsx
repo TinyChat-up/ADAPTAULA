@@ -119,7 +119,7 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
         })}
       </ol>
       <p role="status" className="text-sm text-muted-foreground">
-        {offline ? "Parece que has perdido la conexión. Seguimos intentándolo…" : waiting ? "Tu material está en cola y empezará en cuanto sea posible." : ""}
+        {offline ? "Parece que has perdido la conexión. Seguimos intentándolo…" : waiting ? "Estamos empezando el análisis de tu material…" : ""}
       </p>
     </Card>
   );

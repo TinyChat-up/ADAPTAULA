@@ -277,14 +277,10 @@ export class AdaptationStore {
     return EntitlementUsageSchema.parse(await this.call("adaptation_entitlement_usage", { p_workspace: workspaceId }));
   }
 
-  // --- runtime: what a worker can claim and what lacks a job -----------------------------------------------------------
+  // --- runtime: what a worker can claim ----------------------------------------------------------------------------------
   async listClaimableJobs(limit: number): Promise<Array<{ jobId: string; adaptationId: string; stage: StageName }>> {
     const rows = z.array(z.object({ job_id: z.uuid(), adaptation_id: z.uuid(), stage: z.enum(["planning", "generation"]) })).parse(await this.call("list_claimable_adaptation_jobs", { p_limit: limit }));
     return rows.map((r) => ({ jobId: r.job_id, adaptationId: r.adaptation_id, stage: r.stage }));
-  }
-  async listAdaptationsNeedingJob(minAgeSeconds: number, limit: number): Promise<Array<{ adaptationId: string; stage: StageName }>> {
-    const rows = z.array(z.object({ adaptation_id: z.uuid(), stage: z.enum(["planning", "generation"]) })).parse(await this.call("list_adaptations_needing_job", { p_min_age_seconds: minAgeSeconds, p_limit: limit }));
-    return rows.map((r) => ({ adaptationId: r.adaptation_id, stage: r.stage }));
   }
 
   async recordAiRun(row: AiRunRow): Promise<boolean> {

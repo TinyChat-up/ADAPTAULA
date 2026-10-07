@@ -1,6 +1,6 @@
 import "server-only";
 import { logger } from "@/lib/logger";
-import { enqueueGeneration, enqueuePlanning, latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import type { StageName } from "./store";
 
 /**
@@ -9,8 +9,8 @@ import type { StageName } from "./store";
  * processor (`runStageJob`):
  *   · `processAdaptationStage` — the normal path: the teacher's own request runs its adaptation's pending stage right away, awaited
  *     (`POST /api/adaptations/[id]/run`). A second request, another tab or the cron racing it cannot run it twice: only one claim wins.
- *   · `runAdaptationWorkerCycle` — recovery only (daily cron, developer script): jobs nobody is running (queued past their backoff,
- *     or with an expired lease) and adaptations in a state that needs a job and have none (the reconciler).
+ *   · `runAdaptationWorkerCycle` — recovery only (daily cron, developer script): jobs the teacher already started that nobody is
+ *     running (queued past their backoff, or with an expired lease). Never an adaptation that was not started.
  * Nothing here relies on the process staying alive after a response: whatever is not finished is a durable job found again later.
  */
 
@@ -101,41 +101,13 @@ export async function processAdaptationJobs(deps: OrchestratorDeps, options: Pro
   return summary;
 }
 
-export interface ReconcileSummary {
-  planningEnqueued: number;
-  generationEnqueued: number;
-  alreadyHadJob: number;
-  rejected: number;
-}
-
 /**
- * Finds adaptations whose state needs a durable job and that have none: `queued` (planning) and `generation_queued` (generation).
- * It never touches `awaiting_plan_review`, `blocked`, `failed`, `cancelled` or `ready` (they wait for a person or are over),
- * so it cannot skip the human gate, revive a cancelled adaptation or retry a failure that must not be retried. Idempotent.
+ * One recovery tick (daily cron): the jobs nobody is running. Safe to invoke concurrently or twice in a row (atomic claim).
+ * It deliberately does NOT look for adaptations without a job: an adaptation that is `queued` / `generation_queued` and has no
+ * job is waiting for the teacher to press "Empezar" / "Generar" (the state change and the job are created in one transaction by
+ * `enqueue_adaptation_stage`, so a started stage always has its job). Recovery never makes that decision for them.
  */
-export async function reconcileAdaptationJobs(deps: OrchestratorDeps, options: { minAgeSeconds: number; limit: number; adaptationIds?: readonly string[] }): Promise<ReconcileSummary> {
-  const summary: ReconcileSummary = { planningEnqueued: 0, generationEnqueued: 0, alreadyHadJob: 0, rejected: 0 };
-  const scope = options.adaptationIds ? new Set(options.adaptationIds) : null;
-  const listed = await deps.store.listAdaptationsNeedingJob(options.minAgeSeconds, scope ? 200 : options.limit);
-  const candidates = (scope ? listed.filter((c) => scope.has(c.adaptationId)) : listed).slice(0, options.limit);
-  for (const candidate of candidates) {
-    try {
-      const outcome = candidate.stage === "planning" ? await enqueuePlanning(deps, candidate.adaptationId) : await enqueueGeneration(deps, candidate.adaptationId);
-      if (outcome.outcome === "enqueued" && !outcome.reusedJob) summary[candidate.stage === "planning" ? "planningEnqueued" : "generationEnqueued"] += 1;
-      else if (outcome.outcome === "enqueued" || outcome.outcome === "reused") summary.alreadyHadJob += 1;
-      else summary.rejected += 1;
-      logger.info("adaptation_job_reconciled", { adaptationId: candidate.adaptationId, stage: candidate.stage, outcome: outcome.outcome, code: outcome.code ?? null });
-    } catch (error) {
-      summary.rejected += 1;
-      logger.error("adaptation_reconcile_error", { adaptationId: candidate.adaptationId, reason: error instanceof Error ? error.name : "unknown" });
-    }
-  }
-  return summary;
-}
-
-/** One recovery tick (daily cron): repair first, then work. Safe to invoke concurrently or twice in a row (leases + idempotent enqueue). */
-export async function runAdaptationWorkerCycle(deps: OrchestratorDeps, options: { limit: number; minAgeSeconds: number; adaptationIds?: readonly string[] }) {
-  const reconciled = await reconcileAdaptationJobs(deps, { minAgeSeconds: options.minAgeSeconds, limit: options.limit * 2, ...(options.adaptationIds ? { adaptationIds: options.adaptationIds } : {}) });
+export async function runAdaptationWorkerCycle(deps: OrchestratorDeps, options: { limit: number; adaptationIds?: readonly string[] }) {
   const processed = await processAdaptationJobs(deps, { limit: options.limit, ...(options.adaptationIds ? { adaptationIds: options.adaptationIds } : {}) });
-  return { reconciled, processed };
+  return { processed };
 }
