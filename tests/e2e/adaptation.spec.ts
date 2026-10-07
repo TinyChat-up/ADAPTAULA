@@ -49,7 +49,8 @@ test("material analizado → elegir perfil → Adaptar material → pantalla de 
 
   await page.goto(`/app/materiales/${materialId}`);
   await expect(page.getByRole("heading", { name: "Adaptaciones de este material" })).toBeVisible();
-  await page.getByRole("link", { name: /\d{4}/ }).first().click();
+  // The row says what comes next (created, not started → «Empezar») and leads back to the adaptation.
+  await page.locator("section[aria-labelledby=adaptaciones-material]").getByRole("link", { name: /^Empezar/ }).click();
   await expect(page).toHaveURL(url);
 });
 

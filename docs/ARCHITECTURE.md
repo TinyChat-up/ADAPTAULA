@@ -113,7 +113,7 @@ Un paso de IA (análisis, planificación, generación + revisión) tarda de segu
 
 **Deuda conocida (registrada, no abordada):**
 - La función SQL `list_adaptations_needing_job` sigue en la base de datos sin ningún uso desde que se eliminó el reconciliador; retirarla es una migración aparte.
-- Un miembro de solo lectura que abre la pantalla de progreso o la de la adaptación sigue lanzando un `POST …/run` cada ≥15 s mientras el job está pendiente y recibe 403/404 sin efecto. Evitarlo exige pasar el rol al cliente.
+- Un miembro de solo lectura que abre la pantalla de progreso **del análisis de un material** sigue lanzando un `POST …/analysis/run` cada ≥15 s mientras el job está pendiente y recibe 403 sin efecto. *(Fase 6: la pantalla de la adaptación ya recibe el rol y no lanza `/run` para un miembro de solo lectura; queda solo el caso del análisis.)*
 - Las etapas de adaptación no tienen un plazo global propio (el análisis sí: 270 s). Con los reintentos del SDK de Anthropic, el peor caso de una generación podría rebasar los 300 s de la Function; si muere, el lease caduca y el job se recupera (si ya había empezado la llamada, queda como intento ambiguo y pide confirmación).
 - Si el docente cierra la pestaña entre crear el job y pedir su ejecución, ese job espera a que vuelva a abrir la página o al cron diario.
 

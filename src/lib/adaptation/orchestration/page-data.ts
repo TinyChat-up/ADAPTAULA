@@ -8,6 +8,7 @@ import { getCatalog } from "@/lib/profiles/repository";
 import { buildContextView, type AdaptationContextView } from "@/lib/adaptation/presentation/context";
 import { getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlanDto } from "./service";
 import { serviceDeps } from "./server";
+import { listState, type ListState } from "@/lib/adaptation/presentation/list";
 import type { AdaptationStatusDto } from "./status";
 
 export interface AdaptationPageData {
@@ -16,6 +17,10 @@ export interface AdaptationPageData {
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
   readyInfo: { version: number; createdAt: string } | null;
+  /** The teacher's alias for the profile, for the page header only. Null when the profile was deleted. */
+  profileName: string | null;
+  /** Read-only members see every state but no command (they would be refused on the server anyway). */
+  canWrite: boolean;
 }
 
 /**
@@ -34,12 +39,13 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Pro
   const row = await deps.reader.getAdaptation(id);
   if (!row) return null;
 
-  const [detail, catalog, subjects, planResult, version] = await Promise.all([
+  const [detail, catalog, subjects, planResult, version, profileName] = await Promise.all([
     getMaterialDetail(ctx.workspace.id, row.material_id),
     getCatalog(),
     getSubjects(),
     status.nextAction === "review_plan" && status.phase === "awaiting_review" ? getAdaptationPlan(deps, actor, id) : Promise.resolve(null),
     status.phase === "ready" && row.current_version > 0 ? deps.reader.getVersion(id, row.current_version) : Promise.resolve(null),
+    profileNameOf(supabase, id),
   ]);
   if (!detail) return null;
 
@@ -57,18 +63,58 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Pro
       analysis,
     }),
     readyInfo: version ? { version: version.version, createdAt: version.created_at } : null,
+    profileName,
+    canWrite: actor.canWrite,
   };
+}
+
+async function profileNameOf(supabase: Awaited<ReturnType<typeof getSupabase>>, adaptationId: string): Promise<string | null> {
+  const { data } = await supabase.from("adaptations").select("learner_profile_id").eq("id", adaptationId).maybeSingle();
+  if (!data?.learner_profile_id) return null;
+  const { data: profile } = await supabase.from("learner_profiles").select("display_name").eq("id", data.learner_profile_id).maybeSingle();
+  return (profile?.display_name as string | undefined) ?? null;
 }
 
 export interface AdaptationListItem {
   id: string;
-  status: string;
+  materialTitle: string;
+  /** The teacher's own alias for the profile (shown only to the workspace, never sent anywhere). Null when it was deleted. */
+  profileName: string | null;
   createdAt: string;
+  updatedAt: string;
+  state: ListState;
 }
 
-/** The adaptations of one material, newest first, from the user's client (RLS). Gives every adaptation a way back after a reload. */
-export async function listMaterialAdaptations(materialId: string, limit = 10): Promise<AdaptationListItem[]> {
+/**
+ * Adaptations of the workspace (optionally of one material or one profile), newest activity first, from the USER's client (RLS):
+ * another workspace's rows are simply not there. Whether a stage is running comes from the visible jobs, so an adaptation waiting
+ * for the teacher's «Empezar» or «Crear ficha» is never shown as in progress.
+ */
+export async function listAdaptations(filter: { materialId?: string; profileId?: string; limit?: number } = {}): Promise<AdaptationListItem[]> {
   const supabase = await getSupabase();
-  const { data } = await supabase.from("adaptations").select("id, status, created_at").eq("material_id", materialId).order("created_at", { ascending: false }).limit(limit);
-  return (data ?? []).map((row) => ({ id: row.id, status: row.status, createdAt: row.created_at }));
+  let query = supabase.from("adaptations").select("id, status, created_at, updated_at, material_id, learner_profile_id");
+  if (filter.materialId) query = query.eq("material_id", filter.materialId);
+  if (filter.profileId) query = query.eq("learner_profile_id", filter.profileId);
+  const { data: rows } = await query.order("updated_at", { ascending: false }).limit(filter.limit ?? 50);
+  if (!rows?.length) return [];
+
+  const ids = rows.map((r) => r.id as string);
+  const materialIds = [...new Set(rows.map((r) => r.material_id as string))];
+  const profileIds = [...new Set(rows.map((r) => r.learner_profile_id as string | null).filter((v): v is string => Boolean(v)))];
+  const [jobs, materials, profiles] = await Promise.all([
+    supabase.from("adaptation_jobs").select("adaptation_id").in("adaptation_id", ids).in("status", ["queued", "processing"]),
+    supabase.from("materials").select("id, title").in("id", materialIds),
+    profileIds.length ? supabase.from("learner_profiles").select("id, display_name").in("id", profileIds) : Promise.resolve({ data: [] as Array<{ id: string; display_name: string }> }),
+  ]);
+  const running = new Set((jobs.data ?? []).map((j) => j.adaptation_id as string));
+  const titles = new Map((materials.data ?? []).map((m) => [m.id as string, m.title as string]));
+  const names = new Map((profiles.data ?? []).map((p) => [p.id as string, p.display_name as string]));
+  return rows.map((r) => ({
+    id: r.id as string,
+    materialTitle: titles.get(r.material_id as string) ?? "Material",
+    profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+    state: listState(r.status as string, running.has(r.id as string)),
+  }));
 }

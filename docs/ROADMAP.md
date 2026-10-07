@@ -69,6 +69,12 @@ Objetivo: dejar el análisis como contrato fiable de la Fase 4 antes de volver a
 - Feedback 👍/👎.
 - **Tests:** unit (reducers del editor, mapeo de bloques); visual (snapshots del renderer); PDF de 1, 3 y 10 páginas (número de páginas, sin bloques cortados, texto seleccionable); E2E (editar → descargar).
 
+## Flujo del docente de punta a punta ✅ (encargo «PHASE 6 — TEACHER WORKFLOW»; no es la Fase 6 de Stripe de abajo)
+
+Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF ni cuotas nuevos: material → análisis → perfil → adaptación → propuesta (revisión del docente) → ficha → vista del alumno → PDF. Inicio con «Necesitan tu atención» / «En curso» / «Fichas preparadas», historial real, «Adaptar este material» arriba en la ficha del material, perfil creado desde el material que vuelve a él, adaptar desde un perfil y desde `/app/adaptar`, solo lectura sin comandos, PDF en la pantalla de ficha preparada y la asignatura por su nombre en la cabecera de la ficha. En desarrollo y E2E el pipeline completo corre con los dobles deterministas (sin modelos) y un E2E (`tests/e2e/teacher-workflow.spec.ts`) recorre el camino en escritorio y móvil. Detalle: `docs/UX.md` § «Flujo del docente de punta a punta».
+
+**Deuda que se mantiene:** validación del PDF en runtime de Vercel (DEFERRED); función SQL `list_adaptations_needing_job` sin uso; `POST …/analysis/run` sin efecto de un miembro de solo lectura en la pantalla de análisis; cerrar la pestaña antes del `/run` deja el job al cron de recuperación; sin plazo global por etapa; el E2E histórico de cuota (esperado 10, recibido 9); la ruta PDF pesa ≈116 MB; la ficha de diez páginas lógicas ocupa 11 físicas; el plan Free tiene 0 adaptaciones al mes (decisión de precios pendiente).
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso`, `/app/configuracion/facturacion` y `/precios` conectada.

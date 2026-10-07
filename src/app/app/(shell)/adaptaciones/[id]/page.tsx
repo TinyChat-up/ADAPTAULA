@@ -39,8 +39,8 @@ export default async function AdaptationPage({ params }: PageProps<"/app/adaptac
         <ChevronLeft aria-hidden className="size-4" />
         Volver al material
       </Link>
-      <PageHeader title="Adaptación" description={data.context.materialTitle} />
-      <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} />
+      <PageHeader title="Adaptación" description={data.profileName ? `${data.context.materialTitle} · para ${data.profileName}` : data.context.materialTitle} />
+      <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} />
     </div>
   );
 }

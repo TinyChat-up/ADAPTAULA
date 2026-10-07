@@ -126,6 +126,11 @@ export interface BuildRenderOptions {
   requiredVisuals?: readonly string[];
   /** The deferred decisions of the review this version came from; null/undefined = unknown (reported, never guessed). */
   deferred?: readonly DeferredInput[] | null;
+  /**
+   * How the subject reads on the sheet. The stored document carries the catalogue key (`matematicas`); the loader resolves its
+   * name. Absent → the document's own value, unchanged.
+   */
+  subjectLabel?: string | null;
 }
 
 export const NEUTRAL_VISUAL_LABEL = "Recurso visual de la actividad";
@@ -363,7 +368,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     mode: options.mode,
     title: doc.meta.title,
     language: doc.meta.language,
-    header: { subject: doc.meta.subject, grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
+    header: { subject: options.subjectLabel ?? doc.meta.subject, grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
     pages,
   };

@@ -143,7 +143,7 @@ export const STATUS_COPY = {
   needsGeneration: { title: "Revisión guardada", body: "Ya puedes crear el material con los cambios que has aprobado." },
   generating: { title: "Preparando material", body: "Estamos creando el material con los cambios que has aprobado." },
   reviewing: { title: "Revisando calidad", body: "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas." },
-  ready: { title: "La adaptación está preparada", body: "Ya puedes ver la ficha. La edición llegará en el siguiente paso." },
+  ready: { title: "La adaptación está preparada", body: "Ya puedes ver la ficha tal como la verá el alumnado y descargarla en PDF." },
   readyWithWarnings: { title: "Material preparado con observaciones", body: "La ficha está preparada, pero conviene que revises estos puntos antes de usarla." },
   blocked: { title: "Este material todavía no está listo", body: "La comprobación de calidad ha encontrado algo que necesita tu atención. No se ha entregado ninguna ficha." },
   cancelled: { title: "Adaptación cancelada", body: "Esta adaptación se ha detenido." },
@@ -182,22 +182,6 @@ export function failureCopy(failure: { code: string; category: string; message: 
   if (failure.category === "human_action_required") return failure.message || "Esta adaptación necesita tu decisión antes de continuar.";
   return failure.message || "No hemos podido completar esta adaptación.";
 }
-
-/** One short label per stored status, for lists. Unknown status → neutral. */
-const STATUS_LABELS: Record<string, string> = {
-  queued: "Por empezar",
-  planning: "Preparando propuesta",
-  awaiting_plan_review: "Esperando tu revisión",
-  generation_queued: "Preparando material",
-  generating: "Preparando material",
-  reviewing_deterministic: "Revisando calidad",
-  reviewing_ai: "Revisando calidad",
-  ready: "Preparada",
-  blocked: "Necesita revisión",
-  failed: "Con error",
-  cancelled: "Cancelada",
-};
-export const statusLabel = (status: string): string => (Object.prototype.hasOwnProperty.call(STATUS_LABELS, status) ? (STATUS_LABELS[status] ?? "En curso") : "En curso");
 
 /** How a protected requirement of the sheet is announced under "Se mantendrá". The wording of the requirement itself comes from the analysis. */
 const PRESERVE_PREFIX: Record<string, string> = {

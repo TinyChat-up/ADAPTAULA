@@ -64,6 +64,9 @@ describe("GET /api/adaptations/[id]/pdf · what is printed", () => {
     expect(body).not.toMatch(/\/api\/|visuals\/vis_|storage|generated-assets|https?:\/\//);
     expect(body).not.toMatch(/ms-teacher|ms-chrome|data-app/);
     expect(html).toContain("Content-Security-Policy");
+    // The header names the subject as the catalogue does, never by its key.
+    expect(body).toContain("Matemáticas");
+    expect(body).not.toMatch(/>matematicas</);
     expect(await errorOf(res)).toEqual({ code: "render_failed", message: "No hemos podido preparar el PDF. Inténtalo de nuevo en unos minutos." });
   }, 60_000);
 

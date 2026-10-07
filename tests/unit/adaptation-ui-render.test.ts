@@ -18,8 +18,8 @@ const noop = async () => {
   throw new Error("an action ran during render");
 };
 const actions: AdaptationActions = { start: noop, submit: noop, generate: noop, reopen: noop, retry: noop, cancel: noop };
-const view = (dto = status(), extra: { plan?: typeof plan | null; readyInfo?: { version: number; createdAt: string } | null } = {}) =>
-  html(createElement(AdaptationView, { initial: dto, plan: extra.plan ?? null, context, readyInfo: extra.readyInfo ?? null, actions }));
+const view = (dto = status(), extra: { plan?: typeof plan | null; readyInfo?: { version: number; createdAt: string } | null; canWrite?: boolean } = {}) =>
+  html(createElement(AdaptationView, { initial: dto, plan: extra.plan ?? null, context, readyInfo: extra.readyInfo ?? null, actions, canWrite: extra.canWrite ?? true }));
 const form = () => html(createElement(PlanReviewForm, { plan, context, deferredIds: ["dec_4"], submit: noop, onSaved: () => {}, onRefresh: () => {} }));
 
 const DIAGNOSIS = /diagn|dislex|tdah|autis|discapacidad|trastorno/i;
@@ -181,12 +181,33 @@ describe("page states built from the server's data", () => {
   });
 });
 
+describe("read-only members", () => {
+  it("see every state but no command: no start, no review form, no generate, no retry, no cancel", () => {
+    const starting = view(status({ status: "queued", nextAction: "start_planning" }), { canWrite: false });
+    expect(starting).toContain("solo lectura");
+    expect(starting).not.toContain("Preparar propuesta de adaptación");
+    expect(starting).not.toContain("Cancelar adaptación");
+    const reviewing = view(status({ status: "awaiting_plan_review", phase: "awaiting_review", progress: "awaiting_review", nextAction: "review_plan" }), { canWrite: false, plan });
+    expect(reviewing).toContain("Esperando tu revisión");
+    expect(reviewing).not.toContain("Guardar revisión");
+    const generate = view(status({ status: "generation_queued", nextAction: "start_generation" }), { canWrite: false });
+    expect(generate).not.toContain("Crear material adaptado");
+    const failed = view(status({ status: "failed", phase: "recoverable_failure", progress: "failed", nextAction: "retry", canRetry: true, error: { code: "provider_unavailable", category: "retryable", message: "" } as never }), { canWrite: false });
+    expect(failed).not.toMatch(/>Reintentar<|Cancelar adaptación/);
+    const done = view(ready(), { canWrite: false });
+    expect(done).toContain("Ver la ficha");
+    expect(done).toContain("Descargar PDF");
+  });
+});
+
 describe("result screens", () => {
-  it("ready: temporary success, version and date, no document, no fake rendering", () => {
+  it("ready: success, version and date, the sheet and its PDF as next steps, no document, no fake rendering", () => {
     const out = view(ready(), { readyInfo: { version: 2, createdAt: "2026-10-05T10:30:00Z" } });
     expect(out).toContain("La adaptación está preparada");
     expect(out).toContain("Versión 2");
-    expect(out).toContain("siguiente paso");
+    expect(out).toContain("Ver la ficha");
+    expect(out).toContain("Descargar PDF");
+    expect(out).not.toContain("siguiente paso");
     expect(out).toContain("Volver al material");
     expect(out).not.toMatch(/"blocks"|schema_version|<table|<img|MaterialDocument/);
     expect(out).not.toContain("Cancelar adaptación");
@@ -212,12 +233,12 @@ describe("result screens", () => {
 
   it("blocked: clearly not ready, no 'ready' wording, a way back to the review when the server allows it", () => {
     const dto = status({ status: "blocked", phase: "blocked", progress: "blocked", nextAction: "review_plan" });
-    const out = html(createElement(BlockedPanel, { dto, materialId: context.materialId, busy: false, onReopen: () => {} }));
+    const out = html(createElement(BlockedPanel, { dto, materialId: context.materialId, busy: false, canWrite: true, onReopen: () => {} }));
     expect(out).toContain("Este material todavía no está listo");
     expect(out).toContain("No se ha entregado ninguna ficha");
     expect(out).toContain("Revisar la propuesta");
     expect(out).not.toMatch(/preparada|Versión/);
-    expect(html(createElement(BlockedPanel, { dto: { ...dto, nextAction: "none" }, materialId: context.materialId, busy: false, onReopen: () => {} }))).not.toContain("Revisar la propuesta");
+    expect(html(createElement(BlockedPanel, { dto: { ...dto, nextAction: "none" }, materialId: context.materialId, busy: false, canWrite: true, onReopen: () => {} }))).not.toContain("Revisar la propuesta");
   });
 
   it("retryable failure: 'Reintentar' directly; terminal failure: no retry", () => {

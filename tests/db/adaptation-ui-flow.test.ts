@@ -76,7 +76,7 @@ type Session = Awaited<ReturnType<typeof session>>;
 const q = <T>(sql: string, params: unknown[] = []) => db.query<T>(sql, params).then((r) => r.rows);
 const visible = (markup: string) => markup.replace(/<svg[\s\S]*?<\/svg>/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const render = (s: Session, id: string, dto: Awaited<ReturnType<Session["status"]>>, plan: Awaited<ReturnType<Session["plan"]>> | null = null) =>
-  renderToStaticMarkup(createElement(AdaptationView, { initial: dto, plan, context: s.context, readyInfo: null, actions: s.actionsFor(id) }));
+  renderToStaticMarkup(createElement(AdaptationView, { initial: dto, plan, context: s.context, readyInfo: null, actions: s.actionsFor(id), canWrite: true }));
 
 /** The teacher's choices over the real plan: one rejected, one adjusted, the rest approved (blocked ones discarded). */
 function teacherChoices(plan: Awaited<ReturnType<Session["plan"]>>): FormState {

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { redirect } from "next/navigation";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
@@ -62,6 +63,19 @@ function fromWrite(result: WriteResult): ProfileActionResult | null {
 }
 
 export async function createProfileAction(input: unknown): Promise<ProfileActionResult> {
+  return createAndGo(input, null);
+}
+
+/**
+ * The same creation, started from a material ("Adaptar este material" → "Crear un perfil"): the teacher goes back to that material
+ * with the new profile chosen. The material id is bound on the server page after checking the material is visible to this user;
+ * it is re-validated here and only ever used to build a path inside the app.
+ */
+export async function createProfileForMaterialAction(materialId: string, input: unknown): Promise<ProfileActionResult> {
+  return createAndGo(input, z.uuid().safeParse(materialId).success ? materialId : null);
+}
+
+async function createAndGo(input: unknown, materialId: string | null): Promise<ProfileActionResult> {
   const ctx = await requireWorkspace();
   if (!hasRole(ctx.role, WRITE_ROLES)) return failure("forbidden");
 
@@ -71,10 +85,11 @@ export async function createProfileAction(input: unknown): Promise<ProfileAction
   const entitlement = await checkEntitlement(ctx, "profile.create");
   if (!entitlement.allowed) return failure(entitlement.reason === "role" ? "forbidden" : "limit");
 
-  const failed = fromWrite(await createProfile(ctx, checked.data));
-  if (failed) return failed;
+  const created = await createProfile(ctx, checked.data);
+  const failed = fromWrite(created);
+  if (failed || !created.ok) return failed ?? failure("error");
   revalidatePath("/app/alumnos");
-  redirect("/app/alumnos?aviso=creado");
+  redirect(materialId ? `/app/materiales/${materialId}?perfil=${created.id}#adaptar` : "/app/alumnos?aviso=creado");
 }
 
 export async function updateProfileAction(id: string, input: unknown): Promise<ProfileActionResult> {
