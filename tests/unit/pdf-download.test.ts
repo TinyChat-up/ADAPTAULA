@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { asciiName, pdfBaseName, pdfContentDisposition } from "@/lib/render/print/filename";
-import { fetchAdaptationPdf, filenameFromDisposition, PDF_FALLBACK_NAME, PDF_GENERIC_ERROR } from "@/lib/render/print/download";
+import { asciiName, pdfBaseName, pdfContentDisposition } from "@/lib/render/pdf-filename";
+import { fetchAdaptationPdf, filenameFromDisposition, PDF_FALLBACK_NAME, PDF_GENERIC_ERROR } from "@/lib/render/pdf-download";
 
 describe("PDF file name", () => {
   it("keeps a readable Spanish title and adds .pdf", () => {

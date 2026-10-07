@@ -3,11 +3,11 @@ import type { Actor, ServiceDeps } from "@/lib/adaptation/orchestration/service"
 import { logger } from "@/lib/logger";
 import type { VisualDeps } from "@/lib/materials/visuals/service";
 import { loadRenderInputWith, sheetModel } from "@/lib/render/load";
-import type { PdfEngine, PdfRenderResult } from "./engine";
-import { PdfEngineError } from "./engine";
-import { pdfContentDisposition } from "./filename";
-import { renderPrintHtml } from "./html";
-import { validatePdf } from "./validation";
+import type { PdfEngine, PdfRenderResult } from "./print/engine";
+import { PdfEngineError } from "./print/engine";
+import { pdfContentDisposition } from "./pdf-filename";
+import { renderPrintHtml } from "./print/html";
+import { validatePdf } from "./print/validation";
 
 /**
  * On-demand PDF of an adaptation's CURRENT, DELIVERED version, for whoever may read it. The one chain, nothing parallel:

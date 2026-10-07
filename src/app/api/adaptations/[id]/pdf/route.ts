@@ -6,7 +6,7 @@ import { getSupabase } from "@/lib/auth/session";
 import { WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { visualDeps } from "@/lib/materials/visuals/server";
-import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/print/export";
+import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/pdf-export";
 import { pdfEngine } from "@/lib/render/print/server";
 
 // The first PDF of a new instance unpacks Chromium (≈2–3 s); a render is well under a second after that.

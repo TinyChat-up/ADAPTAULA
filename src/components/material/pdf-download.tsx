@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
-import { fetchAdaptationPdf } from "@/lib/render/print/download";
+import { fetchAdaptationPdf } from "@/lib/render/pdf-download";
 
 type State = { kind: "idle" } | { kind: "generating" } | { kind: "started"; filename: string } | { kind: "error"; message: string };
 

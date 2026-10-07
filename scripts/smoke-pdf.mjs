@@ -10,7 +10,7 @@
  * Function in Vercel's runtime: that validation is DEFERRED (docs/ADAPTATION.md § Exportación PDF).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
@@ -26,10 +26,6 @@ try {
   fail("la suite de PDF real no pasa (ver arriba)");
 }
 
-const size = (p) => {
-  const s = statSync(p);
-  return s.isDirectory() ? readdirSync(p).reduce((n, f) => n + size(path.join(p, f)), 0) : s.size;
-};
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 // 2. The export route's server trace must carry what the engine reads BY PATH at run time (next.config.ts, PDF_FILES).

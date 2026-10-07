@@ -19,7 +19,7 @@ describe("single renderer for screen and PDF", () => {
   it("buildRenderModel is called only by the shared loader (sheetModel); the viewer and the export both use it", () => {
     expect(importing(/\bbuildRenderModel\(/)).toEqual(["lib/render/load.ts", "lib/render/model.ts"]);
     expect(read("app/app/(shell)/adaptaciones/[id]/vista/page.tsx")).toMatch(/sheetModel\(loaded, /);
-    const exporter = read("lib/render/print/export.ts");
+    const exporter = read("lib/render/pdf-export.ts");
     expect(exporter).toMatch(/sheetModel\(loaded, "student"\)/);
     expect(exporter).toMatch(/renderPrintHtml\(model, loaded\.pinned\)/);
     expect(exporter).toMatch(/deps\.engine\.render\(print\.html, /);

@@ -80,7 +80,7 @@ describe("fronteras públicas", () => {
   });
 
   it("el cliente de servicio, el worker y las rutas internas solo se importan desde capas del servidor aprobadas", () => {
-    const allowed = new Set(["app/app/(shell)/adaptaciones/actions.ts", "lib/adaptation/orchestration/http.ts", "app/api/cron/adaptations/route.ts", "app/api/adaptations/[id]/run/route.ts", "lib/render/load.ts"]);
+    const allowed = new Set(["app/app/(shell)/adaptaciones/actions.ts", "lib/adaptation/orchestration/http.ts", "app/api/cron/adaptations/route.ts", "app/api/adaptations/[id]/run/route.ts", "app/api/adaptations/[id]/pdf/route.ts", "lib/render/load.ts"]);
     const importers = src.filter((f) => /orchestration\/server["']/.test(f.text) && f.rel !== "lib/adaptation/orchestration/server.ts").map((f) => f.rel);
     for (const rel of importers) expect(allowed.has(rel), rel).toBe(true);
     for (const rel of ["lib/adaptation/orchestration/server.ts", "lib/adaptation/orchestration/worker.ts", "lib/adaptation/orchestration/http.ts"]) expect(read(`src/${rel}`), rel).toMatch(/^import "server-only";/m);
