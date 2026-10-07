@@ -71,3 +71,4 @@ evals/adaptation/private/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.pdf-smoke/

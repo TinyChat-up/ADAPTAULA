@@ -121,6 +121,8 @@ Un único `MaterialRenderer` React en modo `screen` o `print`, con los mismos to
 
 Motivos: un solo renderer (sin divergencias pantalla/PDF), KaTeX y tablas funcionan tal cual, y control fino de los saltos de página. Hay que **validarlo con un spike en la Fase 5** (fichas de 1, 3 y 10 páginas; arranque en frío; tamaño de función). Alternativa si falla el despliegue: `@react-pdf/renderer` con un segundo renderer que comparta tokens. Nunca capturas de pantalla.
 
+**Resultado (Fase 5.2A, local).** Se confirma el enfoque sin segundo renderer: `renderPrintHtml` (`react-dom/static`, porque Next 16 rechaza `react-dom/server` en el servidor) produce un HTML autocontenido con el mismo `MaterialSheet` y `material.css`, y `playwright-core` 1.63 con `@sparticuz/chromium` 153 lo imprime sin red, con la CSS de paginación y los números de página de `@page`. No se usa una ruta HTTP interna: el HTML entra por `setContent`. `@react-pdf/renderer` queda descartado. Detalle y medidas: `docs/ADAPTATION.md` § «Exportación PDF». **Validación en runtime de Vercel: PENDIENTE.**
+
 ### ADR-008 · Contenido IA como JSON validado → componentes seguros
 La IA nunca produce HTML ni CSS. Produce `MaterialDocument` (Zod). El servidor asigna los IDs estables de bloque (no se confía en IDs generados por la IA para evitar colisiones), valida y guarda. El renderer solo conoce tipos de bloque cerrados. El texto enriquecido se limita a un subconjunto inline (`**negrita**`, `_cursiva_`) parseado por nosotros; matemáticas en LaTeX con KaTeX y `trust: false`.
 
