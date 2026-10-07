@@ -11,16 +11,23 @@ import { listMaterials } from "@/lib/materials/repository";
 import { StatusBadge } from "@/components/materials/status-badge";
 import type { MaterialStatus } from "@/lib/materials/types";
 import { countActiveProfiles } from "@/lib/profiles/repository";
+import { AdaptationList } from "@/components/adaptation/adaptation-list";
+import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 
 export const metadata: Metadata = { title: "Inicio" };
 
 export default async function DashboardPage() {
   const ctx = await requireWorkspace();
-  const [usage, profiles, materials] = await Promise.all([
+  const [usage, profiles, materials, adaptations] = await Promise.all([
     getWorkspaceUsage(ctx.workspace.id),
     countActiveProfiles(ctx.workspace.id),
     listMaterials(ctx.workspace.id),
+    listAdaptations({ limit: 30 }),
   ]);
+  const attention = adaptations.filter((a) => a.state.group === "attention").slice(0, 5);
+  const working = adaptations.filter((a) => a.state.group === "working").slice(0, 5);
+  const done = adaptations.filter((a) => a.state.group === "done").slice(0, 3);
+  const analyzed = materials.filter((m) => m.status === "analyzed");
   const firstName = ctx.profile.fullName?.split(" ")[0];
   const greeting = `${greetingFor(new Date())}${firstName ? `, ${firstName}` : ""}`;
 
@@ -66,6 +73,50 @@ export default async function DashboardPage() {
           </Link>
         </Card>
       </section>
+
+      {attention.length > 0 ? (
+        <section aria-labelledby="atencion" className="space-y-3">
+          <h2 id="atencion" className="text-xl font-semibold">
+            Necesitan tu atención
+          </h2>
+          <AdaptationList items={attention} />
+        </section>
+      ) : null}
+
+      {working.length > 0 ? (
+        <section aria-labelledby="en-curso" className="space-y-3">
+          <h2 id="en-curso" className="text-xl font-semibold">
+            En curso
+          </h2>
+          <AdaptationList items={working} />
+        </section>
+      ) : null}
+
+      {done.length > 0 ? (
+        <section aria-labelledby="preparadas" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 id="preparadas" className="text-xl font-semibold">
+              Fichas preparadas
+            </h2>
+            <Link href="/app/historial" className="text-sm font-medium text-primary underline-offset-2 hover:underline">
+              Ver todas las adaptaciones
+            </Link>
+          </div>
+          <AdaptationList items={done} />
+        </section>
+      ) : null}
+
+      {adaptations.length === 0 && analyzed.length > 0 ? (
+        <Card className="space-y-3">
+          <h2 className="text-lg font-semibold">Siguiente paso: adapta un material</h2>
+          <p className="text-sm text-muted-foreground">
+            {profiles === 0 ? "Crea un perfil con las necesidades que quieres tener en cuenta y elige un material analizado." : "Abre un material analizado y elige para qué perfil quieres adaptarlo."}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {profiles === 0 ? <LinkButton href="/app/alumnos/nuevo">Crear un perfil</LinkButton> : <LinkButton href={`/app/materiales/${analyzed[0]!.id}#adaptar`}>{`Adaptar «${analyzed[0]!.title}»`}</LinkButton>}
+          </div>
+        </Card>
+      ) : null}
 
       {materials.length === 0 ? (
         <EmptyState

@@ -33,6 +33,8 @@ export interface AdaptationReader {
   getVersion(adaptationId: string, version: number | null): Promise<{ id: string; version: number; document: unknown; review: unknown; source: string; created_at: string } | null>;
   /** Latest artifact of each requested kind (member-readable under RLS). */
   getArtifacts(adaptationId: string, kinds: readonly ArtifactKind[]): Promise<ArtifactRow[]>;
+  /** Display name of a subject of the public catalogue (the sheet's header). Optional: without it the key is shown. */
+  getSubjectName?(slug: string): Promise<string | null>;
 }
 
 export interface ServiceDeps {

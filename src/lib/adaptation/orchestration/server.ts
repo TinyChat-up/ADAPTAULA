@@ -7,7 +7,9 @@ import type { ModelEnv } from "@/lib/ai/registry";
 import { createModelGenerator } from "../generator";
 import { createModelPlanner } from "../planner";
 import { createModelReviewer } from "../reviewer";
+import { AIError } from "@/lib/ai/errors";
 import { dbEntitlements } from "./entitlements-db";
+import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
 import type { AdaptationReader, ServiceDeps } from "./service";
 import { AdaptationStore, ARTIFACT_KINDS, type RpcClient } from "./store";
@@ -23,6 +25,12 @@ export const adaptationStore = () => new AdaptationStore(createAdminClient() as 
 
 /** The AI services of a stage, built from the PERSISTED versions: the alias and model frozen at creation, never today's env. */
 export function productionServices(versions: PipelineVersions, analysis: Parameters<typeof createModelPlanner>[0]["analysis"]): PipelineServices {
+  // An adaptation created with the mock provider (development, E2E) runs the deterministic stand-ins: the mock provider only
+  // answers the analysis. Refused in production exactly like the mock provider itself.
+  if (isMockPipeline(versions)) {
+    if (process.env.VERCEL_ENV === "production") throw new AIError("not_configured", "the mock provider is disabled in production");
+    return mockPipelineServices(versions, analysis, serverEnv().MOCK_AI_DELAY_MS ?? 0);
+  }
   const selection = (c: PipelineVersions["planner"]) => modelSelectionOf(c);
   return {
     planner: createModelPlanner({ analysis, selection: selection(versions.planner), provider: providerFor(selection(versions.planner)), maxOutputTokens: versions.planner.max_output_tokens, version: versions.planner.prompt_version }),
@@ -59,6 +67,10 @@ export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
       query = version === null ? query.order("version", { ascending: false }) : query.eq("version", version);
       const { data } = await query.limit(1);
       return data?.[0] ?? null;
+    },
+    async getSubjectName(slug) {
+      const { data } = await supabase.from("subjects").select("name").eq("slug", slug).maybeSingle();
+      return (data?.name as string | undefined) ?? null;
     },
     async getArtifacts(adaptationId, kinds) {
       const { data } = await supabase.from("adaptation_artifacts").select("id, kind, input_fingerprint, fingerprint, payload, created_at").eq("adaptation_id", adaptationId).in("kind", [...kinds]).order("created_at");

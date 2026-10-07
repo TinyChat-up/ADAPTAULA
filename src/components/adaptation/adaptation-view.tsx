@@ -12,7 +12,7 @@ import { actionErrorCopy, needLabels } from "@/lib/adaptation/presentation/copy"
 import { createPoller, shouldPoll, type Poller } from "@/lib/adaptation/presentation/poller";
 import { createRunDispatcher, type RunDispatcher } from "@/lib/jobs/run-dispatcher";
 import { screenFor } from "@/lib/adaptation/presentation/view-model";
-import { BlockedPanel, CancelControl, CancelledPanel, FailedPanel, GeneratePanel, ReadyPanel, StartPanel, WorkingPanel } from "./status-panels";
+import { BlockedPanel, CancelControl, CancelledPanel, FailedPanel, GeneratePanel, ReadOnlyPanel, ReadyPanel, StartPanel, WorkingPanel } from "./status-panels";
 import { PlanReviewForm, type SubmitReview } from "./plan-review-form";
 
 export interface AdaptationActions {
@@ -42,12 +42,15 @@ export function AdaptationView({
   context,
   readyInfo,
   actions,
+  canWrite,
 }: {
   initial: AdaptationStatusDto;
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
   readyInfo: { version: number; createdAt: string } | null;
   actions: AdaptationActions;
+  /** False for read-only members: every state is visible, no command is offered and nothing is asked to run. */
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initial);
@@ -85,7 +88,7 @@ export function AdaptationView({
       onResult: (next) => adopt(next),
     });
     runnerRef.current = runner;
-    if (shouldPoll(statusRef.current)) runner.kick(true);
+    if (canWrite && shouldPoll(statusRef.current)) runner.kick(true);
     const poller = createPoller({
       fetchStatus: async (signal) => {
         const response = await fetch(`/api/adaptations/${id}/status`, { cache: "no-store", signal });
@@ -93,7 +96,7 @@ export function AdaptationView({
       },
       onStatus: (next) => {
         adopt(next);
-        if (shouldPoll(next)) runner.kick();
+        if (canWrite && shouldPoll(next)) runner.kick();
       },
       onConnection: (online) => setOffline(!online),
       isVisible: () => !document.hidden,
@@ -155,6 +158,8 @@ export function AdaptationView({
 
   const cancel = <CancelControl busy={busy} onCancel={() => void run(actions.cancel)} />;
   const screen = screenFor(status);
+  // A read-only member sees the same states without commands (the server would refuse them anyway).
+  const shown = canWrite ? status : { ...status, canCancel: false, canRetry: false };
   const deferredIds = saved?.deferredDecisions ?? status.execution?.deferredDecisions ?? [];
   const needs = plan ? needLabels(plan.decisions.flatMap((d) => d.needs)).slice(0, MAX_NEEDS_SHOWN) : [];
 
@@ -172,10 +177,12 @@ export function AdaptationView({
 
       <div aria-live="polite">{notice ? <Alert tone={notice.tone} title={notice.text} /> : null}</div>
 
-      {screen === "start" ? <StartPanel busy={busy} onStart={() => void run(actions.start, runNow)} cancel={cancel} canCancel={status.canCancel} /> : null}
-      {screen === "working" ? <WorkingPanel dto={status} offline={offline} cancel={cancel} /> : null}
-      {screen === "generate" ? <GeneratePanel busy={busy} onGenerate={() => void run(actions.generate, () => { setSaved(null); runNow(); })} cancel={cancel} canCancel={status.canCancel} deferredCount={deferredIds.length} /> : null}
-      {screen === "review" ? (
+      {!canWrite && (screen === "start" || screen === "generate" || screen === "review") ? <ReadOnlyPanel screen={screen} materialId={context.materialId} /> : null}
+
+      {canWrite && screen === "start" ? <StartPanel busy={busy} onStart={() => void run(actions.start, runNow)} cancel={cancel} canCancel={status.canCancel} /> : null}
+      {screen === "working" ? <WorkingPanel dto={shown} offline={offline} cancel={cancel} /> : null}
+      {canWrite && screen === "generate" ? <GeneratePanel busy={busy} onGenerate={() => void run(actions.generate, () => { setSaved(null); runNow(); })} cancel={cancel} canCancel={status.canCancel} deferredCount={deferredIds.length} /> : null}
+      {canWrite && screen === "review" ? (
         plan === null ? (
           <Alert tone="warning" title="No hemos podido cargar la propuesta.">
             <Button variant="secondary" size="sm" onClick={() => router.refresh()} className="mt-2">
@@ -201,8 +208,8 @@ export function AdaptationView({
         )
       ) : null}
       {screen === "ready" ? <ReadyPanel dto={status} materialId={context.materialId} info={readyInfo} /> : null}
-      {screen === "blocked" ? <BlockedPanel dto={status} materialId={context.materialId} busy={busy} onReopen={() => void run(actions.reopen, () => setSaved(null))} /> : null}
-      {screen === "failed" ? <FailedPanel dto={status} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }), runNow)} cancel={cancel} /> : null}
+      {screen === "blocked" ? <BlockedPanel dto={status} materialId={context.materialId} busy={busy} canWrite={canWrite} onReopen={() => void run(actions.reopen, () => setSaved(null))} /> : null}
+      {screen === "failed" ? <FailedPanel dto={shown} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }), runNow)} cancel={cancel} /> : null}
       {screen === "cancelled" ? <CancelledPanel materialId={context.materialId} /> : null}
     </div>
   );

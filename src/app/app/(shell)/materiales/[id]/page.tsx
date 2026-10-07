@@ -14,7 +14,7 @@ import { Alert, Badge } from "@/components/ui/feedback";
 import { Card, PageHeader } from "@/components/ui/layout";
 import { failureMessage } from "@/lib/ai/errors";
 import { resolveContext } from "@/lib/analysis/context";
-import { requireWorkspace } from "@/lib/auth/workspace";
+import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { formatDay } from "@/lib/format/date";
 import { analysisQuotaMessage } from "@/lib/materials/messages";
 import { getMaterialDetail, getSubjects } from "@/lib/materials/repository";
@@ -24,24 +24,30 @@ import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { IN_PROGRESS, type MaterialStatus } from "@/lib/materials/types";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog, listProfiles } from "@/lib/profiles/repository";
-import { listMaterialAdaptations } from "@/lib/adaptation/orchestration/page-data";
+import { AdaptationList } from "@/components/adaptation/adaptation-list";
+import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
+import { hasRole } from "@/lib/auth/workspace-select";
 import { createAdaptationFromMaterialAction } from "../../adaptaciones/actions";
 import { deleteMaterialAction, retryAnalysisAction, updateContextAction } from "../actions";
 
 export const metadata: Metadata = { title: "Material" };
 
-export default async function MaterialPage({ params }: PageProps<"/app/materiales/[id]">) {
+export default async function MaterialPage({ params, searchParams }: PageProps<"/app/materiales/[id]">) {
   const { id } = await params;
+  const query = await searchParams;
   const ctx = await requireWorkspace();
   const [detail, catalog, subjects, profiles, recent] = await Promise.all([
     getMaterialDetail(ctx.workspace.id, id),
     getCatalog(),
     getSubjects(),
     listProfiles(ctx.workspace.id),
-    listMaterialAdaptations(id),
+    listAdaptations({ materialId: id, limit: 10 }),
   ]);
   if (!detail) notFound();
   const profileOptions = profiles.map((p) => ({ id: p.id, name: p.display_name }));
+  // `?perfil=` comes from "Adaptar un material" on a profile or right after creating one: only preselects, never trusted.
+  const preselected = typeof query.perfil === "string" && profileOptions.some((p) => p.id === query.perfil) ? query.perfil : undefined;
+  const canWrite = hasRole(ctx.role, WRITE_ROLES);
 
   const { material, file, analysis, meta, analysisOutdated } = detail;
   const status = material.status as MaterialStatus;
@@ -102,10 +108,29 @@ export default async function MaterialPage({ params }: PageProps<"/app/materiale
             <>
               <IdentifiedCard analysis={analysis} reused={meta?.source === "reused"} />
               <ReviewNotice analysis={analysis} />
+              {/* The next step comes right after what was understood, not after every detail of the analysis. */}
+              {status === "analyzed" ? (
+                <div id="adaptar" className="scroll-mt-6">
+                  <StartAdaptationCard
+                    profiles={profileOptions}
+                    initialProfileId={preselected}
+                    canWrite={canWrite}
+                    newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
+                    create={createAdaptationFromMaterialAction.bind(null, material.id)}
+                  />
+                </div>
+              ) : null}
+              {recent.length > 0 ? (
+                <section aria-labelledby="adaptaciones-material" className="space-y-3">
+                  <h2 id="adaptaciones-material" className="text-lg font-semibold">
+                    Adaptaciones de este material
+                  </h2>
+                  <AdaptationList items={recent} show={{ material: false, profile: true }} />
+                </section>
+              ) : null}
               <ActivitiesList analysis={analysis} />
               <ProtectedList analysis={analysis} />
               <VisualsList analysis={analysis} />
-              <StartAdaptationCard profiles={profileOptions} recent={recent} create={createAdaptationFromMaterialAction.bind(null, material.id)} />
             </>
           ) : null}
         </div>

@@ -9,8 +9,7 @@ import { SelectField } from "@/components/ui/fields";
 import { Alert } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
-import { actionErrorCopy, statusLabel } from "@/lib/adaptation/presentation/copy";
-import { formatDateTime } from "@/lib/format/date";
+import { actionErrorCopy } from "@/lib/adaptation/presentation/copy";
 
 export interface ProfileOption {
   id: string;
@@ -18,20 +17,25 @@ export interface ProfileOption {
 }
 
 /**
- * Entry point from an analyzed material: choose the functional profile and create the adaptation, then go to its page.
- * The workspace, the plan and the limits are resolved on the server; the key makes a double click create one adaptation.
+ * The one entry point that creates an adaptation (reached from the material, from a profile and from the home screen): choose the
+ * functional profile and create it, then go to its page, where nothing starts until the teacher says so. The workspace, the plan
+ * and the limits are resolved on the server; the key makes a double click create one adaptation.
  */
 export function StartAdaptationCard({
   profiles,
-  recent,
+  initialProfileId,
+  canWrite,
+  newProfileHref,
   create,
 }: {
   profiles: ProfileOption[];
-  recent: Array<{ id: string; status: string; createdAt: string }>;
+  initialProfileId?: string | undefined;
+  canWrite: boolean;
+  newProfileHref: string;
   create: (input: { learnerProfileId: string | null; requestKey: string }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
-  const [profileId, setProfileId] = useState(profiles.length === 1 ? profiles[0]!.id : "");
+  const [profileId, setProfileId] = useState(initialProfileId ?? (profiles.length === 1 ? profiles[0]!.id : ""));
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
@@ -66,16 +70,16 @@ export function StartAdaptationCard({
   return (
     <Card className="space-y-4">
       <h2 className="text-lg font-semibold">Adaptar este material</h2>
-      {profiles.length === 0 ? (
+      {!canWrite ? (
+        <p className="text-sm text-muted-foreground">Tienes acceso de solo lectura en este espacio de trabajo: puedes ver las adaptaciones, pero no crear nuevas.</p>
+      ) : profiles.length === 0 ? (
         <>
-          <p className="text-sm text-muted-foreground">Para adaptar el material necesitas un perfil con las necesidades que quieres tener en cuenta.</p>
-          <LinkButton href="/app/alumnos/nuevo" variant="secondary">
-            Crear un perfil
-          </LinkButton>
+          <p className="text-sm text-muted-foreground">Para adaptar el material necesitas un perfil con las necesidades que quieres tener en cuenta. Al crearlo volverás aquí.</p>
+          <LinkButton href={newProfileHref}>Crear un perfil</LinkButton>
         </>
       ) : (
         <form onSubmit={submit} noValidate className="space-y-4">
-          <SelectField label="Perfil" hint="Solo se tienen en cuenta sus necesidades, nunca el nombre." value={profileId} error={fieldError} onChange={(e) => setProfileId(e.target.value)}>
+          <SelectField label="Perfil" hint="Solo se tienen en cuenta sus necesidades, nunca el nombre. Después podrás revisar la propuesta antes de crear la ficha." value={profileId} error={fieldError} onChange={(e) => setProfileId(e.target.value)}>
             <option value="">Elige un perfil</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
@@ -88,23 +92,14 @@ export function StartAdaptationCard({
             {pending ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
             Adaptar material
           </Button>
+          <p className="text-sm">
+            ¿Es para otra persona?{" "}
+            <Link href={newProfileHref} className="font-medium text-primary underline underline-offset-2">
+              Crear un perfil nuevo
+            </Link>
+          </p>
         </form>
       )}
-      {recent.length > 0 ? (
-        <div className="space-y-2 border-t border-border pt-4">
-          <h3 className="text-sm font-semibold">Adaptaciones de este material</h3>
-          <ul className="space-y-1 text-sm">
-            {recent.map((item) => (
-              <li key={item.id}>
-                <Link href={`/app/adaptaciones/${item.id}`} className="inline-flex min-h-11 items-center gap-2 font-medium text-primary underline underline-offset-2">
-                  {formatDateTime(item.createdAt)}
-                </Link>{" "}
-                <span className="text-muted-foreground">· {statusLabel(item.status)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </Card>
   );
 }
