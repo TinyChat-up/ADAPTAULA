@@ -54,7 +54,7 @@ Las secciones que dependen de un flag o un plan (p. ej. Clases en Free) se muest
 
 **Onboarding (máx. 3 pasos):** ¿Qué enseñas? (Primaria / ESO / Bachillerato / varias) → ¿Cómo quieres empezar? (Adaptar una ficha ahora / Crear primero un perfil / Ver ejemplo) → Privacidad ("Puedes utilizar alias en lugar del nombre real de tus alumnos.") → **Entrar en Adaptaula**.
 
-**Dashboard:** "Buenos días, [nombre]" (saludo según la hora en Europe/Madrid) · CTA grande **+ Adaptar material** · tarjetas (adaptaciones este mes, perfiles, plan, uso) · Continuar trabajando (últimas 4) · Tus clases. Estado vacío: *"Empieza subiendo una ficha que ya utilizas."*
+**Dashboard:** "Buenos días, [nombre]" (saludo según la hora en Europe/Madrid) · CTA grande **+ Adaptar material** · tarjetas (adaptaciones este mes, perfiles, plan, uso) · *(Fase 6)* **Necesitan tu atención** (pendientes de empezar, esperando revisión, listas para crear la ficha, con error o que necesitan revisión), **En curso** y **Fichas preparadas** (con «Ver todas las adaptaciones» → historial); si hay materiales analizados y ninguna adaptación, «Siguiente paso: adapta un material» · Tus materiales (últimos 4) · Tus clases. Estado vacío: *"Empieza subiendo una ficha que ya utilizas."*
 
 **Wizard `/app/adaptar`** (estado en la URL y en el cliente; un paso visible cada vez, con barra de progreso y atrás/siguiente):
 1. **Material** *(implementado en `/app/adaptar` como pantalla propia)*: título «Adapta un material», área de arrastrar y soltar («Arrastra tu ficha aquí» / «o selecciona un archivo»), formatos y límites del plan visibles, tarjeta del archivo (nombre, tipo, tamaño, vista previa si es imagen, cambiar/quitar) y el botón «Analizar material». Aviso de privacidad **siempre visible, sin modal**: «Evita incluir información personal innecesaria del alumnado en los archivos que subas.» Todavía no pide perfil: se elige después, cuando el material está comprendido. Las páginas de un PDF se muestran tras la subida (el navegador no puede contarlas con fiabilidad).
@@ -118,6 +118,25 @@ Las plantillas controlan **solo la presentación** (`visual_template`), nunca la
 `estandar` · `lectura-accesible` · `baja-carga-visual` · `visual` · `ejercicios` · `ciencias` · `matematicas` · `secundaria-sobria`.
 
 Por defecto: Primaria → `estandar`; ESO/Bachillerato → `secundaria-sobria`. Primaria admite ilustración moderada, bloques amplios y espacio para escribir. ESO/Bachillerato: jerarquía, esquemas, organizadores y sin iconografía infantil.
+
+## Flujo del docente de punta a punta (Fase 6)
+
+Un solo camino, sobre las pantallas existentes y sin asistente nuevo:
+
+1. **Subir** en `/app/adaptar` → la ficha del material muestra el análisis en curso y se actualiza sola al terminar.
+2. **Adaptar este material** aparece justo después de «Adaptaula ha identificado» y de los puntos a revisar, antes del detalle de actividades.
+3. **¿Para quién?** Se elige un perfil. Sin perfiles: «Crear un perfil» abre `/app/alumnos/nuevo?material=<id>` y, al crearlo, se vuelve al material con ese perfil elegido (`?perfil=`). Con perfiles hay también «Crear un perfil nuevo».
+4. **Adaptar material** crea la adaptación (un doble clic crea una) y lleva a su página, donde **nada empieza hasta que el docente pulsa «Preparar propuesta de adaptación»**.
+5. Propuesta → **revisión del docente** («Guardar revisión») → **«Crear material adaptado»**: cada paso es una decisión explícita; recargar no la toma por el docente.
+6. **Ficha preparada**: «Ver la ficha» y **«Descargar PDF»** en la misma tarjeta; en la vista, «Vista del alumno» y «Descargar PDF».
+
+**Entradas naturales, un solo flujo.** Desde el material (tarjeta), desde un perfil (`/app/alumnos/[id]` → «Adaptar un material con este perfil» → material con `?perfil=`), desde `/app/adaptar` («¿Ya lo has subido?» → material) y desde el inicio. Todas terminan en la misma tarjeta y la misma acción de servidor; no hay otra forma de crear una adaptación.
+
+**Estados en listas** (`src/lib/adaptation/presentation/list.ts`; inicio, historial, material y perfil): Pendiente de empezar · Preparando propuesta · Esperando tu revisión · Lista para crear la ficha · Preparando ficha · Revisando calidad · Ficha preparada · Necesita tu revisión · No se pudo completar · Cancelada. Una adaptación que espera la decisión del docente nunca aparece «en curso». Cada fila lleva la siguiente acción como enlace (Empezar, Revisar propuesta, Crear ficha, Ver progreso, Ver ficha…), con texto e icono, nunca solo color.
+
+**Solo lectura** (rol `viewer`): ve materiales, adaptaciones, estados, la ficha y su PDF; no ve comandos («Adaptar material», «Preparar propuesta», revisión, «Crear material adaptado», reintentar, cancelar) y su pantalla de adaptación no pide ejecutar nada.
+
+**Historial** (`/app/historial`): todas las adaptaciones, de la actividad más reciente a la más antigua; vacío → «Adaptar material».
 
 ## Pantalla de adaptación (`/app/adaptaciones/[id]`)
 
