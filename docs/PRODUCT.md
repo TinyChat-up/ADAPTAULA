@@ -37,7 +37,9 @@ North Star: **adaptaciones descargadas por profesor activo semanal.**
 
 ## Planes
 
-Los valores viven en la tabla `plans` y se pueden cambiar sin desplegar. Estos son los valores iniciales:
+Los valores viven en la tabla `plans` (sembrada por `supabase/seed.sql`) y se pueden cambiar sin desplegar: es la **única fuente**. El control de cuota (`adaptation_entitlement_limit`, `consume_quota`), la pantalla de uso (`workspace_usage`) y `/precios` la leen; ningún componente lleva números de planes. Estos son los valores iniciales.
+
+**Todos son provisionales** hasta cerrar precios y economía unitaria. En concreto, **Free = 5 adaptaciones/mes es un valor provisional**, no una decisión económica: permite evaluar el producto de verdad con tus fichas, sigue limitando el coste y se revisará con el pricing definitivo. No cambia los límites de análisis (Free 10/mes), que también son provisionales. `/precios` muestra los valores como «precios y límites de lanzamiento», sin compromiso comercial definitivo.
 
 | | Free | Pro | Max |
 |---|---|---|---|
@@ -76,21 +78,21 @@ Las dimensiones no se infieren nunca automáticamente de un diagnóstico. El edi
 
 ## Presets (editables, nunca bloqueantes)
 
-Un preset precarga dimensiones; el docente puede cambiarlas todas. Orientación pedagógica de cada uno (la usa el planificador de IA y la UI para explicar):
+Un preset es un **atajo funcional**, no una categoría diagnóstica: precarga un conjunto de dimensiones (necesidades funcionales) que el docente puede cambiar todas. Ni su id ni su nombre se guardan en el perfil ni llegan a la IA: lo que se guarda y se envía son solo las dimensiones resultantes. Su nombre visible describe el apoyo que configura, nunca una condición. Los ids internos (`dislexia`, `tdah`…) se mantienen por compatibilidad del código y los tests; no se muestran y no se persisten.
 
-- **Dislexia**: fragmentar textos largos, instrucciones directas, espacio suficiente, resaltar lo esencial, reducir copia, aclarar vocabulario. Mantener la demanda cognitiva cuando la lectura no es el objetivo. Ninguna tipografía es "la solución".
-- **TDAH / funciones ejecutivas**: actividades fragmentadas, instrucciones numeradas, objetivo visible, menos distractores, checklist, duración clara, una acción por paso. No reducir la dificultad intelectual.
-- **Comunicación social y predictibilidad (TEA)**: lenguaje explícito, sin ambigüedad innecesaria, estructura predecible, pasos anticipados, menos decoración. No asumir pictogramas, ni discapacidad intelectual. No infantilizar.
-- **Dificultades lingüísticas (TDL)**: sintaxis clara, vocabulario explicado, ejemplos, menor densidad verbal, instrucciones separadas, comprobación de comprensión.
-- **Necesidades cognitivas significativas**: según la competencia real indicada por el docente. Lenguaje concreto, menos abstracción, ejemplos resueltos, práctica guiada, pasos pequeños, menos alternativas. No convertir una ficha adolescente en material infantil.
-- **Dificultad matemática (discalculia)**: pasos visibles, ejemplos resueltos, alineación espacial, representación visual, menos operaciones simultáneas. Preservar el razonamiento matemático cuando sea el objetivo.
-- **Altas capacidades**: profundidad, conexiones, transferencia, preguntas abiertas, múltiples soluciones, pensamiento crítico, elección. No "más ejercicios".
-- **Incorporación tardía / lengua**: vocabulario esencial, definiciones sencillas, imágenes informativas, estructuras repetibles, glosario, apoyo bilingüe solo si se pide. No confundir lengua con capacidad.
-- **Discapacidad visual**: contraste, tipografía escalable, estructura, nada solo por color, texto alternativo, descripción de diagramas.
-- **Discapacidad auditiva**: instrucciones escritas, vocabulario explícito, transcripciones, nada esencial solo por audio.
-- **Dificultades motrices**: menos copia y escritura, respuestas por selección, teclado, espacios amplios. No evaluar destreza motriz si no es el objetivo.
-- **Vulnerabilidad socioeducativa**: no inferir capacidades; evitar actividades que exijan impresora, compras, internet en casa, apoyo familiar o dispositivos.
-- **Ansiedad / regulación**: instrucciones predecibles, orden claro, opciones válidas, lenguaje no amenazante, trabajo visible controlado, checkpoints.
+Qué configura cada uno (`src/lib/profiles/presets.ts`; las dimensiones están congeladas en `tests/unit/fixtures/profile-presets-dimensions.json`):
+
+- **Lectura y decodificación**: fragmentar textos largos, instrucciones directas, espacio suficiente, resaltar lo esencial, reducir copia, aclarar vocabulario. Mantener la demanda cognitiva cuando la lectura no es el objetivo. Ninguna tipografía es "la solución".
+- **Atención, planificación y organización**: actividades fragmentadas, instrucciones numeradas, objetivo visible, menos distractores, checklist, duración clara, una acción por paso. No reducir la dificultad intelectual.
+- **Lenguaje explícito y estructura predecible**: lenguaje explícito, sin ambigüedad innecesaria, estructura predecible, pasos anticipados, menos decoración. No asumir pictogramas. No infantilizar.
+- **Comprensión y expresión del lenguaje**: sintaxis clara, vocabulario explicado, ejemplos, menor densidad verbal, instrucciones separadas, comprobación de comprensión.
+- **Lenguaje concreto y práctica guiada**: según la competencia real indicada por el docente. Lenguaje concreto, menos abstracción, ejemplos resueltos, práctica guiada, pasos pequeños, menos alternativas. No convertir una ficha adolescente en material infantil.
+- **Sentido numérico y pasos en matemáticas**: pasos visibles, ejemplos resueltos, alineación espacial, representación visual, menos operaciones simultáneas. Preservar el razonamiento matemático cuando sea el objetivo.
+- **Ampliación y profundización**: profundidad, conexiones, transferencia, preguntas abiertas, múltiples soluciones, pensamiento crítico, elección. No "más ejercicios".
+- **Vocabulario y apoyo en la lengua de la clase**: vocabulario esencial, definiciones sencillas, imágenes informativas, estructuras repetibles, glosario, apoyo bilingüe solo si se pide. No confundir lengua con capacidad.
+- **Acceso visual: letra ampliada y contraste**: contraste, tipografía escalable, estructura, nada solo por color, texto alternativo, descripción de diagramas.
+- **Todo por escrito, nada solo por audio**: instrucciones escritas, vocabulario explícito, transcripciones, nada esencial solo por audio.
+- **Menos escritura y respuestas por selección**: menos copia y escritura, respuestas por selección, espacios amplios.
 
 ## Tipos de adaptación
 

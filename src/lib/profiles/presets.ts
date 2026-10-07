@@ -5,7 +5,7 @@ type Active = Exclude<SupportLevel, "none">;
 export interface ProfilePreset {
   id: string;
   label: string;
-  /** Always framed as a starting point. A preset is never stored and never implies a diagnosis. */
+  /** What the preset configures, in functional terms. Always framed as a starting point; never stored, never a diagnosis. */
   description: string;
   supports: Partial<Record<DimensionKey, Active>>;
   limits?: FunctionalProfile["limits"];
@@ -16,13 +16,14 @@ const m: Active = "medium";
 const h: Active = "high";
 
 /**
- * Orientative starting points (docs/PRODUCT.md § Presets). Only the resulting dimensions are saved on the
- * profile; the preset's name is not, so adaptations are driven by needs and never by a label.
+ * Orientative starting points (docs/PRODUCT.md § Presets), named after the supports they configure, never after a condition.
+ * Only the resulting dimensions are saved on the profile; the preset (id or name) is not, so adaptations are driven by needs and
+ * never by a label. The ids are stable internal keys (the form's state and the tests use them) and are never shown.
  */
 export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   {
     id: "dislexia",
-    label: "Dislexia",
+    label: "Lectura y decodificación",
     description: "Textos más manejables y menos copia, manteniendo la exigencia cuando leer no es el objetivo.",
     supports: {
       decoding_support: h, reading_chunk_size: h, text_length: m, sentence_length: m, line_spacing: h,
@@ -31,7 +32,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "tdah",
-    label: "TDAH / funciones ejecutivas",
+    label: "Atención, planificación y organización",
     description: "Tareas fragmentadas, objetivo visible y menos distractores, sin bajar el nivel intelectual.",
     supports: {
       instruction_chunking: h, number_of_visible_tasks: h, checklist_support: h, visual_distraction_reduction: m,
@@ -41,7 +42,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "tea",
-    label: "TEA",
+    label: "Lenguaje explícito y estructura predecible",
     description: "Lenguaje explícito, estructura predecible y menos estímulos, sin asumir pictogramas ni infantilizar.",
     supports: {
       literal_language: h, figurative_language_support: h, explicit_expectations: h, predictable_structure: h,
@@ -51,7 +52,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "lenguaje",
-    label: "Dificultades del lenguaje",
+    label: "Comprensión y expresión del lenguaje",
     description: "Sintaxis clara, vocabulario explicado y menor densidad verbal.",
     supports: {
       receptive_language_support: h, vocabulary_support: h, syntax_complexity: m, sentence_length: m,
@@ -60,7 +61,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "discalculia",
-    label: "Dificultades matemáticas / discalculia",
+    label: "Sentido numérico y pasos en matemáticas",
     description: "Pasos visibles y ejemplos resueltos, preservando el razonamiento matemático.",
     supports: {
       number_sense_support: h, worked_examples: h, operation_steps: h, visual_math_support: m,
@@ -69,7 +70,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "cognitivas",
-    label: "Necesidades cognitivas significativas",
+    label: "Lenguaje concreto y práctica guiada",
     description: "Lenguaje concreto y práctica guiada en pasos pequeños, ajustada a la competencia real y sin infantilizar.",
     supports: {
       sentence_length: h, vocabulary_complexity: h, text_length: h, instruction_chunking: h, worked_examples: h,
@@ -80,7 +81,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "altas-capacidades",
-    label: "Altas capacidades",
+    label: "Ampliación y profundización",
     description: "Profundidad, conexiones y preguntas abiertas; no más ejercicios.",
     supports: {
       extension_tasks: h, conceptual_depth: h, reduced_repetition: h, open_ended_tasks: m,
@@ -89,7 +90,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "incorporacion-linguistica",
-    label: "Incorporación lingüística",
+    label: "Vocabulario y apoyo en la lengua de la clase",
     description: "Vocabulario esencial y apoyos visuales. La lengua no es una medida de capacidad.",
     supports: {
       vocabulary_support: h, receptive_language_support: h, visual_support: h, figurative_language_support: h,
@@ -98,7 +99,7 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "visual",
-    label: "Discapacidad visual",
+    label: "Acceso visual: letra ampliada y contraste",
     description: "Contraste, letra ampliada, estructura y nada que dependa solo de la imagen o del color.",
     supports: {
       large_print: h, font_size: h, high_contrast: m, alt_text: h, image_dependency: h, spacing: h,
@@ -107,13 +108,13 @@ export const PROFILE_PRESETS: readonly ProfilePreset[] = [
   },
   {
     id: "auditiva",
-    label: "Discapacidad auditiva",
+    label: "Todo por escrito, nada solo por audio",
     description: "Instrucciones escritas, transcripciones y nada esencial solo por audio.",
     supports: { written_instructions: h, visual_support: h, transcript_support: h, audio_dependency_reduction: h, vocabulary_support: l },
   },
   {
     id: "motrices",
-    label: "Dificultades motrices",
+    label: "Menos escritura y respuestas por selección",
     description: "Menos copia y escritura, respuestas por selección y espacios amplios.",
     supports: {
       writing_amount: h, alternative_response: h, selection_based_response: h, fine_motor_demand: h,

@@ -10,7 +10,7 @@ async function createProfile(page: Page, alias: string, preset?: string) {
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
   if (preset) {
-    await page.getByLabel("Configuración", { exact: true }).selectOption({ label: preset });
+    await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: preset });
     await page.getByRole("button", { name: "Aplicar" }).click();
   }
   await page.getByRole("button", { name: "Crear perfil" }).click();
@@ -27,7 +27,7 @@ test("el destino tras el login no admite redirecciones externas", async ({ page 
   await expect(page.locator(`input[name="next"]`).first()).toHaveValue("/app");
 });
 
-test("registro → onboarding → crear perfil con configuración orientativa → editar → listado", async ({ page }) => {
+test("registro → onboarding → crear perfil desde un punto de partida → editar → listado", async ({ page }) => {
   await signUpAndOnboard(page, unique());
   await expect(page).toHaveURL(/\/app\/alumnos\/nuevo/);
 
@@ -36,7 +36,7 @@ test("registro → onboarding → crear perfil con configuración orientativa �
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
 
   await expect(page.getByText("Todavía no has indicado ningún apoyo")).toBeVisible();
-  await page.getByLabel("Configuración", { exact: true }).selectOption({ label: "TDAH / funciones ejecutivas" });
+  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Atención, planificación y organización" });
   await page.getByRole("button", { name: "Aplicar" }).click();
 
   await expect(page.getByText("instrucciones breves y divididas en pasos (mucho)")).toBeVisible();
@@ -120,7 +120,7 @@ test("otro usuario no puede ver un perfil ajeno: 404 sin pistas", async ({ page,
 
 test("accesibilidad (axe) en las pantallas principales de la app", async ({ page }) => {
   await signUpAndOnboard(page, unique());
-  await createProfile(page, "A11y", "Dislexia");
+  await createProfile(page, "A11y", "Lectura y decodificación");
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso", "/app/adaptar"]) {
     await page.goto(path);
     if (path === "/app/alumnos/nuevo") await page.getByRole("button", { name: /^Lectura/ }).click();
@@ -131,7 +131,7 @@ test("accesibilidad (axe) en las pantallas principales de la app", async ({ page
 
 test("sin desbordamiento horizontal en móvil y escritorio", async ({ page }) => {
   await signUpAndOnboard(page, unique());
-  await createProfile(page, "Resp", "TEA");
+  await createProfile(page, "Resp", "Lenguaje explícito y estructura predecible");
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso"]) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

@@ -16,7 +16,7 @@ export const FAQ_ITEMS = [
   },
   {
     q: "¿Y si no soy experto en adaptaciones?",
-    a: "No hace falta. Puedes partir de una configuración orientativa y ver, en lenguaje claro, cómo se aplicará. Todo se puede cambiar.",
+    a: "No hace falta. Puedes partir de un punto de partida que precarga necesidades funcionales y ver, en lenguaje claro, cómo se aplicará. Todo se puede cambiar.",
   },
   {
     q: "¿Se modifican los objetivos de la ficha?",

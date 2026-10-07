@@ -76,8 +76,8 @@ export function Needs() {
         ))}
       </ul>
       <p className="mt-8 max-w-3xl text-muted-foreground">
-        Si lo prefieres, puedes partir de una configuración orientativa (por ejemplo, para dislexia o TDAH) y modificarla por completo.
-        Una configuración orientativa no es un diagnóstico: Adaptaula trabaja con las necesidades que tú indiques.
+        Si lo prefieres, puedes partir de un punto de partida (por ejemplo, apoyo a la lectura o a la organización) y modificarlo por completo.
+        Un punto de partida no es un diagnóstico: Adaptaula trabaja con las necesidades que tú indiques.
       </p>
     </Section>
   );

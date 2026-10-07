@@ -56,10 +56,14 @@ export function PricingGrid({ plans }: { plans: PublicPlan[] }) {
     return <Alert tone="warning" title="No hemos podido cargar los planes">Vuelve a intentarlo en unos minutos.</Alert>;
   }
   return (
-    <div className={cn("grid gap-6", plans.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2")}>
-      {plans.map((p) => (
-        <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} />
-      ))}
+    <div className="space-y-4">
+      <div className={cn("grid gap-6", plans.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2")}>
+        {plans.map((p) => (
+          <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} />
+        ))}
+      </div>
+      {/* The numbers are read from the plans table; they are launch values, not a final commercial commitment (docs/PRODUCT.md). */}
+      <p className="text-center text-sm text-muted-foreground">Precios y límites de lanzamiento: pueden ajustarse antes de que se activen los planes de pago.</p>
     </div>
   );
 }

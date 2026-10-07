@@ -21,15 +21,15 @@ export function PresetPicker({
   return (
     <Card className="space-y-4">
       <div>
-        <h3 className="font-semibold">Empezar desde una configuración orientativa</h3>
+        <h3 className="font-semibold">Empezar desde un punto de partida</h3>
         <p className="text-sm text-muted-foreground">
-          Opcional. Es un punto de partida que puedes modificar por completo: no es un diagnóstico y no se guarda como tal.
+          Opcional. Precarga unas necesidades funcionales que después puedes cambiar por completo. No representa ni guarda ningún diagnóstico.
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
-          <SelectField label="Configuración" value={presetId} onChange={(e) => onSelect(e.target.value)}>
-            <option value="">Ninguna</option>
+          <SelectField label="Punto de partida" value={presetId} onChange={(e) => onSelect(e.target.value)}>
+            <option value="">Ninguno</option>
             {PROFILE_PRESETS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
@@ -44,7 +44,7 @@ export function PresetPicker({
       {preset ? (
         <p className="text-sm">
           {preset.description}
-          {hasConfiguration ? <span className="text-muted-foreground"> Al aplicarla se sustituye la configuración actual.</span> : null}
+          {hasConfiguration ? <span className="text-muted-foreground"> Al aplicarlo se sustituye la configuración actual.</span> : null}
         </p>
       ) : null}
     </Card>
