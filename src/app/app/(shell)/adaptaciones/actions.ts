@@ -1,12 +1,10 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { after } from "next/server";
 import { z } from "zod";
 import { getSupabase } from "@/lib/auth/session";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
-import { logger } from "@/lib/logger";
 import { AdaptationTypeSchema } from "@/lib/schemas/adaptation-type";
 import { toPublic, type PublicResult } from "@/lib/adaptation/orchestration/public";
 import {
@@ -27,15 +25,15 @@ import {
   type SubmitReviewDto,
 } from "@/lib/adaptation/orchestration/service";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
-import { orchestratorDeps, serviceDeps } from "@/lib/adaptation/orchestration/server";
-import { processAdaptationJobs } from "@/lib/adaptation/orchestration/worker";
+import { serviceDeps } from "@/lib/adaptation/orchestration/server";
 
 /**
- * Public application commands for the adaptation pipeline (no UI yet). Every action: resolves the actor on the SERVER (workspace and
- * role never come from the client), validates its input, calls the application service (the only place with domain rules) and
- * answers with a safe, generic result. None of them calls an AI provider: the stages are durable jobs that the scheduler's worker
- * runs (`/api/cron/adaptations`). After a command that enqueues work we ask the worker to take one job soon, purely to cut latency:
- * it is an optimisation, never the guarantee (if it does not run, the next scheduler tick or the reconciler picks the job up).
+ * Public application commands for the adaptation pipeline. Every action: resolves the actor on the SERVER (workspace and role never
+ * come from the client), validates its input, calls the application service (the only place with domain rules) and answers with a
+ * safe, generic result. None of them calls an AI provider and all of them are fast: a command that needs a stage persists its
+ * durable job, and the screen runs that job at once in its own awaited request (`POST /api/adaptations/[id]/run`). Server Actions
+ * are dispatched one at a time per client, so a stage that takes minutes must not live here (it would hold back "Cancelar").
+ * The daily cron only recovers jobs nobody finished.
  */
 
 async function context() {
@@ -43,16 +41,6 @@ async function context() {
   const supabase = await getSupabase();
   const actor: Actor = { userId: ctx.user.id, workspaceId: ctx.workspace.id, canWrite: hasRole(ctx.role, WRITE_ROLES) };
   return { actor, deps: serviceDeps(supabase) };
-}
-
-function nudgeWorker() {
-  after(async () => {
-    try {
-      await processAdaptationJobs(orchestratorDeps(), { limit: 1 });
-    } catch {
-      logger.warn("adaptation_worker_nudge_failed");
-    }
-  });
 }
 
 const Id = z.uuid();
@@ -84,9 +72,7 @@ export async function createAdaptationFromMaterialAction(materialId: string, inp
 export async function startPlanningAction(adaptationId: string): Promise<PublicResult<EnqueuedDto>> {
   if (!Id.safeParse(adaptationId).success) return toPublic({ ok: false, code: "not_found" });
   const { actor, deps } = await context();
-  const result = await startPlanning(deps, actor, adaptationId);
-  if (result.ok) nudgeWorker();
-  return toPublic(result);
+  return toPublic(await startPlanning(deps, actor, adaptationId));
 }
 
 const ReviewInput = z.object({
@@ -107,9 +93,7 @@ export async function submitPlanReviewAction(adaptationId: string, review: unkno
 export async function startGenerationAction(adaptationId: string): Promise<PublicResult<EnqueuedDto>> {
   if (!Id.safeParse(adaptationId).success) return toPublic({ ok: false, code: "not_found" });
   const { actor, deps } = await context();
-  const result = await startGeneration(deps, actor, adaptationId);
-  if (result.ok) nudgeWorker();
-  return toPublic(result);
+  return toPublic(await startGeneration(deps, actor, adaptationId));
 }
 
 export async function reopenReviewAction(adaptationId: string): Promise<PublicResult<{ status: string }>> {
@@ -121,9 +105,7 @@ export async function reopenReviewAction(adaptationId: string): Promise<PublicRe
 export async function retryAdaptationStageAction(adaptationId: string, options?: { acknowledgeAmbiguous?: boolean }): Promise<PublicResult<EnqueuedDto>> {
   if (!Id.safeParse(adaptationId).success) return toPublic({ ok: false, code: "not_found" });
   const { actor, deps } = await context();
-  const result = await retryAdaptationStage(deps, actor, adaptationId, { acknowledgeAmbiguous: options?.acknowledgeAmbiguous === true });
-  if (result.ok) nudgeWorker();
-  return toPublic(result);
+  return toPublic(await retryAdaptationStage(deps, actor, adaptationId, { acknowledgeAmbiguous: options?.acknowledgeAmbiguous === true }));
 }
 
 export async function cancelAdaptationAction(adaptationId: string): Promise<PublicResult<{ cancelled: boolean; status: string }>> {
