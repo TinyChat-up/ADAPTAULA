@@ -6,6 +6,13 @@ import { packageFiles } from "./next.tracing";
 // never through the `node_modules/pdfjs-dist` symlink of pnpm (next.tracing.ts).
 const RASTER_FILES = packageFiles("pdfjs-dist", ["package.json", "legacy/build/pdf.worker.mjs", "standard_fonts/**/*"]);
 
+/**
+ * The compressed serverless Chromium the PDF export unpacks to /tmp on first use: read BY PATH, so the tracer cannot find it. The
+ * sheet's stylesheet and fonts are found by the tracer on its own (listing them again only duplicates entries). Both are checked
+ * after every build by `scripts/smoke-pdf.mjs`.
+ */
+const PDF_FILES = packageFiles("@sparticuz/chromium", ["bin/*"]);
+
 const nextConfig: NextConfig = {
   // Los E2E arrancan su propio `next dev` con otro directorio de build para no chocar con el servidor de desarrollo del docente/dev.
   distDir: process.env.NEXT_DIST_DIR || ".next",
@@ -16,6 +23,7 @@ const nextConfig: NextConfig = {
     // `scripts/smoke-raster.mjs` checks after every build that both traces really contain these files.
     "/api/materials/*/pages/*": RASTER_FILES,
     "/api/materials/*/visuals/*": RASTER_FILES,
+    "/api/adaptations/*/pdf": PDF_FILES,
   },
 };
 

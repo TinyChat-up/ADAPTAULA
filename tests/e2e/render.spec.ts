@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { allowAdaptations, seedReadyDocument } from "./adaptation-seed";
@@ -116,6 +117,15 @@ test("visor: Primaria, Geografía, Bachillerato y estrés: sin desbordes ni sola
   await expect(page.locator(".ms-table").first()).toBeVisible();
   await expect(page.getByText(/Serie \d/)).toHaveCount(0);
   await expect(page.locator(".ms-data").first()).toBeVisible();
+
+  // Descargar PDF (Fase 5.2B): one click gives a real PDF, named after the sheet, and the screen says the download started.
+  const downloading = page.waitForEvent("download", { timeout: 60_000 });
+  await page.getByRole("button", { name: "Descargar PDF" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/^[^\\/]+\.pdf$/);
+  expect(download.suggestedFilename()).not.toContain(ids.geografia!);
+  expect(readFileSync((await download.path())!).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  await expect(page.getByText(/^Descarga iniciada: .+\.pdf$/)).toBeVisible();
 
   // Primaria: the original figures are not available as assets, so the student sheet never pretends they exist.
   await page.goto(`/app/adaptaciones/${ids.primaria}/vista?modo=alumno`);
