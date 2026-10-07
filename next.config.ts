@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     // `scripts/smoke-raster.mjs` checks after every build that both traces really contain these files.
     "/api/materials/*/pages/*": RASTER_FILES,
     "/api/materials/*/visuals/*": RASTER_FILES,
+    "/api/preview-raster-smoke": RASTER_FILES,
   },
 };
 
