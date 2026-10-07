@@ -144,9 +144,9 @@ export interface EnqueuedDto {
 }
 
 /**
- * Persists the planning job and answers. It NEVER calls a provider: the worker does, later, from the durable job.
- * Idempotent (two clicks, one job). Guarantee: an adaptation that exists but has no job (the process died between creating it
- * and this command) is repaired by calling this command again, or by the reconciler, which finds `queued` adaptations without one.
+ * Persists the planning job and answers. It NEVER calls a provider: the job is run right after (`POST /api/adaptations/[id]/run`).
+ * Idempotent (two clicks, one job). An adaptation that exists but has no job is waiting for THIS command: starting is the
+ * teacher's explicit decision, and nothing (not even the recovery cron) starts it for them.
  */
 export async function startPlanning(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<EnqueuedDto>> {
   const no = denied(actor);
@@ -232,6 +232,17 @@ export async function cancelAdaptationCommand(deps: ServiceDeps, actor: Actor, a
 }
 
 const STATUS_KINDS: readonly ArtifactKind[] = ["plan", "plan_validation", "plan_review", "execution_report", "pedagogical_review", "deterministic_review"];
+
+/**
+ * Gate of `POST /api/adaptations/[id]/run`, BEFORE anything is processed. Running a pending stage (it changes persistent state,
+ * calls the provider and can produce a version) takes the capability that starting or retrying it takes: a writer. Reading the
+ * status stays open to every member. A role without permission gets the same "not found" as every other command.
+ */
+export async function authorizeStageRun(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<AdaptationStatusDto>> {
+  const no = denied(actor);
+  if (no) return no;
+  return getAdaptationStatus(deps, actor, adaptationId);
+}
 
 export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<AdaptationStatusDto>> {
   if (!(await owned(deps, actor, adaptationId))) return notFound;

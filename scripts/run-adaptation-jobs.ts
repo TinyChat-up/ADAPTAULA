@@ -22,11 +22,11 @@ async function main() {
   if (!Number.isInteger(limit) || limit < 1 || limit > 10) throw new Error("--limit debe ser un entero entre 1 y 10.");
   if (process.argv.includes("--dry-run")) {
     const store = adaptationStore();
-    const [jobs, needing] = await Promise.all([store.listClaimableJobs(limit), store.listAdaptationsNeedingJob(0, limit)]);
-    console.log(JSON.stringify({ dryRun: true, claimableJobs: jobs.length, adaptationsNeedingJob: needing.length }));
+    const jobs = await store.listClaimableJobs(limit);
+    console.log(JSON.stringify({ dryRun: true, claimableJobs: jobs.length }));
     return;
   }
-  console.log(JSON.stringify(await runAdaptationWorkerCycle(orchestratorDeps(), { limit, minAgeSeconds: 0 })));
+  console.log(JSON.stringify(await runAdaptationWorkerCycle(orchestratorDeps(), { limit })));
 }
 
 void main().catch((error) => {

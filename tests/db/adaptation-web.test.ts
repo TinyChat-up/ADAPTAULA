@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AIError } from "@/lib/ai/errors";
 import { dbEntitlements, getEntitlementUsage } from "@/lib/adaptation/orchestration/entitlements-db";
 import { cancelAdaptation } from "@/lib/adaptation/orchestration/orchestrator";
-import { processAdaptationJobs, reconcileAdaptationJobs, runAdaptationWorkerCycle } from "@/lib/adaptation/orchestration/worker";
+import { processAdaptationJobs, runAdaptationWorkerCycle } from "@/lib/adaptation/orchestration/worker";
 import { cancelAdaptationCommand, createAdaptationCommand, getAdaptationPlan, getAdaptationStatus, getAdaptationVersion, retryAdaptationStage, startGeneration, startPlanning, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import type { AiReviewDraft } from "@/lib/schemas/pedagogical-review";
@@ -308,7 +308,7 @@ describe("reintentos y recuperación", () => {
     expect(await count("public.adaptation_entitlements where adaptation_id = $1", [id])).toBe(1);
   });
 
-  it("18 · un intento ambiguo no se reintenta solo (ni el worker ni el reconciliador) y exige el reconocimiento explícito", async () => {
+  it("18 · un intento ambiguo no se reintenta solo (ni el worker ni la recuperación) y exige el reconocimiento explícito", async () => {
     const w = await web();
     const id = await w.create();
     await startPlanning(w.deps, w.actor, id);
@@ -319,9 +319,9 @@ describe("reintentos y recuperación", () => {
     const first = await tick(w);
     expect(first.ambiguous).toBe(1);
     expect(w.spy.planner).toBe(0);
-    const again = await runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, minAgeSeconds: 0, adaptationIds: w.ids });
+    const again = await runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, adaptationIds: w.ids });
     expect(again.processed.claimed).toBe(0);
-    expect(again.reconciled.planningEnqueued).toBe(0);
+    expect(await jobs(id, "planning")).toBe(1); // nothing new was created either
     expect(w.spy.planner).toBe(0);
     expect(await w.status(id)).toMatchObject({ status: "failed", ambiguousAttempt: true, canRetry: true, error: { code: "ambiguous_attempt" } });
     expect(await retryAdaptationStage(w.deps, w.actor, id)).toMatchObject({ ok: false, code: "action_required" });
@@ -353,31 +353,33 @@ describe("reintentos y recuperación", () => {
     expect(await w.status(id)).toMatchObject({ status: "awaiting_plan_review" });
   });
 
-  it("20 · el reconciliador repara una adaptación queued sin job; dos pasadas no duplican", async () => {
+  it("20 · una adaptación creada y nunca empezada NO la arranca la recuperación: sin job y sin llamada al planner; Empezar sí", async () => {
     const w = await web();
     const id = await w.create();
-    const a = await reconcileAdaptationJobs(w.deps.orchestrator, { minAgeSeconds: 0, limit: 10, adaptationIds: w.ids });
-    const b = await reconcileAdaptationJobs(w.deps.orchestrator, { minAgeSeconds: 0, limit: 10, adaptationIds: w.ids });
-    expect(a.planningEnqueued).toBeGreaterThanOrEqual(1);
-    expect(b.planningEnqueued).toBe(0);
-    expect(await jobs(id, "planning")).toBe(1);
+    for (let i = 0; i < 2; i++) expect(await runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, adaptationIds: w.ids })).toMatchObject({ processed: { claimed: 0 } });
+    expect(await jobs(id, "planning")).toBe(0);
+    expect(w.spy.planner).toBe(0);
+    expect(await w.status(id)).toMatchObject({ status: "queued", nextAction: "start_planning" });
+    expect((await startPlanning(w.deps, w.actor, id)).ok).toBe(true); // the teacher's explicit decision
     await tick(w);
+    expect(w.spy.planner).toBe(1);
     expect((await w.status(id)).status).toBe("awaiting_plan_review");
   });
 
-  it("21 · y repara generation_queued sin job de generación", async () => {
+  it("21 · lo mismo con la generación: la revisión guardada y sin pulsar Generar no genera nada por recuperación", async () => {
     const w = await web({ reviewer: reviewerPass });
     const id = await planned(w);
     await submitPlanReviewCommand(w.deps, w.actor, id, await planReview(w, id));
+    await runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, adaptationIds: w.ids });
     expect(await jobs(id, "generation")).toBe(0);
-    const r = await reconcileAdaptationJobs(w.deps.orchestrator, { minAgeSeconds: 0, limit: 10, adaptationIds: w.ids });
-    expect(r.generationEnqueued).toBeGreaterThanOrEqual(1);
-    expect(await jobs(id, "generation")).toBe(1);
+    expect(w.spy.generator).toBe(0);
+    expect(await w.status(id)).toMatchObject({ status: "generation_queued", nextAction: "start_generation" });
+    await startGeneration(w.deps, w.actor, id);
     await tick(w);
     expect((await w.status(id)).status).toBe("ready");
   });
 
-  it("22 · el reconciliador no salta la revisión ni toca cancelled, blocked, failed ni ready", async () => {
+  it("22 · la recuperación no salta la revisión ni toca cancelled, blocked, failed ni ready", async () => {
     const w = await web({ reviewer: reviewerPass });
     const awaiting = await planned(w);
     const cancelled = await w.create();
@@ -385,7 +387,7 @@ describe("reintentos y recuperación", () => {
     const ready = await delivered(await web({ reviewer: reviewerPass }, {}, w.user));
     void ready;
     const before = await count("public.adaptation_jobs where workspace_id = $1", [w.user.workspaceId]);
-    await reconcileAdaptationJobs(w.deps.orchestrator, { minAgeSeconds: 0, limit: 50, adaptationIds: w.ids });
+    await runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 50, adaptationIds: w.ids });
     expect(await count("public.adaptation_jobs where workspace_id = $1", [w.user.workspaceId])).toBe(before);
     expect((await w.status(awaiting)).status).toBe("awaiting_plan_review");
     expect(await jobs(cancelled, "planning")).toBe(0);
@@ -395,7 +397,7 @@ describe("reintentos y recuperación", () => {
     const w = await web({ reviewer: reviewerPass });
     const id = await w.create();
     await startPlanning(w.deps, w.actor, id);
-    const [a, b] = await Promise.all([runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, minAgeSeconds: 0, adaptationIds: w.ids }), runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, minAgeSeconds: 0, adaptationIds: w.ids })]);
+    const [a, b] = await Promise.all([runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, adaptationIds: w.ids }), runAdaptationWorkerCycle(w.deps.orchestrator, { limit: 5, adaptationIds: w.ids })]);
     expect(a.processed.completed + b.processed.completed).toBe(1);
     expect(w.spy.planner).toBe(1);
     expect(await jobs(id, "planning")).toBe(1);

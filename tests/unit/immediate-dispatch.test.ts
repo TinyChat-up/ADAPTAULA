@@ -48,6 +48,29 @@ describe("no work after the response", () => {
   });
 });
 
+describe("authorization and the human gate", () => {
+  it("both run endpoints check the writer capability before anything is read or processed", () => {
+    const materials = read("src/app/api/materials/[id]/analysis/run/route.ts");
+    expect(materials.indexOf("hasRole(auth.ctx.role, WRITE_ROLES)")).toBeGreaterThan(-1);
+    expect(materials.indexOf("hasRole(auth.ctx.role, WRITE_ROLES)")).toBeLessThan(materials.indexOf("getMaterialDetail("));
+    const adaptations = read("src/app/api/adaptations/[id]/run/route.ts");
+    expect(adaptations.indexOf("authorizeStageRun(")).toBeGreaterThan(-1);
+    expect(adaptations.indexOf("authorizeStageRun(")).toBeLessThan(adaptations.indexOf("processAdaptationStage("));
+    expect(read("src/lib/adaptation/orchestration/service.ts")).toMatch(/export async function authorizeStageRun[\s\S]*?const no = denied\(actor\);\s*if \(no\) return no;/);
+  });
+
+  it("recovery never starts an adaptation: no reconciler, no enqueue from the worker", () => {
+    const worker = read("src/lib/adaptation/orchestration/worker.ts");
+    expect(worker).not.toMatch(/reconcile|enqueuePlanning|enqueueGeneration|listAdaptationsNeedingJob/i);
+    expect(read("src/lib/adaptation/orchestration/store.ts")).not.toMatch(/listAdaptationsNeedingJob/);
+    expect(read("src/lib/config/env.server-schema.ts")).not.toMatch(/RECONCILE/);
+  });
+
+  it("the progress copy no longer promises a wait in a queue", () => {
+    expect(read("src/components/materials/analysis-progress.tsx")).not.toMatch(/en cola|en cuanto sea posible/);
+  });
+});
+
 describe("cron is recovery-only and daily", () => {
   const crons = (JSON.parse(read("vercel.json")) as { crons: Array<{ path: string; schedule: string }> }).crons;
 
