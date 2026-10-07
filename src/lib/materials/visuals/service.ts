@@ -282,6 +282,8 @@ export interface ResolvedVisuals {
   states: Record<string, VisualState>;
   /** Verified PNG bytes per ready visual (only when asked for, e.g. the image route). */
   bytes: Record<string, Uint8Array>;
+  /** The exact physical instance whose bytes are in `bytes` (asset id + sha-256): what an export pins. Only with `withBytes`. */
+  instances: Record<string, { assetId: string; sha256: string }>;
 }
 
 /**
@@ -291,7 +293,7 @@ export interface ResolvedVisuals {
  * alone never makes a visual "ready", and a damaged instance does not hide a valid one.
  */
 export async function resolveVisuals(deps: VisualDeps, input: { materialId: string; analysisFingerprint: string; sourceSha256: string | null; visualIds: readonly string[]; withBytes?: boolean }): Promise<ResolvedVisuals> {
-  const out: ResolvedVisuals = { states: {}, bytes: {} };
+  const out: ResolvedVisuals = { states: {}, bytes: {}, instances: {} };
   const active = input.sourceSha256 ? await deps.reader.activeLocators(input.materialId, input.analysisFingerprint) : [];
   for (const visualId of input.visualIds) {
     const locator = active.find((l) => l.visual_id === visualId && l.source_sha256 === input.sourceSha256);
@@ -310,7 +312,10 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
     if ("failure" in verified) out.states[visualId] = { visualId, status: "extraction_failed", failure: verified.failure, provenance };
     else {
       out.states[visualId] = { visualId, status: "ready", provenance };
-      if (input.withBytes) out.bytes[visualId] = verified.stored;
+      if (input.withBytes) {
+        out.bytes[visualId] = verified.stored;
+        out.instances[visualId] = { assetId: verified.instance.id, sha256: verified.instance.sha256 };
+      }
     }
   }
   return out;

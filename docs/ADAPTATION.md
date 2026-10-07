@@ -405,7 +405,7 @@ Cualquier fallo → `failed` (reintentable) · `cancelled`. Las transiciones las
 
 **Ruta.** `/app/adaptaciones/[id]/vista` (Server Component): autoriza con RLS (otra cuenta → 404), solo adaptaciones entregadas (bloqueada/fallida/sin terminar → «todavía no tiene una ficha entregada»), `?modo=alumno` cambia solo el modo de vista (nunca la cuenta ni la versión). Desde la pantalla «Listo» hay un enlace «Ver la ficha».
 
-**Límites.** Sin exportación PDF para el docente todavía (el motor existe desde la 5.2A; ver «Exportación PDF»), sin imágenes generadas, sin editor, sin composición de fórmulas, sin paginación física propia (la hace el navegador al imprimir, también en el PDF), un solo estilo de ficha.
+**Límites.** La exportación PDF es bajo demanda y no se guarda (5.2B; ver «Exportación PDF — Fase 5.2B»). Sin imágenes generadas, sin editor, sin composición de fórmulas, sin paginación física propia (la hace el navegador al imprimir, también en el PDF), un solo estilo de ficha.
 
 ### Visuales originales: auditoría de geometría y decisión (2026-10-05)
 
@@ -485,7 +485,7 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
 
-**Estado.** Motor implementado y probado **en local** (smoke PDF 24/24). **Validación en runtime de Vercel: DEFERRED** (ver «Validación en Vercel»). Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI: eso es la 5.2B/C. Cero llamadas a modelos.
+**Estado.** Motor implementado y probado **en local** (smoke PDF 24/24). **Validación en runtime de Vercel: DEFERRED** (ver «Validación en Vercel»). Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI en la 5.2A. La ruta y el botón llegan en la 5.2B (sección siguiente). Cero llamadas a modelos.
 
 **Una sola maquetación.** `MaterialDocument` → `buildRenderModel()` → `RenderModel` → `renderPrintHtml()` (`src/lib/render/print/html.ts`) → Chromium → PDF. `renderPrintHtml` renderiza el **mismo** `MaterialSheet` de la vista con el **mismo** `material.css`; Chromium solo aplica `@page` y los `break-*` que ya existían. `pdf-lib` no dibuja nada: solo lee el PDF para validarlo.
 
@@ -493,7 +493,7 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 
 **HTML autocontenido.** Documento completo: CSP en `<meta>` (`default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'`), el `material.css` real con sus `url("./fonts/…")` sustituidas por data URIs de los bytes verificados (cualquier otra `url(` o `@import` es un error), y `MaterialSheet` en modo `student`. El modo docente, otra versión del renderer, un visual sin fijar o con otros bytes son errores explícitos. No contiene scripts, enlaces, URLs `http(s)`, cookies, rutas `/api`, Supabase ni URLs firmadas. Tampoco el panel docente, la clave de respuestas, respuestas inferidas, ids ni trazas (tests en `tests/unit/print-html.test.ts`).
 
-**Visuales fijados.** El `RenderModel` de una exportación lleva `asset:<assetId>@<sha256>` como `src` (estable y parte de su *fingerprint*). Los bytes viajan aparte (`PinnedAsset`: id, sha-256, MIME, bytes) y solo `renderPrintHtml` los convierte en data URI, tras comprobar el checksum y la firma PNG. Si se aporta una instancia más reciente del mismo visual, se ignora. Si falta la fijada, error `asset_unpinned`: nunca hay sustitución. La 5.2A usa fixtures; la 5.2B leerá los bytes con `readAssetInstance`.
+**Visuales fijados.** El `RenderModel` de una exportación lleva `asset:<assetId>@<sha256>` como `src` (estable y parte de su *fingerprint*). Los bytes viajan aparte (`PinnedAsset`: id, sha-256, MIME, bytes) y solo `renderPrintHtml` los convierte en data URI, tras comprobar el checksum y la firma PNG. Si se aporta una instancia más reciente del mismo visual, se ignora. Si falta la fijada, error `asset_unpinned`: nunca hay sustitución. La 5.2A usa fixtures. La 5.2B fija, en el momento de exportar, la instancia que verifica (ver «Fase 5.2B»).
 
 **`material_renderer@v2`.** Sube de versión porque la salida impresa gana garantías nuevas:
 1. **Fuente local fijada.** Inter 4.1, tres caras estáticas oficiales (400/600/700) en WOFF2 con su licencia OFL, en `src/components/material/fonts/`. La familia «Adaptaula Inter» se declara en `material.css`, así que la pantalla (servida desde `/_next/static/media`, sin CDN) y el PDF usan los mismos ficheros. Las sumas sha-256 están fijadas en `sheet-assets.ts`: un fichero distinto hace fallar la impresión. `font_fingerprint` = huella de familia, versión y sumas. No se usa la fuente variable porque Chromium 153 la incrusta como **Type3**. La cursiva se sintetiza, igual que antes en la app (`next/font` solo cargaba el estilo normal).
@@ -544,7 +544,7 @@ En cada una se comprueba: validación sin incidencias, A4, solo Inter, ninguna p
 
 **Prueba en el runtime de producción de Next (local).** Con un Route Handler temporal (no commiteado) que llama a `renderPrintHtml` → motor → `validatePdf`, `next build` + `next start` devolvieron un PDF válido: ≈2,2 s el primero (extracción) y ≈0,2 s los siguientes. Su traza (`.nft.json`) tenía 303 ficheros y 13,7 MB (10,9 MB de `playwright-core`). Ya incluía `material.css` y las tres fuentes, pero **no** el binario de Chromium (`@sparticuz/chromium/bin`).
 
-**Lo que necesitará la Function de exportación (5.2B, sin hacer).**
+**Lo que necesitaba la Function de exportación (escrito en la 5.2A; hecho en la 5.2B, ver la sección siguiente).**
 - `serverExternalPackages`: nada que añadir, porque Next 16 ya trata `playwright-core` y `@sparticuz/chromium` como externos por defecto.
 - `outputFileTracingIncludes` con `packageFiles("@sparticuz/chromium", ["bin/*"])` (ruta física, 66,8 MB; nunca `./node_modules/@sparticuz/chromium/...`, que con pnpm atraviesa un symlink). Total estimado de la Function: ≈80 MB.
 - Un smoke que lea su `.nft.json` y renderice desde una copia aislada, como `smoke:raster`.
@@ -556,6 +556,47 @@ En cada una se comprueba: validación sin incidencias, A4, solo Inter, ninguna p
 - **Sin comprobar en Vercel todavía:** que el binario de Chromium arranca en el runtime real (`@sparticuz/chromium` solo añade sus librerías de Amazon Linux 2023 si detecta el entorno por variables de AWS); tamaño real de la Function, arranque en frío, memoria y tiempos; que `prerenderToNodeStream` funciona en la ruta real; los diccionarios de guionado (`hyphens: auto`) del binario serverless.
 
 **Deuda menor.** El paquete extrae también SwiftShader (≈6 MB) aunque los gráficos estén desactivados.
+
+## Exportación PDF — Fase 5.2B: descarga bajo demanda
+
+**Estado.** Implementada y validada **en local**: el docente descarga la ficha entregada en PDF A4. **Validación en runtime de Vercel: DEFERRED** (igual que en la 5.2A). Se validará cuando el proyecto definitivo de Vercel tenga su configuración y sus variables de entorno. No se reintroduce un endpoint de humo para eso.
+
+**Flujo.** `GET /api/adaptations/[id]/pdf` (`src/app/api/adaptations/[id]/pdf/route.ts`): sesión y espacio de trabajo resueltos en servidor → `exportAdaptationPdf()` (`src/lib/render/print/export.ts`) → respuesta `application/pdf` con `Content-Disposition: attachment`. Todo ocurre dentro de la petición y se espera (`await`): sin cola, sin `after()`, sin *fire-and-forget*. `maxDuration = 60` s; en local la petición completa tarda ≈0,3–0,5 s y la primera de una instancia nueva ≈2,5 s, porque descomprime Chromium.
+
+**Una sola cadena.** `loadRenderInputWith(…, { pin: true })` → `sheetModel(loaded, "student")` (el mismo `buildRenderModel` y las mismas opciones que la vista del alumno) → `renderPrintHtml` (`MaterialSheet` + `material.css`) → `PdfEngine` → `validatePdf`. `sheetModel` es ahora la **única** llamada a `buildRenderModel` de la app: la vista (`/app/adaptaciones/[id]/vista`, ambos modos) y la exportación pasan por ella. `tests/unit/pdf-single-renderer.test.ts` falla si aparece otra llamada, otra librería que dibuje PDF, otro módulo que use Chromium o una ruta que salte el servicio.
+
+**Fuente canónica.** La versión **actual y entregada** guardada en `adaptation_versions` (la misma que muestra la vista). No se ejecutan el planificador, el generador ni el revisor. No hay llamadas a modelos, `ai_runs`, consumo de cuota ni escrituras: la adaptación, sus versiones, sus jobs, sus derechos y sus recortes quedan intactos (tests en `tests/db/pdf-export.test.ts` y `tests/pdf/export.test.ts`). Exportar dos veces la misma versión produce el mismo HTML de impresión. Solo pueden variar los metadatos propios del PDF.
+
+**Visuales.** Los mismos estados que la vista (localizador activo del análisis fijado y del original actual, con los permisos del usuario por RLS y la política del bucket privado). Para el PDF, cada visual listo se fija a la **instancia exacta que verificó al leerla** (`asset:<id>@<sha256>`, con `resolveVisuals(…, withBytes)`, que ahora devuelve también esa instancia), y esos mismos bytes son los que `renderPrintHtml` incrusta. Un visual que falta se comporta igual que en la vista del alumno. Si es esencial, la ficha es `not_renderable` y no se imprime. Si es opcional, sale el marcador neutro. No hay otra forma de colocar imágenes.
+
+**Permisos y respuestas.** Quien puede leer la ficha puede descargarla, también los miembros de solo lectura (`viewer`): la vista ya les deja verla. Una adaptación de otro espacio de trabajo, una inexistente o un id mal formado dan 404 «No hemos encontrado esa adaptación.». Si no hay ficha entregada, 409 «Esta adaptación todavía no tiene una ficha entregada.». Si el documento no se puede leer o la vista del alumno no puede mostrar la ficha, 409 «Esta ficha todavía no se puede descargar completa…». Si falla el motor o la validación, 503 «No hemos podido preparar el PDF…»; el log registra solo el código, nunca contenido. Cabeceras: `Cache-Control: private, no-store`, `Vary: Cookie`, `X-Content-Type-Options: nosniff` y `Content-Length`.
+
+**Nombre del archivo** (`src/lib/render/print/filename.ts`). Es el título de la propia ficha, el que ya ve el docente. Se normaliza (NFC), se quitan los caracteres de control y de formato (incluidos los bidireccionales) y `\ / : * ? " < > |`, se compactan los espacios y se corta a 80 caracteres; si queda vacío, se usa «Ficha adaptada». Va en `filename="…"` (versión ASCII) y en `filename*=UTF-8''…` (exacto, RFC 8187). Nunca lleva ids, fechas ni nombres de alumnos: el perfil no aporta nada al título. El título lo pone el docente, así que lo que escriba ahí aparece en el nombre.
+
+**Validación en producción.** `validatePdf` (solo `pdf-lib`), en cada petición: `%PDF-` y `%%EOF`, se puede leer, sin cifrar, tamaño ≤ 20 MB, entre 1 y 60 páginas y no menos que las del modelo, todas A4 y sin rotar, ninguna página vacía, fuentes Inter incrustadas (ni Type3), al menos tantas imágenes como visuales fijados y PDF etiquetado. Si algo falla, no se envía nada. pdf.js y canvas siguen solo en tests y *smokes*.
+
+**UX.** En `/app/adaptaciones/[id]/vista` (ambos modos), botón «Descargar PDF» (`src/components/material/pdf-download.tsx`). Estados: normal; «Preparando el PDF…» con el botón desactivado (un segundo clic no lanza otra petición); «Descarga iniciada: <nombre>» (`role="status"`); y error en un `Alert` con el mensaje del servidor y «Puedes volver a intentarlo». No aparece si la vista del alumno no puede mostrar la ficha. El PDF es siempre la ficha del alumno, sin panel docente. Sin opciones avanzadas.
+
+**Persistencia.** No se guardan PDFs. Ya existe una tabla `public.exports` (migración 004: `adaptation_id`, `version`, `visual_template`, `status`, `storage_path`) con RLS de lectura para miembros y escritura solo desde el servidor, pero **no se activa**: no la usa ningún código y la caché o el histórico de exportaciones quedan para una fase posterior. Reproducir exactamente una exportación antigua requeriría guardar su PDF o su instancia (ver «Histórico» en visuales).
+
+**Despliegue.** `outputFileTracingIncludes["/api/adaptations/*/pdf"] = packageFiles("@sparticuz/chromium", ["bin/*"])`, con ruta física. El *tracer* ya encuentra solo `material.css` y las fuentes; listarlos otra vez duplicaba entradas. Tras cada build, `pnpm smoke:pdf` lee la traza de la ruta y comprueba que estén Chromium comprimido, `playwright-core`, `material.css` y las tres fuentes, por ruta física y sin rutas lógicas de pnpm. Traza actual: 335 ficheros, ≈116 MB. Chromium pesa 66,8 MB, `@napi-rs/canvas` 33,2 MB y `playwright-core` 10,9 MB. Está por debajo del límite de 250 MB. `@napi-rs/canvas` entra porque el servicio de visuales importa el rasterizador, aunque exportar nunca rasteriza.
+
+**Rendimiento (local, petición completa a la ruta real: PGlite, recortes reales, Chromium real; medido, no asegurado por tests).**
+
+| Caso | Páginas físicas | Tamaño | Tiempo |
+|---|---|---|---|
+| Primera exportación con Chromium sin descomprimir (frío real) | 3 | 34 KB | ≈2,5 s |
+| Primera del proceso, Chromium ya descomprimido | 3 | 34 KB | ≈0,41–0,47 s |
+| En caliente | 3 | 34 KB | ≈0,34–0,38 s |
+| Una hoja | 1 | 27 KB | ≈0,31–0,36 s |
+| Varias páginas | 3 | 38 KB | ≈0,31–0,35 s |
+| Diez páginas lógicas | 11 | 115 KB | ≈0,41–0,45 s |
+
+**Deuda declarada.**
+- **Runtime de Vercel: DEFERRED.** No se ha comprobado en Vercel que Chromium arranque, ni el tamaño real de la Function, el arranque en frío, la memoria o los tiempos. Se valida con el entorno definitivo; no se reintroduce un endpoint de humo ahora.
+- Sin límite de frecuencia ni de concurrencia propio para exportar: cada petición lanza un Chromium (≈160–180 MB de RSS).
+- Sin caché: exportar dos veces renderiza dos veces.
+- El *bundle* de la ruta incluye `@napi-rs/canvas` sin usarlo (33 MB).
 
 ## Evals
 

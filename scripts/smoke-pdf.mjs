@@ -3,17 +3,17 @@
  *
  *   1. Runs `tests/pdf/` (vitest.pdf.config.mts): `MaterialDocument` → `RenderModel` → `renderPrintHtml` → `@sparticuz/chromium`
  *      via `playwright-core` → PDF → `validatePdf` → pdf.js text + 100 ppp PNG per page. Artefacts in `.pdf-smoke/`.
- *   2. Prints what a future export Function must carry (`outputFileTracingIncludes`), with sizes measured on disk.
- * Limits (stated, not hidden): it runs on this machine (the serverless Chromium needs Linux, like Vercel). No route exports
- * yet (Phase 5.2B), so there is no `.nft.json` to read: the list below is what that route's trace must contain.
+ *      `tests/pdf/export.test.ts` drives the product route `GET /api/adaptations/[id]/pdf` end to end (PGlite, real crops).
+ *   2. Reads that route's server trace (`.nft.json`, so run after `next build`) and checks it carries what the engine reads by
+ *      path at run time: the compressed Chromium, `playwright-core`, `material.css` and the sheet fonts, all by physical path.
+ * Limits (stated, not hidden): it runs on this machine (the serverless Chromium needs Linux, like Vercel). It does not execute the
+ * Function in Vercel's runtime: that validation is DEFERRED (docs/ADAPTATION.md § Exportación PDF).
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 
 const root = process.cwd();
-const require = createRequire(path.join(root, "package.json"));
 const fail = (message) => {
   console.error(`smoke:pdf · FALLO · ${message}`);
   process.exit(1);
@@ -31,23 +31,36 @@ const size = (p) => {
   return s.isDirectory() ? readdirSync(p).reduce((n, f) => n + size(path.join(p, f)), 0) : s.size;
 };
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-const pkgDir = (name) => {
-  let dir = path.dirname(realpathSync(require.resolve(name)));
-  while (!existsSync(path.join(dir, "package.json")) || JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")).name !== name) dir = path.dirname(dir);
-  return dir;
+
+// 2. The export route's server trace must carry what the engine reads BY PATH at run time (next.config.ts, PDF_FILES).
+const dist = process.env.NEXT_DIST_DIR || ".next";
+const traceFile = path.join(root, dist, "server/app/api/adaptations/[id]/pdf/route.js.nft.json");
+if (!existsSync(traceFile)) fail("no existe la traza de /api/adaptations/[id]/pdf (¿se ejecutó next build?)");
+const traced = JSON.parse(readFileSync(traceFile, "utf8")).files.map((f) => path.resolve(path.dirname(traceFile), f));
+const posix = traced.map((f) => f.split(path.sep).join("/"));
+const checks = {
+  "Chromium serverless comprimido (@sparticuz/chromium/bin/chromium.br)": /@sparticuz\/chromium\/bin\/chromium\.br$/,
+  "@sparticuz/chromium (código)": /@sparticuz\/chromium\/build\/.+\.js$/,
+  "playwright-core": /playwright-core\/lib\/.+\.js$/,
+  "material.css": /src\/components\/material\/material\.css$/,
+  "Inter-Regular.woff2": /src\/components\/material\/fonts\/Inter-Regular\.woff2$/,
+  "Inter-SemiBold.woff2": /src\/components\/material\/fonts\/Inter-SemiBold\.woff2$/,
+  "Inter-Bold.woff2": /src\/components\/material\/fonts\/Inter-Bold\.woff2$/,
 };
-const chromiumDir = pkgDir("@sparticuz/chromium");
-const playwrightDir = pkgDir("playwright-core");
-const bin = path.join(chromiumDir, "bin");
-const rows = [
-  ["@sparticuz/chromium/bin (comprimido, se extrae a /tmp)", size(bin)],
-  ["@sparticuz/chromium/build", size(path.join(chromiumDir, "build"))],
-  ["playwright-core (paquete completo)", size(playwrightDir)],
-  ["src/components/material/material.css", size(path.join(root, "src/components/material/material.css"))],
-  ["src/components/material/fonts", size(path.join(root, "src/components/material/fonts"))],
-];
-console.log("\nsmoke:pdf · lo que debe trazar la Function de exportación (5.2B):");
-for (const [name, bytes] of rows) console.log(`  · ${name.padEnd(56)} ${mb(bytes)}`);
-for (const f of readdirSync(bin)) console.log(`      bin/${f.padEnd(24)} ${mb(statSync(path.join(bin, f)).size)}`);
-console.log(`  · total aproximado                                         ${mb(rows.reduce((n, [, b]) => n + b, 0))}`);
+for (const [name, re] of Object.entries(checks)) {
+  const hit = traced.find((_, i) => re.test(posix[i]));
+  if (!hit) fail(`la traza de la exportación no incluye ${name}`);
+  // pnpm: by its physical path, never through a node_modules/<pkg> symlink (what made Vercel reject the package; next.tracing.ts).
+  if (realpathSync(hit) !== hit) fail(`la traza incluye ${name} a través de un symlink: ${path.relative(root, hit)}`);
+}
+const logical = posix.filter((f) => f.startsWith(`${root.split(path.sep).join("/")}/node_modules/@sparticuz/`));
+if (logical.length > 0) fail(`la traza incluye ${logical.length} rutas lógicas de @sparticuz/chromium (symlink de pnpm)`);
+const tracedBytes = traced.filter((f) => existsSync(f) && statSync(f).isFile()).reduce((n, f) => n + statSync(f).size, 0);
+console.log(`\nsmoke:pdf · traza de /api/adaptations/[id]/pdf: ${traced.length} ficheros, ${mb(tracedBytes)} (Chromium comprimido incluido)`);
+
+const report = path.join(root, ".pdf-smoke/export-report.json");
+if (existsSync(report)) {
+  console.log("smoke:pdf · exportación de producto (ruta real, local), petición completa:");
+  for (const r of JSON.parse(readFileSync(report, "utf8"))) console.log(`  · ${String(r.case).padEnd(16)} ${String(r.pages).padStart(3)} pág.  ${String(r.kb).padStart(4)} KB  ${String(r.requestMs).padStart(5)} ms`);
+}
 console.log("smoke:pdf · OK (validación en runtime de Vercel: DEFERRED)");

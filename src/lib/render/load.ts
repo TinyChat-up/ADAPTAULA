@@ -7,16 +7,26 @@ import { WRITE_ROLES, type WorkspaceContext } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/material-document";
-import { resolveVisuals, type VisualDeps } from "@/lib/materials/visuals/service";
+import { resolveVisuals, type ResolvedVisuals, type VisualDeps } from "@/lib/materials/visuals/service";
 import { visualDeps } from "@/lib/materials/visuals/server";
 import type { DeferredInput } from "./deferred";
+import { buildRenderModel, type RenderMode, type RenderModel, type RenderValidation } from "./model";
+import { assetRef, type PinnedAsset } from "./print/pinned-assets";
 import { failureOfState, type VisualAssetFailure, type VisualState } from "./visual-assets";
 
 export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[] };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[] };
+
+export interface RenderLoadOptions {
+  /**
+   * For a PDF: every ready visual becomes the exact instance read now (`asset:<id>@<sha256>` as its source, the verified bytes
+   * in `pinned`), instead of the authorised image route the screen uses. Same states, same failures, same model otherwise.
+   */
+  pin?: boolean;
+}
 
 /** The authorised route that streams a verified crop. Never a signed URL: authorisation never depends on knowing a link. */
 export const visualSrc = (adaptationId: string, visualId: string) => `/api/adaptations/${adaptationId}/visuals/${visualId}`;
@@ -33,7 +43,7 @@ export async function loadRenderInput(ctx: WorkspaceContext, id: string): Promis
 }
 
 /** The same, over explicit dependencies (what the tests drive against a real database with the user's RLS reader). */
-export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: string, visuals?: VisualDeps): Promise<RenderLoad> {
+export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: string, visuals?: VisualDeps, options: RenderLoadOptions = {}): Promise<RenderLoad> {
   const statusResult = await getAdaptationStatus(deps, actor, id);
   if (!statusResult.ok) return { kind: "not_found" };
   const status = statusResult.data;
@@ -57,11 +67,20 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   // The visuals of THIS adaptation's analysis (its pinned fingerprint) and of the material's original file: a locator made for
   // another analysis or file is never used. The current preview follows the active locator (a later correction shows here).
   const material = visuals && materialId ? await visuals.reader.material(materialId) : null;
-  const resolved =
+  const resolved: ResolvedVisuals =
     visuals && material && snapshot?.adaptation.analysis_fingerprint
-      ? await resolveVisuals(visuals, { materialId, analysisFingerprint: snapshot.adaptation.analysis_fingerprint, sourceSha256: material.content_hash, visualIds })
-      : { states: Object.fromEntries(visualIds.map((v) => [v, { visualId: v, status: "missing_locator" as const }])), bytes: {} };
+      ? await resolveVisuals(visuals, { materialId, analysisFingerprint: snapshot.adaptation.analysis_fingerprint, sourceSha256: material.content_hash, visualIds, withBytes: options.pin })
+      : { states: Object.fromEntries(visualIds.map((v) => [v, { visualId: v, status: "missing_locator" as const }])), bytes: {}, instances: {} };
   const states = visualIds.map((v) => resolved.states[v]!);
+  const pinned: Record<string, PinnedAsset> = {};
+  if (options.pin) {
+    for (const s of states) {
+      const instance = resolved.instances[s.visualId];
+      const bytes = resolved.bytes[s.visualId];
+      if (s.status === "ready" && instance && bytes) pinned[s.visualId] = { ...instance, mime: "image/png", bytes };
+    }
+  }
+  const sourceOf = (visualId: string) => (options.pin ? assetRef(pinned[visualId]!) : visualSrc(id, visualId));
   return {
     kind: "ok",
     status,
@@ -69,12 +88,18 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     document: parsed.data,
     deferred,
     requiredVisuals: context.success ? context.data.material.required_visuals : [],
-    assets: Object.fromEntries(states.filter((s) => s.status === "ready").map((s) => [s.visualId, { src: visualSrc(id, s.visualId) }])),
+    assets: Object.fromEntries(states.filter((s) => s.status === "ready" && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId) }])),
     assetFailures: Object.fromEntries(states.flatMap((s) => {
       const failure = failureOfState(s);
       return failure ? [[s.visualId, failure]] : [];
     })),
     materialId,
     visuals: states,
+    pinned: Object.values(pinned),
   };
+}
+
+/** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
+export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
+  return buildRenderModel(loaded.document, { mode, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, deferred: loaded.deferred });
 }

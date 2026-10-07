@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { PdfDownload } from "@/components/material/pdf-download";
 import { MaterialSheet } from "@/components/material/sheet";
 import { TeacherPanel } from "@/components/material/teacher-panel";
 import { LinkButton } from "@/components/ui/button";
@@ -10,8 +11,7 @@ import { Card, PageHeader } from "@/components/ui/layout";
 import { warningLines } from "@/lib/adaptation/presentation/view-model";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
-import { buildRenderModel } from "@/lib/render/model";
-import { loadRenderInput } from "@/lib/render/load";
+import { loadRenderInput, sheetModel } from "@/lib/render/load";
 
 export const metadata: Metadata = { title: "Ficha adaptada" };
 export const dynamic = "force-dynamic";
@@ -44,13 +44,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
     );
   }
 
-  const { model, validation } = buildRenderModel(loaded.document, {
-    mode: student ? "student" : "teacher_preview",
-    requiredVisuals: loaded.requiredVisuals,
-    assets: loaded.assets,
-    assetFailures: loaded.assetFailures,
-    deferred: loaded.deferred,
-  });
+  const { model, validation } = sheetModel(loaded, student ? "student" : "teacher_preview");
 
   return (
     <div className="space-y-6">
@@ -65,6 +59,8 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
             Vista del alumno
           </LinkButton>
         </nav>
+        {/* The PDF is always the student's sheet; a sheet the student view cannot show is not offered for download. */}
+        {validation.status === "not_renderable" ? null : <PdfDownload adaptationId={id} />}
       </div>
 
       {student && validation.status === "not_renderable" ? (
