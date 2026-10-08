@@ -14,23 +14,27 @@ export interface ListState {
   cta: string;
 }
 
-const STATES: Record<string, (running: boolean) => ListState> = {
-  queued: (running) => (running ? { label: "Preparando propuesta", group: "working", cta: "Ver progreso" } : { label: "Pendiente de empezar", group: "attention", cta: "Empezar" }),
-  planning: () => ({ label: "Preparando propuesta", group: "working", cta: "Ver progreso" }),
-  awaiting_plan_review: () => ({ label: "Esperando tu revisión", group: "attention", cta: "Revisar propuesta" }),
-  generation_queued: (running) => (running ? { label: "Preparando ficha", group: "working", cta: "Ver progreso" } : { label: "Lista para crear la ficha", group: "attention", cta: "Crear ficha" }),
-  generating: () => ({ label: "Preparando ficha", group: "working", cta: "Ver progreso" }),
-  reviewing_deterministic: () => ({ label: "Revisando calidad", group: "working", cta: "Ver progreso" }),
-  reviewing_ai: () => ({ label: "Revisando calidad", group: "working", cta: "Ver progreso" }),
+const PREPARING: ListState = { label: "Preparando la adaptación", group: "working", cta: "Ver progreso" };
+
+const STATES: Record<string, (running: boolean, automaticPending: boolean) => ListState> = {
+  queued: (running) => (running ? PREPARING : { label: "Pendiente de empezar", group: "attention", cta: "Empezar" }),
+  planning: () => PREPARING,
+  // «Hacer magia» crosses this state by itself while its plan has no review yet: nobody is waiting for the teacher.
+  awaiting_plan_review: (_running, automaticPending) => (automaticPending ? PREPARING : { label: "Esperando tu revisión", group: "attention", cta: "Revisar adaptación" }),
+  generation_queued: (running) => (running ? { label: "Creando la ficha", group: "working", cta: "Ver progreso" } : { label: "Lista para crear la ficha", group: "attention", cta: "Crear ficha" }),
+  generating: () => ({ label: "Creando la ficha", group: "working", cta: "Ver progreso" }),
+  reviewing_deterministic: () => ({ label: "Revisando el resultado", group: "working", cta: "Ver progreso" }),
+  reviewing_ai: () => ({ label: "Revisando el resultado", group: "working", cta: "Ver progreso" }),
   ready: () => ({ label: "Ficha preparada", group: "done", cta: "Ver ficha" }),
-  blocked: () => ({ label: "Necesita tu revisión", group: "attention", cta: "Revisar" }),
+  blocked: () => ({ label: "Necesita una revisión", group: "attention", cta: "Revisar" }),
   failed: () => ({ label: "No se pudo completar", group: "attention", cta: "Ver qué pasó" }),
   cancelled: () => ({ label: "Cancelada", group: "closed", cta: "Abrir" }),
 };
 
-export function listState(status: string, running: boolean): ListState {
+/** `automaticPending`: created with «Hacer magia» and its plan not reviewed yet (the server continues it; see `buildStatusDto`). */
+export function listState(status: string, running: boolean, automaticPending = false): ListState {
   const of = Object.prototype.hasOwnProperty.call(STATES, status) ? STATES[status] : undefined;
-  return of ? of(running) : { label: "En curso", group: "working", cta: "Abrir" };
+  return of ? of(running, automaticPending) : { label: "En curso", group: "working", cta: "Abrir" };
 }
 
 /** Where a list item leads: the finished sheet when there is one, the adaptation's own page otherwise. */

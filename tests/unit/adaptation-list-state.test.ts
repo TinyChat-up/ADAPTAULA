@@ -7,7 +7,9 @@ describe("adaptation list state", () => {
   it("a stage waiting for the teacher's decision is never shown as in progress (human gates)", () => {
     expect(listState("queued", false)).toMatchObject({ group: "attention", label: "Pendiente de empezar", cta: "Empezar" });
     expect(listState("generation_queued", false)).toMatchObject({ group: "attention", label: "Lista para crear la ficha", cta: "Crear ficha" });
-    expect(listState("awaiting_plan_review", false)).toMatchObject({ group: "attention", cta: "Revisar propuesta" });
+    expect(listState("awaiting_plan_review", false)).toMatchObject({ group: "attention", cta: "Revisar adaptación" });
+    // «Hacer magia» with its plan not reviewed yet: the server is continuing it, nobody is waiting for the teacher.
+    expect(listState("awaiting_plan_review", false, true)).toMatchObject({ group: "working", label: "Preparando la adaptación", cta: "Ver progreso" });
   });
 
   it("the same states with a running stage are in progress", () => {

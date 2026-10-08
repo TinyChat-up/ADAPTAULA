@@ -137,27 +137,37 @@ export function targetLabel(target: string, labels: Readonly<Record<string, stri
 }
 
 export const STATUS_COPY = {
-  needsPlanning: { title: "Todo listo para preparar la propuesta", body: "Adaptaula preparará una propuesta de cambios. Tú decides cuáles se aplican antes de crear la ficha." },
-  planning: { title: "Preparando propuesta", body: "Estamos preparando una propuesta de adaptación." },
-  awaitingReview: { title: "Esperando tu revisión", body: "La propuesta está lista. Revisa los cambios antes de crear la ficha." },
-  needsGeneration: { title: "Revisión guardada", body: "Ya puedes crear el material con los cambios que has aprobado." },
-  generating: { title: "Preparando material", body: "Estamos creando el material con los cambios que has aprobado." },
-  reviewing: { title: "Revisando calidad", body: "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas." },
-  ready: { title: "La adaptación está preparada", body: "Ya puedes ver la ficha tal como la verá el alumnado y descargarla en PDF." },
-  readyWithWarnings: { title: "Material preparado con observaciones", body: "La ficha está preparada, pero conviene que revises estos puntos antes de usarla." },
-  blocked: { title: "Este material todavía no está listo", body: "La comprobación de calidad ha encontrado algo que necesita tu atención. No se ha entregado ninguna ficha." },
+  needsPlanning: { title: "Todo listo para preparar la ficha", body: "Adaptaula preparará cómo adaptar el material para este perfil. Después podrás revisarlo antes de crear la ficha." },
+  planning: { title: "Preparando la adaptación", body: "Estamos decidiendo cómo adaptar el material a las necesidades del perfil." },
+  awaitingReview: { title: "Esperando tu revisión", body: "La adaptación está preparada. Revísala antes de crear la ficha." },
+  needsGeneration: { title: "Todo listo para crear la ficha", body: "Ya puedes crear la ficha con los cambios que has elegido." },
+  generating: { title: "Creando la ficha", body: "Estamos creando la ficha adaptada." },
+  reviewing: { title: "Revisando el resultado", body: "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas." },
+  ready: { title: "La ficha está lista", body: "Ya puedes ver la ficha tal como la verá el alumnado y descargarla en PDF." },
+  readyWithWarnings: { title: "La ficha está lista, con observaciones", body: "Conviene que revises estos puntos antes de usarla." },
+  blocked: { title: "La ficha necesita una revisión antes de estar lista", body: "Al revisar el resultado hemos encontrado algo que conviene corregir. Todavía no se ha entregado ninguna ficha." },
   cancelled: { title: "Adaptación cancelada", body: "Esta adaptación se ha detenido." },
   failed: { title: "No hemos podido completar la adaptación", body: "" },
 } as const;
 
-/** The stage list shown while the pipeline works. Semantic stages, never percentages. */
+/** The two ways to create a sheet. Same pipeline; «Hacer magia» only skips the teacher's approval of the plan. */
+export const CREATION_COPY = {
+  question: "¿Cómo quieres preparar esta ficha?",
+  automatic: { label: "Hacer magia", body: "Adaptaula usará el perfil del alumno para preparar y revisar la ficha automáticamente." },
+  review: { label: "Revisar antes de crear", body: "Revisa cómo se adaptará el material y cambia lo que necesites antes de crear la ficha." },
+} as const;
+
+/**
+ * The stage list shown while the pipeline works: product language, never a percentage and never an internal name. The material
+ * was analysed before the adaptation existed, so that stage is always done; «Tu revisión» exists only when the teacher chose it.
+ */
 export const STAGES = [
-  { key: "preparing", label: "Preparando" },
-  { key: "planning", label: "Preparando propuesta" },
-  { key: "awaiting_review", label: "Esperando tu revisión" },
-  { key: "generating", label: "Preparando material" },
-  { key: "reviewing", label: "Revisando calidad" },
-  { key: "ready", label: "Listo" },
+  { key: "analysis", label: "Analizando el material" },
+  { key: "planning", label: "Preparando la adaptación" },
+  { key: "awaiting_review", label: "Tu revisión" },
+  { key: "generating", label: "Creando la ficha" },
+  { key: "reviewing", label: "Revisando el resultado" },
+  { key: "ready", label: "Lista" },
 ] as const;
 
 export const QUOTA_COPY = {

@@ -10,6 +10,7 @@ import { toPublic, type PublicResult } from "@/lib/adaptation/orchestration/publ
 import {
   cancelAdaptationCommand,
   createAdaptationCommand,
+  createAndStartAdaptation,
   getAdaptationPlan,
   getAdaptationStatus,
   getAdaptationVersion,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/adaptation/orchestration/service";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { serviceDeps } from "@/lib/adaptation/orchestration/server";
+import { CREATION_MODES } from "@/lib/adaptation/orchestration/store";
 
 /**
  * Public application commands for the adaptation pipeline. Every action: resolves the actor on the SERVER (workspace and role never
@@ -64,9 +66,29 @@ export async function createAdaptationAction(input: unknown): Promise<PublicResu
   return toPublic(await createAdaptationCommand(deps, actor, { ...parsed.data, requestKey: parsed.data.requestKey ?? randomUUID() }));
 }
 
-/** Entry from an analyzed material: the type is fixed to the accessibility adaptation (the one the pipeline supports today). */
-export async function createAdaptationFromMaterialAction(materialId: string, input: { learnerProfileId: string | null; requestKey: string }): Promise<PublicResult<{ adaptationId: string }>> {
-  return createAdaptationAction({ materialId, learnerProfileId: input.learnerProfileId, adaptationType: "accessibility", requestKey: input.requestKey });
+const StartInput = z.object({
+  learnerProfileId: Id,
+  requestKey: z.string().min(8).max(120),
+  mode: z.enum(CREATION_MODES),
+});
+
+/**
+ * Entry from an analyzed material: «Hacer magia» or «Revisar antes de crear». Creates the adaptation with its mode and starts it
+ * (the click is the decision). The type is fixed to the accessibility adaptation (the one the pipeline supports today).
+ */
+export async function createAdaptationFromMaterialAction(materialId: string, input: unknown): Promise<PublicResult<{ adaptationId: string }>> {
+  const parsed = StartInput.safeParse(input);
+  if (!Id.safeParse(materialId).success || !parsed.success) return invalid();
+  const { actor, deps } = await context();
+  return toPublic(
+    await createAndStartAdaptation(deps, actor, {
+      materialId,
+      learnerProfileId: parsed.data.learnerProfileId,
+      adaptationType: "accessibility",
+      requestKey: parsed.data.requestKey,
+      creationMode: parsed.data.mode,
+    }),
+  );
 }
 
 export async function startPlanningAction(adaptationId: string): Promise<PublicResult<EnqueuedDto>> {

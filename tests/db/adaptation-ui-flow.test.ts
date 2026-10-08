@@ -104,7 +104,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     // 1 · queued: the page offers exactly one CTA and nothing has been sent to a provider.
     let dto = await s.status(id);
     expect(screenFor(dto)).toBe("start");
-    expect(render(s, id, dto)).toContain("Preparar propuesta de adaptación");
+    expect(render(s, id, dto)).toContain("Preparar la adaptación");
     expect(s.spy).toMatchObject({ planner: 0, generator: 0, reviewer: 0 });
 
     // 2 · the CTA twice (double click) → one job; the page now shows the working state and the DB has one planning job.
@@ -113,7 +113,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     expect((await q<{ c: string }>("select count(*)::text c from public.adaptation_jobs where adaptation_id = $1 and stage = 'planning'", [id]))[0]!.c).toBe("1");
     dto = await s.status(id);
     expect(screenFor(dto)).toBe("working");
-    expect(visible(render(s, id, dto))).toContain("Estamos preparando una propuesta de adaptación.");
+    expect(visible(render(s, id, dto))).toContain("Estamos decidiendo cómo adaptar el material a las necesidades del perfil.");
 
     // 3 · the worker plans; polling would now see the review.
     await s.worker();
@@ -125,9 +125,9 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     expect(visible(reviewHtml)).not.toMatch(/need_\d|\bdec_\d|\bact_\d|diagn|dislex/i);
     expect(s.spy.generator).toBe(0);
 
-    // 4 · the form never submits by itself, blocks until every decision is resolved, then builds a valid review.
+    // 4 · the form never submits by itself; it starts from the recommendation (already a valid review), then the teacher changes some.
     let state = initialFormState(plan);
-    expect(Object.keys(problemsOf(plan, state)).length).toBe(plan.decisions.filter((d) => d.status !== "blocked").length);
+    expect(problemsOf(plan, state)).toEqual({});
     state = teacherChoices(plan);
     expect(problemsOf(plan, state)).toEqual({});
     const review = buildReview(plan, state);
@@ -141,7 +141,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     dto = await s.status(id);
     expect(screenFor(dto)).toBe("generate");
     const generateHtml = render(s, id, dto);
-    expect(generateHtml).toContain("Crear material adaptado");
+    expect(generateHtml).toContain("Crear ficha");
     expect(s.spy.generator).toBe(0);
 
     // 6 · generation only enqueues; the worker runs generator and (mock) reviewer; polling ends on a delivered state.
@@ -153,7 +153,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     expect(screenFor(dto)).toBe("ready");
     expect(dto).toMatchObject({ status: "ready", delivered: true, currentVersion: 1 });
     const readyHtml = render(s, id, dto);
-    expect(visible(readyHtml)).toMatch(/Material preparado con observaciones|La adaptación está preparada/);
+    expect(visible(readyHtml)).toMatch(/La ficha está lista/);
     expect(readyHtml).not.toMatch(/"blocks"|schema_version|<table|<img/);
     expect(visible(readyHtml)).not.toMatch(/need_\d|\bblk_|\bR1\b|traceability_complete|functional_supports_applied/);
 
@@ -171,7 +171,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     const plan = await s.plan(id);
     // Reload while reviewing: same plan, same screen, no extra job or provider call.
     for (let i = 0; i < 3; i++) expect(screenFor(await s.status(id))).toBe("review");
-    expect(render(s, id, await s.status(id), plan)).toContain("Guardar revisión");
+    expect(render(s, id, await s.status(id), plan)).toContain("Así prepararemos esta ficha");
     expect(s.spy.planner).toBe(1);
     // Reload after saving → generate; after generating → ready.
     await s.actionsFor(id).submit(buildReview(plan, teacherChoices(plan)));
@@ -205,7 +205,7 @@ describe("flujo integrado de la UI (mocks de proveedor, 0 llamadas reales)", () 
     expect(await s.actionsFor(id).cancel()).toMatchObject({ ok: true, data: { cancelled: true } });
     const dto = await s.status(id);
     expect(screenFor(dto)).toBe("cancelled");
-    expect(visible(render(s, id, dto))).not.toMatch(/Crear material adaptado|Preparar propuesta|Guardar revisión/);
+    expect(visible(render(s, id, dto))).not.toMatch(/Crear ficha|Preparar la adaptación|Así prepararemos/);
     expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [id]))[0]!.state).toBe("released");
   });
 

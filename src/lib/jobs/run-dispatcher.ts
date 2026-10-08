@@ -13,25 +13,32 @@ export interface RunDispatcher {
   stop: () => void;
 }
 
-export function createRunDispatcher<T>(options: { run: () => Promise<T | null>; onResult: (result: T) => void; now?: () => number }): RunDispatcher {
+export function createRunDispatcher<T>(options: {
+  run: () => Promise<T | null>;
+  /** Returning `true` asks for another run right after this one (the work moved on to a next stage that is already queued). */
+  onResult: (result: T) => boolean | void;
+  now?: () => number;
+}): RunDispatcher {
   const now = options.now ?? Date.now;
   let inFlight = false;
   let lastStart = -Infinity;
   let stopped = false;
 
-  return {
+  const dispatcher: RunDispatcher = {
     kick(force = false) {
       if (stopped || inFlight || (!force && now() - lastStart < RERUN_INTERVAL_MS)) return;
       inFlight = true;
       lastStart = now();
+      let again = false;
       options
         .run()
         .then((result) => {
-          if (!stopped && result !== null) options.onResult(result);
+          if (!stopped && result !== null) again = options.onResult(result) === true;
         })
         .catch(() => undefined)
         .finally(() => {
           inFlight = false;
+          if (again) dispatcher.kick(true);
         });
     },
     /** The screen went away: results are ignored. The request itself is NOT aborted: leaving the page never cuts a running job short. */
@@ -39,4 +46,5 @@ export function createRunDispatcher<T>(options: { run: () => Promise<T | null>; 
       stopped = true;
     },
   };
+  return dispatcher;
 }

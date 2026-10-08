@@ -92,7 +92,7 @@ export interface AdaptationListItem {
  */
 export async function listAdaptations(filter: { materialId?: string; profileId?: string; limit?: number } = {}): Promise<AdaptationListItem[]> {
   const supabase = await getSupabase();
-  let query = supabase.from("adaptations").select("id, status, created_at, updated_at, material_id, learner_profile_id");
+  let query = supabase.from("adaptations").select("id, status, created_at, updated_at, material_id, learner_profile_id, creation_mode");
   if (filter.materialId) query = query.eq("material_id", filter.materialId);
   if (filter.profileId) query = query.eq("learner_profile_id", filter.profileId);
   const { data: rows } = await query.order("updated_at", { ascending: false }).limit(filter.limit ?? 50);
@@ -101,11 +101,14 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
   const ids = rows.map((r) => r.id as string);
   const materialIds = [...new Set(rows.map((r) => r.material_id as string))];
   const profileIds = [...new Set(rows.map((r) => r.learner_profile_id as string | null).filter((v): v is string => Boolean(v)))];
-  const [jobs, materials, profiles] = await Promise.all([
+  const automaticAwaiting = rows.filter((r) => r.creation_mode === "automatic" && r.status === "awaiting_plan_review").map((r) => r.id as string);
+  const [jobs, materials, profiles, reviewed] = await Promise.all([
     supabase.from("adaptation_jobs").select("adaptation_id").in("adaptation_id", ids).in("status", ["queued", "processing"]),
     supabase.from("materials").select("id, title").in("id", materialIds),
     profileIds.length ? supabase.from("learner_profiles").select("id, display_name").in("id", profileIds) : Promise.resolve({ data: [] as Array<{ id: string; display_name: string }> }),
+    automaticAwaiting.length ? supabase.from("adaptation_artifacts").select("adaptation_id").eq("kind", "plan_review").in("adaptation_id", automaticAwaiting) : Promise.resolve({ data: [] as Array<{ adaptation_id: string }> }),
   ]);
+  const hasReview = new Set((reviewed.data ?? []).map((a) => a.adaptation_id as string));
   const running = new Set((jobs.data ?? []).map((j) => j.adaptation_id as string));
   const titles = new Map((materials.data ?? []).map((m) => [m.id as string, m.title as string]));
   const names = new Map((profiles.data ?? []).map((p) => [p.id as string, p.display_name as string]));
@@ -115,6 +118,6 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
-    state: listState(r.status as string, running.has(r.id as string)),
+    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string)),
   }));
 }

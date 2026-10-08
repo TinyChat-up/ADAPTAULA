@@ -58,6 +58,13 @@ export type StageName = "planning" | "generation";
 
 const Fingerprint = z.string().regex(/^[a-f0-9]{64}$/);
 
+/**
+ * The two ways through the ONE pipeline (migration 019): `automatic` («Hacer magia») applies the recommendation after a valid plan
+ * and continues to generation and the mandatory review; `review` («Revisar antes de crear») waits for the teacher's review.
+ */
+export const CREATION_MODES = ["automatic", "review"] as const;
+export type CreationMode = (typeof CREATION_MODES)[number];
+
 const AdaptationRowSchema = z.object({
   id: z.uuid(),
   workspace_id: z.uuid(),
@@ -74,6 +81,7 @@ const AdaptationRowSchema = z.object({
   failure_code: z.string().nullable(),
   delivered_at: z.string().nullable(),
   created_at: z.string(),
+  creation_mode: z.enum(CREATION_MODES).default("review"),
 });
 export type AdaptationRow = z.infer<typeof AdaptationRowSchema> & { status: AdaptationStatus };
 
@@ -179,6 +187,8 @@ export interface CreateAdaptationArgs {
   analysisFingerprint: string;
   /** Reserve the entitlement in the SAME transaction as the row: an unreserved adaptation never exists. */
   reserve?: boolean;
+  /** How the teacher chose to create it (migration 019). Absent = `review`, the human gate. */
+  creationMode?: CreationMode;
 }
 
 function fail(error: { message: string }): never {
@@ -209,7 +219,7 @@ export class AdaptationStore {
   async createAdaptation(a: CreateAdaptationArgs): Promise<string> {
     const id = await this.call("create_adaptation", {
       p_workspace: a.workspaceId, p_material: a.materialId, p_user: a.userId, p_learner: a.learnerProfileId, p_type: a.adaptationType,
-      p_title: a.title, p_request_key: a.requestKey, p_versions: a.versions, p_context: a.context, p_context_fp: a.contextFingerprint, p_analysis_fp: a.analysisFingerprint, p_reserve: a.reserve === true,
+      p_title: a.title, p_request_key: a.requestKey, p_versions: a.versions, p_context: a.context, p_context_fp: a.contextFingerprint, p_analysis_fp: a.analysisFingerprint, p_reserve: a.reserve === true, p_creation_mode: a.creationMode ?? "review",
     });
     return z.uuid().parse(id);
   }

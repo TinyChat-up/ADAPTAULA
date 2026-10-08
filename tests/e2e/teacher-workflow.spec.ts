@@ -28,13 +28,16 @@ async function newProfileFromMaterial(page: Page, materialId: string) {
   await page.getByLabel("Alias o iniciales").fill("M.R.");
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
+  // Needs, so the plan has decisions to show and change (the profile is the only source: nothing is asked again later).
+  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Atención, planificación y organización" });
+  await page.getByRole("button", { name: "Aplicar" }).click();
   await page.getByRole("button", { name: "Crear perfil" }).click();
   // Back to the same material, with the new profile already chosen.
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}\\?perfil=[0-9a-f-]{36}`));
   await expect(page.getByLabel("Perfil")).not.toHaveValue("");
 }
 
-test("happy path: material → análisis → perfil → adaptación → propuesta → ficha → vista del alumno → PDF", async ({ page }) => {
+test("revisar antes de crear: material → análisis → perfil → «Así prepararemos esta ficha» → cambiar → Crear ficha → ficha → PDF", async ({ page }) => {
   test.setTimeout(300_000);
   await signUpAndOnboard(page, uniqueEmail());
   await page.goto("/app");
@@ -55,46 +58,40 @@ test("happy path: material → análisis → perfil → adaptación → propuest
   expect(adaptBox!.y).toBeLessThan(activitiesBox!.y);
   expect(await serious(page)).toEqual([]);
 
-  // 3–4. For whom: a profile created from here comes back here, chosen.
+  // 3–4. For whom: a profile created from here comes back here, chosen, straight to the decision.
   await newProfileFromMaterial(page, materialId);
+  await expect(page.getByRole("heading", { name: "¿Cómo quieres preparar esta ficha?" })).toBeVisible();
 
-  // 5. Create the adaptation; a double click creates one.
-  await page.getByRole("button", { name: "Adaptar material" }).dblclick();
+  // 5. «Revisar antes de crear»: a double click creates (and starts) one adaptation.
+  await page.getByRole("button", { name: "Revisar antes de crear" }).dblclick();
   await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
   const adaptationUrl = page.url();
   const adaptationId = adaptationUrl.split("/").pop()!;
   await expect(page.getByRole("heading", { name: "Adaptación", level: 1 })).toBeVisible();
   await expect(page.getByText("para M.R.")).toBeVisible();
 
-  // Human gate: created is not started. Reloading and coming back from the home screen changes nothing.
-  await expect(page.getByRole("button", { name: "Preparar propuesta de adaptación" })).toBeVisible();
+  // 6. The proposal is prepared by itself (reloading while it is prepared finds it again) and waits for the teacher.
   await page.reload();
-  await expect(page.getByRole("button", { name: "Preparar propuesta de adaptación" })).toBeVisible();
-  await page.goto("/app");
-  const attention = page.getByRole("region", { name: "Necesitan tu atención" }).or(page.locator("section[aria-labelledby=atencion]"));
-  await expect(attention.getByText("Pendiente de empezar")).toBeVisible();
-  await attention.getByRole("link", { name: /Empezar/ }).click();
-  await expect(page).toHaveURL(adaptationUrl);
-
-  // 6. The proposal: started explicitly, reloaded while it is being prepared, reviewed by the teacher.
-  await page.getByRole("button", { name: "Preparar propuesta de adaptación" }).click();
-  // Reload once the command was accepted (the button is gone): the stage keeps going and the page finds it again.
-  await expect(page.getByRole("button", { name: "Preparar propuesta de adaptación" })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Guardar revisión" })).toBeVisible({ timeout: 60_000 });
+  const heading = page.getByRole("heading", { name: "Así prepararemos esta ficha" });
+  await expect(heading).toBeVisible({ timeout: 60_000 });
   expect(await serious(page)).toEqual([]);
-  await page.getByRole("button", { name: "Guardar revisión" }).click();
-
-  // Human gate: a saved review does not generate by itself.
-  await expect(page.getByRole("button", { name: "Crear material adaptado" })).toBeVisible();
+  // Human gate: nothing is created until «Crear ficha».
   await page.reload();
-  await expect(page.getByRole("button", { name: "Crear material adaptado" })).toBeVisible();
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole("button", { name: "Descargar PDF" })).toHaveCount(0);
 
-  // 7–8. Generate and the automatic quality review; reloading while it works; it ends on its own.
-  await page.getByRole("button", { name: "Crear material adaptado" }).click();
-  await expect(page.getByRole("button", { name: "Crear material adaptado" })).toHaveCount(0);
+  // One change: leave out the first decision; then create the sheet.
+  const first = page.locator("form ol > li > fieldset").first();
+  await first.getByRole("button", { name: /^Cambiar/ }).click();
+  await first.getByRole("radio", { name: "No aplicar" }).check();
+  await expect(first.getByText("No se aplicará", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restaurar recomendación" })).toBeVisible();
+  await page.getByRole("button", { name: "Crear ficha" }).click();
+
+  // 7–8. Creating and checking the sheet, in product words; reloading while it works; it ends on its own.
+  await expect(heading).toHaveCount(0, { timeout: 30_000 });
   await page.reload();
-  await expect(page.getByRole("heading", { name: /Material preparado|La adaptación está preparada/ }).or(page.getByText(/Material preparado con observaciones|La adaptación está preparada/))).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/La ficha está lista/).first()).toBeVisible({ timeout: 60_000 });
   expect(await page.locator("main").innerText()).not.toMatch(TECHNICAL);
   expect(await serious(page)).toEqual([]);
 
@@ -143,9 +140,10 @@ test("solo lectura: ve el estado, sin comandos ni ejecución", async ({ page, br
   const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `ro-${Date.now()}-${Math.random()}` }) });
   await waitForAnalysis(page);
   await newProfileFromMaterial(page, materialId);
-  await page.getByRole("button", { name: "Adaptar material" }).click();
+  await page.getByRole("button", { name: "Revisar antes de crear" }).click();
   await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
   const adaptationUrl = page.url();
+  await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible({ timeout: 60_000 });
   const workspaceId = await workspaceOf(page, ownerEmail);
 
   const other = await browser.newContext({ viewport: page.viewportSize() ?? undefined });
@@ -163,16 +161,15 @@ test("solo lectura: ve el estado, sin comandos ni ejecución", async ({ page, br
   });
   await viewer.goto(adaptationUrl);
   await expect(viewer.getByText("Tienes acceso de solo lectura en este espacio de trabajo.")).toBeVisible();
-  await expect(viewer.getByRole("button", { name: "Preparar propuesta de adaptación" })).toHaveCount(0);
-  await expect(viewer.getByRole("button", { name: "Cancelar adaptación" })).toHaveCount(0);
+  await expect(viewer.getByRole("button", { name: /Crear ficha|^Cambiar|Cancelar adaptación|Restaurar recomendación/ })).toHaveCount(0);
   await viewer.goto(`/app/materiales/${materialId}`);
   await expect(viewer.getByText(/solo lectura/)).toBeVisible();
-  await expect(viewer.getByRole("button", { name: "Adaptar material" })).toHaveCount(0);
+  await expect(viewer.getByRole("button", { name: /Hacer magia|Revisar antes de crear/ })).toHaveCount(0);
   expect(runs).toEqual([]);
 
-  // The owner's adaptation never started by itself while someone else looked at it.
+  // The owner's review was not decided by anyone else while the viewer looked at it.
   await page.reload();
-  await expect(page.getByRole("button", { name: "Preparar propuesta de adaptación" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible();
   await other.close();
 });
 

@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { allowAdaptations, requireVisuals, seedReadyDocument } from "./adaptation-seed";
-import { chooseFile, signUpAndOnboard, uniqueEmail, waitForAnalysis, workspaceOf } from "./helpers";
+import { chooseFile, createReviewedAdaptation, signUpAndOnboard, uniqueEmail, waitForAnalysis, workspaceOf } from "./helpers";
 import { primaria } from "../support/render-fixtures";
 import { visualFixturePdf } from "../support/visual-fixture";
 
@@ -27,10 +27,7 @@ async function setup(page: Page) {
   const materialUrl = page.url();
   const workspaceId = await workspaceOf(page, email);
   await allowAdaptations(page);
-  await page.getByLabel("Perfil").selectOption({ label: "M.R." });
-  await page.getByRole("button", { name: "Adaptar material" }).click();
-  await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/, { timeout: 60_000 });
-  const id = page.url().split("/").pop()!;
+  const id = await createReviewedAdaptation(page, materialUrl);
   await seedReadyDocument(page, workspaceId, id, primaria());
   await requireVisuals(page, id, ["vis_2"]);
   return { id, materialId: materialUrl.split("/").pop()! };

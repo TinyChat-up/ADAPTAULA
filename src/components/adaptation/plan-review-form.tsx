@@ -8,13 +8,15 @@ import type { AdaptationPlanDto, SubmitReviewDto } from "@/lib/adaptation/orches
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
 import type { AdaptationContextView } from "@/lib/adaptation/presentation/context";
 import { actionLabel, targetLabel } from "@/lib/adaptation/presentation/copy";
-import { buildReview, formReducer, initialFormState, interpretSubmit, problemsOf } from "@/lib/adaptation/presentation/review-form";
+import { buildReview, formReducer, initialFormState, interpretSubmit, isRecommended, problemsOf } from "@/lib/adaptation/presentation/review-form";
 import { DecisionCard } from "./decision-card";
 
 export type SubmitReview = (review: ReturnType<typeof buildReview>) => Promise<PublicResult<SubmitReviewDto>>;
 
 /**
- * The mandatory human review of the plan. It never submits by itself, never hides a decision and never decides what is
+ * «Así prepararemos esta ficha»: the human review of the real plan (the «Revisar antes de crear» path, and the way back after a
+ * blocked sheet). It starts from the recommendation, so the teacher only changes what they want; «Crear ficha» saves the review
+ * and the screen then creates the sheet. It never submits by itself, never hides a decision and never decides what is
  * executable: the server answers that when the review is saved.
  */
 export function PlanReviewForm({
@@ -24,6 +26,7 @@ export function PlanReviewForm({
   submit,
   onSaved,
   onRefresh,
+  intro,
 }: {
   plan: AdaptationPlanDto;
   context: AdaptationContextView;
@@ -31,6 +34,8 @@ export function PlanReviewForm({
   submit: SubmitReview;
   onSaved: (result: SubmitReviewDto) => void;
   onRefresh: () => void;
+  /** Why the teacher is here when they did not choose it (e.g. after a blocked sheet). */
+  intro?: string | undefined;
 }) {
   const [state, dispatch] = useReducer(formReducer, plan, initialFormState);
   const [attempted, setAttempted] = useState(false);
@@ -73,22 +78,21 @@ export function PlanReviewForm({
     }
   }
 
-  const recommendedLeft = plan.decisions.some((d) => d.status === "valid" && state[d.id]?.choice === null);
+  const changed = !isRecommended(plan, state);
+  const applied = plan.decisions.filter((d) => state[d.id]?.choice !== "reject").length;
 
   return (
     <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-6" aria-labelledby="plan-review-title">
       <div className="space-y-2">
         <h2 id="plan-review-title" className="text-xl font-semibold">
-          Adaptaula propone {plan.decisions.length} {plan.decisions.length === 1 ? "cambio" : "cambios"}. Revísalos antes de crear la ficha.
+          Así prepararemos esta ficha
         </h2>
+        <p className="text-muted-foreground">Revisa cómo se adaptará el material y cambia lo que necesites antes de crear la ficha.</p>
+        {intro ? <Alert tone="info" title={intro} /> : null}
         <p className="text-sm text-muted-foreground">
-          {plan.counts.valid} recomendados · {plan.counts.review} requieren tu atención · {plan.counts.blocked} no aplicables tal cual
+          {applied} de {plan.decisions.length} {plan.decisions.length === 1 ? "cambio se aplicará" : "cambios se aplicarán"}
+          {plan.counts.review > 0 ? ` · ${plan.counts.review} ${plan.counts.review === 1 ? "conviene revisarlo" : "conviene revisarlos"}` : ""}.
         </p>
-        {recommendedLeft ? (
-          <Button variant="secondary" size="sm" onClick={() => dispatch({ type: "approve_recommended", plan })} disabled={pending}>
-            Aprobar los recomendados
-          </Button>
-        ) : null}
       </div>
 
       {stale ? (
@@ -131,10 +135,15 @@ export function PlanReviewForm({
       <div className="flex flex-wrap items-center gap-4">
         <Button type="submit" size="lg" disabled={pending || stale}>
           {pending ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
-          Guardar revisión
+          Crear ficha
         </Button>
+        {changed ? (
+          <Button variant="secondary" onClick={() => dispatch({ type: "reset", plan })} disabled={pending}>
+            Restaurar recomendación
+          </Button>
+        ) : null}
         <p role="status" className="text-sm text-muted-foreground">
-          {pending ? "Guardando la revisión…" : missing > 0 ? `Te quedan ${missing} ${missing === 1 ? "cambio" : "cambios"} por revisar.` : "Has revisado todos los cambios."}
+          {pending ? "Preparando la ficha…" : missing > 0 ? `Te quedan ${missing} ${missing === 1 ? "cambio" : "cambios"} por decidir.` : ""}
         </p>
       </div>
     </form>

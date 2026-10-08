@@ -22,14 +22,15 @@ test("Free: 5 adaptaciones al mes; la sexta se rechaza con un mensaje claro y el
   await page.getByRole("button", { name: "Crear perfil" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}\\?perfil=`));
 
+  // Both paths take the same single unit: three with «Hacer magia», two with «Revisar antes de crear».
   for (let i = 1; i <= 5; i++) {
     await page.goto(`/app/materiales/${materialId}`);
-    await page.getByRole("button", { name: "Adaptar material" }).click();
-    await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
+    await page.getByRole("button", { name: i <= 3 ? "Hacer magia" : "Revisar antes de crear" }).click();
+    await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}/);
   }
 
   await page.goto(`/app/materiales/${materialId}`);
-  await page.getByRole("button", { name: "Adaptar material" }).click();
+  await page.getByRole("button", { name: "Hacer magia" }).click();
   await expect(page.getByText("Has utilizado las adaptaciones disponibles de este periodo.")).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}`));
   expect(await page.locator("main").innerText()).not.toMatch(/entitlement|quota|exhausted|402|error \d/i);
@@ -39,5 +40,5 @@ test("Free: 5 adaptaciones al mes; la sexta se rechaza con un mensaje claro y el
   await page.goto("/app");
   await expect(page.getByText("5 de 5").first()).toBeVisible();
   await page.goto("/app/historial");
-  await expect(page.getByText("Pendiente de empezar")).toHaveCount(5);
+  await expect(page.locator("main").getByRole("link", { name: /Ver ficha|Ver progreso|Revisar adaptación/ })).toHaveCount(5);
 });

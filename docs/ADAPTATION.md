@@ -305,13 +305,22 @@ Generator v2 ($0,0184, 4,4 s, válido a la primera): `act_1` y `act_3` intactas,
 
 ## Orquestación del pipeline (backend real, offline)
 
-`src/lib/adaptation/orchestration/` convierte el núcleo validado en una máquina de estados persistente, idempotente y con una **puerta humana obligatoria**. No hay un job continuo `planner → generator → reviewer`:
+`src/lib/adaptation/orchestration/` convierte el núcleo validado en una máquina de estados persistente, idempotente y con una **puerta humana** (obligatoria hasta Phase 7C; desde entonces, opcional: ver «Dos formas de crear una ficha»). No hay un job continuo `planner → generator → reviewer`:
 
 ```
 createAdaptation → queued → runPlanningStage → awaiting_plan_review ⟶ docente ⟶ submitPlanReview → generation_queued
   → runGenerationStage → generating → reviewing_deterministic → reviewing_ai → ready | blocked
 ```
 Cualquier fallo → `failed` (reintentable) · `cancelled`. Las transiciones las valida el servidor (TS y SQL, un test las compara par a par): ninguna petición puede saltarse `awaiting_plan_review`.
+
+### Dos formas de crear una ficha (Phase 7C, migración 019)
+
+Un solo pipeline, dos maneras de recorrerlo, elegidas por el docente en el material («¿Cómo quieres preparar esta ficha?») y persistidas en `adaptations.creation_mode` (lo escribe solo el servidor):
+
+- **«Hacer magia»** (`automatic`, la recomendada): material + perfil → análisis (ya hecho) → plan → **revisión automática del plan** → ficha → revisión pedagógica → ficha final (`/vista`, con «Descargar PDF»). Solo se salta la **aprobación humana del plan**: cuando el planificador deja un plan válido, `continueAutomatically` envía la recomendación (`autoReview`, la misma política del pipeline offline: se aplica lo no bloqueado y se deja fuera lo bloqueado) por el mismo `submitPlanReview` y encola el mismo job de generación. Planner, generator y **revisor obligatorio** son los de siempre; mismos jobs, leases, fencing, reintentos, límites de 7B (3 generaciones, presupuesto de fallos) y la misma unidad de cuota.
+- **«Revisar antes de crear»** (`review`, la puerta humana opcional): se detiene en «Así prepararemos esta ficha», que parte de esa misma recomendación; el docente cambia lo que quiera («Cambiar»: aplicar, no aplicar o ajustar; «Restaurar recomendación») y «Crear ficha» guarda la revisión y genera.
+
+Garantías del camino automático: actúa una sola vez por plan (solo en `automatic`, solo en `awaiting_plan_review` y solo si el plan actual no tiene ya una revisión; la revisión es determinista, así que dos peticiones simultáneas guardan una revisión y un job). Si la recomendación no se puede ejecutar o el revisor **bloquea**, no se entrega nada y decide la persona: «La ficha necesita una revisión antes de estar lista» → «Revisar adaptación» abre la revisión humana y no se vuelve a pasar por el camino automático (sin bucles). Si el proceso muere entre el plan y la continuación, la siguiente petición `/run` (recargar o volver a abrir la página) la reanuda. El perfil es la fuente de verdad: no se vuelve a preguntar nada ni hay campos clínicos. Las adaptaciones anteriores a 019 quedan en `review`.
 
 **Versiones fijadas.** Al crear la adaptación se resuelven una vez y se persisten (`pipeline_versions`): analysis schema 3, planner v2, plan canónico 1, política de contexto 2, generator v2, documento 1, reviewer v1, revisión 1, más el alias y el modelo que ese alias significaba y los topes de salida. Cada etapa, reintento o reanudación lee la fila, nunca el entorno ni los valores por defecto de hoy (planner y generator por defecto siguen siendo v1; v1 no se elimina). El contexto minimizado y su huella también se fijan al crear; si el análisis del material cambia, la etapa falla con `stale_analysis`.
 

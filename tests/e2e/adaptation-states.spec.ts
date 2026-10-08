@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { allowAdaptations, seedAwaitingReview, seedReadyWithWarnings, seedWorking } from "./adaptation-seed";
-import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { createReviewedAdaptation, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 /**
  * Las pantallas de los estados avanzados en el navegador (desktop y móvil con los proyectos de playwright.config.ts), con las
@@ -10,13 +10,7 @@ import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis,
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 const seriousViolations = async (page: Page) => (await new AxeBuilder({ page }).analyze()).violations.filter((v) => v.impact === "serious" || v.impact === "critical");
 
-async function createAdaptation(page: Page, materialUrl: string): Promise<string> {
-  await page.goto(materialUrl);
-  await page.getByLabel("Perfil").selectOption({ label: "M.R." });
-  await page.getByRole("button", { name: "Adaptar material" }).click();
-  await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
-  return page.url().split("/").pop()!;
-}
+const createAdaptation = (page: Page, materialUrl: string) => createReviewedAdaptation(page, materialUrl);
 
 test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbordes, apilado y utilizable", async ({ page }) => {
   test.setTimeout(300_000);
@@ -33,15 +27,15 @@ test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbo
   const material = page.url();
   const workspaceId = await workspaceOf(page, email);
   await allowAdaptations(page);
-  const mobile = (page.viewportSize()?.width ?? 1280) < 640;
 
   // 1 · PlanReview.
   const review = await createAdaptation(page, material);
   await seedAwaitingReview(page, workspaceId, review);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Adaptaula propone 5 cambios. Revísalos antes de crear la ficha." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible();
+  await expect(page.getByText("4 de 5 cambios se aplicarán · 1 conviene revisarlo.")).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
-  const cards = page.locator("fieldset").filter({ has: page.getByRole("radiogroup") });
+  const cards = page.locator("form ol > li > fieldset");
   await expect(cards).toHaveCount(5);
   const boxes = await cards.evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ top: r.top + window.scrollY, bottom: r.bottom + window.scrollY, left: r.left, width: r.width })));
   for (let i = 1; i < boxes.length; i++) {
@@ -52,28 +46,32 @@ test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbo
   const viewport = page.viewportSize()!.width;
   expect(boxes[0]!.left).toBeGreaterThanOrEqual(0);
   expect(boxes[0]!.left + boxes[0]!.width).toBeLessThanOrEqual(viewport);
-  if (mobile) {
-    const first = cards.first();
-    const what = await first.getByText("Qué se propone").boundingBox();
-    const why = await first.getByText("Por qué").boundingBox();
-    expect(why!.y).toBeGreaterThan(what!.y + 10);
-  }
-  // Controls: radios are reachable and big enough; the blocked decision cannot be approved.
-  const approve = cards.nth(0).getByRole("radio", { name: "Aprobar" });
-  await approve.check();
-  await expect(approve).toBeChecked();
-  const target = await cards.nth(0).locator("label", { hasText: "Aprobar" }).boundingBox();
+  // The recommendation is already chosen: each card says what will happen; the blocked one is left out.
+  await expect(cards.nth(0).getByText("Se aplicará", { exact: true })).toBeVisible();
+  await expect(cards.nth(4).getByText("No se aplicará", { exact: true })).toBeVisible();
+  // «Cambiar» opens the choices; they are reachable and big enough; the blocked decision cannot be applied.
+  const change = cards.nth(0).getByRole("button", { name: /^Cambiar/ });
+  expect((await change.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+  await change.click();
+  const skip = cards.nth(0).getByRole("radio", { name: "No aplicar" });
+  await skip.check();
+  await expect(skip).toBeChecked();
+  await expect(cards.nth(0).getByText("No se aplicará", { exact: true })).toBeVisible();
+  const target = await cards.nth(0).locator("label", { hasText: "Aplicar" }).first().boundingBox();
   expect(target!.height).toBeGreaterThanOrEqual(24);
-  await expect(cards.nth(4).getByRole("radio", { name: "Aprobar" })).toBeDisabled();
-  await expect(cards.nth(4).getByRole("radio", { name: "Descartar" })).toBeChecked();
+  await cards.nth(4).getByRole("button", { name: /^Cambiar/ }).click();
+  await expect(cards.nth(4).getByRole("radio", { name: "Aplicar", exact: true })).toBeDisabled();
+  await expect(cards.nth(4).getByRole("radio", { name: "No aplicar" })).toBeChecked();
   await expect(page.getByText(/MENSAJE_TECNICO|NOTA_INTERNA|need_|dec_\d/)).toHaveCount(0);
-  // The primary CTA is reachable, and an incomplete review is explained instead of sent.
-  const save = page.getByRole("button", { name: "Guardar revisión" });
-  await save.scrollIntoViewIfNeeded();
-  await expect(save).toBeVisible();
-  await save.click();
-  await expect(page.getByText("Elige qué hacer con este cambio.").first()).toBeVisible();
+  // «Restaurar recomendación» undoes the changes; «Crear ficha» is reachable.
+  await page.getByRole("button", { name: "Restaurar recomendación" }).click();
+  await expect(cards.nth(0).getByText("Se aplicará", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restaurar recomendación" })).toHaveCount(0);
+  const create = page.getByRole("button", { name: "Crear ficha" });
+  await create.scrollIntoViewIfNeeded();
+  await expect(create).toBeVisible();
   // Adjust opens structured controls without breaking the layout.
+  await cards.nth(1).getByRole("button", { name: /^Cambiar/ }).click();
   await cards.nth(1).getByRole("radio", { name: "Ajustar" }).check();
   await expect(cards.nth(1).getByText("Ajustar este cambio")).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
@@ -83,7 +81,7 @@ test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbo
   const working = await createAdaptation(page, material);
   await seedWorking(page, working);
   await page.reload();
-  await expect(page.getByText("Estamos creando el material con los cambios que has aprobado.")).toBeVisible();
+  await expect(page.getByText("Estamos creando la ficha adaptada.")).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
   await page.getByRole("button", { name: "Cancelar adaptación" }).click();
   const dialog = page.getByRole("dialog", { name: "¿Cancelar esta adaptación?" });
@@ -103,7 +101,7 @@ test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbo
   const ready = await createAdaptation(page, material);
   await seedReadyWithWarnings(page, workspaceId, ready);
   await page.reload();
-  await expect(page.getByText("Material preparado con observaciones")).toBeVisible();
+  await expect(page.getByText("La ficha está lista, con observaciones")).toBeVisible();
   await expect(page.getByText("Hay una ayuda repetida")).toBeVisible();
   await expect(page.getByText("presentación final")).toBeVisible();
   await expect(page.getByText(/R1|blk_|need_|traceability_complete/)).toHaveCount(0);
