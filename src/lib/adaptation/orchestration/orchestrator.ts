@@ -21,11 +21,12 @@ import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
 import { buildReviewScoped } from "../reviewer";
-import type { AdaptationPlanner, MaterialGenerator, PedagogicalReviewer, StageRunRecord } from "../services";
+import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
 import { AdaptationError, FAILURE_KIND, classifyAIFailure, type AdaptationErrorCode, type Stage } from "./errors";
-import { EntitlementError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type PipelineSnapshot } from "./store";
+import { EntitlementError, GenerationLimitError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type PipelineSnapshot } from "./store";
 import type { AdaptationStatus } from "./state-machine";
+import { MAX_GENERATION_CYCLES, generationCyclesOf } from "./status";
 import type { PipelineVersions } from "./versions";
 
 /**
@@ -136,6 +137,15 @@ function runRow(run: StageRunRecord, ids: { workspaceId: string; adaptationId: s
     output_fingerprint: outputFp,
     job_attempt: ids.jobAttempt,
   };
+}
+
+/**
+ * The row of a failed call. A rejected answer (`RejectedStageOutput`) was paid: its real record (tokens, cost) is kept. Any
+ * other failure returned no record: what is known, never a made-up cost (unknown is null).
+ */
+function failedRow(error: unknown, component: PipelineVersions["planner"], purpose: "plan" | "generate" | "review", promptKey: string, code: string, ids: Parameters<typeof runRow>[1], inputFp: string, callKind: "initial" | "repair" = "initial"): AiRunRow {
+  if (error instanceof RejectedStageOutput) return { ...runRow({ ...error.run, callKind }, ids, inputFp, null), error_code: code };
+  return failedRunRow(component, purpose, promptKey, code, ids, inputFp, callKind);
 }
 
 /** A call that failed before returning a record: what is known (never a made-up cost: unknown is null). */
@@ -294,7 +304,7 @@ async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loade
     answered = await services.planner.plan({ context: loaded.context, material: modelFacingAnalysis(loaded.analysis), ...(repairOf ? { repairOf } : {}) });
   } catch (error) {
     const { code } = classifyAIFailure(error, "planning");
-    await deps.store.recordAiRun(failedRunRow(loaded.versions.planner, "plan", "adaptation_planner", code, run.ids, callFp, repairOf ? "repair" : "initial"));
+    await deps.store.recordAiRun(failedRow(error, loaded.versions.planner, "plan", "adaptation_planner", code, run.ids, callFp, repairOf ? "repair" : "initial"));
     throw error;
   }
   const outputFp = fingerprint(answered.draft);
@@ -541,7 +551,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
           answered = await services.generator.generate({ context: loaded.context, analysis: loaded.analysis, reviewed });
         } catch (error) {
           const { code } = classifyAIFailure(error, "generation");
-          await store.recordAiRun(failedRunRow(loaded.versions.generator, "generate", "material_generator", code, run.ids, inputFp));
+          await store.recordAiRun(failedRow(error, loaded.versions.generator, "generate", "material_generator", code, run.ids, inputFp));
           throw error;
         }
         draft = answered.draft;
@@ -611,7 +621,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
           answered = await services.reviewer.review({ context: loaded.context, document, plan: reviewed.effective, solvability: solvabilityInputs(loaded.analysis), reviewContext });
         } catch (error) {
           const { code } = classifyAIFailure(error, "review");
-          await store.recordAiRun(failedRunRow(loaded.versions.reviewer, "review", "pedagogical_reviewer", code, run.ids, reviewInputFp));
+          await store.recordAiRun(failedRow(error, loaded.versions.reviewer, "review", "pedagogical_reviewer", code, run.ids, reviewInputFp));
           throw error;
         }
         draft = answered.draft as AiReviewDraft;
@@ -643,6 +653,8 @@ export async function reopenPlanReview(deps: OrchestratorDeps, adaptationId: str
   if (!snapshot) throw new NotFoundError();
   const status = snapshot.adaptation.status as AdaptationStatus;
   if (status !== "blocked") return status;
+  // Reopening only leads to another generation: refused here so the teacher is not sent to a review that could not be used.
+  if (generationCyclesOf(snapshot.jobs) >= MAX_GENERATION_CYCLES) throw new GenerationLimitError();
   await deps.store.transition(adaptationId, "blocked", "awaiting_plan_review");
   return "awaiting_plan_review";
 }

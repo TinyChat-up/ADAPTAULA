@@ -31,6 +31,20 @@ export class EntitlementError extends Error {
     this.name = "EntitlementError";
   }
 }
+/** The adaptation already used every product generation it may have (MAX_GENERATION_CYCLES): no new one is started. */
+export class GenerationLimitError extends Error {
+  constructor() {
+    super("Sin generaciones nuevas para esta adaptación");
+    this.name = "GenerationLimitError";
+  }
+}
+/** Too many paid AI calls failed in this workspace recently (ai_failure_budget): no NEW job is admitted for a while. */
+export class FailureBudgetError extends Error {
+  constructor() {
+    super("Presupuesto de fallos de IA agotado");
+    this.name = "FailureBudgetError";
+  }
+}
 export class NotFoundError extends Error {
   constructor() {
     super("No encontrado");
@@ -170,6 +184,8 @@ export interface CreateAdaptationArgs {
 function fail(error: { message: string }): never {
   const m = error.message;
   if (m.includes("lease_lost")) throw new LeaseLostError();
+  if (m.includes("generation_cycles_exhausted")) throw new GenerationLimitError();
+  if (m.includes("ai_failure_budget_exhausted")) throw new FailureBudgetError();
   if (m.includes("entitlement_exhausted")) throw new EntitlementError("exhausted");
   if (m.includes("entitlement_unavailable")) throw new EntitlementError("unavailable");
   if (m.includes("invalid_transition")) {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { restoreSeededFreePlan } from "./adaptation-seed";
 import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis } from "./helpers";
 
 /**
@@ -7,6 +8,7 @@ import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis 
  */
 test("Free: 5 adaptaciones al mes; la sexta se rechaza con un mensaje claro y el uso lo refleja", async ({ page }) => {
   test.setTimeout(240_000);
+  await restoreSeededFreePlan(page);
   await signUpAndOnboard(page, uniqueEmail());
   await page.goto("/app/uso");
   await expect(page.getByText("0 de 5").first()).toBeVisible();

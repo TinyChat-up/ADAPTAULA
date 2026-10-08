@@ -1,5 +1,5 @@
 import { estimateCostUsd } from "@/lib/ai/costs";
-import { AIError, toAIError } from "@/lib/ai/errors";
+import { toAIError } from "@/lib/ai/errors";
 import { ACTIVE_ADAPTATION_PROMPT_VERSIONS, getMaterialGenerator } from "@/lib/ai/prompts";
 import { parseStructured } from "@/lib/ai/structured";
 import type { AIProvider, ModelSelection, StructuredResponse } from "@/lib/ai/types";
@@ -12,7 +12,7 @@ import { authorizedKinds, decisionsToGenerateV2, normalizeGeneratedV2 } from "./
 import { instructionNeedsRewrite, instructionWords, supportBudgetWords } from "./proportion";
 import { appliedDecisions, type ReviewedPlan } from "./plan-review";
 import { statedAnswer } from "@/lib/analysis/answers";
-import type { MaterialGenerator, StageRunRecord } from "./services";
+import { RejectedStageOutput, rejectedRun, type MaterialGenerator, type StageRunRecord } from "./services";
 
 /**
  * The real generator: one model call that turns the APPROVED decisions into the fragments they change or add (never the whole
@@ -279,7 +279,8 @@ export function createModelGenerator(deps: { selection: ModelSelection; provider
       const { response, run } = await callGenerator({ ...deps, analysis, context, reviewed });
       const parsed = parseGeneratorResponse(response, deps.version ?? 1);
       if (parsed.outcome !== "ok") {
-        throw new AIError(parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output", `generator output rejected: ${parsed.outcome}`);
+        const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
+        throw new RejectedStageOutput(code, `generator output rejected: ${parsed.outcome}`, rejectedRun(run, code));
       }
       return { draft: parsed.draft, runs: [run] };
     },

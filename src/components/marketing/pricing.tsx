@@ -6,15 +6,18 @@ import type { PublicPlan } from "@/lib/schemas/plan";
 import { cn } from "@/lib/utils/cn";
 import { Section } from "./section";
 
-/** Everything shown comes from the `plans` row: changing a limit in the database changes this page. */
+/**
+ * Only differences that exist and are enforced today, read from the `plans` row (changing a limit in the database changes this
+ * page): adaptations, analyses, saved profiles and pages per material. Plan options that are not built yet (classes, images,
+ * several profiles per sheet, history length, priority, premium quality, block revisions, editor, comparison) are never sold
+ * here, even if the row already carries them (tests/unit/pricing-truth.test.ts).
+ */
 export function planBullets(plan: PublicPlan): string[] {
-  const out = [`${plan.monthly_adaptations} adaptaciones al mes`, `Hasta ${plan.max_profiles} perfiles guardados`];
-  if (plan.max_classes > 0) out.push(`Hasta ${plan.max_classes} clases`);
-  else out.push("Sin clases");
-  if (plan.features.multi_profile) out.push("Varios perfiles a la vez");
-  if (plan.monthly_images > 0) out.push(`${plan.monthly_images} recursos visuales al mes`);
-  if (plan.features.history_days) out.push(`Historial de ${plan.features.history_days} días`);
-  else if (plan.features.history_days === null) out.push("Historial completo");
+  const out = [`${plan.monthly_adaptations} adaptaciones al mes`];
+  if (plan.features.monthly_analyses !== undefined) out.push(`${plan.features.monthly_analyses} análisis de materiales al mes`);
+  out.push(`Hasta ${plan.max_profiles} perfiles guardados`);
+  if (plan.features.max_pages_per_material !== undefined) out.push(`Materiales de hasta ${plan.features.max_pages_per_material} páginas`);
+  out.push("Descarga en PDF");
   return out;
 }
 
@@ -64,6 +67,7 @@ export function PricingGrid({ plans }: { plans: PublicPlan[] }) {
       </div>
       {/* The numbers are read from the plans table; they are launch values, not a final commercial commitment (docs/PRODUCT.md). */}
       <p className="text-center text-sm text-muted-foreground">Precios y límites de lanzamiento: pueden ajustarse antes de que se activen los planes de pago.</p>
+      <p className="text-center text-sm text-muted-foreground">Las clases, los recursos visuales generados y adaptar para varios perfiles a la vez todavía no están disponibles y no forman parte de ningún plan.</p>
     </div>
   );
 }

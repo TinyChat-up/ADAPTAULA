@@ -15,7 +15,7 @@ import { mockGenerateDraft } from "@/lib/adaptation/mock";
 import { runAdaptation } from "@/lib/adaptation/pipeline";
 import { reviewPlan } from "@/lib/adaptation/plan-review";
 import { buildReview, checkOf } from "@/lib/adaptation/review";
-import type { AdaptationPlanner } from "@/lib/adaptation/services";
+import { RejectedStageOutput, type AdaptationPlanner } from "@/lib/adaptation/services";
 import { answersOf } from "@/lib/adaptation/facts";
 import { getMaterialGenerator } from "@/lib/ai/prompts";
 import { resolveModel } from "@/lib/ai/registry";
@@ -355,8 +355,14 @@ describe("the real generator path with a scripted provider", () => {
     expect(parseGeneratorResponse(respond("Aquí está")).outcome).toBe("not_json");
     expect(parseGeneratorResponse(respond(JSON.stringify({ segments: [{ decision_id: "dec_1", target: "document", blocks: [{ type: "html", html: "<b>x</b>" }] }], blocked: [], change_summary: [] }))).outcome).toBe("schema");
     const { provider, requests } = scripted(respond("{}", "max_tokens"), respond(JSON.stringify(mockDraft())));
-    await expect(createModelGenerator({ selection, provider, maxOutputTokens: 6000 }).generate({ context, analysis, reviewed })).rejects.toMatchObject({ code: "truncated" });
+    const rejected = await createModelGenerator({ selection, provider, maxOutputTokens: 6000 }).generate({ context, analysis, reviewed }).catch((e: unknown) => e);
+    expect(rejected).toMatchObject({ code: "truncated" });
     expect(requests).toHaveLength(1);
+    // The rejected answer was paid: the error carries its real record, so ai_runs keeps the tokens and the cost (Phase 7B).
+    expect(rejected).toBeInstanceOf(RejectedStageOutput);
+    const run = (rejected as RejectedStageOutput).run;
+    expect(run).toMatchObject({ purpose: "generate", status: "invalid_output", errorCode: "truncated", inputTokens: 3000, outputTokens: 1500, cacheCreationInputTokens: 3200 });
+    expect(run.estimatedCostUsd).toBeCloseTo(0.006 + 0.015 + 0.008, 6);
   });
 
   it("the model contract has no HTML, CSS or ids: it cannot even express them", () => {

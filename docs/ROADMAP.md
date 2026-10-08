@@ -81,6 +81,13 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
 - **Presets por necesidad funcional.** Los nombres visibles describen el apoyo que configuran («Lectura y decodificación», «Atención, planificación y organización»…), no una condición. Ids y dimensiones intactos (congelados en un fixture); el preset nunca se guarda ni llega a la IA. El alias del perfil recuerda que no hace falta ningún dato médico.
 - **Pendiente:** pricing definitivo y economía unitaria (Fase 6 de abajo).
 
+## Controles de coste y telemetría ✅ (encargo «PHASE 7B»; cuotas sin cambios y provisionales)
+
+- `/precios` muestra solo lo que existe y se aplica (adaptaciones, análisis, perfiles, páginas por material, PDF). Clases, recursos visuales y varios perfiles por ficha se declaran no disponibles; historial, prioridad, PREMIUM, plantillas y editor no se mencionan. «Cómo funciona» deja de prometer la adaptación rápida sin perfil.
+- Cuota ≠ coste: `ai_spend_summary` (interno) mide el dinero gastado por workspace y periodo, fallos incluidos. Las respuestas rechazadas de planificador, generador y revisor conservan sus tokens y su coste.
+- Límite de 3 generaciones de producto por adaptación y presupuesto de 40 fallos de pago cada 24 h por workspace, comprobado al admitir jobs nuevos.
+- **Pendiente:** pricing definitivo con telemetría real; alertas de coste; la sección «Tipos de adaptación» de la landing anuncia tipos que la app no deja elegir (hoy solo «accesibilidad»).
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso`, `/app/configuracion/facturacion` y `/precios` conectada.

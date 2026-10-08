@@ -1,6 +1,6 @@
 export const STEPS = [
   { title: "Sube tu ficha", text: "Un PDF o una imagen del material que ya utilizas: ficha, texto, examen o problema." },
-  { title: "Elige para quién", text: "Usa un perfil guardado o haz una adaptación rápida. Indica qué quieres adaptar." },
+  { title: "Elige para quién", text: "Elige un perfil guardado con las necesidades funcionales que quieres tener en cuenta." },
   { title: "Revisa la propuesta", text: "Adaptaula te presenta una propuesta editable y te explica qué ha cambiado y por qué." },
   { title: "Descarga y usa", text: "Descarga la ficha en PDF lista para imprimir y repite con otros perfiles sin volver a subirla." },
 ] as const;

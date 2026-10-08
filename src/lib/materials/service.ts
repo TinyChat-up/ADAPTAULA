@@ -163,7 +163,7 @@ export async function completeUpload(ctx: WorkspaceContext, materialId: string):
       : { ok: true, status: "queued", reused: false, jobId: requested.jobId };
   }
   // The file is valid and stored: running out of quota or capacity only postpones the analysis.
-  const postponable: ServiceError[] = ["rate_limited", "too_many_active", "quota_exceeded"];
+  const postponable: ServiceError[] = ["rate_limited", "too_many_active", "quota_exceeded", "failure_budget"];
   return postponable.includes(requested.code) ? { ok: true, status: "uploaded", reused: false, jobId: null } : requested;
 }
 
@@ -263,6 +263,7 @@ export async function queueAnalysis(ctx: WorkspaceContext, materialId: string, i
   if (error) {
     if (error.message.includes("analysis_limit_reached")) return { ok: false, code: "too_many_active" };
     if (error.message.includes("analysis_quota_exceeded")) return { ok: false, code: "quota_exceeded" };
+    if (error.message.includes("ai_failure_budget_exhausted")) return { ok: false, code: "failure_budget" };
     if (error.message.includes("material_not_found")) return { ok: false, code: "not_found" };
     logger.error("enqueue_failed", { workspaceId: ctx.workspace.id, materialId });
     return { ok: false, code: "unexpected" };

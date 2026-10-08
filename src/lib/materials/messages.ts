@@ -15,6 +15,8 @@ export function describeServiceError(code: ServiceError, limits?: MaterialLimits
       return "Ya tienes varios materiales en análisis. Espera a que terminen para enviar más.";
     case "quota_exceeded":
       return "Has utilizado los análisis incluidos en tu plan este mes.";
+    case "failure_budget":
+      return "Ha habido demasiados análisis fallidos en poco tiempo. Vuelve a intentarlo dentro de unas horas o prueba con otro archivo.";
     case "unexpected":
       return "No hemos podido procesar el archivo. Inténtalo de nuevo en unos minutos.";
     default:
@@ -31,6 +33,7 @@ export function statusCodeFor(code: ServiceError): number {
     case "rate_limited":
     case "too_many_active":
     case "quota_exceeded":
+    case "failure_budget":
       return 429;
     case "unexpected":
       return 500;

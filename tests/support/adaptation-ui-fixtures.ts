@@ -61,6 +61,8 @@ export function status(overrides: Partial<AdaptationStatusDto> = {}): Adaptation
     execution: null,
     review: null,
     ambiguousAttempt: false,
+    generationsUsed: 0,
+    regenerationAvailable: true,
     ...overrides,
   };
 }
