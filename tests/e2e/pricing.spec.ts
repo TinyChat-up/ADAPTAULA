@@ -7,7 +7,8 @@ test("precios: solo diferencias reales y verificables, valores de lanzamiento y 
   await restoreSeededFreePlan(page);
   await page.goto("/precios");
   await expect(page.getByRole("heading", { name: "Precios", level: 1 })).toBeVisible();
-  for (const text of ["5 adaptaciones al mes", "75 adaptaciones al mes", "150 adaptaciones al mes", "10 análisis de materiales al mes", "Hasta 2 perfiles guardados", "Materiales de hasta 5 páginas"]) {
+  // Max is shown only when its flag is on (getFlags().maxPlanEnabled): Free and Pro are always there.
+  for (const text of ["5 adaptaciones al mes", "75 adaptaciones al mes", "10 análisis de materiales al mes", "Hasta 2 perfiles guardados", "Materiales de hasta 5 páginas"]) {
     await expect(page.getByText(text, { exact: true })).toBeVisible();
   }
   for (const text of ["50 recursos visuales al mes", "Hasta 10 clases", "Hasta 30 clases", "Sin clases", "Varios perfiles a la vez", "Historial completo", "Historial de 30 días"]) {
