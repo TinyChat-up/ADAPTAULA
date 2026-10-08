@@ -1,0 +1,37 @@
+[
+  {
+    "name": "A-primaria",
+    "label": "Primaria",
+    "design": "standard",
+    "pages": 2,
+    "kb": 50
+  },
+  {
+    "name": "B-primaria-estructurada",
+    "label": "Primaria estructurada",
+    "design": "standard",
+    "pages": 4,
+    "kb": 51
+  },
+  {
+    "name": "C-eso",
+    "label": "ESO",
+    "design": "standard",
+    "pages": 2,
+    "kb": 39
+  },
+  {
+    "name": "D-bachillerato",
+    "label": "Bachillerato",
+    "design": "standard",
+    "pages": 4,
+    "kb": 38
+  },
+  {
+    "name": "E-visual",
+    "label": "Visual (recorte)",
+    "design": "standard",
+    "pages": 2,
+    "kb": 71
+  }
+]

@@ -28,10 +28,10 @@ const model = (doc: MaterialDocument, pins: Record<string, PinnedAsset> = {}, mo
 const bodyOf = (html: string) => html.slice(html.indexOf("<body>"));
 
 describe("renderPrintHtml · self-contained document", () => {
-  it("uses material_renderer@v2 and the app's own sheet markup, whole", async () => {
-    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v2");
+  it("uses material_renderer@v3 and the app's own sheet markup, whole", async () => {
+    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v3");
     const out = await renderPrintHtml(model(geografia()), []);
-    expect(out.rendererVersion).toBe("material_renderer@v2");
+    expect(out.rendererVersion).toBe("material_renderer@v3");
     expect(out.html.startsWith('<!doctype html><html lang="es">')).toBe(true);
     expect(bodyOf(out.html)).toMatch(/^<body><div class="ms-root"/);
     expect(out.html).toContain('class="ms-sheet"');
@@ -142,7 +142,7 @@ describe("sheet font: Inter, local, pinned", () => {
   });
 });
 
-describe("material.css v2: the sheet is self-sufficient and printable", () => {
+describe("material.css (renderer v3): the sheet is self-sufficient and printable", () => {
   const css = readFileSync("src/components/material/material.css", "utf8");
   const print = css.slice(css.indexOf("@media print"));
 
@@ -155,15 +155,16 @@ describe("material.css v2: the sheet is self-sufficient and printable", () => {
 
   it("its own zero-specificity reset (the app's Tailwind preflight never reaches the PDF) and explicit list numbers", () => {
     expect(css).toContain(":where(.ms-root, .ms-root *, .ms-root ::before, .ms-root ::after) { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid; }");
-    expect(css).toMatch(/\.ms-steps, ol\.ms-list \{ list-style: decimal; \}/);
-    expect(css).toMatch(/\.ms-match ol \{[^}]*list-style: decimal/);
+    // Step numbers are generated content (they print and read as text); numbered lists keep their decimal markers.
+    expect(css).toMatch(/\.ms-steps > li::before \{ content: counter\(ms-step\) "\.";/);
+    expect(css).toMatch(/ol\.ms-list \{ list-style: decimal; \}/);
   });
 
   it("A4, page breaks kept, physical page numbers in the page margin, visuals never taller than a page", () => {
     expect(print).toMatch(/@page \{ size: A4; margin: 18mm; @bottom-right \{ content: counter\(page\) " \/ " counter\(pages\)/);
     expect(print).toMatch(/\.ms-sheet \{[^}]*break-after: page/);
     expect(css).toMatch(/\.ms-table thead \{ display: table-header-group; \}/);
-    expect(css).toMatch(/\.ms-figure img \{[^}]*max-height: calc\(\(var\(--ms-page-h\) - 2 \* var\(--ms-margin\)\) \* \.75\)/);
+    expect(css).toMatch(/\.ms-figure img \{[^}]*max-height: calc\(\(var\(--ms-page-h\) - 2 \* var\(--ms-margin\)\) \* \.6\)/);
     expect(print).toMatch(/\.ms-footer \{ display: none; \}/);
   });
 });

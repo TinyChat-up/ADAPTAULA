@@ -2,6 +2,7 @@ import type { Block, MaterialDocument, ResponseSpec } from "@/lib/schemas/materi
 import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
 import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferred";
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
+import { composeMath, type MathPart } from "./math";
 import { renderTokens, type RenderTokens } from "./tokens";
 import { MATERIAL_RENDERER_VERSION } from "./version";
 
@@ -22,7 +23,8 @@ export type RenderResponse =
   | { kind: "lines"; lines: number; fromExpectedLength: boolean }
   | { kind: "box"; rows: number }
   | { kind: "grid"; rows: number }
-  | { kind: "table_cells"; rows: number }
+  /** `inTable`: the activity points at a table of the sheet, whose empty cells ARE the answer space (no second box is drawn). */
+  | { kind: "table_cells"; rows: number; inTable: boolean }
   | { kind: "choice"; multiple: boolean; options: string[] }
   | { kind: "fill_blank"; parts: BlankPart[]; wordBank: string[] }
   | { kind: "match"; left: string[]; right: string[] }
@@ -36,7 +38,11 @@ export type RenderNode = { key: string } & (
   | { kind: "paragraph"; paragraphs: Run[][] }
   | { kind: "reading_text"; title?: string; paragraphs: Array<{ label?: string; runs: Run[] }> }
   | { kind: "instruction"; paragraphs: Run[][]; steps: string[] }
-  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean }
+  /**
+   * `supports`: writing helps the document places right after a writing activity (an organiser, sentence starters). They are its
+   * helps, so the sheet shows them between the prompt and the answer space: enunciado → apoyos → espacio de respuesta.
+   */
+  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[] }
   | { kind: "list"; ordered: boolean; items: Run[][] }
   | { kind: "table"; caption?: string; unit?: string; headers: string[]; rows: string[][] }
   | { kind: "chart"; title?: string; chartType: "bar" | "line" | "pie" | "other"; categories: string[]; series: Array<{ label: string | null; values: number[] }>; unit?: string; xLabel?: string; yLabel?: string }
@@ -47,7 +53,8 @@ export type RenderNode = { key: string } & (
   | { kind: "worked_example"; title?: string; problem: Run[][]; steps: string[]; result: string }
   | { kind: "sentence_starters"; items: string[] }
   | { kind: "planner"; title?: string; slots: Array<{ label: string; lines: number }> }
-  | { kind: "math"; latex: string; display: "inline" | "block"; spoken: string }
+  /** `parts`: the formula composed (stacked fractions…) when it is within what the sheet can typeset; otherwise its source is shown. */
+  | { kind: "math"; latex: string; display: "inline" | "block"; spoken: string; parts: MathPart[] | null }
   | { kind: "unknown"; type: string }
 );
 
@@ -63,11 +70,23 @@ export interface RenderHeader {
   fields: string[];
 }
 
+/** The educational stage, only when the document states a known one: it modulates density and tone, never content. */
+export type RenderStage = "primaria" | "eso" | "bachillerato";
+
+/**
+ * The visual system of the sheet. `standard` is the current one (material_renderer@v3). `claro` is «Adaptaula · Sistema CLARO»,
+ * an editorial direction under human review (docs/qa/phase8/claro-pilots): same blocks, same markup contract, its own CSS layer.
+ * It is a render option, never part of `MaterialDocument`, and nothing selects it in the product until it is approved.
+ */
+export type RenderDesign = "standard" | "claro";
+
 export interface RenderModel {
   rendererVersion: string;
   mode: RenderMode;
   title: string;
   language: string;
+  stage: RenderStage | null;
+  design: RenderDesign;
   header: RenderHeader;
   tokens: RenderTokens;
   pages: RenderPage[];
@@ -131,6 +150,8 @@ export interface BuildRenderOptions {
    * name. Absent → the document's own value, unchanged.
    */
   subjectLabel?: string | null;
+  /** Visual system (default `standard`). See `RenderDesign`. */
+  design?: RenderDesign;
 }
 
 export const NEUTRAL_VISUAL_LABEL = "Recurso visual de la actividad";
@@ -143,6 +164,24 @@ const TABLE_CELL_ROWS = 6;
 const COMPACT_ROWS = 14;
 const MAX_CHECKLIST = 12;
 const WIDE_TABLE_COLUMNS = 8;
+/** Blocks that introduce what follows: they stay with the next activity when a page is closed before it (a reading placed right
+ * before an activity is the part of the text that activity asks about). */
+const LEADS_INTO = new Set<RenderNode["kind"]>(["heading", "instruction", "help_box", "reading_text"]);
+/** Responses that are written (where an organiser or sentence starters help). */
+const WRITING = new Set<RenderResponse["kind"]>(["lines", "box", "oral"]);
+
+/**
+ * How many activities each page holds under `max_tasks_per_page`: the fewest pages the limit allows, filled as evenly as possible
+ * (7 tasks, max 3 → 2 · 3 · 2, never 3 · 3 · 1). The first page takes the smaller share: it also carries the header, the title
+ * and the orientation. Counts, not heights: the browser still paginates whatever a group does not fit.
+ */
+export function taskGroups(tasks: number, max: number): number[] {
+  if (tasks <= max) return [tasks];
+  const groups = Math.ceil(tasks / max);
+  const base = Math.floor(tasks / groups);
+  const extra = tasks - base * groups;
+  return Array.from({ length: groups }, (_, i) => base + (i >= 1 && i <= extra ? 1 : 0));
+}
 
 const wordsRange = /(\d{2,4})\s*(?:[-–]|y|a)\s*(\d{2,4})\s*palabras/i;
 /** Lines needed for the longest expected answer stated in the requirements ("150-180 palabras"), conservative and bounded. */
@@ -155,7 +194,7 @@ function expectedLines(requirements: readonly string[]): number | null {
   return max > 0 ? Math.min(MAX_LINES, Math.ceil(max / WORDS_PER_LINE)) : null;
 }
 
-function responseOf(spec: ResponseSpec, requirements: readonly string[]): RenderResponse {
+function responseOf(spec: ResponseSpec, requirements: readonly string[], answersInTable = false): RenderResponse {
   switch (spec.kind) {
     case "lines": {
       const wanted = expectedLines(requirements);
@@ -166,7 +205,7 @@ function responseOf(spec: ResponseSpec, requirements: readonly string[]): Render
     case "grid":
       return { kind: "grid", rows: GRID_ROWS };
     case "table_cells":
-      return { kind: "table_cells", rows: TABLE_CELL_ROWS };
+      return { kind: "table_cells", rows: TABLE_CELL_ROWS, inTable: answersInTable };
     case "choice":
       return { kind: "choice", multiple: spec.multiple, options: spec.options.map((o) => o.text) };
     case "fill_blank":
@@ -190,7 +229,8 @@ function activityRows(prompt: Run[][], steps: readonly string[], requirements: r
   const text = prompt.reduce((n, p) => n + Math.max(1, Math.ceil(chars(p) / 90)), 0) + steps.length + requirements.length;
   const answer =
     response.kind === "lines" ? response.lines
-    : response.kind === "box" || response.kind === "grid" || response.kind === "table_cells" ? response.rows
+    : response.kind === "table_cells" ? (response.inTable ? 0 : response.rows)
+    : response.kind === "box" || response.kind === "grid" ? response.rows
     : response.kind === "choice" ? response.options.length
     : response.kind === "match" ? Math.max(response.left.length, response.right.length)
     : response.kind === "order" ? response.items.length
@@ -210,6 +250,8 @@ export function gradeLabel(slug: string | null): string | null {
 
 interface Ctx {
   options: BuildRenderOptions;
+  /** Ids of the document's table blocks: an activity that points at one is answered in its cells. */
+  tables: Set<string>;
   isolate: Set<string>;
   issues: RenderIssue[];
   next: () => string;
@@ -230,8 +272,8 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       const requirements = block.requirements ?? [];
       const steps = block.steps ?? [];
       const prompt = parseParagraphs(block.prompt);
-      const response = responseOf(block.response, requirements);
-      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id) };
+      const response = responseOf(block.response, requirements, (block.resource_block_ids ?? []).some((ref) => ctx.tables.has(ref)));
+      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id), supports: [] };
     }
     case "list":
       return { key, kind: "list", ordered: block.style === "numbered", items: block.items.map(parseInline) };
@@ -262,7 +304,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
     case "planner":
       return { key, kind: "planner", ...(block.title ? { title: block.title } : {}), slots: block.slots };
     case "math":
-      return { key, kind: "math", latex: block.latex, display: block.display, spoken: block.spoken_text };
+      return { key, kind: "math", latex: block.latex, display: block.display, spoken: block.spoken_text, parts: composeMath(block.latex) };
     default: {
       // Compile-time exhaustiveness: a new block type in the schema without a case above makes `block` not `never` and stops the
       // build here. At run time (data that does not match the schema) it becomes a visible `unknown` node, never a silent omission.
@@ -279,7 +321,7 @@ const textsOf = (n: RenderNode): string[] => {
     case "paragraph": return runs(n.paragraphs);
     case "reading_text": return n.paragraphs.map((p) => p.runs.map((r) => r.text).join(""));
     case "instruction": return [...runs(n.paragraphs), ...n.steps];
-    case "activity": return [...runs(n.prompt), ...n.steps, ...n.requirements];
+    case "activity": return [...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf)];
     case "list": return runs(n.items);
     case "table": return [...n.headers, ...n.rows.flat()];
     case "help_box": return runs(n.paragraphs);
@@ -310,7 +352,7 @@ function validate(nodes: RenderNode[], ctx: Ctx, outcomes: DeferredOutcome[], de
     if (n.kind === "table" && n.headers.length > WIDE_TABLE_COLUMNS) add("overflow_risk", "warning", "Una tabla es muy ancha: se ajusta al ancho de la hoja con celdas más estrechas");
     if (n.kind === "checklist" && n.items.length > MAX_CHECKLIST) add("structure_inconsistent", "warning", "Una lista de comprobación tiene más elementos de los esperados; se muestra entera");
     if (n.kind === "chart" && hasNegative(n)) add("chart_table_only", "info", "Un gráfico tiene valores negativos: se muestran solo sus datos en tabla, sin dibujarlo");
-    if (n.kind === "math") add("math_source_only", "info", "Una fórmula se muestra como texto con su lectura en voz alta: el visor aún no compone fórmulas");
+    if (n.kind === "math" && n.parts === null) add("math_source_only", "info", "Una fórmula se muestra como texto con su lectura en voz alta: el visor aún no compone fórmulas");
     if (n.kind === "activity" && n.response.kind === "lines" && n.response.lines >= 30) add("overflow_risk", "info", "Una respuesta pide muchas líneas: la actividad puede continuar en la página siguiente");
     for (const t of textsOf(n)) if (t.split(/\s+/).some((w) => w.length > LONG_TOKEN)) {
       add("overflow_risk", "info", "Hay una palabra muy larga: se parte al final de la línea para que no salga de la hoja");
@@ -333,14 +375,18 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   const deferredKnown = options.deferred !== null && options.deferred !== undefined;
   const plan = planDeferred(doc, options.deferred ?? []);
   let counter = 0;
-  const ctx: Ctx = { options, isolate: plan.isolate, issues: [], next: () => `n${++counter}` };
-  const tokens = renderTokens(doc.presentation, doc.meta.stage);
+  const tables = new Set(doc.pages.flatMap((p) => p.blocks).filter((bl) => bl.type === "table").map((bl) => bl.id));
+  const ctx: Ctx = { options, tables, isolate: plan.isolate, issues: [], next: () => `n${++counter}` };
+  const design: RenderDesign = options.design ?? "standard";
+  const tokens = renderTokens(doc.presentation, doc.meta.stage, design);
   const max = tokens.maxTasksPerPage;
 
   const pages: RenderPage[] = [];
   for (const logical of doc.pages) {
     let current: RenderNode[] = [];
     let tasks = 0;
+    const quotas = max === null ? [] : taskGroups(logical.blocks.filter((bl) => bl.type === "activity").length, max);
+    let group = 0;
     const flush = () => {
       if (current.length > 0) pages.push({ number: pages.length + 1, nodes: current });
       current = [];
@@ -348,12 +394,23 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     };
     for (const block of logical.blocks) {
       const node = nodeOf(block, ctx);
-      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed it, and a heading
-      // that would be left alone at the bottom travels with it.
-      if (node.kind === "activity" && max !== null && tasks >= max) {
-        const orphan = current.at(-1)?.kind === "heading" ? current.pop() : undefined;
+      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed its group (see
+      // `taskGroups`), and what leads into that activity (a heading, an orientation, a help, its part of the reading) travels with it.
+      if (node.kind === "activity" && max !== null && tasks >= (quotas[group] ?? max)) {
+        const lead: RenderNode[] = [];
+        while (current.length > 0 && LEADS_INTO.has(current.at(-1)!.kind)) lead.unshift(current.pop()!);
         flush();
-        if (orphan) current.push(orphan);
+        group += 1;
+        current.push(...lead);
+      }
+      // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.
+      const previous = current.at(-1);
+      if ((node.kind === "planner" || node.kind === "sentence_starters") && previous?.kind === "activity" && WRITING.has(previous.response.kind)) {
+        previous.supports.push(node);
+        // An organised essay is long: its writing space may continue on the next page (the prompt and the organiser never leave
+        // its first lines: CSS), rather than pushing the whole activity on and leaving half a page empty.
+        if (node.kind === "planner") previous.keepTogether = false;
+        continue;
       }
       current.push(node);
       if (node.kind === "activity") tasks += 1;
@@ -368,6 +425,8 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     mode: options.mode,
     title: doc.meta.title,
     language: doc.meta.language,
+    stage: doc.meta.stage === "primaria" || doc.meta.stage === "eso" || doc.meta.stage === "bachillerato" ? doc.meta.stage : null,
+    design,
     header: { subject: options.subjectLabel ?? doc.meta.subject, grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
     pages,

@@ -8,6 +8,9 @@ const Lines = ({ count }: { count: number }) => (
   </div>
 );
 
+const GRID_MM = 6;
+const LETTERS = "ABCDEFGHIJ";
+
 const MODE_LABEL = { oral: "Respuesta oral", keyboard: "Respuesta con teclado", other: "Respuesta alternativa" } as const;
 
 /**
@@ -21,9 +24,11 @@ export function Response({ response }: { response: RenderResponse }) {
     case "box":
       return <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${response.rows})` }} aria-hidden />;
     case "grid":
-      return <div className="ms-grid-area" style={{ height: `calc(var(--ms-line) * ${response.rows * 0.7})` }} aria-hidden />;
+      // Whole 6 mm squares: a squared area never ends in a cut row.
+      return <div className="ms-grid-area" style={{ height: `${GRID_MM * Math.round(response.rows * 1.1)}mm` }} aria-hidden />;
     case "table_cells":
-      return <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${response.rows})` }} aria-hidden />;
+      // The table of the sheet the activity points at is where the student writes: a second, empty box would only compete with it.
+      return response.inTable ? null : <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${response.rows})` }} aria-hidden />;
     case "choice":
       return (
         <ul className="ms-options">
@@ -42,30 +47,39 @@ export function Response({ response }: { response: RenderResponse }) {
             {response.parts.map((p, i) => ("blank" in p ? <span key={i} className="ms-blank" role="img" aria-label="espacio en blanco" /> : <span key={i}>{p.text}</span>))}
           </p>
           {response.wordBank.length > 0 ? (
-            <ul className="ms-wordbank">
-              {response.wordBank.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
+            <div className="ms-wordbank">
+              <p className="ms-wordbank-label">Puedes usar:</p>
+              <ul>
+                {response.wordBank.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       );
     case "match":
       return (
+        // The two columns are told apart by their markers (numbers on the left, letters on the right): the student writes a letter
+        // in each box. The markers are text, so they print and read the same everywhere.
         <div className="ms-match">
-          <ol>
+          <ul>
             {response.left.map((l, i) => (
               <li key={i}>
-                <span>{l}</span>
-                <span className="ms-slot" aria-hidden />
+                <span className="ms-mark">{i + 1}.</span>
+                <span className="ms-match-item">{l}</span>
+                <span className="ms-box ms-box-write" aria-hidden />
               </li>
             ))}
-          </ol>
-          <ol className="ms-alpha">
+          </ul>
+          <ul>
             {response.right.map((r, i) => (
-              <li key={i}>{r}</li>
+              <li key={i}>
+                <span className="ms-mark">{LETTERS[i]}.</span>
+                <span className="ms-match-item">{r}</span>
+              </li>
             ))}
-          </ol>
+          </ul>
         </div>
       );
     case "order":
@@ -73,7 +87,7 @@ export function Response({ response }: { response: RenderResponse }) {
         <ul className="ms-options">
           {response.items.map((o, i) => (
             <li key={i}>
-              <span className="ms-box" aria-hidden />
+              <span className="ms-box ms-box-write" aria-hidden />
               <span>{o}</span>
             </li>
           ))}
