@@ -32,8 +32,18 @@ const STAGE: Record<string, { basePt: number; lineMm: number }> = {
 };
 const DEFAULT_STAGE = { basePt: 11.5, lineMm: 9 };
 
-export function renderTokens(presentation: Presentation, stage: string): RenderTokens {
-  const s = STAGE[stage] ?? DEFAULT_STAGE;
+/**
+ * Sistema CLARO: the editorial scale by stage (Primaria 12.5 pt, ESO 11.75 pt, Bachillerato 11.25 pt), before the profile's
+ * `font_scale`. The stage sets the tone; the functional profile still enlarges whatever it needs, at any stage.
+ */
+const CLARO_STAGE: Record<string, { basePt: number; lineMm: number }> = {
+  primaria: { basePt: 12.5, lineMm: 10 },
+  eso: { basePt: 11.75, lineMm: 9 },
+  bachillerato: { basePt: 11.25, lineMm: 8.5 },
+};
+
+export function renderTokens(presentation: Presentation, stage: string, design: "standard" | "claro" = "standard"): RenderTokens {
+  const s = (design === "claro" ? CLARO_STAGE[stage] : STAGE[stage]) ?? DEFAULT_STAGE;
   const scale = presentation.font_scale;
   return {
     page: { widthMm: 210, heightMm: 297, marginMm: 18 },
@@ -70,5 +80,9 @@ export function tokenStyle(t: RenderTokens): Record<string, string> {
     // Writing lines and squares: visible on paper, lighter than the text.
     "--ms-write": t.contrast === "high" ? "#000000" : "#8b919a",
     "--ms-grid": t.contrast === "high" ? "#555555" : "#c9ced6",
+    // Sistema CLARO palette (used only under [data-design="claro"]): Azul Adaptaula is --ms-accent; petroleum green marks helps
+    // only; fog blue is the orientation surface. All of them print as distinct greys and none carries meaning on its own.
+    "--ms-petrol": t.contrast === "high" ? "#000000" : "#227e81",
+    "--ms-fog": t.contrast === "high" ? "#ffffff" : "#eff3f7",
   };
 }

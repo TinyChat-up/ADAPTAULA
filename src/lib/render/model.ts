@@ -67,12 +67,20 @@ export interface RenderHeader {
 /** The educational stage, only when the document states a known one: it modulates density and tone, never content. */
 export type RenderStage = "primaria" | "eso" | "bachillerato";
 
+/**
+ * The visual system of the sheet. `standard` is the current one (material_renderer@v3). `claro` is «Adaptaula · Sistema CLARO»,
+ * an editorial direction under human review (docs/qa/phase8/claro-pilots): same blocks, same markup contract, its own CSS layer.
+ * It is a render option, never part of `MaterialDocument`, and nothing selects it in the product until it is approved.
+ */
+export type RenderDesign = "standard" | "claro";
+
 export interface RenderModel {
   rendererVersion: string;
   mode: RenderMode;
   title: string;
   language: string;
   stage: RenderStage | null;
+  design: RenderDesign;
   header: RenderHeader;
   tokens: RenderTokens;
   pages: RenderPage[];
@@ -136,6 +144,8 @@ export interface BuildRenderOptions {
    * name. Absent → the document's own value, unchanged.
    */
   subjectLabel?: string | null;
+  /** Visual system (default `standard`). See `RenderDesign`. */
+  design?: RenderDesign;
 }
 
 export const NEUTRAL_VISUAL_LABEL = "Recurso visual de la actividad";
@@ -343,7 +353,8 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   let counter = 0;
   const tables = new Set(doc.pages.flatMap((p) => p.blocks).filter((bl) => bl.type === "table").map((bl) => bl.id));
   const ctx: Ctx = { options, tables, isolate: plan.isolate, issues: [], next: () => `n${++counter}` };
-  const tokens = renderTokens(doc.presentation, doc.meta.stage);
+  const design: RenderDesign = options.design ?? "standard";
+  const tokens = renderTokens(doc.presentation, doc.meta.stage, design);
   const max = tokens.maxTasksPerPage;
 
   const pages: RenderPage[] = [];
@@ -378,6 +389,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     title: doc.meta.title,
     language: doc.meta.language,
     stage: doc.meta.stage === "primaria" || doc.meta.stage === "eso" || doc.meta.stage === "bachillerato" ? doc.meta.stage : null,
+    design,
     header: { subject: options.subjectLabel ?? doc.meta.subject, grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
     pages,

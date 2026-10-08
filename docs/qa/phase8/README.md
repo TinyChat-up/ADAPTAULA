@@ -36,3 +36,16 @@ lado a lado es la forma más rápida de revisar el cambio.
 | Primaria | ![](before/A-primaria/pagina-1.png) | ![](after/A-primaria/pagina-1.png) |
 | ESO | ![](before/C-eso/pagina-1.png) | ![](after/C-eso/pagina-1.png) |
 | Bachillerato | ![](before/D-bachillerato/pagina-1.png) | ![](after/D-bachillerato/pagina-1.png) |
+
+## Problemas pedagógicos pendientes (revisión humana)
+
+Siguen abiertos en las cinco fichas de QA; no son de identidad visual y el diseño no los oculta:
+
+- **E · Visual**: el climograma no identifica los meses (sin etiquetas en el eje).
+- **D · Bachillerato**: el organizador de Rousseau va después de la redacción (corregido solo en el piloto CLARO).
+- **C · ESO**: la instrucción de la tabla de células va después de la tabla.
+- **B · Primaria estructurada**: lectura y preguntas demasiado separadas (corregido solo en el piloto CLARO).
+- **A · Primaria**: una cuadrícula genérica no es el espacio adecuado para trabajar fracciones.
+- **B y D**: espacios y saltos de página desaprovechados.
+
+Propuesta de dirección editorial (Sistema CLARO, pendiente de aprobación): [`claro-pilots/`](claro-pilots/README.md).

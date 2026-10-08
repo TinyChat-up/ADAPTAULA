@@ -15,7 +15,7 @@ let seq = 0;
 const id = () => `blk_qa${String(++seq).padStart(5, "0")}`;
 const opts = (texts: string[], prefix = "o") => texts.map((text, i) => ({ id: `${prefix}${i + 1}`, text }));
 
-const b = {
+export const b = {
   h: (text: string, level: 1 | 2 | 3 = 2): Block => ({ id: id(), type: "heading", level, text, trace }),
   p: (text: string): Block => ({ id: id(), type: "paragraph", text, trace }),
   instruction: (text: string, steps?: string[]): Block => ({ id: id(), type: "instruction", text, ...(steps ? { steps } : {}), trace }),
@@ -39,7 +39,7 @@ const FIELDS = [
   { type: "date" as const, label: "Fecha" },
 ];
 
-function sheet(meta: { title: string; stage: string; grade: string; subject: string; topic: string }, pages: Block[][], presentation: Partial<Presentation> = {}): MaterialDocument {
+export function sheet(meta: { title: string; stage: string; grade: string; subject: string; topic: string }, pages: Block[][], presentation: Partial<Presentation> = {}): MaterialDocument {
   return MaterialDocumentSchema.parse({
     schema_version: 1,
     meta: { ...meta, language: "es" },

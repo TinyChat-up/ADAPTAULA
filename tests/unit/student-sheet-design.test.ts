@@ -7,6 +7,7 @@ import { buildRenderModel, type RenderModel } from "@/lib/render/model";
 import { tokenStyle, renderTokens } from "@/lib/render/tokens";
 import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/material-document";
 import { FIXTURES, bachillerato, eso, primary, primaryStructured } from "../visual-qa/fixtures";
+import { pilotBachillerato, pilotPrimary } from "../visual-qa/pilots";
 
 /**
  * Phase 8 · the student sheet's design rules (material_renderer@v3), checked on the markup the PDF prints. They are system rules:
@@ -96,5 +97,53 @@ describe("student privacy on every QA sheet", () => {
     const out = html(build(doc()).model);
     expect(out).not.toMatch(/blk_|dec_|need_|data-trace|ms-teacher|ms-missing/);
     expect(visible(out)).not.toMatch(/trace|decisi[oó]n|reviewer|revisor|confidence|prompt|\bIA\b|inteligencia artificial|diagn|docente|profesor/i);
+  });
+});
+
+describe("Sistema CLARO (pilot, behind a render option)", () => {
+  const claro = (doc: MaterialDocument) => buildRenderModel(doc, { mode: "student", deferred: [], design: "claro" });
+
+  it("is opt-in: by default nothing changes (no attribute, no brand, the same numbers)", () => {
+    const out = html(build(pilotPrimary()).model);
+    expect(build(pilotPrimary()).model.design).toBe("standard");
+    expect(out).not.toMatch(/data-design|ms-brand|ms-cue|>01</);
+  });
+
+  it("the same blocks through the same renderer: header with a discreet mark, guide numbers 01/02, reading and visual cues", () => {
+    const out = html(claro(pilotPrimary()).model);
+    expect(out).toContain('data-design="claro"');
+    expect(visible(out)).toMatch(/Ciencias de la Naturaleza · 4\.º Primaria Adaptaula/);
+    expect(out).toMatch(/class="ms-num">01<\/span>[\s\S]*class="ms-num">02<\/span>/);
+    expect(visible(out)).toContain("Lee");
+  });
+
+  it("every CLARO rule is scoped to the variant (it cannot leak into the current sheets)", () => {
+    const block = css.slice(css.indexOf("ADAPTAULA · SISTEMA CLARO"), css.indexOf("/* Marco de la vista"));
+    const selectors = block.replace(/\/\*[\s\S]*?\*\//g, "").match(/^[^{}\n]+(?=\{)/gm) ?? [];
+    expect(selectors.length).toBeGreaterThan(20);
+    for (const sel of selectors) expect(sel.trim()).toMatch(/^(\[data-design="claro"\]|:is)/);
+    for (const sel of selectors) expect(sel).toContain('[data-design="claro"]');
+  });
+
+  it("the stage sets the tone (type scale); the profile can still enlarge it at any stage", () => {
+    const pri = claro(pilotPrimary()).model.tokens.fontPt;
+    const bach = claro(pilotBachillerato()).model.tokens.fontPt;
+    expect([pri, bach]).toEqual([12.5, 11.3]);
+    const big = buildRenderModel(MaterialDocumentSchema.parse({ ...pilotBachillerato(), presentation: { ...pilotBachillerato().presentation, font_scale: 1.3 } }), { mode: "student", deferred: [], design: "claro" });
+    expect(big.model.tokens.fontPt).toBeGreaterThan(pri);
+    expect(big.model.stage).toBe("bachillerato");
+  });
+
+  it("palette: petroleum and fog only as CLARO tokens; high contrast is black and white", () => {
+    const normal = tokenStyle(renderTokens(pilotPrimary().presentation, "primaria", "claro"));
+    expect([normal["--ms-accent"], normal["--ms-petrol"], normal["--ms-fog"]]).toEqual(["#23426b", "#227e81", "#eff3f7"]);
+    const high = tokenStyle(renderTokens({ ...pilotPrimary().presentation, contrast: "high" }, "primaria", "claro"));
+    expect([high["--ms-petrol"], high["--ms-fog"]]).toEqual(["#000000", "#ffffff"]);
+  });
+
+  it.each([["piloto-primaria", pilotPrimary], ["piloto-bachillerato", pilotBachillerato]] as const)("%s: no ids, traces, review, AI, profile or teacher information", (_n, doc) => {
+    const out = html(claro(doc()).model);
+    expect(out).not.toMatch(/blk_|dec_|need_|ms-teacher|ms-missing/);
+    expect(visible(out)).not.toMatch(/decisi[oó]n|revisor|prompt|\bIA\b|diagn|docente|perfil|adaptaci[oó]n|TDAH|dislex/i);
   });
 });

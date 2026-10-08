@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { RenderMode, RenderNode } from "@/lib/render/model";
+import type { RenderDesign, RenderMode, RenderNode } from "@/lib/render/model";
 import { Chart } from "./chart";
 import { Paragraphs, Runs } from "./inline";
 import { Response } from "./responses";
@@ -8,7 +8,11 @@ type Of<K extends RenderNode["kind"]> = Extract<RenderNode, { kind: K }>;
 interface Props<K extends RenderNode["kind"]> {
   node: Of<K>;
   mode: RenderMode;
+  design?: RenderDesign;
 }
+
+/** Sistema CLARO's guide column numbers activities with two digits (`01`); a non-numeric label (`A`, `4b`) stays as it is. */
+const guideLabel = (label: string, design: RenderDesign | undefined) => (design === "claro" && /^\d$/.test(label) ? `0${label}` : label);
 
 const HELP_TITLE = { key_idea: "Idea clave", reminder: "Recuerda", tip: "Consejo", strategy: "Estrategia" } as const;
 
@@ -17,11 +21,11 @@ function Heading({ node }: Props<"heading">) {
   return <Tag className={`ms-h ms-h${node.level}`}>{node.text}</Tag>;
 }
 
-function Activity({ node }: Props<"activity">) {
+function Activity({ node, design }: Props<"activity">) {
   return (
     <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined}>
       <div className="ms-activity-head">
-        {node.label ? <span className="ms-num">{node.label}</span> : null}
+        {node.label ? <span className="ms-num">{guideLabel(node.label, design)}</span> : null}
         <div className="ms-prompt">
           <Paragraphs paragraphs={node.prompt} />
           {node.steps.length > 0 ? (
@@ -47,10 +51,11 @@ function Activity({ node }: Props<"activity">) {
   );
 }
 
-function Image({ node, mode }: Props<"image">) {
+function Image({ node, mode, design }: Props<"image">) {
   if (node.state === "available") {
     return (
       <figure className="ms-figure">
+        {design === "claro" ? <p className="ms-cue">Observa</p> : null}
         {/* eslint-disable-next-line @next/next/no-img-element -- a private, already-authorised asset URL; sizing is the sheet's */}
         <img src={node.src} alt={node.alt} />
         {node.caption ? <figcaption className="ms-caption">{node.caption}</figcaption> : null}
@@ -83,8 +88,9 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
       <Paragraphs paragraphs={node.paragraphs} />
     </div>
   ),
-  reading_text: ({ node }) => (
+  reading_text: ({ node, design }) => (
     <div className="ms-reading" data-segmented={node.paragraphs.some((p) => p.label) || undefined}>
+      {design === "claro" ? <p className="ms-cue">Lee</p> : null}
       {node.title ? <h3 className="ms-h ms-reading-title">{node.title}</h3> : null}
       {node.paragraphs.map((p, i) => (
         <p key={i} className="ms-para">
@@ -227,7 +233,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
   unknown: Unknown,
 };
 
-export function NodeView({ node, mode }: { node: RenderNode; mode: RenderMode }) {
-  const render = NODE_RENDERERS[node.kind] as (props: { node: RenderNode; mode: RenderMode }) => ReactNode;
-  return <>{render({ node, mode })}</>;
+export function NodeView({ node, mode, design }: { node: RenderNode; mode: RenderMode; design?: RenderDesign }) {
+  const render = NODE_RENDERERS[node.kind] as (props: { node: RenderNode; mode: RenderMode; design?: RenderDesign }) => ReactNode;
+  return <>{render({ node, mode, ...(design ? { design } : {}) })}</>;
 }
