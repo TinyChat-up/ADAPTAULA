@@ -1,6 +1,7 @@
 import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { AdaptationPlan, PlanIssue } from "@/lib/schemas/adaptation-plan";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
+import { AIError } from "@/lib/ai/errors";
 import type { AIRunRecord } from "@/lib/ai/types";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { ModelFacingAnalysis } from "./model-input";
@@ -64,6 +65,26 @@ export interface MaterialGenerator {
 }
 export interface PedagogicalReviewer {
   review(input: ReviewerInput): Promise<StageResult>;
+}
+
+/**
+ * The model answered (and was paid) but its answer was rejected (refused, cut off or not matching the contract). Carries the
+ * real record of that call so the cost is kept in `ai_runs` even though the stage fails: quota may be given back, spend never.
+ */
+export class RejectedStageOutput extends AIError {
+  constructor(
+    code: "refusal" | "truncated" | "invalid_output",
+    message: string,
+    readonly run: StageRunRecord,
+  ) {
+    super(code, message);
+    this.name = "RejectedStageOutput";
+  }
+}
+
+/** The rejected call's own record, with the status and error of the rejection. */
+export function rejectedRun(run: StageRunRecord, code: "refusal" | "truncated" | "invalid_output"): StageRunRecord {
+  return { ...run, status: code === "refusal" ? "refused" : "invalid_output", errorCode: code };
 }
 
 export interface StageCost {

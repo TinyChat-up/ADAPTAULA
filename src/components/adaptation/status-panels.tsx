@@ -162,6 +162,11 @@ export function BlockedPanel({ dto, materialId, busy, canWrite, onReopen }: { dt
         <p>{STATUS_COPY.blocked.body}</p>
       </Alert>
       {lines.length > 0 ? <WarningsList lines={lines} /> : null}
+      {!dto.regenerationAvailable ? (
+        <p className="text-sm">
+          Ya se han preparado tres versiones de esta ficha y ninguna ha superado la comprobación de calidad. No se prepararán más para esta adaptación. Si quieres intentarlo de nuevo, crea una adaptación nueva desde el material.
+        </p>
+      ) : null}
       {canWrite && dto.nextAction === "review_plan" ? (
         <Button onClick={onReopen} disabled={busy}>
           {busy ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}

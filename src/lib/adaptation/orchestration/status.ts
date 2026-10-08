@@ -44,7 +44,20 @@ export interface AdaptationStatusDto {
   review: { verdict: PedagogicalReview["verdict"]; warnings: Array<{ check: string; status: string; detail: string; method: string }>; pendingJudgments: string[] } | null;
   /** The last attempt may have been billed without being saved: a person must decide whether to try again. */
   ambiguousAttempt: boolean;
+  /** Product generations used (distinct generation inputs; a technical retry of the same one does not count) and whether another one is still possible. */
+  generationsUsed: number;
+  regenerationAvailable: boolean;
 }
+
+/**
+ * Product generations an adaptation may have: the first one plus two more after a blocked quality review. Enforced by the
+ * database (`enqueue_adaptation_stage`, migration 018); here only so the screens never offer what would be refused.
+ */
+export const MAX_GENERATION_CYCLES = 3;
+
+/** Distinct generation inputs among the adaptation's jobs: a retry re-queues the same input and is not a new generation. */
+export const generationCyclesOf = (jobs: ReadonlyArray<{ stage: string; input_fingerprint: string | null }>) =>
+  new Set(jobs.filter((j) => j.stage === "generation" && j.input_fingerprint).map((j) => j.input_fingerprint)).size;
 
 /** What the user is told, per code. Generic on purpose: no vendor, model, token, SQL or other workspace's information. */
 export const PUBLIC_ERROR_MESSAGES: Readonly<Record<AdaptationErrorCode, string>> = {
@@ -133,7 +146,8 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
     case "blocked":
       phase = "blocked";
       progress = "blocked";
-      nextAction = "review_plan"; // a blocked adaptation is recoverable: reopen the review, correct, generate again
+      // A blocked adaptation is recoverable (reopen the review, correct, generate again) while it has generations left.
+      nextAction = generationCyclesOf(snapshot.jobs) < MAX_GENERATION_CYCLES ? "review_plan" : "none";
       break;
     case "cancelled":
       phase = "cancelled";
@@ -173,5 +187,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
         }
       : null,
     ambiguousAttempt: snapshot.jobs.some((j) => j.ambiguous && (j.status === "processing" || j.status === "queued")) || failure?.code === "ambiguous_attempt",
+    generationsUsed: generationCyclesOf(snapshot.jobs),
+    regenerationAvailable: generationCyclesOf(snapshot.jobs) < MAX_GENERATION_CYCLES,
   };
 }

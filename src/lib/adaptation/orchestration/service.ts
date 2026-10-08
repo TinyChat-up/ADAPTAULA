@@ -6,7 +6,7 @@ import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning,
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { projectPreserves, projectRestrictions } from "./plan-projection";
 import { buildStatusDto, failureOf, isRetryable, type AdaptationStatusDto, type StatusArtifacts } from "./status";
-import { NotFoundError, type ArtifactKind, type ArtifactRow } from "./store";
+import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow } from "./store";
 import type { AdaptationStatus } from "./state-machine";
 import { isDelivered } from "./state-machine";
 import type { PipelineVersions } from "./versions";
@@ -58,11 +58,27 @@ export type ServiceError =
   | "retry_exhausted"
   | "entitlement_exhausted"
   | "entitlement_unavailable"
-  | "entitlement_not_reserved";
+  | "entitlement_not_reserved"
+  | "generation_limit"
+  | "failure_budget";
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; code: ServiceError; detail?: string[] };
 
 const denied = (actor: Actor): ServiceResult<never> | null => (actor.canWrite ? null : { ok: false, code: "forbidden" });
 const notFound: ServiceResult<never> = { ok: false, code: "not_found" };
+
+/**
+ * The cost guards (migration 018) answer as product refusals, never as crashes: the generation limit of an adaptation and the
+ * workspace's budget of failed paid AI calls. Both are decided by the database when a NEW job would be created.
+ */
+async function guarded<T>(work: () => Promise<ServiceResult<T>>): Promise<ServiceResult<T>> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof GenerationLimitError) return { ok: false, code: "generation_limit" };
+    if (error instanceof FailureBudgetError) return { ok: false, code: "failure_budget" };
+    throw error;
+  }
+}
 
 async function owned(deps: ServiceDeps, actor: Actor, adaptationId: string) {
   const row = await deps.reader.getAdaptation(adaptationId);
@@ -151,13 +167,15 @@ export interface EnqueuedDto {
  * teacher's explicit decision, and nothing (not even the recovery cron) starts it for them.
  */
 export async function startPlanning(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<EnqueuedDto>> {
-  const no = denied(actor);
-  if (no) return no;
-  if (!(await owned(deps, actor, adaptationId))) return notFound;
-  const outcome = await enqueuePlanning(deps.orchestrator, adaptationId);
-  if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
-  if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
-  return rejection(outcome);
+  return guarded(async () => {
+    const no = denied(actor);
+    if (no) return no;
+    if (!(await owned(deps, actor, adaptationId))) return notFound;
+    const outcome = await enqueuePlanning(deps.orchestrator, adaptationId);
+    if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
+    if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
+    return rejection(outcome);
+  });
 }
 
 /** The teacher's review. The reviewer identity and time are set HERE: the client cannot claim to be anyone else. Never generates. */
@@ -186,13 +204,15 @@ export async function submitPlanReviewCommand(deps: ServiceDeps, actor: Actor, a
 
 /** Persists the generation job (review, preflight and entitlement checked) and answers. Never calls a provider. Idempotent. */
 export async function startGeneration(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<EnqueuedDto>> {
-  const no = denied(actor);
-  if (no) return no;
-  if (!(await owned(deps, actor, adaptationId))) return notFound;
-  const outcome = await enqueueGeneration(deps.orchestrator, adaptationId);
-  if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
-  if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
-  return rejection(outcome);
+  return guarded(async () => {
+    const no = denied(actor);
+    if (no) return no;
+    if (!(await owned(deps, actor, adaptationId))) return notFound;
+    const outcome = await enqueueGeneration(deps.orchestrator, adaptationId);
+    if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
+    if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
+    return rejection(outcome);
+  });
 }
 
 /**
@@ -200,30 +220,34 @@ export async function startGeneration(deps: ServiceDeps, actor: Actor, adaptatio
  * acknowledgement. Keeps the entitlement and the persisted versions; creates (or reuses) a job; never a new adaptation.
  */
 export async function retryAdaptationStage(deps: ServiceDeps, actor: Actor, adaptationId: string, options: { acknowledgeAmbiguous?: boolean } = {}): Promise<ServiceResult<EnqueuedDto>> {
-  const no = denied(actor);
-  if (no) return no;
-  if (!(await owned(deps, actor, adaptationId))) return notFound;
-  const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
-  if (!snapshot) return notFound;
-  const failure = failureOf(snapshot);
-  // A second click after the first retry took effect: the work is already queued, not an error.
-  if (snapshot.adaptation.status !== "failed" && snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return { ok: true, data: { status: snapshot.adaptation.status as AdaptationStatus, alreadyQueued: true } };
-  if (snapshot.adaptation.status !== "failed" || !failure || !failure.stage) return { ok: false, code: "invalid_state" };
-  if (!isRetryable(failure)) return { ok: false, code: "action_required" };
-  if (failure.code === "ambiguous_attempt" && options.acknowledgeAmbiguous !== true) return { ok: false, code: "action_required", detail: ["ambiguous_requires_acknowledgement"] };
-  const attempts = snapshot.jobs.filter((j) => j.stage === failure.stage && j.status === "failed").length;
-  if (attempts >= (deps.orchestrator.maxManualRetries ?? 3)) return { ok: false, code: "retry_exhausted" };
-  const outcome = failure.stage === "planning" ? await enqueuePlanning(deps.orchestrator, adaptationId) : await enqueueGeneration(deps.orchestrator, adaptationId);
-  if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
-  if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
-  return rejection(outcome);
+  return guarded(async () => {
+    const no = denied(actor);
+    if (no) return no;
+    if (!(await owned(deps, actor, adaptationId))) return notFound;
+    const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
+    if (!snapshot) return notFound;
+    const failure = failureOf(snapshot);
+    // A second click after the first retry took effect: the work is already queued, not an error.
+    if (snapshot.adaptation.status !== "failed" && snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return { ok: true, data: { status: snapshot.adaptation.status as AdaptationStatus, alreadyQueued: true } };
+    if (snapshot.adaptation.status !== "failed" || !failure || !failure.stage) return { ok: false, code: "invalid_state" };
+    if (!isRetryable(failure)) return { ok: false, code: "action_required" };
+    if (failure.code === "ambiguous_attempt" && options.acknowledgeAmbiguous !== true) return { ok: false, code: "action_required", detail: ["ambiguous_requires_acknowledgement"] };
+    const attempts = snapshot.jobs.filter((j) => j.stage === failure.stage && j.status === "failed").length;
+    if (attempts >= (deps.orchestrator.maxManualRetries ?? 3)) return { ok: false, code: "retry_exhausted" };
+    const outcome = failure.stage === "planning" ? await enqueuePlanning(deps.orchestrator, adaptationId) : await enqueueGeneration(deps.orchestrator, adaptationId);
+    if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
+    if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
+    return rejection(outcome);
+  });
 }
 
 export async function reopenReview(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<{ status: AdaptationStatus }>> {
-  const no = denied(actor);
-  if (no) return no;
-  if (!(await owned(deps, actor, adaptationId))) return notFound;
-  return { ok: true, data: { status: await reopenPlanReview(deps.orchestrator, adaptationId) } };
+  return guarded(async () => {
+    const no = denied(actor);
+    if (no) return no;
+    if (!(await owned(deps, actor, adaptationId))) return notFound;
+    return { ok: true, data: { status: await reopenPlanReview(deps.orchestrator, adaptationId) } };
+  });
 }
 
 export async function cancelAdaptationCommand(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<{ cancelled: boolean; status: AdaptationStatus }>> {

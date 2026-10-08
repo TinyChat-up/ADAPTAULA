@@ -1,5 +1,5 @@
 import { estimateCostUsd } from "@/lib/ai/costs";
-import { AIError, toAIError } from "@/lib/ai/errors";
+import { toAIError } from "@/lib/ai/errors";
 import { ACTIVE_ADAPTATION_PROMPT_VERSIONS, getAdaptationPlanner } from "@/lib/ai/prompts";
 import { describeIssues, parseStructured, type ParseOutcome } from "@/lib/ai/structured";
 import type { AIProvider, ModelSelection, StructuredResponse } from "@/lib/ai/types";
@@ -9,7 +9,7 @@ import { DraftAdaptationPlanV2Schema, type DraftAdaptationPlanV2 } from "@/lib/s
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { modelFacingAnalysis, modelFacingAnalysisV2 } from "./model-input";
 import { plannerContextV2 } from "./plan-v2";
-import type { AdaptationPlanner, StageRunRecord } from "./services";
+import { RejectedStageOutput, rejectedRun, type AdaptationPlanner, type StageRunRecord } from "./services";
 
 /**
  * The real planner: one model call that turns `MaterialAnalysis + AdaptationContext` into an UNTRUSTED draft plan. It knows
@@ -117,7 +117,7 @@ export function createModelPlanner(deps: { analysis: MaterialAnalysis; selection
       const parsed = parsePlanResponse(response, deps.version ?? 1);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
-        throw new AIError(code, `planner output rejected: ${parsed.outcome}`);
+        throw new RejectedStageOutput(code, `planner output rejected: ${parsed.outcome}`, rejectedRun(run, code));
       }
       return { draft: parsed.draft, runs: [run] };
     },

@@ -14,7 +14,7 @@ import { ReviewerFindingsSchema, type ReviewerFindings } from "@/lib/schemas/rev
 import { assembleReview, deterministicChecks } from "./review";
 import type { ReviewInput } from "./review-checks";
 import { reviewScope, type JudgedCheck, type PedagogicalReviewContext, type ReviewScope } from "./review-context";
-import type { PedagogicalReviewer, StageRunRecord } from "./services";
+import { RejectedStageOutput, rejectedRun, type PedagogicalReviewer, type StageRunRecord } from "./services";
 
 /**
  * The real pedagogical reviewer and, above all, the SERVER-SIDE MERGE that bounds it. The model only observes; this module
@@ -205,7 +205,10 @@ export function createModelReviewer(deps: { selection: ModelSelection; provider:
       if (!reviewContext) throw new AIError("invalid_output", "reviewer input without a review context");
       const { response, run } = await callReviewer({ ...deps, reviewContext });
       const parsed = parseReviewerResponse(response);
-      if (parsed.outcome !== "ok") throw new AIError(parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output", `reviewer output rejected: ${parsed.outcome}`);
+      if (parsed.outcome !== "ok") {
+        const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
+        throw new RejectedStageOutput(code, `reviewer output rejected: ${parsed.outcome}`, rejectedRun(run, code));
+      }
       return { draft: findingsToDraft(parsed.findings), runs: [run] };
     },
   };

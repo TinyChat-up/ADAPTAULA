@@ -39,7 +39,9 @@ North Star: **adaptaciones descargadas por profesor activo semanal.**
 
 Los valores viven en la tabla `plans` (sembrada por `supabase/seed.sql`) y se pueden cambiar sin desplegar: es la **única fuente**. El control de cuota (`adaptation_entitlement_limit`, `consume_quota`), la pantalla de uso (`workspace_usage`) y `/precios` la leen; ningún componente lleva números de planes. Estos son los valores iniciales.
 
-**Todos son provisionales** hasta cerrar precios y economía unitaria. En concreto, **Free = 5 adaptaciones/mes es un valor provisional**, no una decisión económica: permite evaluar el producto de verdad con tus fichas, sigue limitando el coste y se revisará con el pricing definitivo. No cambia los límites de análisis (Free 10/mes), que también son provisionales. `/precios` muestra los valores como «precios y límites de lanzamiento», sin compromiso comercial definitivo.
+**Todos son provisionales** hasta cerrar precios y economía unitaria (Phase 7A: confianza baja; el pricing definitivo espera a la telemetría de `ai_spend_summary`).
+
+**Lo que existe y se aplica hoy** (y lo único que muestra `/precios`): adaptaciones/mes, análisis de materiales/mes, perfiles guardados, páginas y tamaño por material, y la descarga en PDF. El resto de filas son diseño de producto, marcadas abajo como no implementadas; no se venden. En concreto, **Free = 5 adaptaciones/mes es un valor provisional**, no una decisión económica: permite evaluar el producto de verdad con tus fichas, sigue limitando el coste y se revisará con el pricing definitivo. No cambia los límites de análisis (Free 10/mes), que también son provisionales. `/precios` muestra los valores como «precios y límites de lanzamiento», sin compromiso comercial definitivo.
 
 | | Free | Pro | Max |
 |---|---|---|---|
@@ -47,15 +49,15 @@ Los valores viven en la tabla `plans` (sembrada por `supabase/seed.sql`) y se pu
 | Adaptaciones/mes | 5 | 75 | 150 |
 | Análisis de materiales/mes (aparte de las adaptaciones; reutilizar uno ya hecho no cuenta) | 10 | 100 | 250 |
 | Perfiles guardados | 2 | 30 | 100 |
-| Clases | 0 | 10 | 30 |
-| Varios perfiles por ficha | — | ✓ (hasta 6) | ✓ (hasta 30) |
-| Regeneración de bloques/mes (uso justo) | 20 | 400 | 800 |
-| Historial | 30 días | completo | completo |
-| Plantillas | básicas | todas | todas |
-| Comparador / editor avanzado | básico | ✓ | ✓ |
-| Calidad de IA base | ECONOMY | STANDARD | STANDARD (+PREMIUM ocasional) |
-| Generaciones visuales/mes | 0 | 0 | 50 |
-| Prioridad de procesamiento | — | — | ✓ |
+| Clases *(no implementado; no se anuncia)* | 0 | 10 | 30 |
+| Varios perfiles por ficha *(no implementado; no se anuncia)* | — | ✓ (hasta 6) | ✓ (hasta 30) |
+| Regeneración de bloques/mes (uso justo) *(no implementado)* | 20 | 400 | 800 |
+| Historial *(no se recorta: hoy es completo para todos; no se anuncia)* | 30 días | completo | completo |
+| Plantillas *(no implementado)* | básicas | todas | todas |
+| Comparador / editor avanzado *(no implementado)* | básico | ✓ | ✓ |
+| Calidad de IA base *(no aplicado: todos los planes usan STANDARD; sin PREMIUM)* | ECONOMY | STANDARD | STANDARD (+PREMIUM ocasional) |
+| Generaciones visuales/mes *(no implementado; no se anuncia)* | 0 | 0 | 50 |
+| Prioridad de procesamiento *(no implementado; no se anuncia)* | — | — | ✓ |
 | Páginas máx. por material | 5 | 15 | 25 |
 
 **Qué cuenta como una adaptación:** una versión generada para un perfil (guardado o rápido). Adaptar una ficha para 4 alumnos consume 4. Regenerar o editar bloques no consume adaptaciones (tiene su propio límite de uso justo). Un fallo que no entrega material no consume nada.
