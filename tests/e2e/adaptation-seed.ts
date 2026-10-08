@@ -15,6 +15,14 @@ async function ok(response: { ok(): boolean; text(): Promise<string> }) {
   expect(response.ok(), await response.text()).toBe(true);
 }
 
+/**
+ * The E2E specs share one fake database and `allowAdaptations` raises Free to 100 for the specs that need room: a spec that
+ * checks the real Free plan puts back the seeded value first (supabase/seed.sql), whatever ran before it.
+ */
+export async function restoreSeededFreePlan(page: Page) {
+  await ok(await page.request.patch(`${FAKE}/rest/v1/plans?slug=eq.free`, { headers, data: { monthly_adaptations: 5 } }));
+}
+
 export async function allowAdaptations(page: Page) {
   await ok(await page.request.patch(`${FAKE}/rest/v1/plans?slug=eq.free`, { headers, data: { monthly_adaptations: 100 } }));
 }

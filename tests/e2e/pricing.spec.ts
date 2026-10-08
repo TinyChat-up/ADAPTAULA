@@ -1,8 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { restoreSeededFreePlan } from "./adaptation-seed";
 
 /** /precios against the real (fake-supabase) plans table: only real, enforced differences; nothing unbuilt is sold. */
 test("precios: solo diferencias reales y verificables, valores de lanzamiento y nada inexistente como incluido", async ({ page }) => {
+  await restoreSeededFreePlan(page);
   await page.goto("/precios");
   await expect(page.getByRole("heading", { name: "Precios", level: 1 })).toBeVisible();
   for (const text of ["5 adaptaciones al mes", "75 adaptaciones al mes", "150 adaptaciones al mes", "10 análisis de materiales al mes", "Hasta 2 perfiles guardados", "Materiales de hasta 5 páginas"]) {
