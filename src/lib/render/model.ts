@@ -2,6 +2,7 @@ import type { Block, MaterialDocument, ResponseSpec } from "@/lib/schemas/materi
 import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
 import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferred";
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
+import { composeMath, type MathPart } from "./math";
 import { renderTokens, type RenderTokens } from "./tokens";
 import { MATERIAL_RENDERER_VERSION } from "./version";
 
@@ -37,7 +38,11 @@ export type RenderNode = { key: string } & (
   | { kind: "paragraph"; paragraphs: Run[][] }
   | { kind: "reading_text"; title?: string; paragraphs: Array<{ label?: string; runs: Run[] }> }
   | { kind: "instruction"; paragraphs: Run[][]; steps: string[] }
-  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean }
+  /**
+   * `supports`: writing helps the document places right after a writing activity (an organiser, sentence starters). They are its
+   * helps, so the sheet shows them between the prompt and the answer space: enunciado → apoyos → espacio de respuesta.
+   */
+  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[] }
   | { kind: "list"; ordered: boolean; items: Run[][] }
   | { kind: "table"; caption?: string; unit?: string; headers: string[]; rows: string[][] }
   | { kind: "chart"; title?: string; chartType: "bar" | "line" | "pie" | "other"; categories: string[]; series: Array<{ label: string | null; values: number[] }>; unit?: string; xLabel?: string; yLabel?: string }
@@ -48,7 +53,8 @@ export type RenderNode = { key: string } & (
   | { kind: "worked_example"; title?: string; problem: Run[][]; steps: string[]; result: string }
   | { kind: "sentence_starters"; items: string[] }
   | { kind: "planner"; title?: string; slots: Array<{ label: string; lines: number }> }
-  | { kind: "math"; latex: string; display: "inline" | "block"; spoken: string }
+  /** `parts`: the formula composed (stacked fractions…) when it is within what the sheet can typeset; otherwise its source is shown. */
+  | { kind: "math"; latex: string; display: "inline" | "block"; spoken: string; parts: MathPart[] | null }
   | { kind: "unknown"; type: string }
 );
 
@@ -158,6 +164,10 @@ const TABLE_CELL_ROWS = 6;
 const COMPACT_ROWS = 14;
 const MAX_CHECKLIST = 12;
 const WIDE_TABLE_COLUMNS = 8;
+/** Blocks that introduce what follows: they stay with the next activity when a page is closed before it. */
+const LEADS_INTO = new Set<RenderNode["kind"]>(["heading", "instruction", "help_box"]);
+/** Responses that are written (where an organiser or sentence starters help). */
+const WRITING = new Set<RenderResponse["kind"]>(["lines", "box", "oral"]);
 
 const wordsRange = /(\d{2,4})\s*(?:[-–]|y|a)\s*(\d{2,4})\s*palabras/i;
 /** Lines needed for the longest expected answer stated in the requirements ("150-180 palabras"), conservative and bounded. */
@@ -249,7 +259,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       const steps = block.steps ?? [];
       const prompt = parseParagraphs(block.prompt);
       const response = responseOf(block.response, requirements, (block.resource_block_ids ?? []).some((ref) => ctx.tables.has(ref)));
-      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id) };
+      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id), supports: [] };
     }
     case "list":
       return { key, kind: "list", ordered: block.style === "numbered", items: block.items.map(parseInline) };
@@ -280,7 +290,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
     case "planner":
       return { key, kind: "planner", ...(block.title ? { title: block.title } : {}), slots: block.slots };
     case "math":
-      return { key, kind: "math", latex: block.latex, display: block.display, spoken: block.spoken_text };
+      return { key, kind: "math", latex: block.latex, display: block.display, spoken: block.spoken_text, parts: composeMath(block.latex) };
     default: {
       // Compile-time exhaustiveness: a new block type in the schema without a case above makes `block` not `never` and stops the
       // build here. At run time (data that does not match the schema) it becomes a visible `unknown` node, never a silent omission.
@@ -297,7 +307,7 @@ const textsOf = (n: RenderNode): string[] => {
     case "paragraph": return runs(n.paragraphs);
     case "reading_text": return n.paragraphs.map((p) => p.runs.map((r) => r.text).join(""));
     case "instruction": return [...runs(n.paragraphs), ...n.steps];
-    case "activity": return [...runs(n.prompt), ...n.steps, ...n.requirements];
+    case "activity": return [...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf)];
     case "list": return runs(n.items);
     case "table": return [...n.headers, ...n.rows.flat()];
     case "help_box": return runs(n.paragraphs);
@@ -328,7 +338,7 @@ function validate(nodes: RenderNode[], ctx: Ctx, outcomes: DeferredOutcome[], de
     if (n.kind === "table" && n.headers.length > WIDE_TABLE_COLUMNS) add("overflow_risk", "warning", "Una tabla es muy ancha: se ajusta al ancho de la hoja con celdas más estrechas");
     if (n.kind === "checklist" && n.items.length > MAX_CHECKLIST) add("structure_inconsistent", "warning", "Una lista de comprobación tiene más elementos de los esperados; se muestra entera");
     if (n.kind === "chart" && hasNegative(n)) add("chart_table_only", "info", "Un gráfico tiene valores negativos: se muestran solo sus datos en tabla, sin dibujarlo");
-    if (n.kind === "math") add("math_source_only", "info", "Una fórmula se muestra como texto con su lectura en voz alta: el visor aún no compone fórmulas");
+    if (n.kind === "math" && n.parts === null) add("math_source_only", "info", "Una fórmula se muestra como texto con su lectura en voz alta: el visor aún no compone fórmulas");
     if (n.kind === "activity" && n.response.kind === "lines" && n.response.lines >= 30) add("overflow_risk", "info", "Una respuesta pide muchas líneas: la actividad puede continuar en la página siguiente");
     for (const t of textsOf(n)) if (t.split(/\s+/).some((w) => w.length > LONG_TOKEN)) {
       add("overflow_risk", "info", "Hay una palabra muy larga: se parte al final de la línea para que no salga de la hoja");
@@ -368,12 +378,22 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     };
     for (const block of logical.blocks) {
       const node = nodeOf(block, ctx);
-      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed it, and a heading
-      // that would be left alone at the bottom travels with it.
+      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed it, and what leads
+      // into that activity (a heading, an orientation, a help placed right before it) travels with it instead of closing a page.
       if (node.kind === "activity" && max !== null && tasks >= max) {
-        const orphan = current.at(-1)?.kind === "heading" ? current.pop() : undefined;
+        const lead: RenderNode[] = [];
+        while (current.length > 0 && LEADS_INTO.has(current.at(-1)!.kind)) lead.unshift(current.pop()!);
         flush();
-        if (orphan) current.push(orphan);
+        current.push(...lead);
+      }
+      // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.
+      const previous = current.at(-1);
+      if ((node.kind === "planner" || node.kind === "sentence_starters") && previous?.kind === "activity" && WRITING.has(previous.response.kind)) {
+        previous.supports.push(node);
+        // An organised essay is long: its writing space may continue on the next page (the prompt and the organiser never leave
+        // its first lines: CSS), rather than pushing the whole activity on and leaving half a page empty.
+        if (node.kind === "planner") previous.keepTogether = false;
+        continue;
       }
       current.push(node);
       if (node.kind === "activity") tasks += 1;

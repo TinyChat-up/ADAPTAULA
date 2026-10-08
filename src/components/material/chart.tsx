@@ -7,13 +7,15 @@ const fmt = (n: number) => new Intl.NumberFormat("es-ES", { maximumFractionDigit
 const seriesName = (c: Chart, i: number) => c.series[i]?.label ?? c.yLabel ?? "Valor";
 
 /** Deterministic, data-only chart: nothing is drawn that the structured data does not say; the table below is always shown. */
-export function Chart({ node }: { node: Chart }) {
+/** `cue`: Sistema CLARO labels what is there to be observed (never the data itself). */
+export function Chart({ node, cue }: { node: Chart; cue?: string | undefined }) {
   const plot = chartPlottable(node);
   const max = Math.max(1, ...node.series.flatMap((s) => s.values));
   const n = node.categories.length;
   const showLegend = node.series.length > 1 && !seriesAmbiguous(node) && plot;
   return (
     <figure className="ms-chart">
+      {cue ? <p className="ms-cue">{cue}</p> : null}
       {node.title ? <figcaption className="ms-caption">{node.title}</figcaption> : null}
       {plot && node.chartType === "pie" ? <Pie node={node} /> : null}
       {plot && node.chartType !== "pie" && node.chartType !== "other" ? (

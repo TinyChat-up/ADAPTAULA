@@ -520,6 +520,15 @@ regla conoce una ficha concreta). Mismo renderer para pantalla y PDF (HTML/CSS �
 - **Paginación.** El enunciado de una actividad (con sus pasos y requisitos) nunca se separa de su primera zona de respuesta.
   Deuda conocida: los saltos de página lógicos del documento pueden dejar media página vacía (casos B y D).
 
+## Sistema CLARO — identidad editorial (Phase 8, aprobada; activación pendiente)
+
+Variante del mismo renderer (`buildRenderModel(doc, { design: "claro" })` → `data-design="claro"` → capa CSS acotada en
+`material.css`); el producto sigue con el diseño actual hasta la autorización final. Paleta azul Adaptaula `#23426B`, verde petróleo
+`#227E81` (solo ayudas), azul niebla `#EFF3F7` (orientación), blanco; Inter; columna guía con 01, 02…; cabecera con marca discreta;
+escala por etapa multiplicada por el `font_scale` del perfil. Reglas reutilizables añadidas con ella (valen para ambos diseños):
+apoyos de escritura dentro de su actividad, actividad con tabla unida a su tabla, lo que introduce una actividad viaja con ella al
+cerrar página por número de tareas, fracciones sencillas apiladas. Fichas, evaluación y cómo activarlo: `docs/qa/phase8/claro/`.
+
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
 
 **Estado.** Motor implementado y probado **en local** (smoke PDF 24/24). **Validación en runtime de Vercel: DEFERRED** (ver «Validación en Vercel»). Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI en la 5.2A. La ruta y el botón llegan en la 5.2B (sección siguiente). Cero llamadas a modelos.

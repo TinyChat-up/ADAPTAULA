@@ -1,8 +1,17 @@
 # Adaptaula · Sistema CLARO — pilotos para revisión humana
 
-> **Estado: propuesta, sin aprobar.** Sistema CLARO existe solo como variante opcional del renderer (`design: "claro"`). Ninguna
-> ficha del producto la usa hasta que se apruebe la dirección visual. Estos dos pilotos son extractos editoriales de las fichas
-> de QA de Phase 8 (una página A4 cada uno), no fichas completas.
+> **Estado: identidad aprobada** (revisión humana de los pilotos). Las cinco fichas completas con CLARO están en
+> [`../claro/`](../claro/README.md). Estos dos pilotos son **extractos editoriales**, no fichas completas: el de Bachillerato lleva
+> «(extracto)» en el título y no representa el comentario completo (que está en `../claro/D-bachillerato`).
+
+### Correcciones tras la revisión
+
+- **Primaria:** la instrucción ya no pide «después de cada parte, piensa…», que la composición no permitía seguir: ahora dice
+  «Lee las tres partes del texto» y «Responde a cada pregunta: te dice dónde buscar», y cada pregunta indica en qué parte buscar.
+  Una página A4.
+- **Bachillerato:** el organizador queda dentro de la actividad 02 que prepara: enunciado y requisitos → organizador → redacción
+  (regla del renderer, no del piloto). La extensión vuelve a 80-100 palabras con 10 líneas; el piloto pasa a dos páginas en lugar
+  de recortar la redacción.
 
 ## Objetivo
 
@@ -69,14 +78,13 @@ Es un único sistema con variaciones controladas por etapa.
 | Fichero | Qué es |
 | --- | --- |
 | `piloto-primaria.pdf` / `.png` / `-grises.png` | Piloto A (de «El ciclo del agua»): orientación, lectura por partes, idea clave, 2 actividades |
-| `piloto-bachillerato.pdf` / `.png` / `-grises.png` | Piloto B (de Rousseau): lectura, análisis, organizador ANTES de la redacción |
+| `piloto-bachillerato.pdf` / `.png` / `-grises.png` (+ `-2`) | Piloto B (de Rousseau, extracto): lectura, análisis, organizador dentro de la actividad, antes de la redacción |
 | `*-anterior.pdf` / `*-anterior*.png` | El mismo contenido con el diseño actual (`material_renderer@v3`), para comparar |
 
 Abrir: los PDF directamente (en GitHub, «View raw»); los PNG se ven en la PR. Cambios del extracto respecto a las fichas de QA:
-Primaria sin la actividad de relacionar (no cabía en una página) y con la lectura pegada a sus preguntas; Bachillerato con dos
-párrafos del fragmento, el organizador movido antes de la redacción y una redacción más corta (40-50 palabras).
+Primaria sin la actividad de relacionar; Bachillerato con dos párrafos del fragmento y dos actividades.
 
 ## Regenerar
 
 Linux, sin IA, unos segundos: `pnpm vitest run --config vitest.visual-qa.config.mts tests/visual-qa/pilots.qa.test.ts`
-(el test exige una sola página A4 por piloto y escribe aquí los PDF y PNG).
+(escribe aquí los PDF y PNG de cada página).

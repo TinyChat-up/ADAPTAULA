@@ -21,9 +21,9 @@ function Heading({ node }: Props<"heading">) {
   return <Tag className={`ms-h ms-h${node.level}`}>{node.text}</Tag>;
 }
 
-function Activity({ node, design }: Props<"activity">) {
+function Activity({ node, mode, design }: Props<"activity">) {
   return (
-    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined}>
+    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}>
       <div className="ms-activity-head">
         {node.label ? <span className="ms-num">{guideLabel(node.label, design)}</span> : null}
         <div className="ms-prompt">
@@ -44,6 +44,14 @@ function Activity({ node, design }: Props<"activity">) {
           ) : null}
         </div>
       </div>
+      {node.supports.length > 0 ? (
+        // The activity's own helps, after what to do and before where to answer.
+        <div className="ms-activity-supports">
+          {node.supports.map((support) => (
+            <NodeView key={support.key} node={support} mode={mode} {...(design ? { design } : {})} />
+          ))}
+        </div>
+      ) : null}
       <div className="ms-answer">
         <Response response={node.response} />
       </div>
@@ -152,7 +160,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
       {node.unit ? <p className="ms-note">Unidad: {node.unit}</p> : null}
     </figure>
   ),
-  chart: ({ node }) => <Chart node={node} />,
+  chart: ({ node, design }) => <Chart node={node} cue={design === "claro" ? "Observa" : undefined} />,
   image: Image,
   help_box: ({ node }) => (
     <aside className="ms-help" data-variant={node.variant}>
@@ -225,11 +233,28 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
       ))}
     </section>
   ),
-  math: ({ node }) => (
-    <p className="ms-math" data-display={node.display}>
-      <code aria-label={node.spoken}>{node.latex}</code>
-    </p>
-  ),
+  math: ({ node }) =>
+    node.parts ? (
+      // Composed: stacked fractions read as such, and the spoken text is the accessible name of the whole formula.
+      <p className="ms-math" data-display={node.display} role="math" aria-label={node.spoken}>
+        {node.parts.map((part, i) =>
+          part.kind === "frac" ? (
+            <span key={i} className="ms-frac" aria-hidden>
+              <span className="ms-frac-num">{part.num}</span>
+              <span className="ms-frac-den">{part.den}</span>
+            </span>
+          ) : (
+            <span key={i} aria-hidden>
+              {part.text}
+            </span>
+          ),
+        )}
+      </p>
+    ) : (
+      <p className="ms-math" data-display={node.display}>
+        <code aria-label={node.spoken}>{node.latex}</code>
+      </p>
+    ),
   unknown: Unknown,
 };
 

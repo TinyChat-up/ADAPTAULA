@@ -118,11 +118,24 @@ ul.ms-list { list-style: disc; }
 .ms-slot-label { margin: 0; font-weight: 600; }
 .ms-math code { font-family: inherit; font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ms-math[data-display="block"] { text-align: center; }
+/* Fracción apilada: numerador sobre denominador con su raya, alineada con el texto de la fórmula. */
+.ms-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 .15em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ms-frac-num { padding: 0 .25em .05em; border-bottom: 1.5px solid currentColor; }
+.ms-frac-den { padding: .05em .25em 0; }
+.ms-math[role="math"] { font-size: 1.1em; }
+/* Los apoyos de una actividad van entre su enunciado y su espacio de respuesta, sin separarse de él al paginar. */
+/* Una actividad que se responde en una tabla de la ficha no se separa de ella al paginar. */
+.ms-activity[data-table-answer] { break-after: avoid; }
+.ms-activity-supports { margin-top: .55em; display: flex; flex-direction: column; gap: .5em; break-after: avoid; break-inside: avoid; }
+/* Al menos dos líneas de escritura acompañan al enunciado y a sus apoyos; el resto puede seguir en la página siguiente. */
+.ms-answer > .ms-lines > div:nth-child(-n+2) { break-before: avoid; }
 
 .ms-tablewrap { margin: 0; }
 .ms-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .95em; }
 .ms-table th, .ms-table td { border: 1px solid var(--ms-rule); padding: .35em .55em; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .ms-table thead th { font-weight: 700; background: var(--ms-tint); border-bottom: 2px solid var(--ms-ink); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+/* Una cabecera se parte entre palabras, nunca dentro de una («Denomina-dor»): un poco más pequeña y con corte normal. */
+.ms-table thead th { overflow-wrap: break-word; word-break: normal; hyphens: manual; font-size: .92em; }
 /* Una celda vacía es un hueco para escribir: tiene la altura de una línea de respuesta. */
 .ms-table td:empty { height: var(--ms-line); }
 .ms-table tr { break-inside: avoid; }
@@ -207,6 +220,7 @@ ul.ms-list { list-style: disc; }
 [data-design="claro"] .ms-reading[data-segmented] .ms-para { border-left: 0; padding-left: 0; }
 [data-design="claro"] .ms-reading[data-segmented] .ms-seg { display: inline-block; margin: 0 .55em 0 0; color: var(--ms-soft); }
 [data-design="claro"] .ms-figure { align-items: flex-start; }
+[data-design="claro"] .ms-chart > .ms-cue { margin-bottom: .2em; }
 [data-design="claro"] .ms-figure .ms-caption { text-align: left; }
 
 /* C · Actividad guiada: número en la columna guía, un filo fino que la recorre, enunciado, pasos y respuesta juntos. */
@@ -231,6 +245,12 @@ ul.ms-list { list-style: disc; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) { display: flex; align-items: flex-end; gap: .8em; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) .ms-slot-label { flex: 0 1 auto; max-width: 45%; padding-bottom: .15em; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) .ms-lines { flex: 1 1 auto; }
+
+/* Menos estímulos (`decoration` del perfil) dentro de CLARO: misma gramática, menos superficie. Con `reduced`, la orientación
+   pierde el fondo y queda con un filo azul; con `none`, ni fondos ni filos: solo las etiquetas. Las ayudas siempre en petróleo. */
+[data-design="claro"][data-decoration] :is(.ms-help, .ms-help[data-variant], .ms-vocab, .ms-example, .ms-starters, .ms-planner, .ms-checklist) { background: none; border: 0; border-left: 2px solid var(--ms-petrol); border-radius: 0; padding: .1em 0 .1em .9em; }
+[data-design="claro"][data-decoration="reduced"] :is(.ms-instruction, .ms-instruction[class]) { background: none; border: 0; border-left: 3px solid var(--ms-accent); border-radius: 0; padding: .1em 0 .1em .85em; }
+[data-design="claro"][data-decoration="none"] :is(.ms-help, .ms-help[data-variant], .ms-vocab, .ms-example, .ms-starters, .ms-planner, .ms-checklist, .ms-instruction, .ms-instruction[class]) { background: none; border: 0; padding-left: 0; }
 
 /* E · Espacio de trabajo: blanco, líneas finas; la tabla, con la cabecera en azul niebla. */
 [data-design="claro"] .ms-table thead th { background: var(--ms-fog); }

@@ -17,8 +17,10 @@ import { FIXTURES, climographPng, pinOf } from "./fixtures";
  * and writes what a person needs to judge it: the PDF, every page as PNG in colour and in greyscale (as a school printer would
  * print it) and a screenshot of the same HTML on screen. Output: `QA_OUT` (default docs/qa/phase8/after).
  */
-const OUT = path.resolve(process.env.QA_OUT ?? "docs/qa/phase8/after");
-const summary: Array<{ name: string; label: string; pages: number; kb: number }> = [];
+/** `QA_DESIGN=claro` renders with Sistema CLARO (`design: "claro"`); anything else, the current default design. */
+const DESIGN = process.env.QA_DESIGN === "claro" ? "claro" : "standard";
+const OUT = path.resolve(process.env.QA_OUT ?? (DESIGN === "claro" ? "docs/qa/phase8/claro" : "docs/qa/phase8/after"));
+const summary: Array<{ name: string; label: string; design: string; pages: number; kb: number }> = [];
 
 async function greyscale(png: Buffer): Promise<Buffer> {
   const image = await loadImage(png);
@@ -57,7 +59,7 @@ describe("Phase 8 · visual QA sheets", () => {
       const doc = fixture.doc();
       const pin = pinOf("5c0ffee0-1c2d-4e5f-8a9b-0c1d2e3f4a5b", await climographPng());
       const visual = doc.pages.flatMap((p) => p.blocks).some((bl) => bl.type === "image");
-      const { model, validation } = buildRenderModel(doc, { mode: "student", deferred: [], ...(visual ? { assets: { vis_1: { src: assetRef(pin) } }, requiredVisuals: ["vis_1"] } : {}) });
+      const { model, validation } = buildRenderModel(doc, { mode: "student", deferred: [], design: DESIGN, ...(visual ? { assets: { vis_1: { src: assetRef(pin) } }, requiredVisuals: ["vis_1"] } : {}) });
       expect(validation.status).not.toBe("not_renderable");
       const print = await renderPrintHtml(model, visual ? [pin] : []);
       const result = await engine.render(print.html, { fontFamily: print.fontFamily, fontWeights: print.fontWeights });
@@ -72,7 +74,7 @@ describe("Phase 8 · visual QA sheets", () => {
         writeFileSync(path.join(dir, `pagina-${page.number}-grises.png`), await greyscale(page.png));
       }
       writeFileSync(path.join(dir, "pantalla.png"), await screenshot(print.html));
-      summary.push({ name: fixture.name, label: fixture.label, pages: pages.length, kb: Math.round(result.pdf.length / 1024) });
+      summary.push({ name: fixture.name, label: fixture.label, design: DESIGN, pages: pages.length, kb: Math.round(result.pdf.length / 1024) });
     });
   }
 

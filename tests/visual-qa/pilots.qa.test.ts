@@ -38,13 +38,16 @@ async function print(name: string, design: RenderDesign) {
 describe("Sistema CLARO · pilots", () => {
   mkdirSync(OUT, { recursive: true });
   for (const pilot of PILOTS) {
-    it(`${pilot.name}: one A4 page, same renderer, readable in greyscale`, async () => {
+    it(`${pilot.name}: same renderer, readable in greyscale`, async () => {
       const claro = await print(pilot.name, "claro");
       writeFileSync(path.join(OUT, `${pilot.name}.pdf`), claro.pdf);
       writeFileSync(path.join(OUT, `${pilot.name}.png`), claro.pages[0]!.png);
       writeFileSync(path.join(OUT, `${pilot.name}-grises.png`), await greyscale(claro.pages[0]!.png));
       expect(claro.html).toContain('data-design="claro"');
-      expect(claro.pages, "un piloto es una página A4").toHaveLength(1);
+      // Content decides the length: the pilots are not squeezed into one page any more.
+      expect(claro.pages.length).toBeLessThanOrEqual(2);
+      for (const page of claro.pages.slice(1)) writeFileSync(path.join(OUT, `${pilot.name}-${page.number}.png`), page.png);
+      for (const page of claro.pages.slice(1)) writeFileSync(path.join(OUT, `${pilot.name}-${page.number}-grises.png`), await greyscale(page.png));
       // The same content in the current design, for the side-by-side comparison.
       const before = await print(pilot.name, "standard");
       before.pages.forEach((page) => writeFileSync(path.join(OUT, `${pilot.name}-anterior${before.pages.length > 1 ? `-${page.number}` : ""}.png`), page.png));

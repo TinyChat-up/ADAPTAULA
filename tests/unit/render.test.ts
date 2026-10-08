@@ -84,14 +84,20 @@ describe("student view: separation of answers and internals", () => {
 });
 
 describe("content fidelity", () => {
-  it("6 · keeps the document's order, and an activity's supports stay where the pipeline put them", () => {
+  it("6 · keeps the document's order; a writing help right after a writing activity travels inside it (before its answer space)", () => {
     const doc = bachillerato();
     const { model } = build(doc);
-    const kinds = model.pages.flatMap((p) => p.nodes.map((n) => n.kind));
+    // Flattened (an activity followed by its supports), the sheet is exactly the document, in order: nothing added or dropped.
+    const kinds = model.pages.flatMap((p) => p.nodes.flatMap((n) => [n.kind, ...(n.kind === "activity" ? n.supports.map((s) => s.kind) : [])]));
     const blocks = doc.pages.flatMap((p) => p.blocks.map((b) => b.type));
     expect(kinds).toEqual(blocks);
-    const w = kinds.lastIndexOf("activity");
-    expect(kinds.slice(w, w + 4)).toEqual(["activity", "planner", "checklist", "help_box"]);
+    const top = model.pages.flatMap((p) => p.nodes);
+    const w = top.map((n) => n.kind).lastIndexOf("activity");
+    const writing = top[w]!;
+    expect(writing.kind === "activity" && writing.supports.map((s) => s.kind)).toEqual(["planner"]);
+    expect(top.slice(w + 1, w + 3).map((n) => n.kind)).toEqual(["checklist", "help_box"]);
+    const out = html(model);
+    expect(out.indexOf("ms-planner")).toBeLessThan(out.lastIndexOf('class="ms-answer"'));
   });
 
   it("12 · tables keep every header and cell exactly and in order", () => {
@@ -162,7 +168,7 @@ describe("answer areas, planner and checklist are real writing and marking space
     const out = html(build(bachillerato()).model);
     expect(out).toContain("ms-planner");
     for (const label of ["Tesis", "Argumento 1", "Argumento 2", "Conclusión"]) expect(out).toContain(label);
-    const planner = out.slice(out.indexOf("ms-planner"), out.indexOf('class="ms-checklist"'));
+    const planner = out.slice(out.indexOf("ms-planner"), out.indexOf('class="ms-answer"', out.indexOf("ms-planner")));
     expect(count(planner, /<div><\/div>/g)).toBe(2 + 3 + 3 + 2);
   });
 
