@@ -1,5 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
 import { continueAutomatically, runPlanningStage } from "@/lib/adaptation/orchestration/orchestrator";
 import { createAndStartAdaptation, getAdaptationPlan, getAdaptationStatus, reopenReview, startGeneration, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
@@ -275,5 +275,61 @@ describe("permissions, persistence and telemetry", () => {
     expect(Object.keys(summary.cost_by_creation_mode).sort()).toEqual(["automatic", "review"]);
     expect(summary.cost_by_creation_mode.automatic!.adaptations).toBe(1);
     expect(JSON.stringify(summary)).not.toMatch(/Marta|fracci|display_name|prompt/i);
+  });
+});
+
+describe("hotfix · «Hacer magia» never answers with an opaque HTTP 500", () => {
+  it("a database without migration 019 is a safe refusal (logged as a schema mismatch); nothing is created or reserved", async () => {
+    const old = await createTestDb({ through: "20261001001800" });
+    await old.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'");
+    const u = await createUser(old, "magic-old@example.com");
+    const material = await seedMaterial(old, u, fractionsAnalysis());
+    const learner = await seedLearner(old, u);
+    const orchestrator = makeDeps(old, scriptedServices(newSpy(), {}));
+    orchestrator.entitlements = dbEntitlements(orchestrator.store);
+    const deps: ServiceDeps = { orchestrator, reader: readerFor(old, u), resolveVersions: versions };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await createAndStartAdaptation(deps, { userId: u.id, workspaceId: u.workspaceId, canWrite: true }, { materialId: material, learnerProfileId: learner, adaptationType: "accessibility", requestKey: "old-schema-key", creationMode: "automatic" });
+      expect(result).toEqual({ ok: false, code: "unavailable" });
+      const line = JSON.parse(String(errors.mock.calls.at(-1)![0])) as Record<string, string>;
+      expect(line).toMatchObject({ level: "error", event: "adaptation_create_failed", reason: "schema_mismatch", mode: "automatic", materialId: material });
+      expect(line.detail).toMatch(/create_adaptation/);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(Number((await old.query<{ c: string }>("select count(*)::text c from public.adaptations")).rows[0]!.c)).toBe(0);
+    expect(Number((await old.query<{ c: string }>("select count(*)::text c from public.adaptation_entitlements")).rows[0]!.c)).toBe(0);
+    await old.close();
+  }, 120_000);
+
+  it("created but the start fails unexpectedly: the adaptation is returned (its page offers to start it); retrying reuses it, one job", async () => {
+    const t = await teacher();
+    const getAdaptation = t.deps.reader.getAdaptation.bind(t.deps.reader);
+    let fail = true;
+    t.deps.reader.getAdaptation = async (id) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return getAdaptation(id);
+    };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const key = `magic-retry-${n}`;
+    try {
+      const first = await t.start("automatic", key);
+      expect(first.ok).toBe(true);
+      const id = first.ok ? first.data.adaptationId : "";
+      expect(JSON.parse(String(errors.mock.calls.at(-1)![0]))).toMatchObject({ event: "adaptation_start_failed", adaptationId: id, reason: "Error" });
+      expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(0);
+      // The same click again (same request key): the same adaptation, its single reservation, and now its one planning job.
+      const again = await t.start("automatic", key);
+      expect(again).toEqual(first);
+      expect(await count("public.adaptations where request_key = $1", [key])).toBe(1);
+      expect(await count("public.adaptation_jobs where adaptation_id = $1 and stage = 'planning'", [id])).toBe(1);
+      expect(await entitlement(id)).toBe("reserved");
+    } finally {
+      errors.mockRestore();
+    }
   });
 });

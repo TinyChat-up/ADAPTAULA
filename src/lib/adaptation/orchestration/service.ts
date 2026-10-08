@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { FunctionalProfileSchema } from "@/lib/schemas/functional-profile";
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import { logger } from "@/lib/logger";
 import { AdaptationError } from "./errors";
 import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning, reopenPlanReview, submitPlanReview, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
@@ -60,7 +61,8 @@ export type ServiceError =
   | "entitlement_unavailable"
   | "entitlement_not_reserved"
   | "generation_limit"
-  | "failure_budget";
+  | "failure_budget"
+  | "unavailable";
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; code: ServiceError; detail?: string[] };
 
 const denied = (actor: Actor): ServiceResult<never> | null => (actor.canWrite ? null : { ok: false, code: "forbidden" });
@@ -147,11 +149,35 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
  * job. Nothing here calls a provider; the screen runs the job right after (`POST /api/adaptations/[id]/run`).
  */
 export async function createAndStartAdaptation(deps: ServiceDeps, actor: Actor, request: CreateAdaptationRequest & { creationMode: CreationMode }): Promise<ServiceResult<{ adaptationId: string }>> {
-  const created = await createAdaptationCommand(deps, actor, request);
+  let created: ServiceResult<{ adaptationId: string }>;
+  try {
+    created = await createAdaptationCommand(deps, actor, request);
+  } catch (error) {
+    // An unexpected failure (a database without the current migrations, a lost connection) is a refusal the screen can show,
+    // not an opaque HTTP 500; the log says why. Creation is one transaction, so nothing was created or reserved.
+    logUnexpected("adaptation_create_failed", error, { workspaceId: actor.workspaceId, materialId: request.materialId, mode: request.creationMode });
+    return { ok: false, code: "unavailable" };
+  }
   if (!created.ok) return created;
-  // Created but not started (the failure budget, a lost connection): its page shows that and offers to start it there.
-  await startPlanning(deps, actor, created.data.adaptationId);
+  // Created but not started (the failure budget, a lost connection, an unexpected error): its page shows that and offers to start
+  // it there. Retrying with the same request key reuses this adaptation and its single reservation.
+  try {
+    await startPlanning(deps, actor, created.data.adaptationId);
+  } catch (error) {
+    logUnexpected("adaptation_start_failed", error, { workspaceId: actor.workspaceId, adaptationId: created.data.adaptationId, mode: request.creationMode });
+  }
   return created;
+}
+
+/** Database errors whose cause is a schema older than the code (a migration not applied): named as such in the log. */
+// PostgREST: «Could not find the function … in the schema cache» (PGRST202); Postgres: «function public.x(…) does not exist»
+// (the store keeps only the first 160 characters, so the signature may hide the end).
+const SCHEMA_MISMATCH = /does not exist|could not find the (function|column|table)|schema cache|PGRST20[0-9]|^database: function public\./i;
+
+function logUnexpected(event: string, error: unknown, ids: Record<string, string>) {
+  const message = error instanceof Error ? error.message : String(error);
+  // Only opaque ids and the database's own message (SQL names, never values from the material or the learner).
+  logger.error(event, { ...ids, reason: SCHEMA_MISMATCH.test(message) ? "schema_mismatch" : error instanceof Error ? error.name : "unknown", detail: message });
 }
 
 /** Maps a stage outcome to the application's vocabulary (no internal message ever crosses this line). */
