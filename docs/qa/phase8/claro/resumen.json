@@ -10,8 +10,8 @@
     "name": "B-primaria-estructurada",
     "label": "Primaria estructurada",
     "design": "claro",
-    "pages": 4,
-    "kb": 48
+    "pages": 3,
+    "kb": 47
   },
   {
     "name": "C-eso",
@@ -24,8 +24,8 @@
     "name": "D-bachillerato",
     "label": "Bachillerato",
     "design": "claro",
-    "pages": 4,
-    "kb": 37
+    "pages": 3,
+    "kb": 36
   },
   {
     "name": "E-visual",

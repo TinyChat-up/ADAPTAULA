@@ -245,6 +245,10 @@ ul.ms-list { list-style: disc; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) { display: flex; align-items: flex-end; gap: .8em; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) .ms-slot-label { flex: 0 1 auto; max-width: 45%; padding-bottom: .15em; }
 [data-design="claro"] .ms-slot-block:has(.ms-lines > div:only-child) .ms-lines { flex: 1 1 auto; }
+/* En ESO y Bachillerato, los apartados de notas cortas (hasta dos líneas) se reparten en dos columnas y los largos ocupan el
+   ancho: son notas, no la redacción, y así el organizador no empuja la redacción a otra página. Primaria conserva el ancho. */
+[data-design="claro"]:not([data-stage="primaria"]) .ms-planner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 1.6em; row-gap: .2em; }
+[data-design="claro"]:not([data-stage="primaria"]) .ms-planner > :not(.ms-slot-block), [data-design="claro"]:not([data-stage="primaria"]) .ms-planner > .ms-slot-block:has(.ms-lines > div:nth-child(3)) { grid-column: 1 / -1; }
 
 /* Menos estímulos (`decoration` del perfil) dentro de CLARO: misma gramática, menos superficie. Con `reduced`, la orientación
    pierde el fondo y queda con un filo azul; con `none`, ni fondos ni filos: solo las etiquetas. Las ayudas siempre en petróleo. */

@@ -78,8 +78,10 @@ export const primary = (): MaterialDocument => {
 /**
  * B · Primaria with more structure (working-memory support, max 3 tasks per page): the reading comes in parts and each part is
  * followed by its question, so the instruction «lee una parte y responde» can be followed literally. The three terms are named in
- * the text before they are assessed, and the cycle is first organised in a partly structured scheme, then drawn. One logical
- * page: the profile's «3 tasks per page» groups the activities, the browser paginates the rest.
+ * the text before they are assessed, and the cycle is first organised in a partly structured scheme (in the scientific order:
+ * evaporation → water vapour → condensation → clouds → precipitation → back to rivers and sea; the word bank is not in that
+ * order, so it does not give the answer away), then drawn. One logical page: the profile's «3 tasks per page» groups the
+ * activities evenly (2 · 3 · 2), the browser paginates the rest.
  */
 export const primaryStructured = (): MaterialDocument =>
   sheet(
@@ -97,9 +99,9 @@ export const primaryStructured = (): MaterialDocument =>
         b.help("key_idea", "El agua **cambia de estado**, pero no desaparece: siempre vuelve a empezar el viaje."),
         b.activity("4", "Ordena lo que le pasa al agua. Escribe 1, 2 y 3 en los cuadros.", { kind: "order", items: opts(["Se forman las nubes.", "El agua se evapora.", "Llueve."]) }),
         b.activity("5", "Une cada palabra con lo que significa.", { kind: "match", left: opts(["Evaporación", "Condensación", "Precipitación"]), right: opts(["El agua cae de las nubes.", "El agua se convierte en vapor.", "El vapor forma gotas."], "r") }),
-        b.activity("6", "Completa el esquema del ciclo con las palabras del recuadro.", { kind: "fill_blank", text: "Mar  →  {{a}}  →  nubes  →  {{b}}  →  gotas  →  {{c}}  →  ríos y mar", word_bank: ["evaporación", "condensación", "precipitación"] }),
-        b.activity("7", "Ahora dibuja el ciclo del agua siguiendo tu esquema. Pon una flecha entre cada paso y escribe su nombre.", { kind: "box", size: "medium" }),
-        b.checklist(["He leído las tres partes.", "He respondido a todas las preguntas.", "Mi dibujo tiene las tres flechas con su nombre."], "Antes de terminar"),
+        b.activity("6", "Completa el esquema del ciclo. En cada hueco, escribe el nombre del cambio con una palabra del recuadro.", { kind: "fill_blank", text: "Agua del mar  →  {{a}}  →  vapor de agua  →  {{b}}  →  nubes  →  {{c}}  →  el agua vuelve a los ríos y al mar", word_bank: ["precipitación", "evaporación", "condensación"] }),
+        b.activity("7", "Ahora dibuja el ciclo del agua siguiendo tu esquema: el mar, el vapor, las nubes y la lluvia. En cada flecha, escribe el nombre del cambio.", { kind: "box", size: "medium" }),
+        b.checklist(["He leído las tres partes.", "He respondido a todas las preguntas.", "Cada flecha de mi dibujo tiene el nombre de su cambio."], "Antes de terminar"),
       ],
     ],
     { font_scale: 1.15, line_spacing: "relaxed", spacing: "wide", decoration: "reduced", max_tasks_per_page: 3 },

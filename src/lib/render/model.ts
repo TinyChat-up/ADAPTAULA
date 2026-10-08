@@ -164,10 +164,24 @@ const TABLE_CELL_ROWS = 6;
 const COMPACT_ROWS = 14;
 const MAX_CHECKLIST = 12;
 const WIDE_TABLE_COLUMNS = 8;
-/** Blocks that introduce what follows: they stay with the next activity when a page is closed before it. */
-const LEADS_INTO = new Set<RenderNode["kind"]>(["heading", "instruction", "help_box"]);
+/** Blocks that introduce what follows: they stay with the next activity when a page is closed before it (a reading placed right
+ * before an activity is the part of the text that activity asks about). */
+const LEADS_INTO = new Set<RenderNode["kind"]>(["heading", "instruction", "help_box", "reading_text"]);
 /** Responses that are written (where an organiser or sentence starters help). */
 const WRITING = new Set<RenderResponse["kind"]>(["lines", "box", "oral"]);
+
+/**
+ * How many activities each page holds under `max_tasks_per_page`: the fewest pages the limit allows, filled as evenly as possible
+ * (7 tasks, max 3 → 2 · 3 · 2, never 3 · 3 · 1). The first page takes the smaller share: it also carries the header, the title
+ * and the orientation. Counts, not heights: the browser still paginates whatever a group does not fit.
+ */
+export function taskGroups(tasks: number, max: number): number[] {
+  if (tasks <= max) return [tasks];
+  const groups = Math.ceil(tasks / max);
+  const base = Math.floor(tasks / groups);
+  const extra = tasks - base * groups;
+  return Array.from({ length: groups }, (_, i) => base + (i >= 1 && i <= extra ? 1 : 0));
+}
 
 const wordsRange = /(\d{2,4})\s*(?:[-–]|y|a)\s*(\d{2,4})\s*palabras/i;
 /** Lines needed for the longest expected answer stated in the requirements ("150-180 palabras"), conservative and bounded. */
@@ -371,6 +385,8 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   for (const logical of doc.pages) {
     let current: RenderNode[] = [];
     let tasks = 0;
+    const quotas = max === null ? [] : taskGroups(logical.blocks.filter((bl) => bl.type === "activity").length, max);
+    let group = 0;
     const flush = () => {
       if (current.length > 0) pages.push({ number: pages.length + 1, nodes: current });
       current = [];
@@ -378,12 +394,13 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     };
     for (const block of logical.blocks) {
       const node = nodeOf(block, ctx);
-      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed it, and what leads
-      // into that activity (a heading, an orientation, a help placed right before it) travels with it instead of closing a page.
-      if (node.kind === "activity" && max !== null && tasks >= max) {
+      // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed its group (see
+      // `taskGroups`), and what leads into that activity (a heading, an orientation, a help, its part of the reading) travels with it.
+      if (node.kind === "activity" && max !== null && tasks >= (quotas[group] ?? max)) {
         const lead: RenderNode[] = [];
         while (current.length > 0 && LEADS_INTO.has(current.at(-1)!.kind)) lead.unshift(current.pop()!);
         flush();
+        group += 1;
         current.push(...lead);
       }
       // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.

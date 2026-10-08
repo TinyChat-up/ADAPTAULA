@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
-import { buildRenderModel, type RenderModel } from "@/lib/render/model";
+import { buildRenderModel, taskGroups, type RenderModel } from "@/lib/render/model";
 import { tokenStyle, renderTokens } from "@/lib/render/tokens";
 import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/material-document";
 import { FIXTURES, bachillerato, eso, primary, primaryStructured, visualCrop } from "../visual-qa/fixtures";
@@ -171,12 +171,35 @@ describe("Sistema CLARO on the five complete sheets · reusable rules", () => {
     expect(d.pages.flatMap((p) => p.nodes).some((n) => n.kind === "checklist")).toBe(true);
   });
 
-  it("closing a page for «max tasks per page» carries the heading, orientation or help that leads into the next activity", () => {
+  it("closing a page for «max tasks per page» carries what leads into the next activity, its part of the reading included", () => {
     const pages = claroModel(primaryStructured()).pages;
     const second = pages[1]!.nodes;
-    expect(second[0]!.kind).toBe("help_box");
-    expect(second[1]!.kind).toBe("activity");
+    expect(second.slice(0, 2).map((n) => n.kind)).toEqual(["reading_text", "activity"]);
+    expect(pages[0]!.nodes.at(-1)!.kind).toBe("activity");
     expect(pages.every((p) => p.nodes.filter((n) => n.kind === "activity").length <= 3)).toBe(true);
+  });
+
+  it("«max tasks per page» uses the fewest pages the limit allows, evenly filled, the first page with the smaller share", () => {
+    expect(taskGroups(7, 3)).toEqual([2, 3, 2]);
+    expect(taskGroups(6, 3)).toEqual([3, 3]);
+    expect(taskGroups(4, 3)).toEqual([2, 2]);
+    expect(taskGroups(8, 3)).toEqual([2, 3, 3]);
+    expect(taskGroups(3, 3)).toEqual([3]);
+    for (let max = 1; max <= 6; max++)
+      for (let n = 1; n <= 30; n++) {
+        const groups = taskGroups(n, max);
+        expect(groups.reduce((a, b) => a + b, 0)).toBe(n);
+        expect(groups).toHaveLength(Math.ceil(n / max));
+        expect(Math.max(...groups)).toBeLessThanOrEqual(max);
+        expect(Math.max(...groups) - Math.min(...groups)).toBeLessThanOrEqual(1);
+      }
+    const perPage = claroModel(primaryStructured()).pages.map((p) => p.nodes.filter((n) => n.kind === "activity").length);
+    expect(perPage).toEqual([2, 3, 2]);
+  });
+
+  it("an organiser's short note slots share a row in ESO and Bachillerato (long slots and Primaria keep the full width)", () => {
+    expect(css).toMatch(/\[data-design="claro"\]:not\(\[data-stage="primaria"\]\) \.ms-planner \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.ms-planner > \.ms-slot-block:has\(\.ms-lines > div:nth-child\(3\)\) \{ grid-column: 1 \/ -1; \}/);
   });
 
   it("an activity answered in a table of the sheet is kept with it when paginating", () => {
@@ -232,6 +255,22 @@ describe("pedagogical corrections of the QA sheets (content, not CSS)", () => {
     const draw = all.find((x) => x.type === "activity" && x.response.kind === "box")!;
     const scheme = all.findIndex((x) => x.type === "activity" && x.response.kind === "fill_blank");
     expect(scheme).toBeLessThan(all.indexOf(draw));
+  });
+
+  it("B · the scheme of activity 06 follows the scientific order and its word bank does not give the answer away", () => {
+    const scheme = blocks(primaryStructured()).find((x) => x.type === "activity" && x.response.kind === "fill_blank")!;
+    if (scheme.type !== "activity" || scheme.response.kind !== "fill_blank") throw new Error("no scheme");
+    // Each blank is the change between the state before it and the state after it.
+    const steps = scheme.response.text.split(/\s*→\s*/);
+    expect(steps).toEqual(["Agua del mar", "{{a}}", "vapor de agua", "{{b}}", "nubes", "{{c}}", "el agua vuelve a los ríos y al mar"]);
+    const key = { a: "evaporación", b: "condensación", c: "precipitación" };
+    expect([...scheme.response.word_bank!].sort()).toEqual(Object.values(key).sort());
+    expect(scheme.response.word_bank).not.toEqual(Object.values(key));
+    // The reading names each change with the same states the scheme uses.
+    const reading = JSON.stringify(blocks(primaryStructured()).filter((x) => x.type === "reading_text"));
+    expect(reading).toMatch(/vapor[^"]*\*\*evaporación\*\*/);
+    expect(reading).toMatch(/gotas[^"]*nubes[^"]*\*\*condensación\*\*/);
+    expect(reading).toMatch(/lluvia[^"]*\*\*precipitación\*\*[^"]*ríos y al\s+mar/);
   });
 
   it("C · the table instruction comes before the table; «frases completas» only where the answer is written", () => {

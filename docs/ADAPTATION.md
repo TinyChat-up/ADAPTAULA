@@ -526,8 +526,12 @@ Variante del mismo renderer (`buildRenderModel(doc, { design: "claro" })` → `d
 `material.css`); el producto sigue con el diseño actual hasta la autorización final. Paleta azul Adaptaula `#23426B`, verde petróleo
 `#227E81` (solo ayudas), azul niebla `#EFF3F7` (orientación), blanco; Inter; columna guía con 01, 02…; cabecera con marca discreta;
 escala por etapa multiplicada por el `font_scale` del perfil. Reglas reutilizables añadidas con ella (valen para ambos diseños):
-apoyos de escritura dentro de su actividad, actividad con tabla unida a su tabla, lo que introduce una actividad viaja con ella al
-cerrar página por número de tareas, fracciones sencillas apiladas. Fichas, evaluación y cómo activarlo: `docs/qa/phase8/claro/`.
+apoyos de escritura dentro de su actividad, actividad con tabla unida a su tabla, lo que introduce una actividad (su parte de la
+lectura incluida) viaja con ella al cerrar página por número de tareas, fracciones sencillas apiladas. `max_tasks_per_page`
+reparte las tareas de una página lógica en el mínimo de páginas que permite el límite y de forma equilibrada (`taskGroups`: 7
+tareas con máximo 3 → 2 · 3 · 2, nunca 3 · 3 · 1; la primera página lleva la parte menor porque también lleva cabecera, título y
+orientación): cuenta tareas, no mide alturas. Solo en CLARO (ESO y Bachillerato), los apartados cortos de un organizador (hasta dos
+líneas) se reparten en dos columnas. Fichas, evaluación y cómo activarlo: `docs/qa/phase8/claro/`.
 
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
 

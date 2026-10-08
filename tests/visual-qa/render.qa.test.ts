@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Sparticuz from "@sparticuz/chromium";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
@@ -20,6 +20,8 @@ import { FIXTURES, climographPng, pinOf } from "./fixtures";
 /** `QA_DESIGN=claro` renders with Sistema CLARO (`design: "claro"`); anything else, the current default design. */
 const DESIGN = process.env.QA_DESIGN === "claro" ? "claro" : "standard";
 const OUT = path.resolve(process.env.QA_OUT ?? (DESIGN === "claro" ? "docs/qa/phase8/claro" : "docs/qa/phase8/after"));
+/** `QA_ONLY=B-primaria-estructurada,D-bachillerato` regenerates only those sheets and keeps the others (and their summary rows). */
+const ONLY = process.env.QA_ONLY ? process.env.QA_ONLY.split(",") : null;
 const summary: Array<{ name: string; label: string; design: string; pages: number; kb: number }> = [];
 
 async function greyscale(png: Buffer): Promise<Buffer> {
@@ -51,10 +53,11 @@ async function screenshot(html: string): Promise<Buffer> {
 }
 
 describe("Phase 8 · visual QA sheets", () => {
-  rmSync(OUT, { recursive: true, force: true });
+  if (ONLY) for (const name of ONLY) rmSync(path.join(OUT, name), { recursive: true, force: true });
+  else rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
 
-  for (const fixture of FIXTURES) {
+  for (const fixture of FIXTURES.filter((f) => !ONLY || ONLY.includes(f.name))) {
     it(fixture.name, async () => {
       const doc = fixture.doc();
       const pin = pinOf("5c0ffee0-1c2d-4e5f-8a9b-0c1d2e3f4a5b", await climographPng());
@@ -79,6 +82,9 @@ describe("Phase 8 · visual QA sheets", () => {
   }
 
   afterAll(() => {
-    writeFileSync(path.join(OUT, "resumen.json"), `${JSON.stringify(summary, null, 2)}\n`);
+    const file = path.join(OUT, "resumen.json");
+    const kept = ONLY && existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as typeof summary).filter((row) => !ONLY.includes(row.name)) : [];
+    const rows = [...kept, ...summary].sort((a, b) => a.name.localeCompare(b.name));
+    writeFileSync(file, `${JSON.stringify(rows, null, 2)}\n`);
   });
 });
