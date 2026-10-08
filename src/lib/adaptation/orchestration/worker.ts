@@ -1,6 +1,6 @@
 import "server-only";
 import { logger } from "@/lib/logger";
-import { latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { continueAutomatically, latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import type { StageName } from "./store";
 
 /**
@@ -62,7 +62,16 @@ export interface ProcessOptions {
 
 /** The one processor of a stage job, whoever calls it. The stage functions claim the job themselves: a held job is `skipped`. */
 async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: StageName): Promise<StageOutcome> {
-  if (stage === "planning") return runPlanningStage(deps, adaptationId);
+  if (stage === "planning") {
+    const planned = await runPlanningStage(deps, adaptationId);
+    // «Hacer magia»: a valid plan goes on to generation (queued, run by the next request) instead of waiting for a person.
+    if (planned.status !== "awaiting_plan_review") return planned;
+    const continued = await continueAutomatically(deps, adaptationId);
+    if (continued?.outcome === "enqueued" || continued?.outcome === "reused") return { ...planned, status: continued.status };
+    // Nothing was queued, but the review may have been saved (a refused generation): report where it really is.
+    const status = (await deps.store.getPipeline(adaptationId))?.adaptation.status as StageOutcome["status"] | undefined;
+    return { ...planned, status: status ?? planned.status };
+  }
   const review = await latestReviewFingerprint(deps.store, adaptationId);
   return review ? runGenerationStage(deps, adaptationId, review) : { outcome: "rejected", status: "generation_queued", code: "plan_review_required" };
 }
@@ -73,11 +82,17 @@ async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: 
  * no provider is called.
  */
 export async function processAdaptationStage(deps: OrchestratorDeps, adaptationId: string): Promise<StageOutcome | null> {
-  const snapshot = await deps.store.getPipeline(adaptationId);
-  const job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
+  let snapshot = await deps.store.getPipeline(adaptationId);
+  let job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
+  // An automatic adaptation whose plan finished but whose continuation did not (the process died in between): resume it now.
+  if (!job && snapshot?.adaptation.creation_mode === "automatic" && snapshot.adaptation.status === "awaiting_plan_review") {
+    if (!(await continueAutomatically(deps, adaptationId))) return null;
+    snapshot = await deps.store.getPipeline(adaptationId);
+    job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
+  }
   if (!job) return null;
   const outcome = await runStageJob(deps, adaptationId, job.stage);
-  logger.info("adaptation_job_processed", { jobId: job.id, adaptationId, stage: job.stage, outcome: outcome.outcome, code: outcome.code ?? null, status: outcome.status, trigger: "request" });
+  logger.info("adaptation_job_processed", { jobId: job.id, adaptationId, stage: job.stage, outcome: outcome.outcome, code: outcome.code ?? null, status: outcome.status, mode: snapshot?.adaptation.creation_mode ?? null, trigger: "request" });
   return outcome;
 }
 

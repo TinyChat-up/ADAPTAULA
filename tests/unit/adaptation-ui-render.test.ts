@@ -28,7 +28,7 @@ const TECHNICAL = /need_\d|\bdec_\d|\bact_\d|ctt_\d|prt_\d|\bR1\b|\bblk_|unsuppo
 describe("queued: the first action", () => {
   it("offers the single CTA, no spinner without text and no cancel-less dead end", () => {
     const out = view();
-    expect(out).toContain("Preparar propuesta de adaptación");
+    expect(out).toContain("Preparar la adaptación");
     expect(out).toContain("Cancelar adaptación");
     expect(visible(out)).not.toMatch(/\bIA\b|inteligencia artificial/);
     expect(out).toContain("5 actividades");
@@ -37,8 +37,8 @@ describe("queued: the first action", () => {
 
 describe("work states: plain text, no promises, cancel only if the server allows it", () => {
   it.each([
-    ["planning", status({ status: "planning", progress: "planning", nextAction: "none" }), "Estamos preparando una propuesta de adaptación."],
-    ["generating", status({ status: "generating", progress: "generating", nextAction: "none" }), "Estamos creando el material con los cambios que has aprobado."],
+    ["planning", status({ status: "planning", progress: "planning", nextAction: "none" }), "Estamos decidiendo cómo adaptar el material a las necesidades del perfil."],
+    ["generating", status({ status: "generating", progress: "generating", nextAction: "none" }), "Estamos creando la ficha adaptada."],
     ["reviewing", status({ status: "reviewing_ai", progress: "reviewing", nextAction: "none" }), "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas."],
   ])("%s", (_n, dto, copy) => {
     const out = view(dto);
@@ -55,7 +55,7 @@ describe("work states: plain text, no promises, cancel only if the server allows
 
   it("generation waiting for the person shows the CTA, and generation is never started by rendering", () => {
     const out = view(status({ status: "generation_queued", nextAction: "start_generation" }));
-    expect(out).toContain("Crear material adaptado");
+    expect(out).toContain("Crear ficha");
   });
 });
 
@@ -63,16 +63,17 @@ describe("plan review: every decision, in teacher language", () => {
   const out = form();
 
   it("shows the summary and every decision, one fieldset each", () => {
-    expect(out).toContain("Adaptaula propone 5 cambios. Revísalos antes de crear la ficha.");
+    expect(out).toContain("Así prepararemos esta ficha");
+    expect(out).toContain("Revisa cómo se adaptará el material y cambia lo que necesites antes de crear la ficha.");
     expect(out.match(/<fieldset/g)).toHaveLength(decisions.length);
     expect(out.match(/<legend/g)).toHaveLength(decisions.length);
-    expect(out).toContain("3 recomendados · 1 requieren tu atención · 1 no aplicables tal cual");
+    expect(out).toContain("4 de 5 cambios se aplicarán · 1 conviene revisarlo.");
   });
 
   it("explains where, what, why and what is kept", () => {
     expect(out).toContain("Actividad 1 · Reformular");
     expect(out).toContain("Todo el documento · Dividir en partes");
-    expect(out).toContain("Responde a: Ajuste del nivel de lectura");
+    expect(out).toContain("Por qué: </span>Ajuste del nivel de lectura");
     expect(out).toContain("Se mantendrá: 150-180 palabras con tesis, al menos dos argumentos y conclusión");
     expect(out).toContain("Debe mantenerse: ");
     expect(out).toContain("Ayudas: Lista de comprobación, Planificador");
@@ -89,19 +90,22 @@ describe("plan review: every decision, in teacher language", () => {
 
   it("never shows diagnosis language", () => expect(visible(out)).not.toMatch(DIAGNOSIS));
 
-  it("a blocked decision cannot be approved: the option is disabled and the reason is explained", () => {
-    const card = html(createElement(DecisionCard, { decision: decisions[4]!, index: 4, context, draft: initialFormState(plan)["dec_5"]!, problem: undefined, deferred: false, disabled: false, onChoose: () => {}, onEdit: () => {} }));
+  it("a blocked decision is left out by default and cannot be applied: the option is disabled and the reason is explained", () => {
+    const card = html(createElement(DecisionCard, { decision: decisions[4]!, index: 4, context, draft: initialFormState(plan)["dec_5"]!, problem: "blocked_approved", deferred: false, disabled: false, onChoose: () => {}, onEdit: () => {} }));
     expect(card).toMatch(/<input[^>]*disabled=""[^>]*value="approve"/);
     expect(card).not.toMatch(/<input[^>]*disabled=""[^>]*value="reject"/);
-    expect(card).toContain("No aplicable tal cual");
-    expect(card).toContain("pero no aprobar");
+    expect(card).toContain("No se aplicará");
+    expect(card).toContain("no se puede aplicar tal cual");
   });
 
-  it("nothing is preselected for valid or review decisions (a conscious choice is needed)", () => {
-    const card = html(createElement(DecisionCard, { decision: decisions[2]!, index: 2, context, draft: initialFormState(plan)["dec_3"]!, problem: "missing_choice", deferred: false, disabled: false, onChoose: () => {}, onEdit: () => {} }));
-    expect(card).not.toContain("checked");
-    expect(card).toContain("Elige qué hacer con este cambio.");
-    expect(card).toContain('aria-describedby="');
+  it("the recommendation is already chosen: each decision says what will happen and offers 'Cambiar' instead of a forced choice", () => {
+    const card = html(createElement(DecisionCard, { decision: decisions[2]!, index: 2, context, draft: initialFormState(plan)["dec_3"]!, problem: undefined, deferred: false, disabled: false, onChoose: () => {}, onEdit: () => {} }));
+    expect(card).toContain("Se aplicará");
+    expect(card).toContain(">Cambiar</button>");
+    expect(card).not.toContain('type="radio"');
+    const missing = html(createElement(DecisionCard, { decision: decisions[2]!, index: 2, context, draft: { choice: null, edit: {} }, problem: "missing_choice", deferred: false, disabled: false, onChoose: () => {}, onEdit: () => {} }));
+    expect(missing).toContain("Elige qué hacer con este cambio.");
+    expect(missing).toContain('aria-describedby="');
   });
 
   it("the editor offers structured, translated controls only", () => {
@@ -116,10 +120,12 @@ describe("plan review: every decision, in teacher language", () => {
     expect(card).toMatch(/<label[^>]*for="[^"]+"[^>]*>Nota para este cambio/);
   });
 
-  it("has an explicit submit, labelled, with a live count of what is left", () => {
-    expect(out).toContain("Guardar revisión");
-    expect(out).toContain("Te quedan 4 cambios por revisar.");
+  it("has one explicit submit, «Crear ficha», and no 'Restaurar recomendación' while nothing was changed", () => {
+    expect(out).toContain("Crear ficha");
+    expect(out).not.toContain("Guardar revisión");
+    expect(out).not.toContain("Restaurar recomendación");
     expect(out).toContain('type="submit"');
+    expect(out).toContain('role="status"');
     expect(out).toContain('aria-labelledby="plan-review-title"');
   });
 });
@@ -165,7 +171,7 @@ describe("preservations and limits come from the decision itself", () => {
 describe("page states built from the server's data", () => {
   it("awaiting review renders the form from the server-provided plan (no empty flash)", () => {
     const out = view(awaitingReview(), { plan });
-    expect(out).toContain("Guardar revisión");
+    expect(out).toContain("Crear ficha");
     expect(out).toContain("Necesidades que se tienen en cuenta: Ajuste del nivel de lectura");
   });
 
@@ -173,11 +179,11 @@ describe("page states built from the server's data", () => {
     expect(view(awaitingReview())).toContain("Actualizar propuesta");
   });
 
-  it("once the review is saved the server moves on: the page shows 'Crear material adaptado' with the presentation note, never auto-started", () => {
+  it("a saved review whose generation was not queued shows 'Crear ficha' with the presentation note, never auto-started", () => {
     const out = view(status({ status: "generation_queued", nextAction: "start_generation", hasPlanReview: true, execution: { aiDecisions: 3, deferredDecisions: ["dec_4"], blockers: [] } }));
-    expect(out).toContain("Crear material adaptado");
+    expect(out).toContain("Crear ficha");
     expect(out).toContain("Se aplicará al preparar la presentación final.");
-    expect(out).not.toContain("Guardar revisión");
+    expect(out).not.toContain("Así prepararemos esta ficha");
   });
 });
 
@@ -185,13 +191,14 @@ describe("read-only members", () => {
   it("see every state but no command: no start, no review form, no generate, no retry, no cancel", () => {
     const starting = view(status({ status: "queued", nextAction: "start_planning" }), { canWrite: false });
     expect(starting).toContain("solo lectura");
-    expect(starting).not.toContain("Preparar propuesta de adaptación");
+    expect(starting).not.toContain("Preparar la adaptación");
     expect(starting).not.toContain("Cancelar adaptación");
     const reviewing = view(status({ status: "awaiting_plan_review", phase: "awaiting_review", progress: "awaiting_review", nextAction: "review_plan" }), { canWrite: false, plan });
     expect(reviewing).toContain("Esperando tu revisión");
-    expect(reviewing).not.toContain("Guardar revisión");
+    expect(reviewing).not.toContain("Crear ficha");
+    expect(reviewing).not.toContain("Cambiar");
     const generate = view(status({ status: "generation_queued", nextAction: "start_generation" }), { canWrite: false });
-    expect(generate).not.toContain("Crear material adaptado");
+    expect(generate).not.toContain("Crear ficha");
     const failed = view(status({ status: "failed", phase: "recoverable_failure", progress: "failed", nextAction: "retry", canRetry: true, error: { code: "provider_unavailable", category: "retryable", message: "" } as never }), { canWrite: false });
     expect(failed).not.toMatch(/>Reintentar<|Cancelar adaptación/);
     const done = view(ready(), { canWrite: false });
@@ -203,7 +210,7 @@ describe("read-only members", () => {
 describe("result screens", () => {
   it("ready: success, version and date, the sheet and its PDF as next steps, no document, no fake rendering", () => {
     const out = view(ready(), { readyInfo: { version: 2, createdAt: "2026-10-05T10:30:00Z" } });
-    expect(out).toContain("La adaptación está preparada");
+    expect(out).toContain("La ficha está lista");
     expect(out).toContain("Versión 2");
     expect(out).toContain("Ver la ficha");
     expect(out).toContain("Descargar PDF");
@@ -223,7 +230,7 @@ describe("result screens", () => {
       execution: { aiDecisions: 3, deferredDecisions: ["dec_4"], blockers: [] },
     });
     const out = view(dto);
-    expect(out).toContain("Material preparado con observaciones");
+    expect(out).toContain("La ficha está lista, con observaciones");
     expect(out).toContain("Hay una ayuda repetida");
     expect(out).toContain("no queda del todo cubierta");
     expect(out).toContain("presentación final");
@@ -234,11 +241,14 @@ describe("result screens", () => {
   it("blocked: clearly not ready, no 'ready' wording, a way back to the review when the server allows it", () => {
     const dto = status({ status: "blocked", phase: "blocked", progress: "blocked", nextAction: "review_plan" });
     const out = html(createElement(BlockedPanel, { dto, materialId: context.materialId, busy: false, canWrite: true, onReopen: () => {} }));
-    expect(out).toContain("Este material todavía no está listo");
-    expect(out).toContain("No se ha entregado ninguna ficha");
-    expect(out).toContain("Revisar la propuesta");
-    expect(out).not.toMatch(/preparada|Versión/);
-    expect(html(createElement(BlockedPanel, { dto: { ...dto, nextAction: "none" }, materialId: context.materialId, busy: false, canWrite: true, onReopen: () => {} }))).not.toContain("Revisar la propuesta");
+    expect(out).toContain("La ficha necesita una revisión antes de estar lista");
+    expect(out).toContain("Todavía no se ha entregado ninguna ficha");
+    expect(out).toContain("Revisar adaptación");
+    expect(out).toContain("vuelve a crear la ficha");
+    expect(out).not.toMatch(/preparada|Versión|Descargar PDF/);
+    expect(visible(out)).not.toMatch(/planner|generator|reviewer|revisor|job|schema|cola/i);
+    expect(html(createElement(BlockedPanel, { dto: { ...dto, nextAction: "none" }, materialId: context.materialId, busy: false, canWrite: true, onReopen: () => {} }))).not.toContain("Revisar adaptación");
+    expect(html(createElement(BlockedPanel, { dto, materialId: context.materialId, busy: false, canWrite: false, onReopen: () => {} }))).not.toContain("Revisar adaptación");
   });
 
   it("retryable failure: 'Reintentar' directly; terminal failure: no retry", () => {
@@ -268,7 +278,7 @@ describe("result screens", () => {
     expect(out).toContain("Se detendrá esta adaptación. Si aún no se había entregado, no contará como una adaptación utilizada.");
     const cancelled = view(status({ status: "cancelled", phase: "cancelled", progress: "cancelled", nextAction: "none", canCancel: false }));
     expect(cancelled).toContain("Adaptación cancelada");
-    expect(cancelled).not.toMatch(/Crear material adaptado|Preparar propuesta|Guardar revisión|Reintentar/);
+    expect(cancelled).not.toMatch(/Crear ficha|Preparar la adaptación|Reintentar/);
   });
 
   it("ready panel alone never renders anything but the temporary summary", () => {

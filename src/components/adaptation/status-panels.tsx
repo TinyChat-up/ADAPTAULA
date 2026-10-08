@@ -52,7 +52,7 @@ export function StartPanel({ busy, onStart, cancel, canCancel }: { busy: boolean
       <div className="flex flex-wrap items-center gap-3">
         <Button size="lg" onClick={onStart} disabled={busy}>
           {busy ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
-          Preparar propuesta de adaptación
+          Preparar la adaptación
         </Button>
         {canCancel ? cancel : null}
       </div>
@@ -70,7 +70,7 @@ export function WorkingPanel({ dto, offline, cancel }: { dto: AdaptationStatusDt
         <p className="text-sm text-muted-foreground">Puedes seguir usando Adaptaula: la adaptación se guarda y podrás volver a esta página.</p>
       </div>
       <ol className="space-y-3" aria-label="Fases de la adaptación">
-        {stageStates(dto.progress).map((stage) => (
+        {stageStates(dto.progress, { mode: dto.creationMode, generationQueued: dto.status === "generation_queued" }).map((stage) => (
           <li key={stage.key} aria-current={stage.state === "active" ? "step" : undefined} className="flex items-center gap-3">
             {stage.state === "done" ? (
               <Check aria-hidden className="size-5 shrink-0 text-success" />
@@ -107,7 +107,7 @@ export function GeneratePanel({ busy, onGenerate, cancel, canCancel, deferredCou
       <div className="flex flex-wrap items-center gap-3">
         <Button size="lg" onClick={onGenerate} disabled={busy}>
           {busy ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
-          Crear material adaptado
+          Crear ficha
         </Button>
         {canCancel ? cancel : null}
       </div>
@@ -168,10 +168,13 @@ export function BlockedPanel({ dto, materialId, busy, canWrite, onReopen }: { dt
         </p>
       ) : null}
       {canWrite && dto.nextAction === "review_plan" ? (
-        <Button onClick={onReopen} disabled={busy}>
-          {busy ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
-          Revisar la propuesta
-        </Button>
+        <div className="space-y-2">
+          <p className="text-sm">Revisa cómo se ha adaptado el material, cambia lo que necesites y vuelve a crear la ficha.</p>
+          <Button onClick={onReopen} disabled={busy}>
+            {busy ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
+            Revisar adaptación
+          </Button>
+        </div>
       ) : null}
       <BackLinks materialId={materialId} />
     </Card>
@@ -211,8 +214,8 @@ export function FailedPanel({ dto, materialId, busy, onRetry, cancel }: { dto: A
 
 const READ_ONLY_COPY: Record<"start" | "generate" | "review", string> = {
   start: "Esta adaptación está creada pero todavía no se ha empezado.",
-  review: "La propuesta de cambios está esperando la revisión de una persona con permiso de edición.",
-  generate: "La propuesta está revisada; falta que una persona con permiso de edición cree la ficha.",
+  review: "La adaptación está esperando la revisión de una persona con permiso de edición.",
+  generate: "La adaptación está revisada; falta que una persona con permiso de edición cree la ficha.",
 };
 
 /** What a read-only member sees where a decision is needed: the state, no commands. */

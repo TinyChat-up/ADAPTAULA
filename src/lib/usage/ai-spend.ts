@@ -35,6 +35,10 @@ export const AiSpendSummarySchema = z.object({
   avg_cost_per_analysis: Money.nullable(),
   avg_cost_per_adaptation: Money.nullable(),
   by_purpose: z.record(z.string(), z.object({ cost: Money, runs: Count, successful: Count, failed: Count })),
+  /** Adaptations CREATED in the period per creation mode (migration 019: `automatic` = «Hacer magia», `review`), and how many are ready / blocked now. */
+  by_creation_mode: z.record(z.string(), z.object({ adaptations: Count, ready: Count, blocked: Count })).default({}),
+  /** AI spend of the period (plan + generate + review) per creation mode, and the adaptations it belongs to. */
+  cost_by_creation_mode: z.record(z.string(), z.object({ cost: Money, adaptations: Count })).default({}),
 });
 export type AiSpendSummary = z.infer<typeof AiSpendSummarySchema>;
 

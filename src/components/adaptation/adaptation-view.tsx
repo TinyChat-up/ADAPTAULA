@@ -70,11 +70,18 @@ export function AdaptationView({
   const lock = useRef(false);
   const id = initial.id;
 
-  function adopt(next: AdaptationStatusDto) {
+  /** Takes a newer status. True when the pipeline moved on to another stage it is still working on (run that one now). */
+  function adopt(next: AdaptationStatusDto): boolean {
     const previous = statusRef.current;
     statusRef.current = next;
     setStatus(next);
+    // «Hacer magia» ends on the sheet itself, the moment it is delivered.
+    if (next.creationMode === "automatic" && next.phase === "ready" && previous.phase !== "ready") {
+      router.push(`/app/adaptaciones/${id}/vista`);
+      return false;
+    }
     if (next.phase !== previous.phase || next.nextAction !== previous.nextAction || next.status !== previous.status) router.refresh();
+    return next.status !== previous.status && shouldPoll(next);
   }
 
   useEffect(() => {
@@ -85,7 +92,7 @@ export function AdaptationView({
         const response = await fetch(`/api/adaptations/${id}/run`, { method: "POST", cache: "no-store" });
         return response.ok ? ((await response.json()) as AdaptationStatusDto) : null;
       },
-      onResult: (next) => adopt(next),
+      onResult: (next) => adopt(next) && canWrite,
     });
     runnerRef.current = runner;
     if (canWrite && shouldPoll(statusRef.current)) runner.kick(true);
@@ -95,8 +102,8 @@ export function AdaptationView({
         return response.ok ? ((await response.json()) as AdaptationStatusDto) : null;
       },
       onStatus: (next) => {
-        adopt(next);
-        if (canWrite && shouldPoll(next)) runner.kick();
+        const moved = adopt(next);
+        if (canWrite && shouldPoll(next)) runner.kick(moved);
       },
       onConnection: (online) => setOffline(!online),
       isVisible: () => !document.hidden,
@@ -161,6 +168,14 @@ export function AdaptationView({
   // A read-only member sees the same states without commands (the server would refuse them anyway).
   const shown = canWrite ? status : { ...status, canCancel: false, canRetry: false };
   const deferredIds = saved?.deferredDecisions ?? status.execution?.deferredDecisions ?? [];
+  const reviewIntro =
+    status.creationMode === "automatic"
+      ? status.generationsUsed > 0
+        ? "Corrige lo que necesites y vuelve a crear la ficha."
+        : "No hemos podido preparar la ficha automáticamente. Revisa cómo se adaptará el material y créala desde aquí."
+      : status.generationsUsed > 0
+        ? "Corrige lo que necesites y vuelve a crear la ficha."
+        : undefined;
   const needs = plan ? needLabels(plan.decisions.flatMap((d) => d.needs)).slice(0, MAX_NEEDS_SHOWN) : [];
 
   return (
@@ -198,9 +213,14 @@ export function AdaptationView({
               deferredIds={deferredIds}
               submit={actions.submit}
               onSaved={(result) => {
+                // «Crear ficha»: the review is saved; the sheet is created right away with it.
                 setSaved(result);
-                void refreshStatus();
+                void run(actions.generate, () => {
+                  setSaved(null);
+                  runNow();
+                });
               }}
+              intro={reviewIntro}
               onRefresh={() => router.refresh()}
             />
             {status.canCancel ? cancel : null}

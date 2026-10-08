@@ -44,6 +44,7 @@ export function status(overrides: Partial<AdaptationStatusDto> = {}): Adaptation
   return {
     id: "11111111-1111-4111-8111-111111111111",
     status: "queued",
+    creationMode: "review",
     phase: "working",
     progress: "preparing",
     step: null,

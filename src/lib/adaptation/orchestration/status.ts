@@ -1,6 +1,6 @@
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { ADAPTATION_ERROR_CODES, FAILURE_KIND, type AdaptationErrorCode, type FailureKind } from "./errors";
-import type { PipelineSnapshot } from "./store";
+import type { CreationMode, PipelineSnapshot } from "./store";
 import { isDelivered, type AdaptationStatus } from "./state-machine";
 
 /**
@@ -26,6 +26,8 @@ export interface StatusArtifacts {
 export interface AdaptationStatusDto {
   id: string;
   status: AdaptationStatus;
+  /** How the teacher chose to create it: `automatic` («Hacer magia») or `review` («Revisar antes de crear»). */
+  creationMode: CreationMode;
   phase: StatusPhase;
   progress: ProgressStage;
   step: string | null;
@@ -120,6 +122,12 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       progress = "planning";
       break;
     case "awaiting_plan_review":
+      if (row.creation_mode === "automatic" && artifacts.hasPlanReview !== true) {
+        // «Hacer magia» with a fresh plan: the server crosses the gate itself (the run request resumes it), nobody has to review.
+        phase = "working";
+        progress = "planning";
+        break;
+      }
       phase = "awaiting_review";
       progress = "awaiting_review";
       nextAction = "review_plan";
@@ -163,6 +171,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
   return {
     id: row.id,
     status,
+    creationMode: row.creation_mode,
     phase,
     progress,
     step: active.at(-1)?.step ?? null,

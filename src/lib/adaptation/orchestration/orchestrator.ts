@@ -15,7 +15,7 @@ import { buildGeneratorInputV2, normalizeGeneration } from "../generator";
 import { classifyPlan } from "../invariants";
 import { modelFacingAnalysis } from "../model-input";
 import { applicablePlan } from "../plan";
-import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
+import { autoReview, normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { normalizePlanFor } from "../plan-v2";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
@@ -24,7 +24,7 @@ import { buildReviewScoped } from "../reviewer";
 import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
 import { AdaptationError, FAILURE_KIND, classifyAIFailure, type AdaptationErrorCode, type Stage } from "./errors";
-import { EntitlementError, GenerationLimitError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type PipelineSnapshot } from "./store";
+import { EntitlementError, FailureBudgetError, GenerationLimitError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type CreationMode, type PipelineSnapshot } from "./store";
 import type { AdaptationStatus } from "./state-machine";
 import { MAX_GENERATION_CYCLES, generationCyclesOf } from "./status";
 import type { PipelineVersions } from "./versions";
@@ -34,6 +34,10 @@ import type { PipelineVersions } from "./versions";
  *
  *   createAdaptation → [queued] → runPlanningStage → [awaiting_plan_review] ⟶ teacher ⟶ submitPlanReview → [generation_queued]
  *   → runGenerationStage → [generating → reviewing_deterministic → reviewing_ai] → [ready | blocked]
+ *
+ * An adaptation created in `automatic` mode («Hacer magia») crosses the gate with `continueAutomatically`: the server submits the
+ * recommendation (`autoReview`, the same policy as the offline pipeline) once per plan, through the same `submitPlanReview`, and
+ * queues the same generation job. Nothing else differs: same jobs, fencing, limits, entitlement and mandatory reviewer.
  *
  * Guarantees, and their limits:
  *  - IDEMPOTENT APPLICATION STATE: every stage output is persisted under "stage + input fingerprint + versions" and checked
@@ -182,6 +186,8 @@ export interface CreateAdaptationInput {
   /** Same key, same adaptation: a double submit never creates two. */
   requestKey: string;
   versions: PipelineVersions;
+  /** `automatic` = «Hacer magia» (no human plan approval; the reviewer still decides). Default: `review`. */
+  creationMode?: CreationMode;
 }
 
 export async function createAdaptation(deps: OrchestratorDeps, input: CreateAdaptationInput): Promise<{ adaptationId: string; contextFingerprint: string }> {
@@ -212,6 +218,7 @@ export async function createAdaptation(deps: OrchestratorDeps, input: CreateAdap
     contextFingerprint,
     analysisFingerprint: fingerprint(parsed.analysis),
     reserve: entitlements.atomicWithCreation === true,
+    creationMode: input.creationMode ?? "review",
     });
   } catch (error) {
     if (error instanceof EntitlementError) throw new AdaptationError(error.reason === "exhausted" ? "entitlement_exhausted" : "entitlement_unavailable", error.message);
@@ -457,6 +464,46 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
   if (execution.blockers.length > 0 || !reviewed.effectiveValidation.valid) return { ok: true, executable: false, reviewFingerprint: reviewFp, execution };
   await store.transition(adaptationId, "awaiting_plan_review", "generation_queued");
   return { ok: true, executable: true, reviewFingerprint: reviewFp, execution };
+}
+
+/**
+ * «Hacer magia»: crosses the human gate for an adaptation created in `automatic` mode. The server submits the recommendation
+ * (`autoReview`: what is not blocked is applied, what is blocked is left out) through the SAME `submitPlanReview`, and queues the
+ * SAME generation job; the deterministic and pedagogical reviews still decide whether anything is delivered.
+ * Idempotent and bounded: it acts only in `automatic` mode, only while awaiting the plan review, and only if the current plan has
+ * no review yet. Once a review exists (this one, or the teacher's after reopening a blocked sheet) the person decides: a
+ * recommendation that cannot be executed, or a reviewer that blocks, falls back to the human review and never loops.
+ * The review is deterministic (same plan, same fingerprint), so two racing calls store one review and one job.
+ */
+export async function continueAutomatically(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
+  const store = deps.store;
+  const snapshot = await store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic" || snapshot.adaptation.status !== "awaiting_plan_review") return null;
+  let loaded: Loaded;
+  try {
+    loaded = load(snapshot);
+  } catch (error) {
+    if (error instanceof AdaptationError) return null;
+    throw error;
+  }
+  const raw = await currentPlan(store, snapshot, loaded);
+  if (!raw) return null;
+  if ((await store.listArtifacts(adaptationId, "plan_review")).some((a) => a.input_fingerprint === raw.fingerprint)) return null;
+  const submitted = await submitPlanReview(deps, adaptationId, autoReview(raw.plan, loaded.analysis, loaded.context));
+  if (!submitted.ok || !submitted.executable) {
+    deps.log?.warn("automatic_review_needs_person", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code });
+    return null;
+  }
+  try {
+    return await enqueueGeneration(deps, adaptationId);
+  } catch (error) {
+    // The cost guards refuse the job: the review stays saved and the screen offers «Crear ficha», which explains the refusal.
+    if (error instanceof GenerationLimitError || error instanceof FailureBudgetError) {
+      deps.log?.warn("automatic_generation_refused", { adaptationId, code: error instanceof FailureBudgetError ? "failure_budget" : "generation_limit" });
+      return null;
+    }
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

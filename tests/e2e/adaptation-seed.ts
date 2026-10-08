@@ -81,3 +81,22 @@ export async function requireVisuals(page: Page, id: string, visuals: string[]) 
   snapshot.material.required_visuals = visuals;
   await ok(await page.request.patch(`${FAKE}/rest/v1/adaptations?id=eq.${id}`, { headers, data: { context_snapshot: snapshot } }));
 }
+
+/**
+ * «Hacer magia» whose pedagogical review BLOCKED the sheet, as the pipeline leaves it: the adaptation (created through the UI, with
+ * its real plan) in automatic mode, the server's recommendation saved for that plan, one generation spent and a blocking review.
+ * The mock reviewer never blocks, so this is the only way to show that screen in a browser.
+ */
+export async function seedBlockedMagic(page: Page, workspaceId: string, id: string) {
+  const get = async <T>(path: string) => (await (await page.request.get(`${FAKE}/rest/v1/${path}`, { headers })).json()) as T;
+  const [plan] = await get<Array<{ fingerprint: string }>>(`adaptation_artifacts?select=fingerprint&adaptation_id=eq.${id}&kind=eq.plan`);
+  const [validation] = await get<Array<{ payload: { classification: { decisions: Array<{ id: string; status: string }> } } }>>(`adaptation_artifacts?select=payload&adaptation_id=eq.${id}&kind=eq.plan_validation`);
+  const [row] = await get<Array<{ material_id: string }>>(`adaptations?select=material_id&id=eq.${id}`);
+  const entries = validation!.payload.classification.decisions.map((d) => (d.status === "blocked" ? { decision_id: d.id, action: "rejected", reason: "Bloqueada" } : { decision_id: d.id, action: "approved", reason: "Sin avisos" }));
+  const review = { schema_version: 1, plan_fingerprint: plan!.fingerprint, reviewer: { kind: "auto" }, reviewed_at: "auto", entries };
+  await ok(await page.request.post(`${FAKE}/rest/v1/adaptation_artifacts`, { headers, data: { workspace_id: workspaceId, adaptation_id: id, kind: "plan_review", input_fingerprint: plan!.fingerprint, fingerprint: hex(), payload: review } }));
+  await ok(await page.request.post(`${FAKE}/rest/v1/adaptation_jobs`, { headers, data: { workspace_id: workspaceId, material_id: row!.material_id, adaptation_id: id, kind: "adapt", stage: "generation", input: {}, status: "completed", input_fingerprint: hex() } }));
+  const blocked = { verdict: "blocked", checks: [{ check: "age_appropriate", status: "FAIL", detail: "Tono inadecuado", method: "ai", targets: [] }] };
+  await artifact(page, workspaceId, id, "pedagogical_review", { review: blocked, pending: [] });
+  await setStatus(page, id, { status: "blocked", creation_mode: "automatic" });
+}

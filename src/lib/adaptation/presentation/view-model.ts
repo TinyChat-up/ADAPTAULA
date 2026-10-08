@@ -1,4 +1,5 @@
 import type { AdaptationStatusDto, ProgressStage } from "@/lib/adaptation/orchestration/status";
+import type { CreationMode } from "@/lib/adaptation/orchestration/store";
 import { STAGES, STATUS_COPY, checkCopy, failureCopy } from "./copy";
 
 /**
@@ -20,20 +21,22 @@ export function screenFor(dto: AdaptationStatusDto): ScreenKind {
 }
 
 export function workingCopy(progress: ProgressStage): { title: string; body: string } {
-  if (progress === "planning") return STATUS_COPY.planning;
   if (progress === "generating") return STATUS_COPY.generating;
   if (progress === "reviewing") return STATUS_COPY.reviewing;
-  return { title: "Preparando", body: "Estamos preparando la adaptación." };
+  return STATUS_COPY.planning;
 }
 
 export type StageState = "done" | "active" | "pending";
 
-const ORDER = ["preparing", "planning", "awaiting_review", "generating", "reviewing", "ready"] as const;
+/** Where each progress value sits in `STAGES` (`preparing` = a stage is about to start: shown on the next one). */
+const POSITION: Partial<Record<ProgressStage, string>> = { preparing: "planning", planning: "planning", awaiting_review: "awaiting_review", generating: "generating", reviewing: "reviewing", ready: "ready" };
 
-export function stageStates(progress: ProgressStage): Array<{ key: string; label: string; state: StageState }> {
-  const index = (ORDER as readonly string[]).indexOf(progress);
-  const current = index < 0 ? 0 : index;
-  return STAGES.map((stage, i) => ({ key: stage.key, label: stage.label, state: progress === "ready" || i < current ? "done" : i === current ? "active" : "pending" }));
+export function stageStates(progress: ProgressStage, options: { mode?: CreationMode; generationQueued?: boolean } = {}): Array<{ key: string; label: string; state: StageState }> {
+  const stages = STAGES.filter((s) => s.key !== "awaiting_review" || options.mode === "review");
+  // A queued generation is past the plan (and its review) even before its job starts.
+  const at = progress === "preparing" && options.generationQueued ? "generating" : POSITION[progress] ?? "planning";
+  const current = Math.max(0, stages.findIndex((s) => s.key === at));
+  return stages.map((stage, i) => ({ key: stage.key, label: stage.label, state: progress === "ready" || i < current ? "done" : i === current ? "active" : "pending" }));
 }
 
 /** Observations for the teacher, de-duplicated by wording; never a check name, an id or the reviewer's own text. */

@@ -6,8 +6,8 @@ import { ADAPTATION_ACTIONS, INTENSITIES, RESPONSE_TARGETS, STRATEGY_KEYS, SUPPO
 /**
  * Pure state of the plan-review form. It holds the teacher's choices and builds the payload of the EXISTING review contract
  * (`PlanReview v1` entries); it owns no domain rule: the server validates, classifies and decides what is executable.
- * The only guards here are the ones the form needs to be usable: every decision has a choice, a blocked one is never approved
- * (the server refuses it anyway), and an adjustment actually changes something.
+ * The only guards here are the ones the form needs to be usable: every decision has a choice (the recommendation, until the
+ * teacher changes it), a blocked one is never approved (the server refuses it anyway), and an adjustment actually changes something.
  */
 
 export type Choice = "approve" | "reject" | "edit";
@@ -32,12 +32,21 @@ export type FormState = Record<string, DecisionDraft>;
 export type FormAction =
   | { type: "choose"; id: string; choice: Choice }
   | { type: "edit"; id: string; patch: EditDraft }
-  | { type: "approve_recommended"; plan: AdaptationPlanDto }
   | { type: "reset"; plan: AdaptationPlanDto };
 
-/** A blocked decision starts as "descartar": it cannot be applied as it is and rejecting never harms. Everything else needs a conscious choice. */
+/**
+ * The recommendation, which is also where the form starts: every decision that can be applied is applied, a blocked one is left
+ * out (it cannot be applied as it is). The same policy «Hacer magia» applies on the server (`autoReview`), so «Crear ficha»
+ * without touching anything creates the same sheet. The teacher only changes what they want to change.
+ */
 export function initialFormState(plan: AdaptationPlanDto): FormState {
-  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" ? ("reject" as const) : null, edit: {} }]));
+  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" ? ("reject" as const) : ("approve" as const), edit: {} }]));
+}
+
+/** True while every decision is still as recommended («Restaurar recomendación» has nothing to restore). */
+export function isRecommended(plan: AdaptationPlanDto, state: FormState): boolean {
+  const recommended = initialFormState(plan);
+  return plan.decisions.every((d) => state[d.id]?.choice === recommended[d.id]!.choice);
 }
 
 export function formReducer(state: FormState, action: FormAction): FormState {
@@ -52,13 +61,6 @@ export function formReducer(state: FormState, action: FormAction): FormState {
       if (!current) return state;
       return { ...state, [action.id]: { choice: "edit", edit: { ...current.edit, ...action.patch } } };
     }
-    case "approve_recommended":
-      return Object.fromEntries(
-        action.plan.decisions.map((d) => {
-          const current = state[d.id] ?? { choice: null, edit: {} };
-          return [d.id, d.status === "valid" && current.choice === null ? { ...current, choice: "approve" as const } : current];
-        }),
-      );
     case "reset":
       return initialFormState(action.plan);
   }

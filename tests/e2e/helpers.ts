@@ -86,3 +86,16 @@ export async function reserveAnalyses(page: Page, workspaceId: string, units: nu
   });
   expect(response.ok()).toBe(true);
 }
+
+/**
+ * Crea una adaptación desde la página del material por «Revisar antes de crear» (crear = empezar) y espera a que la propuesta
+ * simulada esté lista: los specs que siembran estados avanzados parten de una adaptación que ya no está trabajando.
+ */
+export async function createReviewedAdaptation(page: Page, materialUrl: string, profile = "M.R."): Promise<string> {
+  await page.goto(materialUrl);
+  await page.getByLabel("Perfil").selectOption({ label: profile });
+  await page.getByRole("button", { name: "Revisar antes de crear" }).click();
+  await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible({ timeout: 60_000 });
+  return page.url().split("/").pop()!;
+}

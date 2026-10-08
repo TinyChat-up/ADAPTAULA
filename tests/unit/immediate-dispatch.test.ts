@@ -100,7 +100,7 @@ describe("createRunDispatcher (client)", () => {
     const resolvers: Array<(v: string) => void> = [];
     const run = vi.fn(() => new Promise<string | null>((resolve) => resolvers.push(resolve)));
     const results: string[] = [];
-    const d = createRunDispatcher<string>({ run, onResult: (r) => results.push(r), now: () => clock });
+    const d = createRunDispatcher<string>({ run, onResult: (r) => void results.push(r), now: () => clock });
 
     d.kick(true);
     d.kick(true); // in flight: ignored
@@ -129,7 +129,7 @@ describe("createRunDispatcher (client)", () => {
     let clock = 0;
     const run = vi.fn().mockRejectedValueOnce(new Error("red")).mockResolvedValueOnce("ok");
     const results: string[] = [];
-    const d = createRunDispatcher<string>({ run, onResult: (r) => results.push(r), now: () => clock });
+    const d = createRunDispatcher<string>({ run, onResult: (r) => void results.push(r), now: () => clock });
     d.kick(true);
     for (let i = 0; i < 4; i++) await Promise.resolve();
     clock += RERUN_INTERVAL_MS;

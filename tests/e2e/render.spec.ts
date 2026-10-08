@@ -2,20 +2,14 @@ import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { allowAdaptations, seedReadyDocument } from "./adaptation-seed";
-import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { createReviewedAdaptation, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 import { ANSWER_KEY_SECRET, BLANK_SECRET, bachillerato, geografia, primaria, stress } from "../support/render-fixtures";
 
 /**
  * El visor de la ficha en el navegador (proyectos desktop y mobile de playwright.config.ts): geometría, impresión y separación
  * alumno/docente, con documentos sintéticos sembrados como los dejaría el pipeline. Sin PDF, sin proveedores.
  */
-async function createAdaptation(page: Page, materialUrl: string): Promise<string> {
-  await page.goto(materialUrl);
-  await page.getByLabel("Perfil").selectOption({ label: "M.R." });
-  await page.getByRole("button", { name: "Adaptar material" }).click();
-  await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
-  return page.url().split("/").pop()!;
-}
+const createAdaptation = (page: Page, materialUrl: string) => createReviewedAdaptation(page, materialUrl);
 
 /** Every element inside each sheet stays within it horizontally, and flow siblings do not overlap vertically. */
 async function geometry(page: Page) {

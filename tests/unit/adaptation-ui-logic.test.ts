@@ -3,7 +3,7 @@ import { ADAPTATION_ERROR_CODES } from "@/lib/adaptation/orchestration/errors";
 import { PUBLIC_ERROR_MESSAGES, type AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { ACTION_LABELS, CHECK_COPY, FLAG_COPY, RESPONSE_TARGET_LABELS, STATUS_COPY, SUPPORT_LABELS, actionErrorCopy, checkCopy, failureCopy, flagCopy, needLabel, strategyLabel, targetLabel } from "@/lib/adaptation/presentation/copy";
 import { HIDDEN_INTERVAL_MS, MAX_BACKOFF_MS, POLL_INTERVAL_MS, createPoller, nextDelay, shouldPoll } from "@/lib/adaptation/presentation/poller";
-import { buildReview, decisionsInBlockers, editsFor, formReducer, initialFormState, interpretSubmit, problemsOf } from "@/lib/adaptation/presentation/review-form";
+import { buildReview, decisionsInBlockers, editsFor, formReducer, initialFormState, interpretSubmit, isRecommended, problemsOf } from "@/lib/adaptation/presentation/review-form";
 import { screenFor, stageStates, warningLines } from "@/lib/adaptation/presentation/view-model";
 import { ADAPTATION_ACTIONS, REVIEW_FLAGS, STRATEGY_KEYS } from "@/lib/schemas/adaptation-plan";
 import { DIMENSIONS } from "@/lib/schemas/functional-profile";
@@ -71,7 +71,7 @@ describe("view model: the screen follows the server's flags", () => {
 
   it("stage list has no percentages and marks one active stage", () => {
     const stages = stageStates("generating");
-    expect(stages.filter((s) => s.state === "active").map((s) => s.label)).toEqual(["Preparando material"]);
+    expect(stages.filter((s) => s.state === "active").map((s) => s.label)).toEqual(["Creando la ficha"]);
     expect(stages.map((s) => s.label).join(" ")).not.toMatch(/%/);
     expect(stageStates("ready").every((s) => s.state === "done")).toBe(true);
   });
@@ -93,14 +93,14 @@ describe("view model: the screen follows the server's flags", () => {
 });
 
 describe("review form: choices, validation and the payload of the existing contract", () => {
-  it("starts with a conscious choice required, except blocked ones which start discarded; nothing is hidden", () => {
+  it("starts from the recommendation (what «Hacer magia» applies): applicable decisions applied, blocked ones left out; nothing is hidden", () => {
     const state = initialFormState(plan);
     expect(Object.keys(state)).toHaveLength(plan.decisions.length);
-    expect(state["dec_1"]!.choice).toBeNull();
-    expect(state["dec_3"]!.choice).toBeNull();
+    expect(state["dec_1"]!.choice).toBe("approve");
+    expect(state["dec_3"]!.choice).toBe("approve");
     expect(state["dec_5"]!.choice).toBe("reject");
-    const problems = problemsOf(plan, state);
-    expect(Object.keys(problems).sort()).toEqual(["dec_1", "dec_2", "dec_3", "dec_4"]);
+    expect(problemsOf(plan, state)).toEqual({});
+    expect(isRecommended(plan, state)).toBe(true);
   });
 
   it("a blocked decision can never be approved from the form", () => {
@@ -108,12 +108,13 @@ describe("review form: choices, validation and the payload of the existing contr
     expect(problemsOf(plan, state)["dec_5"]).toBe("blocked_approved");
   });
 
-  it("'approve recommended' only touches valid decisions and never a review/blocked one", () => {
-    const state = formReducer(initialFormState(plan), { type: "approve_recommended", plan });
-    expect(state["dec_1"]!.choice).toBe("approve");
-    expect(state["dec_2"]!.choice).toBe("approve");
-    expect(state["dec_3"]!.choice).toBeNull();
-    expect(state["dec_5"]!.choice).toBe("reject");
+  it("'Restaurar recomendación' undoes every change, adjustments included", () => {
+    let state = formReducer(initialFormState(plan), { type: "choose", id: "dec_1", choice: "reject" });
+    state = formReducer(state, { type: "edit", id: "dec_2", patch: { intensity: "light" } });
+    expect(isRecommended(plan, state)).toBe(false);
+    state = formReducer(state, { type: "reset", plan });
+    expect(state).toEqual(initialFormState(plan));
+    expect(isRecommended(plan, state)).toBe(true);
   });
 
   it("builds approve / reject / edit entries for the real PlanReview schema (and the server sets reviewer and time)", () => {
