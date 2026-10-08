@@ -1,0 +1,209 @@
+import { createHash } from "node:crypto";
+import { createCanvas } from "@napi-rs/canvas";
+import { MaterialDocumentSchema, type Block, type MaterialDocument } from "@/lib/schemas/material-document";
+import type { Presentation } from "@/lib/schemas/adaptation-context";
+import type { PinnedAsset } from "@/lib/render/print/pinned-assets";
+
+/**
+ * Phase 8 · visual QA. Five small, deterministic, synthetic sheets that look like what the pipeline delivers (adapted wording,
+ * the block types an adaptation adds), written by hand: no model, no private material. They exist to JUDGE the printed product
+ * (docs/qa/phase8), not to pin the renderer: nothing in the renderer may know about them.
+ */
+
+const trace = { origin: "adapted" as const, source_refs: [] as string[], decision_ids: [] as string[] };
+let seq = 0;
+const id = () => `blk_qa${String(++seq).padStart(5, "0")}`;
+const opts = (texts: string[], prefix = "o") => texts.map((text, i) => ({ id: `${prefix}${i + 1}`, text }));
+
+const b = {
+  h: (text: string, level: 1 | 2 | 3 = 2): Block => ({ id: id(), type: "heading", level, text, trace }),
+  p: (text: string): Block => ({ id: id(), type: "paragraph", text, trace }),
+  instruction: (text: string, steps?: string[]): Block => ({ id: id(), type: "instruction", text, ...(steps ? { steps } : {}), trace }),
+  reading: (paragraphs: string[], title?: string, labels?: string[]): Block => ({ id: id(), type: "reading_text", ...(title ? { title } : {}), paragraphs, literal: true, ...(labels ? { segment_labels: labels } : {}), trace }),
+  activity: (label: string, prompt: string, response: Extract<Block, { type: "activity" }>["response"], extra: { steps?: string[]; requirements?: string[] } = {}): Block => ({ id: id(), type: "activity", label, prompt, ...extra, response, trace }),
+  help: (variant: "key_idea" | "reminder" | "tip" | "strategy", text: string, title?: string): Block => ({ id: id(), type: "help_box", variant, text, ...(title ? { title } : {}), trace }),
+  checklist: (items: string[], title?: string): Block => ({ id: id(), type: "checklist", items, ...(title ? { title } : {}), trace }),
+  vocab: (items: Array<{ term: string; definition: string }>, title?: string): Block => ({ id: id(), type: "vocabulary", items, ...(title ? { title } : {}), trace }),
+  example: (problem: string, steps: string[], result: string, title?: string): Block => ({ id: id(), type: "worked_example", problem, steps, result, ...(title ? { title } : {}), trace }),
+  starters: (items: string[]): Block => ({ id: id(), type: "sentence_starters", items, trace }),
+  planner: (slots: Array<{ label: string; lines: number }>, title?: string): Block => ({ id: id(), type: "planner", slots, ...(title ? { title } : {}), trace }),
+  table: (headers: string[], rows: string[][], caption?: string, unit?: string): Block => ({ id: id(), type: "table", headers, rows, ...(caption ? { caption } : {}), ...(unit ? { unit } : {}), trace }),
+  chart: (title: string, categories: string[], values: number[], yLabel: string): Block => ({ id: id(), type: "chart", title, chart_type: "bar", categories, series: [{ label: null, values }], y_label: yLabel, trace }),
+  image: (visual: string, caption: string): Block => ({ id: id(), type: "image", source: { kind: "original", visual_ref: visual }, alt_text: caption, caption, trace }),
+  math: (latex: string, spoken: string): Block => ({ id: id(), type: "math", latex, display: "block", spoken_text: spoken, trace }),
+};
+
+const PRESENTATION: Presentation = { font_scale: 1, line_spacing: "normal", spacing: "normal", contrast: "normal", decoration: "standard", max_tasks_per_page: null, color_independent: true, text_alternatives_for_visuals: true };
+const FIELDS = [
+  { type: "student_name" as const, label: "Nombre" },
+  { type: "date" as const, label: "Fecha" },
+];
+
+function sheet(meta: { title: string; stage: string; grade: string; subject: string; topic: string }, pages: Block[][], presentation: Partial<Presentation> = {}): MaterialDocument {
+  return MaterialDocumentSchema.parse({
+    schema_version: 1,
+    meta: { ...meta, language: "es" },
+    presentation: { ...PRESENTATION, ...presentation },
+    admin_fields: FIELDS,
+    pages: pages.map((blocks) => ({ blocks })),
+    answer_key: [],
+  });
+}
+
+/** A · Primaria: instructions, several short questions, every common answer type, one help. */
+export const primary = (): MaterialDocument =>
+  sheet({ title: "Fracciones equivalentes", stage: "primaria", grade: "5-primaria", subject: "Matemáticas", topic: "Fracciones" }, [
+    [
+      b.h("Fracciones equivalentes", 1),
+      b.instruction("Lee cada pregunta con calma. Puedes usar el recuadro **Recuerda** si lo necesitas."),
+      b.help("reminder", "Dos fracciones son **equivalentes** cuando representan la misma parte de un todo. Por ejemplo, 1/2 y 2/4."),
+      b.activity("1", "Escribe una fracción equivalente a **1/3**.", { kind: "lines", lines: 1 }),
+      b.activity("2", "¿Qué fracción es equivalente a **2/4**?", { kind: "choice", multiple: false, options: opts(["1/2", "1/4", "3/4"]) }),
+      b.activity("3", "Completa con el número que falta.", { kind: "fill_blank", text: "1/2 = {{a}}/6     y     3/4 = 6/{{b}}", word_bank: ["3", "8", "5"] }),
+      b.activity("4", "Marca si es verdadero (V) o falso (F).", { kind: "true_false", statements: opts(["3/6 es lo mismo que 1/2.", "1/4 es mayor que 1/2.", "2/8 y 1/4 son equivalentes."]) }),
+      b.activity("5", "Une cada fracción con su equivalente.", { kind: "match", left: opts(["1/2", "1/5", "2/3"]), right: opts(["4/6", "2/10", "5/10"], "r") }),
+      b.activity("6", "Ana come 2/8 de una pizza y Luis come 1/4. ¿Han comido lo mismo? Explica cómo lo sabes.", { kind: "lines", lines: 3 }),
+      b.activity("7", "Haz las operaciones en la cuadrícula: multiplica arriba y abajo por el mismo número para encontrar dos fracciones equivalentes a 3/5.", { kind: "grid" }),
+    ],
+  ]);
+
+/** B · Primaria with more structure: chunked instructions with steps, a short reading in parts, fewer tasks per page, wide spacing. */
+export const primaryStructured = (): MaterialDocument =>
+  sheet(
+    { title: "El ciclo del agua", stage: "primaria", grade: "4-primaria", subject: "Ciencias de la Naturaleza", topic: "El ciclo del agua" },
+    [
+      [
+        b.h("El ciclo del agua", 1),
+        b.instruction("Vamos a trabajar paso a paso.", ["Lee el texto por partes.", "Después de cada parte, piensa qué ha pasado con el agua.", "Responde a las preguntas de una en una."]),
+        b.reading(
+          ["El sol calienta el agua de los mares y los ríos. El agua se convierte en vapor y sube al cielo.", "Arriba hace frío. El vapor se enfría y forma pequeñas gotas. Así nacen las nubes.", "Cuando las gotas pesan mucho, caen en forma de lluvia o de nieve. El agua vuelve a los ríos y al mar."],
+          "Un viaje sin fin",
+          ["Parte 1", "Parte 2", "Parte 3"],
+        ),
+        b.help("key_idea", "El agua **cambia de estado**, pero no desaparece: siempre vuelve a empezar el viaje."),
+        b.activity("1", "¿Qué hace el sol con el agua del mar?", { kind: "lines", lines: 2 }, { steps: ["Busca la respuesta en la Parte 1.", "Escríbela con tus palabras."] }),
+        b.activity("2", "Ordena lo que le pasa al agua. Escribe 1, 2 y 3 en los cuadros.", { kind: "order", items: opts(["Se forman las nubes.", "El agua se evapora.", "Llueve."]) }),
+        b.activity("3", "Une cada palabra con lo que significa.", { kind: "match", left: opts(["Evaporación", "Condensación", "Precipitación"]), right: opts(["El agua cae de las nubes.", "El agua se convierte en vapor.", "El vapor forma gotas."], "r") }),
+      ],
+      [
+        b.activity("4", "Dibuja el ciclo del agua. Pon una flecha entre cada paso.", { kind: "box", size: "medium" }),
+        b.checklist(["He leído las tres partes.", "He respondido a todas las preguntas.", "He revisado mi dibujo."], "Antes de terminar"),
+      ],
+    ],
+    { font_scale: 1.15, line_spacing: "relaxed", spacing: "wide", decoration: "reduced", max_tasks_per_page: 3 },
+  );
+
+/** C · ESO: denser, more mature. Reading, vocabulary, a data table and varied questions. */
+export const eso = (): MaterialDocument => {
+  const cells = b.table(["Estructura", "Célula animal", "Célula vegetal"], [["Núcleo", "", ""], ["Pared celular", "", ""], ["Cloroplastos", "", ""]], "Tabla 1. Estructuras celulares");
+  return sheet({ title: "La célula: unidad de vida", stage: "eso", grade: "1-eso", subject: "Biología y Geología", topic: "La célula" }, [
+    [
+      b.h("La célula: unidad de vida", 1),
+      b.instruction("Lee el texto y consulta el vocabulario antes de responder. Responde en frases completas."),
+      b.reading([
+        "Todos los seres vivos están formados por células. Algunos organismos, como las bacterias, tienen una sola célula; otros, como las plantas y los animales, tienen millones de ellas.",
+        "Las células eucariotas tienen un núcleo que guarda el material genético. Las procariotas no tienen núcleo: su material genético está libre en el citoplasma.",
+        "Las células vegetales, además, tienen pared celular y cloroplastos, que les permiten fabricar su propio alimento mediante la fotosíntesis.",
+      ]),
+      b.vocab(
+        [
+          { term: "Núcleo", definition: "Parte de la célula que contiene el material genético." },
+          { term: "Citoplasma", definition: "Medio interno de la célula, donde están los orgánulos." },
+          { term: "Cloroplasto", definition: "Orgánulo de las células vegetales donde se realiza la fotosíntesis." },
+        ],
+        "Vocabulario",
+      ),
+      b.h("Comprueba lo que has leído", 2),
+      b.activity("1", "¿Qué diferencia principal hay entre una célula eucariota y una procariota?", { kind: "lines", lines: 3 }),
+      cells,
+      { ...b.activity("2", "Completa la tabla 1: escribe «sí» o «no» en cada casilla.", { kind: "table_cells" }), resource_block_ids: [cells.id] } as Block,
+      b.activity("3", "¿Qué afirmaciones son correctas? Marca todas las que lo sean.", { kind: "choice", multiple: true, options: opts(["Las bacterias son organismos unicelulares.", "Las células animales tienen cloroplastos.", "El núcleo guarda el material genético.", "Todas las células tienen pared celular."]) }),
+      b.starters(["Una célula vegetal se diferencia de una animal en que", "Esto le permite"]),
+      b.activity("4", "Explica por qué las plantas pueden fabricar su propio alimento y los animales no.", { kind: "lines", lines: 5 }),
+    ],
+  ]);
+};
+
+/** D · Bachillerato: dense academic content — a long source text, a commentary with requirements, a planner. */
+export const bachillerato = (): MaterialDocument =>
+  sheet(
+    { title: "Comentario de texto: el contrato social", stage: "bachillerato", grade: "2-bachillerato", subject: "Historia de la Filosofía", topic: "Rousseau" },
+    [
+      [
+        b.h("Comentario de texto: el contrato social", 1),
+        b.instruction("Lee el fragmento con atención. Después, realiza las actividades en el orden propuesto. Cita el texto cuando lo necesites."),
+        b.reading(
+          [
+            "«Encontrar una forma de asociación que defienda y proteja con toda la fuerza común la persona y los bienes de cada asociado, y por la cual cada uno, uniéndose a todos, no obedezca sin embargo más que a sí mismo y permanezca tan libre como antes.» Tal es el problema fundamental cuya solución da el contrato social.",
+            "Las cláusulas de este contrato están de tal modo determinadas por la naturaleza del acto que la menor modificación las haría vanas y de ningún efecto; de suerte que, aunque quizá nunca hayan sido enunciadas formalmente, son en todas partes las mismas, en todas partes tácitamente admitidas y reconocidas.",
+            "Estas cláusulas, bien entendidas, se reducen todas a una sola, a saber: la enajenación total de cada asociado con todos sus derechos a toda la comunidad. Porque, en primer lugar, al darse cada uno por entero, la condición es igual para todos; y siendo la condición igual para todos, nadie tiene interés en hacerla onerosa para los demás.",
+          ],
+          "J.-J. Rousseau, Del contrato social (1762), libro I, cap. VI",
+        ),
+        b.h("Actividades", 2),
+        b.activity("1", "Identifica la **tesis** del fragmento y formúlala con tus propias palabras.", { kind: "lines", lines: 3 }),
+        b.activity("2", "Explica el significado de la expresión «enajenación total» en el contexto del texto.", { kind: "lines", lines: 4 }),
+        b.activity("3", "Relaciona el fragmento con la teoría política de Rousseau y compárala con la de Hobbes o Locke.", { kind: "lines", lines: 10 }, { requirements: ["Entre 150 y 200 palabras", "Menciona la voluntad general", "Incluye al menos una comparación argumentada"] }),
+      ],
+      [
+        b.planner([{ label: "Idea principal", lines: 2 }, { label: "Conceptos clave", lines: 2 }, { label: "Comparación", lines: 3 }], "Organiza tu respuesta antes de escribir"),
+        b.activity("4", "Valora críticamente la vigencia del planteamiento de Rousseau en las democracias actuales.", { kind: "lines", lines: 12 }, { requirements: ["Entre 200 y 250 palabras", "Al menos un ejemplo actual"] }),
+        b.checklist(["La tesis está formulada con mis palabras.", "He citado el texto cuando era necesario.", "He respetado la extensión pedida."], "Antes de entregar"),
+      ],
+    ],
+  );
+
+/** E · An original visual (a crop of the source sheet) that the questions depend on, plus a chart and a table answer. */
+export const visualCrop = (): MaterialDocument =>
+  sheet({ title: "El clima de Valdeloma", stage: "eso", grade: "1-eso", subject: "Geografía e Historia", topic: "El clima" }, [
+    [
+      b.h("El clima de Valdeloma", 1),
+      b.instruction("Observa el climograma y responde a las preguntas. Todas las respuestas están en la imagen."),
+      b.image("vis_1", "Climograma de Valdeloma (temperaturas en línea, precipitaciones en barras)"),
+      b.activity("1", "¿En qué mes llueve más? ¿Y en cuál menos?", { kind: "lines", lines: 2 }),
+      b.activity("2", "Describe cómo cambia la temperatura a lo largo del año.", { kind: "lines", lines: 3 }),
+      b.chart("Precipitaciones por estación", ["Invierno", "Primavera", "Verano", "Otoño"], [180, 140, 40, 160], "Litros por m²"),
+      b.activity("3", "Según el gráfico, ¿qué estación es la más seca? Justifica tu respuesta con un dato.", { kind: "lines", lines: 2 }),
+      b.activity("4", "¿Qué tipo de clima tiene Valdeloma?", { kind: "choice", multiple: false, options: opts(["Mediterráneo", "Oceánico", "Continental"]) }),
+    ],
+  ]);
+
+const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+
+/** A climograph-like crop of the "original" sheet: grey bars and a dark line on a light frame (prints the same in greyscale). */
+export async function climographPng(): Promise<Uint8Array> {
+  const w = 900;
+  const h = 520;
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fbfaf6";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(70, 30, w - 120, h - 90);
+  const rain = [110, 95, 80, 70, 45, 20, 8, 12, 40, 85, 105, 120];
+  const temp = [6, 8, 11, 13, 17, 22, 26, 25, 21, 15, 10, 7];
+  const bw = (w - 120) / 12;
+  rain.forEach((r, i) => {
+    ctx.fillStyle = "#8aa9c8";
+    ctx.fillRect(70 + i * bw + 8, h - 60 - r * 3.2, bw - 16, r * 3.2);
+  });
+  ctx.strokeStyle = "#b03a2e";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  temp.forEach((t, i) => (i === 0 ? ctx.moveTo(70 + i * bw + bw / 2, h - 60 - t * 14) : ctx.lineTo(70 + i * bw + bw / 2, h - 60 - t * 14)));
+  ctx.stroke();
+  ctx.fillStyle = "#333";
+  for (let i = 0; i < 12; i++) ctx.fillRect(70 + i * bw + bw / 2 - 1, h - 60, 2, 10);
+  return new Uint8Array(await canvas.encode("png"));
+}
+
+export const pinOf = (assetId: string, bytes: Uint8Array): PinnedAsset => ({ assetId, sha256: sha(bytes), mime: "image/png", bytes });
+
+export const FIXTURES = [
+  { name: "A-primaria", label: "Primaria", doc: primary },
+  { name: "B-primaria-estructurada", label: "Primaria estructurada", doc: primaryStructured },
+  { name: "C-eso", label: "ESO", doc: eso },
+  { name: "D-bachillerato", label: "Bachillerato", doc: bachillerato },
+  { name: "E-visual", label: "Visual (recorte)", doc: visualCrop },
+] as const;

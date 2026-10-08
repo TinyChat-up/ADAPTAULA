@@ -496,6 +496,30 @@ Producción idempotente y segura en concurrencia (`produceVisualAsset`): si algu
 
 **Límites.** Selección cómoda en escritorio; en móvil funciona con arrastre pero se recomienda pantalla grande. Imágenes subidas con orientación EXIF se muestran como están almacenadas (la herramienta y el recorte usan la misma imagen, así que coinciden). Sin herramienta para subir una imagen alternativa (feature distinta).
 
+## Diseño de la ficha del alumno — `material_renderer@v3` (Phase 8)
+
+Auditoría con cinco fichas representativas (`tests/visual-qa`, artefactos en `docs/qa/phase8/`) y cambios **de sistema** (ninguna
+regla conoce una ficha concreta). Mismo renderer para pantalla y PDF (HTML/CSS → Chromium); ningún segundo renderer.
+
+- **Responsabilidades.** `MaterialDocument` dice qué hay (bloques, respuesta, presentación semántica, etapa); `RenderModel` lo
+  proyecta (ahora también `stage`, solo si el documento indica una conocida, y `table_cells.inTable` cuando la actividad apunta a
+  una tabla de la ficha); los componentes deciden el marcado (marcadores 1/2/3 y A/B/C como texto, etiquetas «Puedes usar:» y
+  «Puedes empezar así»); `material.css` decide el aspecto; Chromium solo pagina.
+- **Jerarquía.** Título (color de acento) > sección > actividad. Qué hacer (instrucción: franja suave con filo de acento; número de
+  actividad destacado y enunciado en seminegrita) frente a qué información necesito (texto de lectura sin marco, ayudas con fondo
+  suave y título en versalitas) frente a dónde respondo (zona de respuesta alineada con el enunciado, líneas grises finas).
+- **Respuestas.** Las actividades se separan por espacio, no por rayas (una raya junto a líneas de escritura parecía otra línea).
+  Relacionar: números a la izquierda, LETRAS a la derecha (antes ambas columnas salían numeradas) y una casilla para la letra.
+  Ordenar: casilla donde cabe un número escrito a mano. Cuadrícula: cuadros enteros de 6 mm. Completar: más interlínea y espacios
+  respetados. Una tabla de la ficha que se rellena es la zona de respuesta (sin caja vacía duplicada; sus celdas vacías tienen la
+  altura de una línea de respuesta).
+- **Etapa.** Primaria: número en círculo y más aire; ESO: sobria; Bachillerato: número con contorno, enunciado sin negrita, título
+  más contenido. Sin etapa conocida, el diseño común.
+- **Color.** Un solo acento oscuro (se imprime como gris oscuro) y fondos muy claros; nada se entiende solo por el color; el modo
+  de alto contraste lo vuelve todo blanco y negro.
+- **Paginación.** El enunciado de una actividad (con sus pasos y requisitos) nunca se separa de su primera zona de respuesta.
+  Deuda conocida: los saltos de página lógicos del documento pueden dejar media página vacía (casos B y D).
+
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
 
 **Estado.** Motor implementado y probado **en local** (smoke PDF 24/24). **Validación en runtime de Vercel: DEFERRED** (ver «Validación en Vercel»). Sin base de datos, sin jobs, sin Storage de PDFs, sin rutas de exportación y sin UI en la 5.2A. La ruta y el botón llegan en la 5.2B (sección siguiente). Cero llamadas a modelos.

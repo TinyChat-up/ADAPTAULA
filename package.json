@@ -16,6 +16,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:raster && pnpm smoke:pdf && pnpm check:secrets",
     "smoke:raster": "node scripts/smoke-raster.mjs",
     "smoke:pdf": "node scripts/smoke-pdf.mjs",
+    "qa:visual": "vitest run --config vitest.visual-qa.config.mts",
     "check:secrets": "node --env-file-if-exists=.env.local --import tsx scripts/check-secrets.ts",
     "db:setup-sql": "node scripts/build-setup-sql.mjs",
     "test:e2e": "playwright test",

@@ -19,7 +19,7 @@ function Heading({ node }: Props<"heading">) {
 
 function Activity({ node }: Props<"activity">) {
   return (
-    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined}>
+    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined}>
       <div className="ms-activity-head">
         {node.label ? <span className="ms-num">{node.label}</span> : null}
         <div className="ms-prompt">
@@ -84,8 +84,8 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
     </div>
   ),
   reading_text: ({ node }) => (
-    <div className="ms-reading">
-      {node.title ? <h3 className="ms-h ms-h3">{node.title}</h3> : null}
+    <div className="ms-reading" data-segmented={node.paragraphs.some((p) => p.label) || undefined}>
+      {node.title ? <h3 className="ms-h ms-reading-title">{node.title}</h3> : null}
       {node.paragraphs.map((p, i) => (
         <p key={i} className="ms-para">
           {p.label ? <span className="ms-seg">{p.label}</span> : null}
@@ -195,11 +195,14 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
     </section>
   ),
   sentence_starters: ({ node }) => (
-    <ul className="ms-starters">
-      {node.items.map((s, i) => (
-        <li key={i}>{s} …</li>
-      ))}
-    </ul>
+    <section className="ms-starters">
+      <p className="ms-help-title">Puedes empezar así</p>
+      <ul>
+        {node.items.map((s, i) => (
+          <li key={i}>{s} …</li>
+        ))}
+      </ul>
+    </section>
   ),
   planner: ({ node }) => (
     <section className="ms-planner">

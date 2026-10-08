@@ -61,6 +61,14 @@ export function tokenStyle(t: RenderTokens): Record<string, string> {
     "--ms-box": `${t.boxMm}mm`,
     "--ms-ink": t.contrast === "high" ? "#000000" : "#1a1a1a",
     "--ms-rule": t.contrast === "high" ? "#000000" : "#4a4a4a",
-    "--ms-soft": t.contrast === "high" ? "#000000" : "#6b6b6b",
+    "--ms-soft": t.contrast === "high" ? "#000000" : "#5f6670",
+    // One accent, dark enough to read as black when printed in greyscale: it helps find things, it never carries meaning alone.
+    "--ms-accent": t.contrast === "high" ? "#000000" : "#23426b",
+    // Surfaces of helps and instructions: a tint that photocopies as a very light grey (never needed to understand anything).
+    "--ms-tint": t.contrast === "high" ? "#ffffff" : "#eef1f5",
+    "--ms-rule-soft": t.contrast === "high" ? "#000000" : "#c3c8d0",
+    // Writing lines and squares: visible on paper, lighter than the text.
+    "--ms-write": t.contrast === "high" ? "#000000" : "#8b919a",
+    "--ms-grid": t.contrast === "high" ? "#555555" : "#c9ced6",
   };
 }

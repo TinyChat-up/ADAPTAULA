@@ -14,88 +14,132 @@
 :where(.ms-root) :where(b, strong) { font-weight: bolder; }
 :where(.ms-root) :where(code) { font-size: 1em; }
 
-.ms-root { font-family: "Adaptaula Inter", ui-sans-serif, system-ui, sans-serif; color: var(--ms-ink); font-size: var(--ms-font); line-height: var(--ms-leading); }
+.ms-root { font-family: "Adaptaula Inter", ui-sans-serif, system-ui, sans-serif; color: var(--ms-ink); font-size: var(--ms-font); line-height: var(--ms-leading); font-variant-numeric: lining-nums; }
 .ms-sheet { box-sizing: border-box; width: var(--ms-page-w); min-height: var(--ms-page-h); padding: var(--ms-margin); margin: 0 auto 24px; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .18); position: relative; display: flex; flex-direction: column; overflow-wrap: anywhere; hyphens: auto; }
 .ms-sheet * { box-sizing: border-box; max-width: 100%; }
 .ms-flow { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--ms-gap); min-width: 0; }
 .ms-flow > * { min-width: 0; margin: 0; }
 .ms-footer { margin-top: 1.2em; text-align: right; font-size: .75em; color: var(--ms-soft); }
-.ms-header { margin-bottom: 1em; border-bottom: 1px solid var(--ms-rule); padding-bottom: .6em; }
-.ms-meta { margin: 0 0 .5em; font-size: .85em; color: var(--ms-soft); }
+
+/* Cabecera: quién y cuándo (a mano), la materia y el curso en pequeño. Discreta: no compite con el título. */
+.ms-header { margin-bottom: 1.1em; padding-bottom: .55em; border-bottom: 1.5px solid var(--ms-accent); font-size: .9em; }
+.ms-meta { margin: 0 0 .55em; font-size: .85em; font-weight: 600; letter-spacing: .02em; color: var(--ms-soft); }
 .ms-fields { display: flex; flex-wrap: wrap; gap: .5em 2em; }
 .ms-field { display: inline-flex; align-items: flex-end; gap: .4em; flex: 1 1 12em; }
-.ms-field-line { flex: 1; border-bottom: 1px solid var(--ms-rule); min-width: 5em; height: 1.2em; }
+.ms-field-line { flex: 1; border-bottom: 1px solid var(--ms-write); min-width: 5em; height: 1.3em; }
 
-.ms-h { margin: 0; font-weight: 700; line-height: 1.25; break-after: avoid; }
-.ms-h1 { font-size: 1.6em; } .ms-h2 { font-size: 1.25em; } .ms-h3 { font-size: 1.05em; }
-.ms-para, .ms-text p, .ms-instruction p { margin: 0 0 .7em; orphans: 3; widows: 3; }
-.ms-seg { display: inline-block; margin-right: .5em; font-weight: 700; font-size: .85em; }
-.ms-instruction { border-left: 3px solid var(--ms-rule); padding-left: .8em; }
-.ms-steps, .ms-list, .ms-reqs { margin: .3em 0; padding-left: 1.4em; }
-/* Los pasos y las listas numeradas se leen por su número: el marcador es contenido, no decoración. */
-.ms-steps, ol.ms-list { list-style: decimal; }
+/* Jerarquía: título > sección > actividad. Los títulos nunca se quedan solos al final de una página. */
+.ms-h { margin: 0; font-weight: 700; line-height: 1.25; break-after: avoid; color: var(--ms-accent); }
+.ms-h1 { font-size: 1.55em; letter-spacing: -.01em; }
+.ms-h2 { font-size: 1.15em; padding-top: .3em; }
+.ms-h3 { font-size: 1.02em; }
+.ms-para, .ms-text p, .ms-instruction p { margin: 0 0 .6em; orphans: 3; widows: 3; }
+.ms-text p:last-child, .ms-instruction p:last-child, .ms-reading .ms-para:last-child { margin-bottom: 0; }
+
+/* Instrucción: lo primero que hay que encontrar. Una franja suave con el filo del color de acento; legible sin color. */
+.ms-instruction { background: var(--ms-tint); border-left: 4px solid var(--ms-accent); padding: .55em .9em; border-radius: 0 .3em .3em 0; }
+/* Solo el primer párrafo en seminegrita: una instrucción larga entera en negrita se lee peor, no mejor. */
+.ms-instruction > p:first-child { font-weight: 600; }
+/* Pasos: una secuencia real, con el número como contenido (se lee y se imprime). */
+.ms-steps { margin: .45em 0 0; padding: 0; list-style: none; counter-reset: ms-step; display: flex; flex-direction: column; gap: .3em; }
+.ms-steps > li { counter-increment: ms-step; display: flex; gap: .55em; align-items: baseline; font-weight: 400; }
+.ms-steps > li::before { content: counter(ms-step) "."; flex: none; min-width: 1.3em; font-weight: 700; color: var(--ms-accent); }
+.ms-list, .ms-reqs { margin: .3em 0; padding-left: 1.3em; }
+ol.ms-list { list-style: decimal; }
 ul.ms-list { list-style: disc; }
-.ms-reqs { list-style: square; }
+.ms-reqs { list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: .15em; font-size: .92em; }
+.ms-reqs > li { display: flex; gap: .5em; }
+.ms-reqs > li::before { content: "—"; flex: none; color: var(--ms-soft); }
 .ms-note, .ms-caption { margin: .3em 0; font-size: .85em; color: var(--ms-soft); }
 .ms-caption { font-weight: 600; color: var(--ms-ink); break-after: avoid; }
 
-.ms-activity { border-top: 1px solid var(--ms-rule); padding-top: .7em; }
-.ms-activity[data-keep] { break-inside: avoid; }
-.ms-activity[data-isolate] { break-inside: avoid; border-top-width: 2px; padding-top: 1.1em; margin-top: .8em; padding-bottom: .8em; }
-.ms-activity-head { display: flex; gap: .8em; align-items: flex-start; }
-.ms-num { flex: none; min-width: 1.9em; height: 1.9em; padding: 0 .3em; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--ms-ink); border-radius: .35em; font-weight: 700; }
-.ms-prompt { flex: 1 1 auto; min-width: 0; }
-.ms-prompt p { margin: 0 0 .5em; }
-.ms-answer { margin-top: .6em; }
+/* Texto de lectura: información de referencia, no una tarea. Medida de línea cómoda y título discreto. */
+.ms-reading { break-inside: auto; }
+.ms-reading-title { font-size: .92em; color: var(--ms-ink); margin-bottom: .45em; }
+.ms-seg { display: inline-block; margin-right: .5em; font-weight: 700; font-size: .78em; letter-spacing: .04em; text-transform: uppercase; color: var(--ms-accent); }
+.ms-reading[data-segmented] .ms-para { padding-left: .9em; border-left: 2px solid var(--ms-rule-soft); }
+.ms-reading[data-segmented] .ms-seg { display: block; margin: 0 0 .1em; }
 
-.ms-lines > div { height: var(--ms-line); border-bottom: 1px solid var(--ms-rule); }
-.ms-box-area { border: 1.5px solid var(--ms-rule); border-radius: .3em; }
-.ms-grid-area { border: 1.5px solid var(--ms-rule); background-image: linear-gradient(var(--ms-rule) 1px, transparent 1px), linear-gradient(90deg, var(--ms-rule) 1px, transparent 1px); background-size: 6mm 6mm; background-position: -1px -1px; opacity: .85; }
+/* Actividad: número (dónde empieza una tarea) + enunciado; la zona de respuesta va alineada con el enunciado.
+   Las actividades se separan por espacio, no por rayas: una raya junto a líneas de escritura parece otra línea más. */
+.ms-activity { --ms-num-w: 1.75em; --ms-num-gap: .7em; padding-top: .35em; }
+.ms-activity[data-keep] { break-inside: avoid; }
+.ms-activity[data-isolate] { break-inside: avoid; padding-top: .9em; margin-top: .6em; }
+.ms-activity-head { display: flex; gap: var(--ms-num-gap); align-items: flex-start; break-inside: avoid; break-after: avoid; }
+.ms-num { flex: none; min-width: var(--ms-num-w); height: var(--ms-num-w); padding: 0 .3em; display: inline-flex; align-items: center; justify-content: center; border-radius: .35em; background: var(--ms-accent); color: #fff; font-weight: 700; font-size: .95em; line-height: 1; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.ms-prompt { flex: 1 1 auto; min-width: 0; padding-top: .12em; }
+.ms-prompt p { margin: 0 0 .35em; }
+.ms-prompt > p:first-child { font-weight: 600; }
+.ms-prompt .ms-steps { margin-top: .2em; }
+.ms-answer { margin-top: .5em; }
+.ms-activity[data-numbered] > .ms-answer { margin-left: calc(var(--ms-num-w) + var(--ms-num-gap)); }
+
+/* Zonas de respuesta: espacio real para escribir a mano. Líneas finas y grises (se ven al imprimir, no compiten con el texto). */
+.ms-lines > div { height: var(--ms-line); border-bottom: 1px solid var(--ms-write); }
+.ms-box-area { border: 1px solid var(--ms-write); border-radius: .3em; }
+.ms-grid-area { border: 1px solid var(--ms-write); background-image: linear-gradient(var(--ms-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ms-grid) 1px, transparent 1px); background-size: 6mm 6mm; background-position: -1px -1px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 .ms-box { flex: none; display: inline-block; width: var(--ms-box); height: var(--ms-box); border: 1.5px solid var(--ms-ink); border-radius: .15em; background: #fff; vertical-align: middle; }
 .ms-round { border-radius: 50%; }
-.ms-options, .ms-checklist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55em; }
-.ms-options li, .ms-checklist li { display: flex; gap: .7em; align-items: flex-start; min-width: 0; }
+/* Una casilla donde se escribe (un número, una letra) tiene que admitir una cifra hecha a mano. */
+.ms-box-write { width: calc(var(--ms-box) * 1.45); height: calc(var(--ms-box) * 1.45); border-radius: .2em; }
+.ms-options, .ms-checklist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5em; }
+.ms-options li, .ms-checklist li { display: flex; gap: .7em; align-items: center; min-width: 0; }
 .ms-options li > span:last-child, .ms-checklist li > span:last-child { min-width: 0; }
-.ms-tf { flex: none; display: inline-flex; align-items: center; gap: .3em; font-weight: 700; }
-.ms-blank { display: inline-block; min-width: 6em; border-bottom: 1.5px solid var(--ms-ink); margin: 0 .2em; height: 1.1em; vertical-align: baseline; }
-.ms-wordbank { list-style: none; display: flex; flex-wrap: wrap; gap: .4em .8em; padding: .5em .7em; margin: .6em 0 0; border: 1px solid var(--ms-rule); }
-.ms-match { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5em; }
-.ms-match ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: .6em; list-style: decimal; }
-.ms-match li { min-width: 0; }
-.ms-match li > span:first-child { margin-right: .5em; }
-.ms-slot { display: inline-block; width: 3em; border-bottom: 1.5px solid var(--ms-ink); height: 1em; }
-.ms-alpha { list-style: upper-alpha; }
+.ms-tf { flex: none; display: inline-flex; align-items: center; gap: .3em; font-weight: 700; margin-right: .3em; }
+.ms-tf .ms-box + .ms-box { margin-left: .5em; }
+.ms-fill p { margin: 0; line-height: 2.3; white-space: pre-wrap; }
+.ms-blank { display: inline-block; min-width: 5em; border-bottom: 1.5px solid var(--ms-ink); margin: 0 .25em; height: 1.2em; vertical-align: baseline; }
+.ms-wordbank { display: flex; flex-wrap: wrap; align-items: center; gap: .4em .8em; margin: .4em 0 0; }
+.ms-wordbank-label { margin: 0; font-size: .85em; font-weight: 600; color: var(--ms-soft); }
+.ms-wordbank ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4em; }
+.ms-wordbank li { border: 1px solid var(--ms-rule); border-radius: 1em; padding: .05em .75em; }
+/* Columna izquierda tan ancha como sus elementos: la casilla queda junto a lo que se relaciona, no al otro lado de la hoja. */
+.ms-match { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 3em; }
+.ms-match ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55em; }
+.ms-match li { display: flex; gap: .5em; align-items: center; min-width: 0; min-height: calc(var(--ms-box) * 1.45); }
+.ms-match .ms-box-write { margin-left: .8em; }
+.ms-match ul + ul li { align-items: baseline; }
+.ms-match-item { flex: 1 1 auto; min-width: 0; }
+.ms-mark { flex: none; min-width: 1.4em; font-weight: 700; color: var(--ms-accent); }
 
-.ms-help, .ms-checklist, .ms-vocab, .ms-example, .ms-planner { border: 1.5px solid var(--ms-rule); border-radius: .35em; padding: .7em .9em; }
-.ms-help[data-variant="key_idea"] { border-left-width: 5px; border-color: var(--ms-ink); }
-.ms-help p, .ms-example p { margin: 0 0 .4em; }
-.ms-help-title { margin: 0 0 .4em; font-weight: 700; break-after: avoid; }
-.ms-checklist[data-keep], .ms-vocab, .ms-example, .ms-slot-block, .ms-help { break-inside: avoid; }
-.ms-vocab dl { margin: 0; display: grid; gap: .4em; }
+/* Ayudas (recuerda, idea clave, consejo, vocabulario, ejemplo): apoyo para resolver, no tareas. Fondo suave, sin marco pesado. */
+.ms-help, .ms-vocab, .ms-example, .ms-starters { background: var(--ms-tint); border-radius: .35em; padding: .6em .9em; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.ms-help[data-variant="key_idea"] { border-left: 4px solid var(--ms-accent); border-radius: 0 .35em .35em 0; }
+.ms-help p, .ms-example p { margin: 0 0 .35em; }
+.ms-help p:last-child, .ms-example p:last-child { margin-bottom: 0; }
+.ms-help-title { margin: 0 0 .3em; font-weight: 700; font-size: .78em; letter-spacing: .06em; text-transform: uppercase; color: var(--ms-accent); break-after: avoid; }
+.ms-checklist, .ms-planner { border: 1px solid var(--ms-rule-soft); border-radius: .35em; padding: .6em .9em; }
+.ms-checklist[data-keep], .ms-vocab, .ms-example, .ms-slot-block, .ms-help, .ms-starters { break-inside: avoid; }
+.ms-vocab dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .25em 1em; }
+.ms-vocab dl > div { display: contents; }
 .ms-vocab dt { font-weight: 700; } .ms-vocab dd { margin: 0; }
-.ms-starters { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: .3em; list-style: none; }
-.ms-planner { display: flex; flex-direction: column; gap: .8em; }
+.ms-starters ul { margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25em; list-style: none; font-style: italic; }
+.ms-planner { display: flex; flex-direction: column; gap: .6em; }
 .ms-slot-label { margin: 0; font-weight: 600; }
 .ms-math code { font-family: inherit; font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ms-math[data-display="block"] { text-align: center; }
 
 .ms-tablewrap { margin: 0; }
 .ms-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .95em; }
-.ms-table th, .ms-table td { border: 1px solid var(--ms-ink); padding: .35em .5em; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-.ms-table thead th { font-weight: 700; background: #ececec; }
+.ms-table th, .ms-table td { border: 1px solid var(--ms-rule); padding: .35em .55em; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.ms-table thead th { font-weight: 700; background: var(--ms-tint); border-bottom: 2px solid var(--ms-ink); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+/* Una celda vacía es un hueco para escribir: tiene la altura de una línea de respuesta. */
+.ms-table td:empty { height: var(--ms-line); }
 .ms-table tr { break-inside: avoid; }
 .ms-table thead { display: table-header-group; }
 .ms-table[data-wide] { font-size: .85em; }
-.ms-data { margin-top: .6em; }
+/* La tabla de datos de un gráfico es su alternativa textual: compacta, no una segunda figura del mismo tamaño. */
+.ms-table.ms-data { margin-top: .5em; width: auto; min-width: 55%; font-size: .85em; }
 .ms-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .ms-chart { margin: 0; break-inside: avoid; }
 .ms-plot-wrap { margin: .4em 0; }
-.ms-plot { position: relative; display: grid; gap: 4px; height: 55mm; border-left: 1.5px solid var(--ms-ink); border-bottom: 1.5px solid var(--ms-ink); padding-top: 1.2em; }
+.ms-plot { position: relative; display: grid; gap: 4px; height: 55mm; border-left: 1.5px solid var(--ms-ink); border-bottom: 1.5px solid var(--ms-ink); padding-top: 1.4em; }
 .ms-col { display: flex; flex-direction: column; min-width: 0; height: 100%; }
 .ms-bars { position: relative; flex: 1 1 auto; display: flex; align-items: flex-end; justify-content: center; gap: 2px; min-height: 0; }
 .ms-bar-slot { position: relative; flex: 1 1 0; max-width: 3em; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
-.ms-val { font-size: .7em; line-height: 1.1; position: absolute; top: 0; } 
+/* El valor va encima de su barra, nunca sobre ella (la barra más alta llega al techo del área). */
+.ms-val { font-size: .7em; line-height: 1.1; position: absolute; top: -1.4em; }
 .ms-bar { width: 100%; border: 1.5px solid var(--ms-ink); }
 .ms-dot { position: absolute; width: .6em; height: .6em; border-radius: 50%; background: var(--ms-ink); }
 .ms-cat { font-size: .75em; text-align: center; padding-top: .3em; overflow-wrap: anywhere; line-height: 1.15; }
@@ -110,11 +154,28 @@ ul.ms-list { list-style: disc; }
 
 /* Un visual se reduce (sin deformarse) a 3/4 del alto útil de la página: cabe con la cabecera de la hoja, un título y su pie, así
    que nunca se corta ni deja una página casi vacía al imprimir. */
-.ms-figure { margin: 0; break-inside: avoid; } .ms-figure img { display: block; width: auto; height: auto; max-width: 100%; max-height: calc((var(--ms-page-h) - 2 * var(--ms-margin)) * .75); }
+.ms-figure { margin: 0; break-inside: avoid; display: flex; flex-direction: column; align-items: center; gap: .35em; }
+.ms-figure img { display: block; width: auto; height: auto; max-width: 92%; max-height: calc((var(--ms-page-h) - 2 * var(--ms-margin)) * .6); border: 1px solid var(--ms-rule-soft); }
+.ms-figure .ms-caption { margin: 0; font-weight: 400; font-size: .85em; color: var(--ms-soft); text-align: center; break-after: auto; }
 .ms-missing { border: 2px dashed var(--ms-ink); padding: .6em .8em; font-size: .85em; font-weight: 600; }
 
-[data-decoration="reduced"] .ms-help, [data-decoration="reduced"] .ms-checklist, [data-decoration="reduced"] .ms-vocab, [data-decoration="reduced"] .ms-example, [data-decoration="reduced"] .ms-planner { border-width: 1px; border-radius: 0; }
-[data-decoration="none"] .ms-help, [data-decoration="none"] .ms-checklist, [data-decoration="none"] .ms-vocab, [data-decoration="none"] .ms-example, [data-decoration="none"] .ms-planner { border: 0; border-top: 1px solid var(--ms-rule); border-radius: 0; padding: .5em 0 0; }
+/* Menos estímulos: menos superficies. `reduced` quita fondos y redondeos; `none` deja solo una raya de separación. */
+[data-decoration="reduced"] :is(.ms-help, .ms-vocab, .ms-example, .ms-starters, .ms-instruction) { background: none; border: 1px solid var(--ms-rule-soft); border-radius: 0; }
+[data-decoration="reduced"] :is(.ms-help[data-variant="key_idea"], .ms-instruction) { border-left: 4px solid var(--ms-accent); }
+[data-decoration="reduced"] :is(.ms-checklist, .ms-planner) { border-radius: 0; }
+[data-decoration="none"] :is(.ms-help, .ms-checklist, .ms-vocab, .ms-example, .ms-planner, .ms-starters, .ms-instruction) { background: none; border: 0; border-top: 1px solid var(--ms-rule); border-radius: 0; padding: .5em 0 0; }
+
+/* Etapa (solo cuando el documento la indica): misma ficha, distinta densidad y tono.
+   Primaria: más aire y un número más visible. ESO: sobria. Bachillerato: académica, compacta, sin fondos de color en el número. */
+[data-stage="primaria"] .ms-activity { --ms-num-w: 2em; padding-top: .5em; }
+[data-stage="primaria"] .ms-num { border-radius: 50%; font-size: 1em; }
+[data-stage="primaria"] .ms-options, [data-stage="primaria"] .ms-match ul { gap: .7em; }
+[data-stage="eso"] .ms-h1 { font-size: 1.45em; }
+[data-stage="bachillerato"] .ms-h1 { font-size: 1.4em; }
+[data-stage="bachillerato"] .ms-num { background: none; color: var(--ms-accent); border: 1.5px solid var(--ms-accent); font-size: .9em; }
+[data-stage="bachillerato"] .ms-prompt > p:first-child { font-weight: 400; }
+[data-stage="bachillerato"] .ms-instruction > p:first-child { font-weight: 400; }
+
 
 /* Marco de la vista (fuera de la hoja). */
 .ms-stage { overflow-x: auto; padding: 16px; background: #e9eaec; border-radius: .6rem; touch-action: pan-x pan-y pinch-zoom; }
@@ -133,6 +194,6 @@ ul.ms-list { list-style: disc; }
   .ms-flow { display: block; }
   .ms-flow > * { margin-bottom: var(--ms-gap); }
   .ms-footer { display: none; }
-  .ms-table thead th { background: #fff; border-bottom-width: 2px; }
+  .ms-activity { padding-top: .2em; }
   .ms-s0, .ms-s1, .ms-s2, .ms-s3, .ms-swatch, .ms-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }

@@ -22,7 +22,8 @@ export type RenderResponse =
   | { kind: "lines"; lines: number; fromExpectedLength: boolean }
   | { kind: "box"; rows: number }
   | { kind: "grid"; rows: number }
-  | { kind: "table_cells"; rows: number }
+  /** `inTable`: the activity points at a table of the sheet, whose empty cells ARE the answer space (no second box is drawn). */
+  | { kind: "table_cells"; rows: number; inTable: boolean }
   | { kind: "choice"; multiple: boolean; options: string[] }
   | { kind: "fill_blank"; parts: BlankPart[]; wordBank: string[] }
   | { kind: "match"; left: string[]; right: string[] }
@@ -63,11 +64,15 @@ export interface RenderHeader {
   fields: string[];
 }
 
+/** The educational stage, only when the document states a known one: it modulates density and tone, never content. */
+export type RenderStage = "primaria" | "eso" | "bachillerato";
+
 export interface RenderModel {
   rendererVersion: string;
   mode: RenderMode;
   title: string;
   language: string;
+  stage: RenderStage | null;
   header: RenderHeader;
   tokens: RenderTokens;
   pages: RenderPage[];
@@ -155,7 +160,7 @@ function expectedLines(requirements: readonly string[]): number | null {
   return max > 0 ? Math.min(MAX_LINES, Math.ceil(max / WORDS_PER_LINE)) : null;
 }
 
-function responseOf(spec: ResponseSpec, requirements: readonly string[]): RenderResponse {
+function responseOf(spec: ResponseSpec, requirements: readonly string[], answersInTable = false): RenderResponse {
   switch (spec.kind) {
     case "lines": {
       const wanted = expectedLines(requirements);
@@ -166,7 +171,7 @@ function responseOf(spec: ResponseSpec, requirements: readonly string[]): Render
     case "grid":
       return { kind: "grid", rows: GRID_ROWS };
     case "table_cells":
-      return { kind: "table_cells", rows: TABLE_CELL_ROWS };
+      return { kind: "table_cells", rows: TABLE_CELL_ROWS, inTable: answersInTable };
     case "choice":
       return { kind: "choice", multiple: spec.multiple, options: spec.options.map((o) => o.text) };
     case "fill_blank":
@@ -190,7 +195,8 @@ function activityRows(prompt: Run[][], steps: readonly string[], requirements: r
   const text = prompt.reduce((n, p) => n + Math.max(1, Math.ceil(chars(p) / 90)), 0) + steps.length + requirements.length;
   const answer =
     response.kind === "lines" ? response.lines
-    : response.kind === "box" || response.kind === "grid" || response.kind === "table_cells" ? response.rows
+    : response.kind === "table_cells" ? (response.inTable ? 0 : response.rows)
+    : response.kind === "box" || response.kind === "grid" ? response.rows
     : response.kind === "choice" ? response.options.length
     : response.kind === "match" ? Math.max(response.left.length, response.right.length)
     : response.kind === "order" ? response.items.length
@@ -210,6 +216,8 @@ export function gradeLabel(slug: string | null): string | null {
 
 interface Ctx {
   options: BuildRenderOptions;
+  /** Ids of the document's table blocks: an activity that points at one is answered in its cells. */
+  tables: Set<string>;
   isolate: Set<string>;
   issues: RenderIssue[];
   next: () => string;
@@ -230,7 +238,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       const requirements = block.requirements ?? [];
       const steps = block.steps ?? [];
       const prompt = parseParagraphs(block.prompt);
-      const response = responseOf(block.response, requirements);
+      const response = responseOf(block.response, requirements, (block.resource_block_ids ?? []).some((ref) => ctx.tables.has(ref)));
       return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id) };
     }
     case "list":
@@ -333,7 +341,8 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   const deferredKnown = options.deferred !== null && options.deferred !== undefined;
   const plan = planDeferred(doc, options.deferred ?? []);
   let counter = 0;
-  const ctx: Ctx = { options, isolate: plan.isolate, issues: [], next: () => `n${++counter}` };
+  const tables = new Set(doc.pages.flatMap((p) => p.blocks).filter((bl) => bl.type === "table").map((bl) => bl.id));
+  const ctx: Ctx = { options, tables, isolate: plan.isolate, issues: [], next: () => `n${++counter}` };
   const tokens = renderTokens(doc.presentation, doc.meta.stage);
   const max = tokens.maxTasksPerPage;
 
@@ -368,6 +377,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     mode: options.mode,
     title: doc.meta.title,
     language: doc.meta.language,
+    stage: doc.meta.stage === "primaria" || doc.meta.stage === "eso" || doc.meta.stage === "bachillerato" ? doc.meta.stage : null,
     header: { subject: options.subjectLabel ?? doc.meta.subject, grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
     pages,

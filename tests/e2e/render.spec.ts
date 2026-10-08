@@ -77,20 +77,24 @@ test("visor: Primaria, Geografía, Bachillerato y estrés: sin desbordes ni sola
     expect(await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".ms-sheet")].every((s) => s.scrollHeight <= s.clientHeight + 1))).toBe(true);
   }
 
-  // material_renderer@v2: the sheet uses its own local font (the same file the PDF embeds) and numbered steps show their numbers.
+  // material_renderer@v2+ (v3 today): the sheet uses its own local font (the same file the PDF embeds) and numbered steps show their numbers.
   await page.goto(`/app/adaptaciones/${ids.primaria}/vista?modo=alumno`);
   const sheet = await page.evaluate(async () => {
     await document.fonts.ready;
     const root = document.querySelector(".ms-root")!;
-    const ordered = document.querySelector(".ms-steps, ol.ms-list, .ms-match ol");
+    const step = document.querySelector(".ms-steps > li");
+    const ordered = document.querySelector("ol.ms-list");
     return {
       family: getComputedStyle(root).fontFamily.split(",")[0]!.replace(/["']/g, "").trim(),
       loaded: [...document.fonts].some((f) => f.family.replace(/["']/g, "") === "Adaptaula Inter" && f.status === "loaded"),
+      // v3: step numbers are generated text (a counter), numbered lists keep their decimal markers.
+      step: step ? getComputedStyle(step, "::before").content : null,
       marker: ordered ? getComputedStyle(ordered).listStyleType : null,
     };
   });
   expect(sheet.family).toBe("Adaptaula Inter");
   expect(sheet.loaded).toBe(true);
+  if (sheet.step !== null) expect(sheet.step).toMatch(/counter\(ms-step\)/);
   if (sheet.marker !== null) expect(sheet.marker).toBe("decimal");
 
   // Stress sheet: the long word, the ten-column table and the long lists are all there.
@@ -129,7 +133,7 @@ test("visor: Primaria, Geografía, Bachillerato y estrés: sin desbordes ni sola
   // Teacher view: same sheet plus the panel outside it; the missing figures are marked there.
   await page.goto(`/app/adaptaciones/${ids.primaria}/vista`);
   await expect(page.getByRole("complementary", { name: "Información para la docente" })).toBeVisible();
-  await expect(page.getByText("material_renderer@v2")).toBeVisible();
+  await expect(page.getByText("material_renderer@v3")).toBeVisible();
   await expect(page.locator(".ms-missing").first()).toBeVisible();
   expect(await serious(page)).toEqual([]);
 

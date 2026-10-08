@@ -11,7 +11,7 @@ export function MaterialSheet({ model }: { model: RenderModel }) {
   const { header } = model;
   const meta = [header.subject, header.grade].filter(Boolean).join(" · ");
   return (
-    <div className="ms-root" style={tokenStyle(model.tokens) as React.CSSProperties} data-decoration={model.tokens.decoration} data-contrast={model.tokens.contrast} lang={model.language}>
+    <div className="ms-root" style={tokenStyle(model.tokens) as React.CSSProperties} data-decoration={model.tokens.decoration} data-contrast={model.tokens.contrast} data-stage={model.stage ?? undefined} lang={model.language}>
       {model.pages.map((page, index) => (
         <article key={page.number} className="ms-sheet" aria-label={`Página ${page.number} de ${model.pages.length}`} data-page={page.number}>
           {index === 0 && (meta || header.fields.length > 0) ? (
