@@ -39,7 +39,7 @@ ofrecía «Descargar PDF», que respondía 409. La acción para localizarla solo
 | 1 · Visual del original, localizado | `image` de origen `original` con recorte `visual_crop@v1` | Infraestructura existente (localizador + recorte) | No |
 | 2 · Visual del original sin localizar | Igual, sin recorte todavía | El docente: «Seleccionar imagen» (localizador humano). Nunca se puede omitir si es necesario | Sí, si es necesario |
 | 3 · Gráfico o tabla con datos estructurados | `chart` / `table` reconstruido con los datos verificados del análisis | El renderer; no hace falta imagen | No |
-| 4 · Visual imprescindible que no está en el original | `image` de origen `requested` con `essential: true` | El docente: «Añadir recurso» (su imagen). «Continuar sin esta imagen» solo si la misma decisión dejó una alternativa real en la ficha | Sí, hasta que se resuelva |
+| 4 · Visual imprescindible que no está en el original | `image` de origen `requested` con `essential: true` | El docente: «Añadir recurso» (su imagen). Nunca se omite | Sí, hasta que se aporte |
 | 5 · Apoyo visual opcional | `image` de origen `requested` sin `essential` | Nadie obligatoriamente; el docente puede añadirlo | No |
 
 `visualTreatment` (`src/lib/adaptation/visual-needs.ts`) clasifica cada decisión:
@@ -62,11 +62,11 @@ llaman a ningún modelo:
 - **Imagen imprescindible del original** (por ejemplo, la figura o el gráfico que una pregunta pide interpretar): **nunca** se
   omite. No hay ningún camino para hacerlo, ni en la interfaz ni en el servidor. El PDF no se genera hasta que se selecciona.
 - **Apoyo opcional**: se puede omitir.
-- **Recurso imprescindible que no está en el original**:
-  - Se puede omitir solo si **la misma decisión dejó en la ficha entregada una alternativa real**: un bloque escrito para esa
-    decisión, como pasos, una idea clave, un glosario o un ejemplo (`omittable` en `requestedVisuals`).
-  - Sin alternativa, el servidor rechaza la omisión con `needs_resource` («Esta imagen es imprescindible… añádela para poder
-    imprimirla») y la interfaz no ofrece «Continuar sin esta imagen».
+- **Recurso imprescindible que no está en el original**: **debe proporcionarse**. El servidor rechaza la omisión con
+  `needs_resource` y la interfaz no ofrece «Continuar sin esta imagen».
+- **Texto asociado:** un texto escrito para la misma decisión (pasos, idea clave…) **no** demuestra equivalencia funcional. Un
+  pictograma que da acceso a una instrucción no se sustituye por palabras. Admitir alternativas multimodales equivalentes exigirá
+  un mecanismo explícito y validado; no está implementado.
 - **Omisión registrada sin derecho a ella** (una fila antigua, una carrera o una llamada directa): el renderer **la ignora**. El
   recurso sigue pendiente, la ficha no se puede imprimir y el PDF sigue bloqueado. Lo comprueba un test.
 

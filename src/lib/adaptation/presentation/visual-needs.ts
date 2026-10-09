@@ -34,13 +34,11 @@ function originalMessage(essential: boolean, status: VisualNeedStatus, page?: nu
   return essential ? "Esta actividad necesita una imagen del documento original." : "Hay una imagen del documento original que se puede incluir si quieres.";
 }
 
-function requestedMessage(essential: boolean, status: VisualNeedStatus, omittable: boolean) {
+function requestedMessage(essential: boolean, status: VisualNeedStatus) {
   if (status === "provided") return "Recurso añadido.";
   if (status === "omitted") return "Se decidió continuar sin este recurso.";
   if (!essential) return "Apoyo visual opcional: la ficha se puede imprimir sin él.";
-  return omittable
-    ? "Esta actividad necesita un recurso visual que no está en el documento original. La ficha incluye una alternativa escrita."
-    : "Esta actividad necesita un recurso visual que no está en el documento original. No tiene alternativa en la ficha: añádelo para poder imprimirla.";
+  return "Esta actividad necesita un recurso visual que no está en el documento original: añádelo para poder imprimir la ficha.";
 }
 
 export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }> }): VisualNeed[] {
@@ -54,7 +52,7 @@ export function visualNeedsOf(input: { document: MaterialDocument; visuals: Visu
   const requested: VisualNeed[] = input.requested.map((r) => {
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "requested" && b.source.decision_id === r.decisionId);
     const status: VisualNeedStatus = r.state.status === "provided" ? "provided" : r.state.status === "omitted" ? "omitted" : "to_provide";
-    return { key: r.decisionId, origin: "requested", essential: r.essential, status, label: r.purpose, activity: activityOf(input.document, block?.id), message: requestedMessage(r.essential, status, r.omittable), omittable: r.omittable };
+    return { key: r.decisionId, origin: "requested", essential: r.essential, status, label: r.purpose, activity: activityOf(input.document, block?.id), message: requestedMessage(r.essential, status), omittable: r.omittable };
   });
   return [...original, ...requested];
 }

@@ -25,7 +25,7 @@ const MESSAGES = {
   invalid: "Revisa los datos y vuelve a intentarlo.",
   rights: "Confirma que puedes usar esta imagen en tu clase.",
   storage_failed: "No hemos podido guardar la imagen. Inténtalo de nuevo.",
-  needs_resource: "Esta imagen es imprescindible para resolver la actividad y la ficha no tiene alternativa: añádela para poder imprimirla.",
+  needs_resource: "Esta imagen es imprescindible para la actividad: añádela para poder imprimir la ficha.",
 } as const;
 
 const valid = (id: string, decisionId: string) => z.uuid().safeParse(id).success && RESOURCE_DECISION.test(decisionId);

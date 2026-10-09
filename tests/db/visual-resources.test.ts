@@ -213,7 +213,7 @@ describe("D · an essential visual that is not in the original", () => {
     expect(before.validation.status).toBe("not_renderable");
     const need = blockingNeeds(before.needs).find((x) => x.origin === "requested")!;
     expect(need).toMatchObject({ essential: true, status: "to_provide", activity: "Actividad 4", omittable: false });
-    expect(need.message).toMatch(/^Esta actividad necesita un recurso visual que no está en el documento original\. No tiene alternativa/);
+    expect(need.message).toBe("Esta actividad necesita un recurso visual que no está en el documento original: añádelo para poder imprimir la ficha.");
     // Never a stand-in image in the student's sheet.
     expect(html(sheetModel(before.loaded, "student").model)).not.toContain("<img");
 
@@ -264,26 +264,22 @@ describe("D · an essential visual that is not in the original", () => {
     expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [m.id]))[0]!.state).toBe("consumed");
   });
 
-  it("with a real alternative written for the same decision it can be skipped: recorded (who, when), the alternative is printed", async () => {
-    const withAlternative: Extra = (refs) => ({ ...newEssential("act_4")(refs), supports: [{ kind: "step_list", uses_task_data: false }] });
-    const m = await magic(fractionsAnalysis(), [withAlternative]);
+  it("text written for the same decision does NOT make it skippable: refused, the text is not a substitute, the PDF stays blocked", async () => {
+    const withText: Extra = (refs) => ({ ...newEssential("act_4")(refs), supports: [{ kind: "step_list", uses_task_data: false }] });
+    const m = await magic(fractionsAnalysis(), [withText]);
     await locateOriginals(m);
     const before = await sheet(m);
     const need = blockingNeeds(before.needs).find((x) => x.origin === "requested")!;
-    expect(need).toMatchObject({ omittable: true });
-    const alternative = allBlocks(before.loaded.document).find((b) => b.type === "list" && b.trace.decision_ids.includes(need.key));
-    expect(alternative).toBeDefined();
+    // The decision did produce written content…
+    expect(allBlocks(before.loaded.document).some((b) => b.type === "list" && b.trace.decision_ids.includes(need.key))).toBe(true);
+    // …but it proves no functional equivalence: the essential visual must be provided.
+    expect(need).toMatchObject({ essential: true, omittable: false });
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toEqual({ ok: false, code: "needs_resource" });
+    expect(await count("public.adaptation_visual_resources where adaptation_id = $1", [m.id])).toBe(0);
+    await as(db, "service_role", null, () => db.query("select public.set_adaptation_visual_resource($1, $2, $3, 'omitted', null, null, null, null, null, false, $4)", [m.user.workspaceId, m.id, need.key, m.user.id]));
+    expect((await sheet(m)).validation.status).toBe("not_renderable");
     expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
-    const omitted = await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key });
-    expect(omitted).toMatchObject({ ok: true, reused: false, state: { status: "omitted" } });
-    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toMatchObject({ ok: true, reused: true });
-    const row = (await q<{ resolution: string; created_by: string; storage_path: string | null }>("select resolution, created_by, storage_path from public.adaptation_visual_resources where adaptation_id = $1 and superseded_at is null", [m.id]))[0]!;
-    expect(row).toEqual({ resolution: "omitted", created_by: m.user.id, storage_path: null });
-    const s = await sheet(m, "student", true);
-    expect(s.validation.status).not.toBe("not_renderable");
-    const student = html(s.model);
-    expect(student.match(/<img /g)).toHaveLength(2); // the two figures of the original; nothing stands in for the omitted one
-    expect(student).not.toContain("/resources/");
+    await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key, ...(await teacherPng()), rightsConfirmed: true });
     expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
   });
 });
