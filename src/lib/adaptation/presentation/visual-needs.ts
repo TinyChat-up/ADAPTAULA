@@ -31,7 +31,9 @@ const activityOf = (document: MaterialDocument, blockId: string | undefined) => 
 
 function originalMessage(essential: boolean, status: VisualNeedStatus, page?: number) {
   if (status === "ready") return page ? `Imagen del documento original incluida (seleccionada en la página ${page}).` : "Imagen del documento original incluida.";
-  return essential ? "Esta actividad necesita una imagen del documento original." : "Hay una imagen del documento original que se puede incluir si quieres.";
+  return essential
+    ? "Esta actividad necesita una imagen del documento original. Localízala en el original o, si no está, añade la tuya."
+    : "Hay una imagen del documento original que se puede incluir si quieres.";
 }
 
 function requestedMessage(essential: boolean, status: VisualNeedStatus) {
@@ -41,13 +43,15 @@ function requestedMessage(essential: boolean, status: VisualNeedStatus) {
   return "Esta actividad necesita un recurso visual que no está en el documento original: añádelo para poder imprimir la ficha.";
 }
 
-export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }> }): VisualNeed[] {
+export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages?: readonly string[] }): VisualNeed[] {
   const blocks = allBlocks(input.document);
   const original: VisualNeed[] = input.visuals.map((v) => {
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === v.visualId);
     const essential = input.requiredVisuals.includes(v.visualId);
-    const status: VisualNeedStatus = v.status === "ready" ? "ready" : "to_select";
-    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message: originalMessage(essential, status, v.provenance?.page), omittable: false };
+    const teacher = v.status !== "ready" && (input.teacherImages ?? []).includes(v.visualId);
+    const status: VisualNeedStatus = v.status === "ready" ? "ready" : teacher ? "provided" : "to_select";
+    const message = teacher ? "Imagen añadida por ti: no se encontró en el documento original." : originalMessage(essential, status, v.provenance?.page);
+    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message, omittable: false };
   });
   const requested: VisualNeed[] = input.requested.map((r) => {
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "requested" && b.source.decision_id === r.decisionId);

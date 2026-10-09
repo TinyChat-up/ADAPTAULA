@@ -22,9 +22,16 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
         {need.essential && !done ? " · imprescindible para imprimir la ficha" : ""}
       </p>
       {canWrite && need.origin === "original" ? (
-        <LinkButton size="sm" variant={need.status === "ready" ? "secondary" : "primary"} href={locateHref(need.key)}>
-          {need.status === "ready" ? "Cambiar la selección" : "Seleccionar imagen"}
-        </LinkButton>
+        <div className="flex flex-wrap items-start gap-2">
+          <LinkButton size="sm" variant={need.status === "ready" ? "secondary" : "primary"} href={locateHref(need.key)}>
+            {need.status === "ready" ? "Cambiar la selección" : "Localizar en el original"}
+          </LinkButton>
+          {need.status !== "ready" ? (
+            // The analysis says it is in the original, but that cannot be checked here: if the teacher does not find it, they add
+            // theirs (never a guessed region of the PDF, never an invented image). It is never skipped.
+            <ResourceActions adaptationId={adaptationId} decisionId={need.key} canOmit={false} hasResource={need.status === "provided"} addLabel="No está en el original · Añadir imagen" changeLabel="Cambiar imagen" />
+          ) : null}
+        </div>
       ) : null}
       {canWrite && need.origin === "requested" ? (
         <ResourceActions adaptationId={adaptationId} decisionId={need.key} canOmit={need.status === "to_provide" && need.omittable && !need.essential} hasResource={need.status === "provided"} />

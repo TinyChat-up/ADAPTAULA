@@ -20,7 +20,7 @@ export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }> };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[] };
 
 export interface RenderLoadOptions {
   /**
@@ -30,6 +30,11 @@ export interface RenderLoadOptions {
   pin?: boolean;
   /** The teacher's resources for the visuals a decision asked for (docs/VISUAL_RESOURCES.md). Absent → all still pending. */
   resources?: ResourceDeps;
+  /**
+   * `false` only for lists (many rows at once): crops and resources count from their rows, without downloading and hashing every
+   * object. The sheet, the image routes and the PDF always verify (the default).
+   */
+  verify?: boolean;
 }
 
 /** The authorised route that streams a verified crop. Never a signed URL: authorisation never depends on knowing a link. */
@@ -75,7 +80,7 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   const material = visuals && materialId ? await visuals.reader.material(materialId) : null;
   const resolved: ResolvedVisuals =
     visuals && material && snapshot?.adaptation.analysis_fingerprint
-      ? await resolveVisuals(visuals, { materialId, analysisFingerprint: snapshot.adaptation.analysis_fingerprint, sourceSha256: material.content_hash, visualIds, withBytes: options.pin })
+      ? await resolveVisuals(visuals, { materialId, analysisFingerprint: snapshot.adaptation.analysis_fingerprint, sourceSha256: material.content_hash, visualIds, withBytes: options.pin, verify: options.verify })
       : { states: Object.fromEntries(visualIds.map((v) => [v, { visualId: v, status: "missing_locator" as const }])), bytes: {}, instances: {} };
   const states = visualIds.map((v) => resolved.states[v]!);
   const pinned: Record<string, PinnedAsset> = {};
@@ -89,7 +94,20 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   // The visuals a decision asked for and the original does not have: the teacher's image (verified bytes), their explicit
   // decision to go on without it, or still pending. Pinned for a PDF exactly like a crop (id + sha-256).
   const requested = requestedVisuals(parsed.data);
-  const resolvedResources = options.resources ? await resolveResources(options.resources, id, requested.map((r) => r.decisionId), { withBytes: options.pin }) : { states: {}, bytes: {} };
+  // An original visual without a usable crop may have the teacher's own image instead (it was not found in the original).
+  const unlocated = states.filter((s) => s.status !== "ready").map((s) => s.visualId);
+  const resolvedResources = options.resources ? await resolveResources(options.resources, id, [...requested.map((r) => r.decisionId), ...unlocated], { withBytes: options.pin, verify: options.verify }) : { states: {}, bytes: {} };
+  const teacherImages: string[] = [];
+  for (const visualId of unlocated) {
+    const state = resolvedResources.states[visualId];
+    if (state?.status !== "provided") continue;
+    if (options.pin) {
+      const bytes = resolvedResources.bytes[visualId];
+      if (!bytes) continue;
+      pinned[`teacher:${visualId}`] = { assetId: state.resourceId, sha256: state.sha256, mime: "image/png", bytes };
+    }
+    teacherImages.push(visualId);
+  }
   // An omission counts only where the sheet stays solvable without the visual: a recorded «continue without it» for an essential
   // visual with no alternative (an old row, a race) leaves it pending, so the sheet is not printed without it.
   const stateOf = (decisionId: string): ResourceState => {
@@ -120,9 +138,15 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     document: parsed.data,
     deferred,
     requiredVisuals: context.success ? context.data.material.required_visuals : [],
-    assets: Object.fromEntries(states.filter((s) => s.status === "ready" && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId) }])),
+    assets: {
+      ...Object.fromEntries(states.filter((s) => s.status === "ready" && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId) }])),
+      ...Object.fromEntries(teacherImages.map((v) => {
+        const state = resolvedResources.states[v] as Extract<ResourceState, { status: "provided" }>;
+        return [v, { src: options.pin ? assetRef({ assetId: state.resourceId, sha256: state.sha256 }) : resourceSrc(id, v) }];
+      })),
+    },
     assetFailures: Object.fromEntries(states.flatMap((s) => {
-      const failure = failureOfState(s);
+      const failure = teacherImages.includes(s.visualId) ? undefined : failureOfState(s);
       return failure ? [[s.visualId, failure]] : [];
     })),
     materialId,
@@ -131,10 +155,14 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     subjectName,
     resources,
     requested: requested.map((r) => ({ ...r, state: stateOf(r.decisionId) })),
+    teacherImages,
   };
 }
 
+/** The product's design (Phase 8, approved): Sistema CLARO, the same for the screen and the PDF. The one switch. */
+export const PRODUCT_DESIGN = "claro" as const;
+
 /** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
 export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
-  return buildRenderModel(loaded.document, { mode, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
+  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
 }

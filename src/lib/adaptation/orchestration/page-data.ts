@@ -10,16 +10,21 @@ import { getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlan
 import { serviceDeps } from "./server";
 import { listState, type ListState } from "@/lib/adaptation/presentation/list";
 import type { AdaptationStatusDto } from "./status";
-import { blockingNeeds, visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
-import { loadRenderInput } from "@/lib/render/load";
+import { loadRenderInput, loadRenderInputWith } from "@/lib/render/load";
+import { readinessOf } from "@/lib/render/readiness";
+import { visualDeps } from "@/lib/materials/visuals/server";
+import { resourceDeps } from "@/lib/adaptation/resources/server";
 
 export interface AdaptationPageData {
   status: AdaptationStatusDto;
   /** Only while the teacher has to review it: the plan is not needed (nor sent to the browser) in any other state. */
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
-  /** `visualsPending`: essential visuals the printed sheet still waits for (an image to select or a resource to provide). */
-  readyInfo: { version: number; createdAt: string; visualsPending: number } | null;
+  /**
+   * `printable`: what the PDF and the student view accept (`readinessOf`). `visualsPending`: essential visuals still to locate or to
+   * provide. A delivered sheet that is not printable is never presented as «lista».
+   */
+  readyInfo: { version: number; createdAt: string; visualsPending: number; printable: boolean } | null;
   /** The teacher's alias for the profile, for the page header only. Null when the profile was deleted. */
   profileName: string | null;
   /** Read-only members see every state but no command (they would be refused on the server anyway). */
@@ -65,7 +70,7 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Pro
       subject: subjects.find((s) => s.slug === material.subject_slug)?.name ?? null,
       analysis,
     }),
-    readyInfo: version ? { version: version.version, createdAt: version.created_at, visualsPending: await visualsPending(ctx, id) } : null,
+    readyInfo: version ? { version: version.version, createdAt: version.created_at, ...(await readiness(ctx, id)) } : null,
     profileName,
     canWrite: actor.canWrite,
   };
@@ -112,6 +117,8 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     automaticAwaiting.length ? supabase.from("adaptation_artifacts").select("adaptation_id").eq("kind", "plan_review").in("adaptation_id", automaticAwaiting) : Promise.resolve({ data: [] as Array<{ adaptation_id: string }> }),
   ]);
   const hasReview = new Set((reviewed.data ?? []).map((a) => a.adaptation_id as string));
+  // A delivered sheet still waiting for an essential visual reads «casi lista» here too, like its own page and its PDF.
+  const pendingIds = await pendingDelivered(supabase, rows.filter((r) => r.status === "ready").map((r) => r.id as string));
   const running = new Set((jobs.data ?? []).map((j) => j.adaptation_id as string));
   const titles = new Map((materials.data ?? []).map((m) => [m.id as string, m.title as string]));
   const names = new Map((profiles.data ?? []).map((p) => [p.id as string, p.display_name as string]));
@@ -121,12 +128,32 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
-    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string)),
+    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string), pendingIds.has(r.id as string)),
   }));
 }
 
-/** The same reading of the sheet the viewer and the PDF make: what an essential visual still lacks, counted, never guessed. */
-async function visualsPending(ctx: WorkspaceContext, id: string): Promise<number> {
+/** The same reading of the sheet the viewer and the PDF make (`readinessOf`): never a separate, divergent rule. */
+async function readiness(ctx: WorkspaceContext, id: string): Promise<{ visualsPending: number; printable: boolean }> {
   const loaded = await loadRenderInput(ctx, id);
-  return loaded.kind === "ok" ? blockingNeeds(visualNeedsOf(loaded)).length : 0;
+  if (loaded.kind !== "ok") return { visualsPending: 0, printable: false };
+  const r = readinessOf(loaded);
+  return { visualsPending: r.pendingResources, printable: r.printable };
+}
+
+/** Ready adaptations whose sheet cannot be printed yet (`readinessOf`, counted from rows: lists do not download every object). */
+async function pendingDelivered(supabase: Awaited<ReturnType<typeof getSupabase>>, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: rows } = await supabase.from("adaptations").select("id, workspace_id").in("id", ids);
+  const deps = serviceDeps(supabase);
+  const visuals = visualDeps(supabase);
+  const resources = resourceDeps(supabase);
+  const pending = await Promise.all(
+    (rows ?? []).map(async (row) => {
+      const actor: Actor = { userId: auth.user?.id ?? "", workspaceId: row.workspace_id as string, canWrite: false };
+      const loaded = await loadRenderInputWith(deps, actor, row.id as string, visuals, { resources, verify: false });
+      return loaded.kind === "ok" && !readinessOf(loaded).printable ? (row.id as string) : null;
+    }),
+  );
+  return new Set(pending.filter((x): x is string => x !== null));
 }

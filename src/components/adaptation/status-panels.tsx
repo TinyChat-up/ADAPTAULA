@@ -126,17 +126,22 @@ export function WarningsList({ lines }: { lines: string[] }) {
   );
 }
 
-export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto; materialId: string; info: { version: number; createdAt: string; visualsPending: number } | null }) {
+export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto; materialId: string; info: { version: number; createdAt: string; visualsPending: number; printable: boolean } | null }) {
   const copy = readyTitle(dto);
   const lines = warningLines(dto);
   const version = info?.version ?? dto.currentVersion;
   // Delivered, but the printed sheet still waits for an image: the next step is to complete it on the sheet, not a new adaptation.
   const pending = info?.visualsPending ?? 0;
+  const printable = info?.printable ?? true;
   return (
     <Card className="space-y-4">
       {pending > 0 ? (
-        <Alert tone="warning" title="La ficha está casi lista">
+        <Alert tone="warning" title="La ficha está casi lista · Falta completar un recurso">
           <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
+        </Alert>
+      ) : !printable ? (
+        <Alert tone="warning" title="La ficha no se puede mostrar completa todavía">
+          <p>Revisa la ficha para ver qué falta.</p>
         </Alert>
       ) : (
         <Alert tone={lines.length > 0 ? "warning" : "success"} title={copy.title}>
@@ -149,13 +154,13 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
       </p>
       {lines.length > 0 ? (
         <div className="space-y-2">
-          <h3 className="font-semibold">Observaciones</h3>
+          <h3 className="font-semibold">Observaciones (no impiden usar la ficha)</h3>
           <WarningsList lines={lines} />
         </div>
       ) : null}
       <div className="flex flex-wrap items-start gap-3 pt-1">
-        <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>{pending > 0 ? "Completar la ficha" : "Ver la ficha"}</LinkButton>
-        {pending > 0 ? null : <PdfDownload adaptationId={dto.id} />}
+        <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>{pending > 0 ? "Completar ficha" : "Ver la ficha"}</LinkButton>
+        {printable ? <PdfDownload adaptationId={dto.id} /> : null}
       </div>
       <BackLinks materialId={materialId} />
     </Card>

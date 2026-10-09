@@ -263,6 +263,8 @@ Buckets privados: `source-materials`, `generated-assets`, `exports`. Ruta de los
 
 Ver `docs/VISUAL_RESOURCES.md`.
 
+**Migración 021.** La clave admite también `vis_N`: la imagen que aporta el docente cuando un visual que el análisis atribuye al original no está en él. Una restricción impide omitir un `vis_N`. La función, la RLS y los permisos no cambian.
+
 ## Funciones SQL de negocio
 
 - `workspace_plan(ws) returns plans` — plan efectivo (sin suscripción vigente = `free`). Solo `service_role`.

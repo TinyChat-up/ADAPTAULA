@@ -133,7 +133,7 @@ test("visor: Primaria, Geografía, Bachillerato y estrés: sin desbordes ni sola
   // Teacher view: same sheet plus the panel outside it; the missing figures are marked there.
   await page.goto(`/app/adaptaciones/${ids.primaria}/vista`);
   await expect(page.getByRole("complementary", { name: "Información para la docente" })).toBeVisible();
-  await expect(page.getByText("material_renderer@v3")).toBeVisible();
+  await expect(page.getByText("material_renderer@v4")).toBeVisible();
   await expect(page.locator(".ms-missing").first()).toBeVisible();
   expect(await serious(page)).toEqual([]);
 

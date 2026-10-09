@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { fetchAdaptationPdf } from "@/lib/render/pdf-download";
 
-type State = { kind: "idle" } | { kind: "generating" } | { kind: "started"; filename: string } | { kind: "error"; message: string };
+type State = { kind: "idle" } | { kind: "generating" } | { kind: "started"; filename: string } | { kind: "error"; message: string; pending: boolean };
 
 /** "Descargar PDF": the sheet as the student sees it, generated now. One request at a time (a second click while it runs does nothing). */
 export function PdfDownload({ adaptationId }: { adaptationId: string }) {
@@ -20,7 +20,7 @@ export function PdfDownload({ adaptationId }: { adaptationId: string }) {
     try {
       const result = await fetchAdaptationPdf(adaptationId);
       if (!result.ok) {
-        setState({ kind: "error", message: result.message });
+        setState({ kind: "error", message: result.message, pending: result.code === "resource_pending" });
         return;
       }
       const url = URL.createObjectURL(result.blob);
@@ -52,9 +52,16 @@ export function PdfDownload({ adaptationId }: { adaptationId: string }) {
         {generating ? "Estamos preparando el PDF de la ficha. Puede tardar unos segundos." : state.kind === "started" ? `Descarga iniciada: ${state.filename}` : ""}
       </p>
       {state.kind === "error" ? (
-        <Alert tone="danger" title="No se ha podido descargar el PDF.">
-          {state.message} Puedes volver a intentarlo.
-        </Alert>
+        state.pending ? (
+          // A known cause the teacher can fix: never «try again in a few minutes».
+          <Alert tone="warning" title="Falta completar la ficha.">
+            {state.message}
+          </Alert>
+        ) : (
+          <Alert tone="danger" title="No se ha podido descargar el PDF.">
+            {state.message} Puedes volver a intentarlo.
+          </Alert>
+        )
       ) : null}
     </div>
   );

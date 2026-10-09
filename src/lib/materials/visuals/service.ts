@@ -292,7 +292,7 @@ export interface ResolvedVisuals {
  * (`created_at desc, id desc`): an object only counts if it is readable AND matches its own row's sha-256, so database metadata
  * alone never makes a visual "ready", and a damaged instance does not hide a valid one.
  */
-export async function resolveVisuals(deps: VisualDeps, input: { materialId: string; analysisFingerprint: string; sourceSha256: string | null; visualIds: readonly string[]; withBytes?: boolean }): Promise<ResolvedVisuals> {
+export async function resolveVisuals(deps: VisualDeps, input: { materialId: string; analysisFingerprint: string; sourceSha256: string | null; visualIds: readonly string[]; withBytes?: boolean; verify?: boolean }): Promise<ResolvedVisuals> {
   const out: ResolvedVisuals = { states: {}, bytes: {}, instances: {} };
   const active = input.sourceSha256 ? await deps.reader.activeLocators(input.materialId, input.analysisFingerprint) : [];
   for (const visualId of input.visualIds) {
@@ -306,6 +306,11 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
     const instances = locator.assets.filter((a) => a.recipe_version === VISUAL_CROP_RECIPE.version && a.identity === identity);
     if (instances.length === 0) {
       out.states[visualId] = locator.last_failure ? { visualId, status: "extraction_failed", failure: locator.last_failure, provenance } : { visualId, status: "located_processing", provenance };
+      continue;
+    }
+    // Lists only (`verify: false`): an instance row counts without reading its object; the sheet and the PDF always verify.
+    if (input.verify === false && !input.withBytes) {
+      out.states[visualId] = { visualId, status: "ready", provenance };
       continue;
     }
     const verified = await verifiedInstance((path) => deps.reader.readObject(path), instances);

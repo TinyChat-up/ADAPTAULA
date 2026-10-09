@@ -4,6 +4,8 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { PLAN_REVIEW_SCHEMA_VERSION, PlanReviewSchema, type PlanReview, type PlanReviewEntry } from "@/lib/schemas/plan-review";
 import { fingerprint } from "./fingerprint";
 import { classifyPlan, validatePlan, type DecisionStatus, type PlanClassification } from "./invariants";
+import { isResolvedByPresentation } from "./context";
+import { classifyDecisionExecution } from "./execution";
 
 /**
  * Applies a review on top of a raw plan. The raw plan is never modified; every decision keeps its whole history:
@@ -81,16 +83,25 @@ export function reviewPlan(raw: AdaptationPlan, reviewInput: PlanReview, analysi
  */
 export function autoReview(raw: AdaptationPlan, analysis: MaterialAnalysis, context: AdaptationContext): PlanReview {
   const classification = classifyPlan(raw, validatePlan(raw, analysis, context));
+  const blocked = new Set(classification.decisions.filter((c) => c.status === "blocked").map((c) => c.id));
+  const unsupported = new Set(raw.decisions.filter((d) => !blocked.has(d.id) && classifyDecisionExecution(d, analysis, context).route === "unsupported").map((d) => d.id));
+  // A decision nobody can execute is left out ONLY when the functional needs it answers are already covered (by another decision
+  // that will be executed, or by the presentation): recorded with its reason, never dropped silently. Otherwise it stays
+  // approved, the execution preflight stops and the teacher decides (the person checks what the profile needs).
+  const covered = (d: Decision) =>
+    d.dimensions.length > 0 &&
+    d.dimensions.every((dim) => isResolvedByPresentation(dim, context.presentation) || raw.decisions.some((o) => o.id !== d.id && !blocked.has(o.id) && !unsupported.has(o.id) && o.dimensions.includes(dim)));
   return {
     schema_version: PLAN_REVIEW_SCHEMA_VERSION,
     plan_fingerprint: fingerprint(raw),
     reviewer: { kind: "auto" },
     reviewed_at: "auto",
-    entries: classification.decisions.map((c) =>
-      c.status === "blocked"
-        ? { decision_id: c.id, action: "rejected" as const, reason: "Bloqueada por las invariantes deterministas" }
-        : { decision_id: c.id, action: "approved" as const, reason: c.status === "review" ? "Aplicada con aviso de revisión" : "Sin avisos" },
-    ),
+    entries: classification.decisions.map((c) => {
+      if (c.status === "blocked") return { decision_id: c.id, action: "rejected" as const, reason: "Bloqueada por las invariantes deterministas" };
+      const decision = raw.decisions.find((d) => d.id === c.id)!;
+      if (unsupported.has(c.id) && covered(decision)) return { decision_id: c.id, action: "rejected" as const, reason: "Ningún ejecutor puede aplicarla a este elemento; su necesidad ya la cubren otras decisiones o la presentación" };
+      return { decision_id: c.id, action: "approved" as const, reason: c.status === "review" ? "Aplicada con aviso de revisión" : "Sin avisos" };
+    }),
   };
 }
 

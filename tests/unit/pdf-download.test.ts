@@ -53,7 +53,9 @@ describe("fetchAdaptationPdf (browser)", () => {
 
   it("an error answer shows the server's user-facing message; anything else a generic one", async () => {
     const json = (status: number, body: unknown) => async () => Response.json(body, { status });
-    expect(await fetchAdaptationPdf("x", json(409, { error: { code: "not_ready", message: "Esta adaptación todavía no tiene una ficha entregada." } }))).toEqual({ ok: false, message: "Esta adaptación todavía no tiene una ficha entregada." });
+    expect(await fetchAdaptationPdf("x", json(409, { error: { code: "not_ready", message: "Esta adaptación todavía no tiene una ficha entregada." } }))).toEqual({ ok: false, code: "not_ready", message: "Esta adaptación todavía no tiene una ficha entregada." });
+    // A missing resource keeps its code, so the screen says «Falta completar la ficha» instead of «inténtalo más tarde».
+    expect(await fetchAdaptationPdf("x", json(409, { error: { code: "resource_pending", message: "Falta completar un recurso de la ficha (una imagen)." } }))).toMatchObject({ ok: false, code: "resource_pending" });
     expect(await fetchAdaptationPdf("x", async () => new Response("<html>502</html>", { status: 502 }))).toEqual({ ok: false, message: PDF_GENERIC_ERROR });
     expect(await fetchAdaptationPdf("x", async () => new Response("no", { status: 200, headers: { "Content-Type": "text/html" } }))).toEqual({ ok: false, message: PDF_GENERIC_ERROR });
     expect((await fetchAdaptationPdf("x", async () => Promise.reject(new TypeError("offline")))).ok).toBe(false);

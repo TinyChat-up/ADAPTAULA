@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
 import { VisualNeedsPanel } from "@/components/material/visual-needs-panel";
 import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
@@ -19,6 +19,8 @@ import { visualFixturePdf } from "../support/visual-fixture";
 import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions, type User } from "./orchestration-harness";
 import { attachSource, visualHarness, type VisualHarness } from "./visual-harness";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }));
 
 /** The sheet viewer with the visual asset layer, over the real pipeline output on PGlite (mock providers, 0 real calls). */
 let db: PGlite;
@@ -109,7 +111,7 @@ describe("visor + localización: de no renderizable a renderizable sin tocar la 
       locateHref: (visualId: string) => `/app/materiales/${m.id}/visuales/${visualId}`,
     }));
     expect(panel).toContain("seleccionada en la página 2");
-    expect(panel).toContain("Seleccionar imagen");
+    expect(panel).toContain("Localizar en el original");
     expect(panel).toContain("Cambiar la selección");
     expect(panel).not.toMatch(/missing_locator|asset_missing|located_processing|geometry_missing/);
     expect(panel).not.toMatch(/storage_path|sha256|analysis_fingerprint|diagn/i);

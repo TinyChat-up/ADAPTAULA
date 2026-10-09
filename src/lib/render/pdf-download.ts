@@ -21,7 +21,7 @@ export function filenameFromDisposition(header: string | null): string {
   return safe && safe.toLowerCase().endsWith(".pdf") ? safe : PDF_FALLBACK_NAME;
 }
 
-export type PdfFetchResult = { ok: true; blob: Blob; filename: string } | { ok: false; message: string };
+export type PdfFetchResult = { ok: true; blob: Blob; filename: string } | { ok: false; message: string; code?: string };
 
 export async function fetchAdaptationPdf(adaptationId: string, fetcher: typeof fetch = fetch): Promise<PdfFetchResult> {
   let response: Response;
@@ -31,9 +31,9 @@ export async function fetchAdaptationPdf(adaptationId: string, fetcher: typeof f
     return { ok: false, message: "No hemos podido conectar. Comprueba tu conexión y vuelve a intentarlo." };
   }
   if (!response.ok || response.headers.get("Content-Type")?.split(";")[0] !== "application/pdf") {
-    const body = (await response.json().catch(() => null)) as { error?: { message?: unknown } } | null;
+    const body = (await response.json().catch(() => null)) as { error?: { message?: unknown; code?: unknown } } | null;
     const message = typeof body?.error?.message === "string" ? body.error.message : PDF_GENERIC_ERROR;
-    return { ok: false, message };
+    return { ok: false, message, ...(typeof body?.error?.code === "string" ? { code: body.error.code } : {}) };
   }
   return { ok: true, blob: await response.blob(), filename: filenameFromDisposition(response.headers.get("Content-Disposition")) };
 }

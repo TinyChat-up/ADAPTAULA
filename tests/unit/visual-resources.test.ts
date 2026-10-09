@@ -41,6 +41,11 @@ describe("the five kinds of visual need, told apart without any image model", ()
     expect(visualTreatment(decision({ supports: [{ kind: "visual_cue", uses_task_data: false }] }), analysis)).toMatchObject({ kind: "requested", essential: false });
   });
 
+  it("8.2A.1 · a layout-only decision is deferred to the renderer only where it can execute it (activities), never on a text", () => {
+    expect(classifyDecisionExecution(decision({ action: "reorganize", target: "act_2", strategies: ["visual_load_reduction"] }), analysis, context).route).toBe("deferred_to_renderer");
+    expect(classifyDecisionExecution(decision({ action: "reorganize", target: "ctt_1", strategies: ["visual_load_reduction"] }), analysis, context)).toMatchObject({ route: "unsupported", reason: expect.stringMatching(/solo sabe separar visualmente actividades/) });
+  });
+
   it("a rewrite with a visual request still needs its rewrite: no silent partial execution", () => {
     const d = decision({ action: "rephrase", target: "act_3", visual: { mode: "new_representation", source_visual: null, purpose: "Esquema", essential: false } });
     expect(classifyDecisionExecution(d, analysis, context).route).not.toBe("deterministic");
@@ -125,7 +130,7 @@ describe("what the teacher reads and may do", () => {
 
   it("plain messages and only the safe actions; no technical state ever", () => {
     const out = panel(true);
-    for (const text of ["Seleccionar imagen", "Añadir recurso", "Faltan 2 imágenes para poder imprimir la ficha", "Esta actividad necesita una imagen del documento original.", "añádelo para poder imprimir la ficha"]) expect(out).toContain(text);
+    for (const text of ["Localizar en el original", "No está en el original · Añadir imagen", "Añadir recurso", "Faltan 2 imágenes para poder imprimir la ficha", "Esta actividad necesita una imagen del documento original.", "añádelo para poder imprimir la ficha"]) expect(out).toContain(text);
     // Only the optional support can be left out: one «Continuar sin esta imagen», never for an essential visual.
     expect(out.match(/>Continuar sin esta imagen</g)).toHaveLength(1);
     expect(out).toContain("Es un apoyo opcional");
@@ -142,6 +147,6 @@ describe("what the teacher reads and may do", () => {
   it("read-only members see the state, never an action", () => {
     const out = panel(false);
     expect(out).toContain("solo lectura");
-    expect(out).not.toMatch(/Seleccionar imagen|Añadir recurso|Continuar sin esta imagen|<button|<form/);
+    expect(out).not.toMatch(/Localizar en el original|Añadir recurso|Añadir imagen|Continuar sin esta imagen|<button|<form/);
   });
 });

@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 const ERRORS: Record<PdfExportError, { status: number; message: string }> = {
   not_found: { status: 404, message: "No hemos encontrado esa adaptación." },
   not_ready: { status: 409, message: "Esta adaptación todavía no tiene una ficha entregada." },
+  resource_pending: { status: 409, message: "Falta completar un recurso de la ficha (una imagen). Complétalo en la ficha y podrás descargar el PDF." },
   not_renderable: { status: 409, message: "Esta ficha todavía no se puede descargar completa. Revisa la vista docente para ver qué falta." },
   render_failed: { status: 503, message: "No hemos podido preparar el PDF. Inténtalo de nuevo en unos minutos." },
 };
