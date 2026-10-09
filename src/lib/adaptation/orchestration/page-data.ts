@@ -10,13 +10,16 @@ import { getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlan
 import { serviceDeps } from "./server";
 import { listState, type ListState } from "@/lib/adaptation/presentation/list";
 import type { AdaptationStatusDto } from "./status";
+import { blockingNeeds, visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
+import { loadRenderInput } from "@/lib/render/load";
 
 export interface AdaptationPageData {
   status: AdaptationStatusDto;
   /** Only while the teacher has to review it: the plan is not needed (nor sent to the browser) in any other state. */
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
-  readyInfo: { version: number; createdAt: string } | null;
+  /** `visualsPending`: essential visuals the printed sheet still waits for (an image to select or a resource to provide). */
+  readyInfo: { version: number; createdAt: string; visualsPending: number } | null;
   /** The teacher's alias for the profile, for the page header only. Null when the profile was deleted. */
   profileName: string | null;
   /** Read-only members see every state but no command (they would be refused on the server anyway). */
@@ -62,7 +65,7 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Pro
       subject: subjects.find((s) => s.slug === material.subject_slug)?.name ?? null,
       analysis,
     }),
-    readyInfo: version ? { version: version.version, createdAt: version.created_at } : null,
+    readyInfo: version ? { version: version.version, createdAt: version.created_at, visualsPending: await visualsPending(ctx, id) } : null,
     profileName,
     canWrite: actor.canWrite,
   };
@@ -120,4 +123,10 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     updatedAt: r.updated_at as string,
     state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string)),
   }));
+}
+
+/** The same reading of the sheet the viewer and the PDF make: what an essential visual still lacks, counted, never guessed. */
+async function visualsPending(ctx: WorkspaceContext, id: string): Promise<number> {
+  const loaded = await loadRenderInput(ctx, id);
+  return loaded.kind === "ok" ? blockingNeeds(visualNeedsOf(loaded)).length : 0;
 }

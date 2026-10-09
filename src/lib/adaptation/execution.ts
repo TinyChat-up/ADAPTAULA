@@ -6,6 +6,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { isResolvedByPresentation } from "./context";
 import { authorizedKinds, decisionsToGenerateV2 } from "./generated-v2";
 import type { ReviewOutcome, ReviewedDecision, ReviewedPlan } from "./plan-review";
+import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
 /**
  * Who carries out each EFFECTIVE decision, decided before any model call (docs/ADAPTATION.md § Rutas de ejecución). The planner
@@ -25,6 +26,7 @@ export type ExecutionRoute = (typeof EXECUTION_ROUTES)[number];
 
 /** Layout-only actions: with no support to write they only ask for a different arrangement of what is already there. */
 const LAYOUT_ACTIONS = new Set<Decision["action"]>(["segment", "reorganize"]);
+
 
 /**
  * How many elements each support of contract v2 can hold, read from the schema itself (one source of truth): relaxing a cap in
@@ -55,6 +57,8 @@ export interface DecisionExecution {
   outcome: ReviewOutcome;
   /** null when the decision is not applied (rejected, unreviewed, blocked): nothing has to execute it. */
   route: ExecutionRoute | null;
+  /** Its visual part, carried out by the assembler whatever the route (docs/VISUAL_RESOURCES.md). Absent: none. */
+  visual?: VisualTreatment;
   reason: string;
   issues: ExecutionIssue[];
 }
@@ -78,6 +82,13 @@ export function classifyDecisionExecution(decision: Decision, analysis: Material
   const text = analysis.texts.find((t) => t.id === decision.target);
   if (decision.action === "remove") return { route: "deterministic", reason: "El ensamblador omite el elemento" };
   if (decision.action === "segment" && text?.kind === "reading_text") return { route: "deterministic", reason: "El ensamblador etiqueta los párrafos del texto fuente sin tocarlos" };
+  const visual = VISUAL_ACTIONS.has(decision.action) ? visualTreatment(decision, analysis) : null;
+  if (visual?.kind === "original") {
+    return { route: "deterministic", reason: visual.requestedTransform ? "El ensamblador conserva el visual original junto a la actividad (la transformación no se hace: se mantiene tal cual)" : "El ensamblador conserva el visual original junto a la actividad" };
+  }
+  if (visual?.kind === "requested") {
+    return { route: "deterministic", reason: visual.essential ? "El ensamblador reserva el sitio del recurso visual: lo aporta el docente o decide continuar sin él antes de imprimir" : "El ensamblador reserva el sitio de un apoyo visual opcional: la ficha se imprime sin él hasta que el docente lo aporte" };
+  }
   if (decision.dimensions.length > 0 && decision.dimensions.every((d) => isResolvedByPresentation(d, context.presentation))) {
     return { route: "presentation", reason: "Lo resuelve la presentación del documento (paginación o decoración)" };
   }
@@ -112,7 +123,8 @@ export function planExecutability(reviewed: ReviewedPlan, analysis: MaterialAnal
     const issues: ExecutionIssue[] = [...(route === "unsupported" ? [{ code: "no_executor" as const, detail: reason }] : []), ...reviewIssues(rd, rd.effective)];
     byRoute[route].push(rd.id);
     for (const issue of issues) blockers.push(`${rd.id}: ${issue.detail}`);
-    return { ...base, route, reason, issues };
+    const visual = route !== "unsupported" && VISUAL_ACTIONS.has(rd.effective.action) ? visualTreatment(rd.effective, analysis) : null;
+    return { ...base, route, reason, issues, ...(visual ? { visual } : {}) };
   });
   return {
     decisions,

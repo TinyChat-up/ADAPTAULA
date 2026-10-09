@@ -4,6 +4,7 @@ import type { GeneratedSegments } from "@/lib/schemas/ai-contracts";
 import { MATERIAL_DOCUMENT_SCHEMA_VERSION, MaterialDocumentSchema, createBlockId, type Block, type DraftBlock, type MaterialDocument, type ResponseSpec } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { statedAnswer } from "@/lib/analysis/answers";
+import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
 /**
  * Builds the MaterialDocument from the analysis, the plan and the generated segments. What the plan keeps is copied
@@ -186,10 +187,28 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     }
   }
 
+  // The visual part of each decision (docs/VISUAL_RESOURCES.md): an original visual is linked to its activity; a visual the
+  // original does not have gets its place (an `image` of source `requested`) right before its target, for the teacher to fill.
+  const visuals = plan.decisions.flatMap((d) => {
+    const treatment = VISUAL_ACTIONS.has(d.action) ? visualTreatment(d, analysis) : null;
+    return treatment ? [{ decision: d, treatment }] : [];
+  });
+  const placeholders = new Map<string, Block[]>();
+  const linked = new Map<string, string[]>();
+  const link = (target: string, id: string) => linked.set(target, [...(linked.get(target) ?? []), id]);
+  for (const { decision, treatment } of visuals) {
+    if (treatment.kind !== "requested") continue;
+    const block = placeholderBlock(decision, treatment, newBlockId());
+    if (decision.target === "document") head.push(block);
+    else placeholders.set(decision.target, [...(placeholders.get(decision.target) ?? []), block]);
+    link(decision.target, block.id);
+  }
+
   const ordered: Array<{ page: number; block: Block }> = [];
   for (const unit of units) {
     const decisions = decisionsFor(unit.ref);
     if (decisions.some((d) => d.action === "remove")) continue;
+    for (const block of placeholders.get(unit.ref) ?? []) ordered.push({ page: unit.page, block });
     // Segmenting a source text is deterministic: the paragraphs stay word for word, only labelled. No model rewrites them.
     const segmenting = decisions.filter((d) => d.action === "segment");
     const literal = unit.blocks.map((b) =>
@@ -212,6 +231,18 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
       .map((id) => (finalIds.has(id) ? id : originalRef.has(id) ? finalBlockOf(originalRef.get(id)!) : undefined))
       .filter((x): x is string => x !== undefined);
     o.block = { ...o.block, resource_block_ids: [...new Set(remapped)] };
+  }
+  for (const { decision, treatment } of visuals) {
+    if (treatment.kind !== "original") continue;
+    const visualBlock = ordered.find((o) => RESOURCE_TYPES.has(o.block.type) && o.block.trace.source_refs.includes(treatment.visualId));
+    if (!visualBlock) continue;
+    visualBlock.block = { ...visualBlock.block, trace: { ...visualBlock.block.trace, decision_ids: [...new Set([...visualBlock.block.trace.decision_ids, decision.id])] } };
+    link(decision.target, visualBlock.block.id);
+  }
+  for (const o of ordered) {
+    if (o.block.type !== "activity") continue;
+    const extra = o.block.trace.source_refs.flatMap((ref) => linked.get(ref) ?? []);
+    if (extra.length > 0) o.block = { ...o.block, resource_block_ids: [...new Set([...(o.block.resource_block_ids ?? []), ...extra])] };
   }
 
   // Original stated answers go to the teacher's key; inferred ones never do.
@@ -259,6 +290,17 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     pages: pages.filter((p) => p.blocks.length > 0),
     answer_key: answerKey,
   });
+}
+
+/** The reserved place of a visual the original does not have. Its accessible name is neutral until the teacher provides it. */
+function placeholderBlock(decision: Decision, treatment: Extract<VisualTreatment, { kind: "requested" }>, id: string): Block {
+  return {
+    id,
+    type: "image",
+    source: { kind: "requested", decision_id: decision.id, purpose: treatment.purpose.slice(0, 300), style: treatment.style, essential: treatment.essential },
+    alt_text: "Recurso visual de la actividad",
+    trace: { origin: "adapted", source_refs: decision.target === "document" ? [] : [decision.target], decision_ids: [decision.id] },
+  };
 }
 
 /** Deterministic id factory for tests and evals (`blk_0001`, `blk_0002`…). */

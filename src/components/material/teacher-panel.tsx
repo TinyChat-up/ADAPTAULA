@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { Alert } from "@/components/ui/feedback";
-import { FAILURE_COPY, failureOfState, type VisualState } from "@/lib/render/visual-assets";
 import type { RenderValidation } from "@/lib/render/model";
 import { MATERIAL_RENDERER_VERSION } from "@/lib/render/version";
 
@@ -14,32 +12,7 @@ const STATUS_COPY = {
  * Teacher-only layer, OUTSIDE the sheet (hidden in print, never in the student's view): the version, what the presentation
  * could not do and which pedagogical observations the review left. No prompts, reasoning, profile or inferred answers.
  */
-export interface PanelVisual {
-  state: VisualState;
-  label: string;
-  essential: boolean;
-  locateHref: string | null;
-}
-
-function VisualRow({ visual }: { visual: PanelVisual }) {
-  const { state } = visual;
-  const failure = failureOfState(state);
-  return (
-    <li className="space-y-1">
-      <p>
-        <span className="font-medium">{visual.label}</span> · {visual.essential ? "necesaria" : "opcional"} ·{" "}
-        {state.status === "ready" ? `localizada a mano en la página ${state.provenance?.page} (revisión ${state.provenance?.revision})` : failure ? FAILURE_COPY[failure] : ""}
-      </p>
-      {visual.locateHref ? (
-        <Link href={visual.locateHref} className="inline-flex min-h-9 items-center text-sm font-medium text-primary underline underline-offset-2">
-          {state.status === "ready" ? "Corregir la localización" : visual.essential ? "Localizar en el original" : "Localizar también"}
-        </Link>
-      ) : null}
-    </li>
-  );
-}
-
-export function TeacherPanel({ validation, version, observations, visuals = [] }: { validation: RenderValidation; version: number; observations: string[]; visuals?: PanelVisual[] }) {
+export function TeacherPanel({ validation, version, observations }: { validation: RenderValidation; version: number; observations: string[] }) {
   const attention = validation.issues.filter((i) => i.severity !== "info");
   const notes = validation.issues.filter((i) => i.severity === "info");
   return (
@@ -55,16 +28,6 @@ export function TeacherPanel({ validation, version, observations, visuals = [] }
           <ul className="list-disc space-y-1 pl-5 text-sm">
             {attention.map((i, n) => (
               <li key={n}>{i.message}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {visuals.length > 0 ? (
-        <section className="space-y-1">
-          <h2 className="text-sm font-semibold">Imágenes del original</h2>
-          <ul className="space-y-2 text-sm">
-            {visuals.map((v) => (
-              <VisualRow key={v.state.visualId} visual={v} />
             ))}
           </ul>
         </section>

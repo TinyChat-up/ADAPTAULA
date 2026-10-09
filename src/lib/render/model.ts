@@ -46,7 +46,7 @@ export type RenderNode = { key: string } & (
   | { kind: "list"; ordered: boolean; items: Run[][] }
   | { kind: "table"; caption?: string; unit?: string; headers: string[]; rows: string[][] }
   | { kind: "chart"; title?: string; chartType: "bar" | "line" | "pie" | "other"; categories: string[]; series: Array<{ label: string | null; values: number[] }>; unit?: string; xLabel?: string; yLabel?: string }
-  | { kind: "image"; state: "available" | "missing" | "pending"; src?: string; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure }
+  | { kind: "image"; state: "available" | "missing" | "pending" | "omitted"; src?: string; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure; origin: "original" | "requested" }
   | { kind: "help_box"; variant: "key_idea" | "reminder" | "tip" | "strategy"; title?: string; paragraphs: Run[][] }
   | { kind: "checklist"; title?: string; items: string[]; keepTogether: boolean }
   | { kind: "vocabulary"; title?: string; items: Array<{ term: string; definition: string }> }
@@ -98,6 +98,7 @@ export type IssueCode =
   | "asset_missing"
   | "asset_unsupported"
   | "image_pending"
+  | "image_omitted"
   | "deferred_unsupported"
   | "deferred_not_applicable"
   | "deferred_applied"
@@ -143,6 +144,11 @@ export interface BuildRenderOptions {
   assetFailures?: Readonly<Record<string, VisualAssetFailure>>;
   /** `vis_N` that the adaptation must preserve (from the pinned context): a missing one makes the sheet not renderable. */
   requiredVisuals?: readonly string[];
+  /**
+   * The teacher's answer to each visual a decision asked for (`requested`, by `dec_N`): the image they provided, or their explicit
+   * decision to go on without it. Absent → still pending (an essential one makes the sheet not renderable).
+   */
+  resources?: Readonly<Record<string, AssetSource | { omitted: true }>>;
   /** The deferred decisions of the review this version came from; null/undefined = unknown (reported, never guessed). */
   deferred?: readonly DeferredInput[] | null;
   /**
@@ -282,14 +288,20 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
     case "chart":
       return { key, kind: "chart", ...(block.title ? { title: block.title } : {}), chartType: block.chart_type, categories: block.categories, series: block.series.map((s) => ({ label: s.label, values: s.values })), ...(block.unit ? { unit: block.unit } : {}), ...(block.x_label ? { xLabel: block.x_label } : {}), ...(block.y_label ? { yLabel: block.y_label } : {}) };
     case "image": {
-      if (block.source.kind === "requested") return { key, kind: "image", state: "pending", alt: block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential: false };
+      if (block.source.kind === "requested") {
+        const resource = ctx.options.resources?.[block.source.decision_id];
+        const essential = block.source.essential === true;
+        const base = { key, kind: "image" as const, alt: block.caption ?? NEUTRAL_VISUAL_LABEL, ...(block.caption ? { caption: block.caption } : {}), essential, origin: "requested" as const };
+        if (resource && "omitted" in resource) return { ...base, state: "omitted" };
+        return resource ? { ...base, state: "available", src: resource.src } : { ...base, state: "pending" };
+      }
       const ref = block.source.visual_ref;
       const asset = ctx.options.assets?.[ref];
       const essential = ctx.options.requiredVisuals?.includes(ref) ?? false;
       const failure = asset ? undefined : ctx.options.assetFailures?.[ref];
       // The accessible name is the printed caption of the original when there is one; otherwise a neutral label. The analyzer's
       // free description of the image is not verified, so it is never used as the student's text alternative.
-      return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src } : {}), alt: block.caption ?? NEUTRAL_VISUAL_LABEL, ...(block.caption ? { caption: block.caption } : {}), essential, ...(failure ? { failure } : {}) };
+      return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src } : {}), alt: block.caption ?? NEUTRAL_VISUAL_LABEL, ...(block.caption ? { caption: block.caption } : {}), essential, ...(failure ? { failure } : {}), origin: "original" };
     }
     case "help_box":
       return { key, kind: "help_box", variant: block.variant, ...(block.title ? { title: block.title } : {}), paragraphs: parseParagraphs(block.text) };
@@ -345,7 +357,11 @@ function validate(nodes: RenderNode[], ctx: Ctx, outcomes: DeferredOutcome[], de
       if (n.essential) add(code, "error", `Falta una imagen del material original que es necesaria para resolver la actividad${why}`);
       else add(code, "warning", `Falta una imagen del material original; no se muestra en la ficha${why}`);
     }
-    if (n.kind === "image" && n.state === "pending") add("image_pending", "warning", "Hay una imagen prevista que todavía no existe; la ficha del alumno no la muestra");
+    if (n.kind === "image" && n.state === "pending") {
+      if (n.essential) add("image_pending", "error", "Falta un recurso visual imprescindible que no está en el material original: añádelo o decide continuar sin él");
+      else add("image_pending", "warning", "Hay un apoyo visual opcional sin recurso; la ficha del alumno no lo muestra");
+    }
+    if (n.kind === "image" && n.state === "omitted") add("image_omitted", "info", "Se decidió continuar sin un recurso visual que no estaba en el material original");
     if (n.kind === "chart" && seriesAmbiguous(n)) add("chart_series_unverified", "warning", "El material original no proporciona nombres verificados para estas series: se muestran sus datos en tabla, sin leyenda ni nombres inventados");
     if (n.kind === "chart" && n.series.some((s) => s.values.length !== n.categories.length)) add("structure_inconsistent", "error", "Un gráfico tiene series con distinto número de valores que categorías");
     if (n.kind === "table" && n.rows.some((r) => r.length !== n.headers.length)) add("structure_inconsistent", "error", "Una tabla tiene filas con distinto número de celdas que cabeceras");

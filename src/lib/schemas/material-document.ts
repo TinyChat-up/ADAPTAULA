@@ -62,12 +62,17 @@ export type ResponseSpec = z.infer<typeof ResponseSchema>;
 const ImageSourceSchema = z.discriminatedUnion("kind", [
   /** A visual of the original material, reused as it is. */
   z.object({ kind: z.literal("original"), visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/) }),
-  /** A future generated visual requested by a plan decision (images are not implemented yet). */
+  /**
+   * A visual a plan decision asks for that the original does not have. Nothing draws it: the teacher provides it (an image of
+   * theirs, later an authorised catalogue) or decides explicitly to go on without it (docs/VISUAL_RESOURCES.md). `purpose` is
+   * for the teacher, never the student's text alternative. `essential` (absent = false): the printed sheet waits for it.
+   */
   z.object({
     kind: z.literal("requested"),
     decision_id: z.string().regex(/^dec_[0-9]{1,4}$/),
     purpose: ShortText,
     style: z.enum(["diagram", "chart", "icon", "photo_like", "illustration"]),
+    essential: z.boolean().optional(),
   }),
 ]);
 

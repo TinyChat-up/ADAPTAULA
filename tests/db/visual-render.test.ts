@@ -3,7 +3,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
-import { TeacherPanel } from "@/components/material/teacher-panel";
+import { VisualNeedsPanel } from "@/components/material/visual-needs-panel";
+import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
 import { processAdaptationJobs } from "@/lib/adaptation/orchestration/worker";
 import { createAdaptationCommand, getAdaptationPlan, startGeneration, startPlanning, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
@@ -101,15 +102,16 @@ describe("visor + localización: de no renderizable a renderizable sin tocar la 
     expect(student).not.toMatch(/storage|generated-assets|token=|signed/i);
 
     const teacher = await view(a, m.visuals, "teacher_preview");
-    const panel = renderToStaticMarkup(createElement(TeacherPanel, {
-      validation: teacher.validation,
-      version: teacher.loaded.version.version,
-      observations: [],
-      visuals: teacher.loaded.visuals.map((state) => ({ state, label: state.visualId === "vis_3" ? "Decoración" : "Figura", essential: teacher.loaded.requiredVisuals.includes(state.visualId), locateHref: `/app/materiales/${m.id}/visuales/${state.visualId}` })),
+    const panel = renderToStaticMarkup(createElement(VisualNeedsPanel, {
+      needs: visualNeedsOf(teacher.loaded),
+      adaptationId: a.id,
+      canWrite: true,
+      locateHref: (visualId: string) => `/app/materiales/${m.id}/visuales/${visualId}`,
     }));
-    expect(panel).toContain("localizada a mano en la página 2 (revisión 1)");
-    expect(panel).toContain("Localizar también");
-    expect(panel).toContain("Corregir la localización");
+    expect(panel).toContain("seleccionada en la página 2");
+    expect(panel).toContain("Seleccionar imagen");
+    expect(panel).toContain("Cambiar la selección");
+    expect(panel).not.toMatch(/missing_locator|asset_missing|located_processing|geometry_missing/);
     expect(panel).not.toMatch(/storage_path|sha256|analysis_fingerprint|diagn/i);
 
     // The adaptation itself did not change: same version, same review, same document (no asset URL in it).

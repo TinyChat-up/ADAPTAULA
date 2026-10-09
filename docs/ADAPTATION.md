@@ -130,9 +130,9 @@ Detalles que importan: solo se exige lo que dice la consigna original (el valor 
 
 `stage-rules.ts`. La accesibilidad cognitiva y la edad cronológica son ejes distintos: un perfil con mucho apoyo en ESO recibe frases cortas, no una ficha infantil. ESO/Bachillerato: registro adolescente/joven, decoración reducida, sin ilustraciones infantiles (solo esquema, gráfico, icono o foto en ESO; esquema, gráfico o foto en Bachillerato), sin diminutivos ni elogios condescendientes ni emojis (FAIL); en Primaria, aviso.
 
-## Ayudas visuales (diseño, sin implementar)
+## Ayudas visuales (Phase 8.2A: ejecutadas sin generar imágenes)
 
-Una decisión puede pedir `visual: { mode, source_visual, purpose, essential }` con `mode` = `reuse_original` (el visual tal cual), `transform_original` (mismos datos, otra forma: review si es necesario), `new_representation` (algo nuevo; bloqueado si sustituye un visual necesario) u `optional_support`. Solo si aporta una función; más imágenes no es mejor adaptación. En el documento se convierte en `image` con `source.kind = "requested"` y estilo permitido por la etapa; `ImageBrief` es el contrato que esa petición alimentará.
+Una decisión puede pedir `visual: { mode, source_visual, purpose, essential }` con `mode` = `reuse_original` (el visual tal cual), `transform_original` (mismos datos, otra forma: review si es necesario), `new_representation` (algo nuevo; bloqueado si sustituye un visual necesario) u `optional_support`. Solo si aporta una función; más imágenes no es mejor adaptación. Desde 8.2A estas decisiones van por la ruta `deterministic`: el ensamblador conserva y enlaza el visual del original, o reserva el sitio (`image` de origen `requested`, con `essential`) para el recurso que aporta el docente o para su decisión explícita de continuar sin él. Antes no tenían ejecutor y paraban «Hacer magia» en la revisión del plan. Detalle, casos y licencias: `docs/VISUAL_RESOURCES.md`.
 
 ## Persistencia propuesta (sin migración ahora)
 

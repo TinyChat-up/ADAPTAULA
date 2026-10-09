@@ -9,6 +9,8 @@ import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/material-document";
 import { resolveVisuals, type ResolvedVisuals, type VisualDeps } from "@/lib/materials/visuals/service";
 import { visualDeps } from "@/lib/materials/visuals/server";
+import { requestedVisuals, resolveResources, type RequestedVisual, type ResourceDeps, type ResourceState } from "@/lib/adaptation/resources/service";
+import { resourceDeps } from "@/lib/adaptation/resources/server";
 import type { DeferredInput } from "./deferred";
 import { buildRenderModel, type RenderMode, type RenderModel, type RenderValidation } from "./model";
 import { assetRef, type PinnedAsset } from "./print/pinned-assets";
@@ -18,7 +20,7 @@ export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }> };
 
 export interface RenderLoadOptions {
   /**
@@ -26,10 +28,14 @@ export interface RenderLoadOptions {
    * in `pinned`), instead of the authorised image route the screen uses. Same states, same failures, same model otherwise.
    */
   pin?: boolean;
+  /** The teacher's resources for the visuals a decision asked for (docs/VISUAL_RESOURCES.md). Absent → all still pending. */
+  resources?: ResourceDeps;
 }
 
 /** The authorised route that streams a verified crop. Never a signed URL: authorisation never depends on knowing a link. */
 export const visualSrc = (adaptationId: string, visualId: string) => `/api/adaptations/${adaptationId}/visuals/${visualId}`;
+/** The authorised route that streams a verified image the teacher provided for a decision's visual. */
+export const resourceSrc = (adaptationId: string, decisionId: string) => `/api/adaptations/${adaptationId}/resources/${decisionId}`;
 
 /**
  * What the sheet viewer needs, from the USER's client (RLS): another workspace's adaptation and a missing one are both
@@ -39,7 +45,7 @@ export const visualSrc = (adaptationId: string, visualId: string) => `/api/adapt
 export async function loadRenderInput(ctx: WorkspaceContext, id: string): Promise<RenderLoad> {
   const supabase = await getSupabase();
   const actor: Actor = { userId: ctx.user.id, workspaceId: ctx.workspace.id, canWrite: hasRole(ctx.role, WRITE_ROLES) };
-  return loadRenderInputWith(serviceDeps(supabase), actor, id, visualDeps(supabase));
+  return loadRenderInputWith(serviceDeps(supabase), actor, id, visualDeps(supabase), { resources: resourceDeps(supabase) });
 }
 
 /** The same, over explicit dependencies (what the tests drive against a real database with the user's RLS reader). */
@@ -80,6 +86,25 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
       if (s.status === "ready" && instance && bytes) pinned[s.visualId] = { ...instance, mime: "image/png", bytes };
     }
   }
+  // The visuals a decision asked for and the original does not have: the teacher's image (verified bytes), their explicit
+  // decision to go on without it, or still pending. Pinned for a PDF exactly like a crop (id + sha-256).
+  const requested = requestedVisuals(parsed.data);
+  const resolvedResources = options.resources ? await resolveResources(options.resources, id, requested.map((r) => r.decisionId), { withBytes: options.pin }) : { states: {}, bytes: {} };
+  const stateOf = (decisionId: string): ResourceState => resolvedResources.states[decisionId] ?? { decisionId, status: "pending" };
+  const resources: Record<string, { src: string } | { omitted: true }> = {};
+  for (const r of requested) {
+    const state = stateOf(r.decisionId);
+    if (state.status === "omitted") resources[r.decisionId] = { omitted: true };
+    if (state.status !== "provided") continue;
+    if (!options.pin) {
+      resources[r.decisionId] = { src: resourceSrc(id, r.decisionId) };
+      continue;
+    }
+    const bytes = resolvedResources.bytes[r.decisionId];
+    if (!bytes) continue;
+    pinned[`dec:${r.decisionId}`] = { assetId: state.resourceId, sha256: state.sha256, mime: "image/png", bytes };
+    resources[r.decisionId] = { src: assetRef({ assetId: state.resourceId, sha256: state.sha256 }) };
+  }
   const subjectSlug = parsed.data.meta.subject;
   const subjectName = subjectSlug && deps.reader.getSubjectName ? await deps.reader.getSubjectName(subjectSlug) : null;
   const sourceOf = (visualId: string) => (options.pin ? assetRef(pinned[visualId]!) : visualSrc(id, visualId));
@@ -99,10 +124,12 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     visuals: states,
     pinned: Object.values(pinned),
     subjectName,
+    resources,
+    requested: requested.map((r) => ({ ...r, state: stateOf(r.decisionId) })),
   };
 }
 
 /** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
 export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
-  return buildRenderModel(loaded.document, { mode, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
+  return buildRenderModel(loaded.document, { mode, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
 }
