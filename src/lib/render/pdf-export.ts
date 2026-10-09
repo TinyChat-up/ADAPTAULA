@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import type { VisualDeps } from "@/lib/materials/visuals/service";
 import type { ResourceDeps } from "@/lib/adaptation/resources/service";
 import { loadRenderInputWith, sheetModel } from "@/lib/render/load";
+import { readinessOf } from "@/lib/render/readiness";
 import type { PdfEngine, PdfRenderResult } from "./print/engine";
 import { PdfEngineError } from "./print/engine";
 import { pdfContentDisposition } from "./pdf-filename";
@@ -20,7 +21,7 @@ import { validatePdf } from "./print/validation";
 // PostScript name of the embedded faces (`Inter-Regular`…), not the CSS family the sheet declares.
 const PDF_FONT_PREFIX = "Inter";
 
-export type PdfExportError = "not_found" | "not_ready" | "not_renderable" | "render_failed";
+export type PdfExportError = "not_found" | "not_ready" | "resource_pending" | "not_renderable" | "render_failed";
 
 export type PdfExportResult =
   | { ok: true; pdf: Uint8Array; filename: string; contentDisposition: string; pageCount: number; timings: PdfRenderResult["timings"] & { prepareMs: number; validateMs: number } }
@@ -40,9 +41,10 @@ export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, ada
   if (loaded.kind === "not_ready") return { ok: false, code: "not_ready" };
   if (loaded.kind === "invalid_document") return { ok: false, code: "not_renderable" };
 
-  // Exactly what the student view refuses to show, the PDF refuses to print.
-  const { model, validation } = sheetModel(loaded, "student");
-  if (validation.status === "not_renderable") return { ok: false, code: "not_renderable" };
+  // Exactly what the student view refuses to show, the PDF refuses to print; a missing essential visual is said as such.
+  const readiness = readinessOf(loaded);
+  if (!readiness.printable) return { ok: false, code: readiness.reason === "resource_pending" ? "resource_pending" : "not_renderable" };
+  const { model } = sheetModel(loaded, "student");
 
   let result: PdfRenderResult;
   let prepareMs: number;

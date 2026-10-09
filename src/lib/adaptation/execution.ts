@@ -74,6 +74,11 @@ export interface ExecutabilityReport {
   blockers: string[];
 }
 
+/** A layout-only decision the renderer can carry out: on an activity, or on the whole document (its activities). */
+export function isLayoutExecutable(decision: Pick<Decision, "target">, analysis: Pick<MaterialAnalysis, "activities">): boolean {
+  return decision.target === "document" ? analysis.activities.length > 0 : analysis.activities.some((a) => a.id === decision.target);
+}
+
 export function classifyDecisionExecution(decision: Decision, analysis: MaterialAnalysis, context: Pick<AdaptationContext, "limits" | "presentation">): { route: ExecutionRoute; reason: string } {
   if (decision.response_target !== undefined && (CLOSED_RESPONSES as readonly string[]).includes(decision.response_target)) {
     return { route: "unsupported", reason: `El formato ${decision.response_target} necesita una clave de respuestas: ningún ejecutor la produce` };
@@ -92,8 +97,12 @@ export function classifyDecisionExecution(decision: Decision, analysis: Material
   if (decision.dimensions.length > 0 && decision.dimensions.every((d) => isResolvedByPresentation(d, context.presentation))) {
     return { route: "presentation", reason: "Lo resuelve la presentación del documento (paginación o decoración)" };
   }
+  // The renderer can only give ACTIVITIES their own visual group (`planDeferred`): a layout intent on a text, a visual or a section
+  // has no executor, and deferring it would deliver a sheet that silently ignores it. It is reported as unsupported here, where
+  // the review (automatic or human) can decide about it, never discovered later on a «ready» sheet.
   if (LAYOUT_ACTIONS.has(decision.action) && authorizedKinds(decision).size === 0) {
-    return { route: "deferred_to_renderer", reason: "Reorganización de lo que ya hay: ni el análisis ni el documento tienen estructura para hacerlo sin interpretar el texto" };
+    if (isLayoutExecutable(decision, analysis)) return { route: "deferred_to_renderer", reason: "Reorganización de lo que ya hay: ni el análisis ni el documento tienen estructura para hacerlo sin interpretar el texto" };
+    return { route: "unsupported", reason: `La presentación solo sabe separar visualmente actividades; ${decision.target} no es una actividad` };
   }
   return { route: "unsupported", reason: `La acción ${decision.action} sobre ${decision.target} no tiene ejecutor (sin apoyo autorizado que escribir)` };
 }

@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
  * delivered version: nothing is regenerated, no new adaptation, no quota. The server validates the image on its bytes; this form
  * only collects it. Errors stay next to the field (`aria-describedby`), never only in a toast.
  */
-export function ResourceActions({ adaptationId, decisionId, canOmit, hasResource }: { adaptationId: string; decisionId: string; canOmit: boolean; hasResource: boolean }) {
+export function ResourceActions({ adaptationId, decisionId, canOmit, hasResource, addLabel = "Añadir recurso", changeLabel = "Cambiar recurso" }: { adaptationId: string; decisionId: string; canOmit: boolean; hasResource: boolean; addLabel?: string; changeLabel?: string }) {
   const router = useRouter();
   const uid = useId();
   const [open, setOpen] = useState(false);
@@ -56,9 +56,9 @@ export function ResourceActions({ adaptationId, decisionId, canOmit, hasResource
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant={open ? "secondary" : "primary"} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={`${uid}-form`} disabled={pending !== null}>
+        <Button size="sm" variant={open || addLabel !== "Añadir recurso" ? "secondary" : "primary"} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={`${uid}-form`} disabled={pending !== null}>
           <ImagePlus aria-hidden className="size-4" />
-          {hasResource ? "Cambiar recurso" : "Añadir recurso"}
+          {hasResource ? changeLabel : addLabel}
         </Button>
         {canOmit ? (
           <ConfirmDialog

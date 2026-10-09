@@ -7,7 +7,12 @@ import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-documen
  * creates another adaptation, regenerates anything or touches the quota. Original visuals go through the locator (materials).
  */
 
-export const RESOURCE_DECISION = /^dec_[0-9]{1,4}$/;
+/**
+ * Key of a resource: `dec_N`, a visual a plan decision asked for; or `vis_N`, a visual the analysis attributes to the original that
+ * the teacher could not find there (migration 021): the teacher provides theirs, it is never omitted.
+ */
+export const RESOURCE_DECISION = /^(dec|vis)_[0-9]{1,4}$/;
+const ORIGINAL_KEY = /^vis_[0-9]{1,4}$/;
 
 export interface ResourceRow {
   id: string;
@@ -89,7 +94,13 @@ async function authorised(deps: ResourceDeps, actor: ResourceActor, adaptationId
   const adaptation = await deps.reader.adaptation(adaptationId);
   if (!adaptation || adaptation.workspace_id !== actor.workspaceId) return { ok: false as const, code: "not_found" as const };
   const document = await deps.reader.currentDocument(adaptationId);
-  const requested = document ? requestedVisuals(document).find((r) => r.decisionId === decisionId) : undefined;
+  const original = ORIGINAL_KEY.test(decisionId) && document ? allBlocks(document).some((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === decisionId) : false;
+  // A visual of the original in this sheet: the teacher's image stands in for one they could not find. Never omittable.
+  const requested: RequestedVisual | undefined = original
+    ? { decisionId, essential: true, purpose: "Imagen del documento original", omittable: false }
+    : document
+      ? requestedVisuals(document).find((r) => r.decisionId === decisionId)
+      : undefined;
   if (!requested) return { ok: false as const, code: "not_found" as const };
   return { ok: true as const, adaptation, requested };
 }
@@ -143,7 +154,7 @@ export interface ResolvedResources {
  * The state of each requested visual, read with the user's rights. A provided image counts only if its object exists AND its
  * bytes match the recorded sha-256: the row alone is not enough (the same rule as the crops of the original).
  */
-export async function resolveResources(deps: ResourceDeps, adaptationId: string, decisionIds: readonly string[], options: { withBytes?: boolean } = {}): Promise<ResolvedResources> {
+export async function resolveResources(deps: ResourceDeps, adaptationId: string, decisionIds: readonly string[], options: { withBytes?: boolean; verify?: boolean } = {}): Promise<ResolvedResources> {
   const states: Record<string, ResourceState> = {};
   const bytes: Record<string, Uint8Array> = {};
   const rows = decisionIds.length > 0 ? await deps.reader.activeResources(adaptationId) : [];
@@ -151,6 +162,7 @@ export async function resolveResources(deps: ResourceDeps, adaptationId: string,
     const row = rows.find((r) => r.decision_id === decisionId);
     if (!row) states[decisionId] = { decisionId, status: "pending" };
     else if (row.resolution === "omitted") states[decisionId] = { decisionId, status: "omitted" };
+    else if (options.verify === false && !options.withBytes && row.sha256) states[decisionId] = { decisionId, status: "provided", resourceId: row.id, sha256: row.sha256 };
     else {
       const object = row.storage_path ? await deps.reader.readObject(row.storage_path) : null;
       if (object && row.sha256 && sha256(object) === row.sha256) {

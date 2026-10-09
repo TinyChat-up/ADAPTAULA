@@ -34,7 +34,7 @@ export function TeacherPanel({ validation, version, observations }: { validation
       ) : null}
       {observations.length > 0 ? (
         <section className="space-y-1">
-          <h2 className="text-sm font-semibold">Observaciones de la revisión</h2>
+          <h2 className="text-sm font-semibold">Observaciones de la revisión (no impiden usar la ficha)</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm">
             {observations.map((o) => (
               <li key={o}>{o}</li>

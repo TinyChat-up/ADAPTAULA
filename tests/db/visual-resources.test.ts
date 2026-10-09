@@ -13,6 +13,11 @@ import { normaliseTeacherImage } from "@/lib/adaptation/resources/image";
 import { omitVisualResource, provideVisualResource, resolveResources } from "@/lib/adaptation/resources/service";
 import { locateVisual } from "@/lib/materials/visuals/service";
 import { loadRenderInputWith, sheetModel } from "@/lib/render/load";
+import { readinessOf } from "@/lib/render/readiness";
+import { MATERIAL_RENDERER_VERSION } from "@/lib/render/version";
+import { renderPrintHtml } from "@/lib/render/print/html";
+import { listState } from "@/lib/adaptation/presentation/list";
+import { ReadyPanel } from "@/components/adaptation/status-panels";
 import { modelAssetRefs } from "@/lib/render/print/pinned-assets";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { allBlocks } from "@/lib/schemas/material-document";
@@ -42,7 +47,7 @@ const q = <T>(sql: string, params: unknown[] = []) => db.query<T>(sql, params).t
 const count = async (sql: string, params: unknown[]) => Number((await q<{ c: string }>(`select count(*)::text c from ${sql}`, params))[0]!.c);
 const html = (model: Parameters<typeof MaterialSheet>[0]["model"]) => renderToStaticMarkup(createElement(MaterialSheet, { model }));
 
-type Extra = (needRefs: string[]) => Record<string, unknown>;
+type Extra = (needRefs: string[], unusedRefs: string[]) => Record<string, unknown>;
 let n = 0;
 
 /** «Hacer magia» on `analysis` with the scripted planner's plan plus `extra` decisions (what the real planner proposes). */
@@ -58,7 +63,9 @@ async function magic(analysis: MaterialAnalysis, extra: Extra[], options: { user
       const out = await inner.plan(input);
       const draft = out.draft as { decisions: Array<{ need_refs: string[] }> };
       const refs = draft.decisions[0]?.need_refs ?? ["need_1"];
-      return { ...out, draft: { ...draft, decisions: [...draft.decisions, ...extra.map((e) => e(refs))] } } as never;
+      const used = new Set(draft.decisions.flatMap((d) => d.need_refs));
+      const unused = (input.context.needs as unknown[]).map((_, i) => `need_${i + 1}`).filter((r) => !used.has(r));
+      return { ...out, draft: { ...draft, decisions: [...draft.decisions, ...extra.map((e) => e(refs, unused))] } } as never;
     },
   }));
   orchestrator.entitlements = dbEntitlements(orchestrator.store);
@@ -82,7 +89,7 @@ async function sheet(m: Awaited<ReturnType<typeof magic>>, mode: "student" | "te
   return { loaded, ...sheetModel(loaded, mode), needs: visualNeedsOf(loaded) };
 }
 
-/** The teacher selects the two essential figures of the original (what «Seleccionar imagen» does). */
+/** The teacher selects the two essential figures of the original (what «Localizar en el original» does). */
 async function locateOriginals(m: Awaited<ReturnType<typeof magic>>) {
   for (const [visualId, y] of [["vis_1", 0.22], ["vis_2", 0.45]] as const) {
     expect((await locateVisual(m.visuals.deps, m.actor, { materialId: m.materialId, visualId, page: 2, bounds: { x: 0.15, y, w: 0.6, h: 0.12 } })).ok).toBe(true);
@@ -161,17 +168,17 @@ describe("A · an existing visual of the original, located", () => {
 });
 
 describe("B · an existing visual of the original that needs to be selected", () => {
-  it("delivered but not printable; «Seleccionar imagen»; once selected, the SAME adaptation prints, nothing re-run", async () => {
+  it("delivered but not printable; «Localizar en el original»; once selected, the SAME adaptation prints, nothing re-run", async () => {
     const m = await magic(fractionsAnalysis(), []);
     const before = await sheet(m, "teacher_preview");
     expect(before.validation.status).toBe("not_renderable");
     const blocking = blockingNeeds(before.needs);
     expect(blocking.map((b) => [b.key, b.message])).toEqual([
-      ["vis_1", "Esta actividad necesita una imagen del documento original."],
-      ["vis_2", "Esta actividad necesita una imagen del documento original."],
+      ["vis_1", "Esta actividad necesita una imagen del documento original. Localízala en el original o, si no está, añade la tuya."],
+      ["vis_2", "Esta actividad necesita una imagen del documento original. Localízala en el original o, si no está, añade la tuya."],
     ]);
     const panel = renderToStaticMarkup(createElement(VisualNeedsPanel, { needs: before.needs, adaptationId: m.id, canWrite: true, locateHref: (v: string) => `/app/materiales/${m.materialId}/visuales/${v}` }));
-    expect(panel).toContain("Seleccionar imagen");
+    expect(panel).toContain("Localizar en el original");
     expect(panel).toContain("Falta");
     expect(panel).not.toMatch(/missing_locator|asset_missing|render_unresolved|visual_crop|located_processing/);
     expect(panel).not.toContain("Continuar sin esta imagen"); // an original essential visual is never skipped
@@ -256,7 +263,7 @@ describe("D · an essential visual that is not in the original", () => {
     expect(blockingNeeds(forced.needs).map((x) => [x.key, x.status])).toEqual([[need.key, "to_provide"]]);
     const panel = renderToStaticMarkup(createElement(VisualNeedsPanel, { needs: forced.needs, adaptationId: m.id, canWrite: true, locateHref: (v: string) => v }));
     expect(panel).not.toContain(">Continuar sin esta imagen<");
-    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "resource_pending" });
     // Resolved by adding it: same adaptation, the PDF is now allowed (the engine is reached).
     await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key, ...(await teacherPng()), rightsConfirmed: true });
     expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
@@ -265,7 +272,7 @@ describe("D · an essential visual that is not in the original", () => {
   });
 
   it("text written for the same decision does NOT make it skippable: refused, the text is not a substitute, the PDF stays blocked", async () => {
-    const withText: Extra = (refs) => ({ ...newEssential("act_4")(refs), supports: [{ kind: "step_list", uses_task_data: false }] });
+    const withText: Extra = (refs, unused) => ({ ...newEssential("act_4")(refs, unused), supports: [{ kind: "step_list", uses_task_data: false }] });
     const m = await magic(fractionsAnalysis(), [withText]);
     await locateOriginals(m);
     const before = await sheet(m);
@@ -278,7 +285,7 @@ describe("D · an essential visual that is not in the original", () => {
     expect(await count("public.adaptation_visual_resources where adaptation_id = $1", [m.id])).toBe(0);
     await as(db, "service_role", null, () => db.query("select public.set_adaptation_visual_resource($1, $2, $3, 'omitted', null, null, null, null, null, false, $4)", [m.user.workspaceId, m.id, need.key, m.user.id]));
     expect((await sheet(m)).validation.status).toBe("not_renderable");
-    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "resource_pending" });
     await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key, ...(await teacherPng()), rightsConfirmed: true });
     expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
   });
@@ -289,9 +296,9 @@ describe("an essential visual of the ORIGINAL (a question that reads a figure) i
     const m = await magic(fractionsAnalysis(), []);
     const s = await sheet(m, "teacher_preview");
     expect(blockingNeeds(s.needs).every((x) => x.origin === "original" && !x.omittable)).toBe(true);
-    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_2" })).toEqual({ ok: false, code: "invalid" });
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_2" })).toEqual({ ok: false, code: "needs_resource" });
     expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "dec_1" })).toEqual({ ok: false, code: "not_found" });
-    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "resource_pending" });
     await locateOriginals(m);
     expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
   });
@@ -355,4 +362,106 @@ describe("PDF smoke · the production chain with the teacher's resource (real Ch
     expect(new TextDecoder("latin1").decode(result.pdf.subarray(0, 5))).toBe("%PDF-");
     expect(result.pageCount).toBeGreaterThan(0);
   }, 120_000);
+});
+
+describe("8.2A.1 · one state everywhere: adaptation screen, sheet, lists and PDF agree", () => {
+  const readiness = async (m: Awaited<ReturnType<typeof magic>>, verify = true) => {
+    const loaded = await loadRenderInputWith(m.deps, m.actor, m.id, m.visuals.deps, { resources: m.resources.deps, verify });
+    if (loaded.kind !== "ok") throw new Error(loaded.kind);
+    return readinessOf(loaded);
+  };
+  const panel = (m: Awaited<ReturnType<typeof magic>>, info: { visualsPending: number; printable: boolean }) =>
+    renderToStaticMarkup(createElement(ReadyPanel, { dto: m.status, materialId: m.materialId, info: { version: 1, createdAt: "2026-10-09T10:00:00Z", ...info } }));
+
+  it("an original image not located: «casi lista» on the screen and the list, «Completar ficha», no PDF button, 409 resource_pending", async () => {
+    const m = await magic(fractionsAnalysis(), []);
+    const r = await readiness(m);
+    expect(r).toEqual({ printable: false, pendingResources: 2, reason: "resource_pending" });
+    expect(await readiness(m, false)).toEqual(r); // the list's row-only reading agrees with the verified one
+    const out = panel(m, { visualsPending: r.pendingResources, printable: r.printable });
+    expect(out).toContain("La ficha está casi lista · Falta completar un recurso");
+    expect(out).toContain("Completar ficha");
+    expect(out).not.toMatch(/La ficha está lista|Descargar PDF/);
+    expect(listState("ready", false, false, !r.printable)).toEqual({ label: "Casi lista · falta un recurso", group: "attention", cta: "Completar ficha" });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "resource_pending" });
+
+    // Located: the same adaptation is now ready everywhere and the PDF reaches the engine.
+    await locateOriginals(m);
+    const after = await readiness(m);
+    expect(after).toEqual({ printable: true, pendingResources: 0, reason: null });
+    expect(panel(m, { visualsPending: 0, printable: true })).toContain("Descargar PDF");
+    expect(listState("ready", false, false, !after.printable).label).toBe("Ficha preparada");
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
+  });
+
+  it("«No está en el original · Añadir imagen»: the teacher's image stands in, pinned for the PDF; never omittable; idempotent; one unit", async () => {
+    const m = await magic(fractionsAnalysis(), []);
+    const image = await teacherPng();
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_1" })).toEqual({ ok: false, code: "needs_resource" });
+    expect(await provideVisualResource(m.resources.deps, { ...m.actor, canWrite: false }, { adaptationId: m.id, decisionId: "vis_1", ...image, rightsConfirmed: true })).toEqual({ ok: false, code: "forbidden" });
+    expect(await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_99", ...image, rightsConfirmed: true })).toEqual({ ok: false, code: "not_found" });
+    const first = await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_1", ...image, rightsConfirmed: true });
+    expect(first).toMatchObject({ ok: true, reused: false });
+    expect(await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_1", ...image, rightsConfirmed: true })).toMatchObject({ ok: true, reused: true });
+    const s = await sheet(m, "teacher_preview");
+    expect(s.needs.find((x) => x.key === "vis_1")).toMatchObject({ status: "provided", message: "Imagen añadida por ti: no se encontró en el documento original." });
+    expect(blockingNeeds(s.needs).map((x) => x.key)).toEqual(["vis_2"]); // the other figure is still to locate
+    await locateVisual(m.visuals.deps, m.actor, { materialId: m.materialId, visualId: "vis_2", page: 2, bounds: { x: 0.15, y: 0.45, w: 0.6, h: 0.12 } });
+    const print = await sheet(m, "student", true);
+    expect(print.validation.status).not.toBe("not_renderable");
+    expect(print.loaded.pinned).toHaveLength(2);
+    expect(modelAssetRefs(print.model).some((ref) => first.ok && first.state.status === "provided" && ref.includes(first.state.sha256))).toBe(true);
+    // The database itself refuses an omission of an original visual.
+    await expect(as(db, "service_role", null, () => db.query("select public.set_adaptation_visual_resource($1, $2, 'vis_2', 'omitted', null, null, null, null, null, false, $3)", [m.user.workspaceId, m.id, m.user.id]))).rejects.toThrow();
+    expect(await count("public.adaptations where request_key = $1", [m.key])).toBe(1);
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [m.id])).toBe(2);
+    expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [m.id]))[0]!.state).toBe("consumed");
+    expect(m.spy.planner + m.spy.generator + m.spy.reviewer).toBe(3);
+  });
+
+  it("an optional support never makes the sheet «casi lista»", async () => {
+    const m = await magic(fractionsAnalysis(), [optional("act_3")]);
+    await locateOriginals(m);
+    expect(await readiness(m)).toEqual({ printable: true, pendingResources: 0, reason: null });
+  });
+});
+
+describe("8.2A.1 · a layout decision the renderer cannot execute never reaches a «ready» sheet silently", () => {
+  const onText = (dimsFrom: "first" | "unused"): Extra => (refs, unused) => ({ target: "ctt_1", action: "reorganize", strategies: ["visual_load_reduction"], need_refs: dimsFrom === "first" ? refs : unused.slice(0, 1), intensity: "light" });
+
+  it("its need covered elsewhere: left out by the recommendation WITH its reason, delivered without a «not applied» warning", async () => {
+    const m = await magic(fractionsAnalysis(), [onText("first")]);
+    expect(m.status.status).toBe("ready");
+    const review = (await q<{ payload: { entries: Array<{ decision_id: string; action: string; reason: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review' order by created_at desc limit 1", [m.id]))[0]!.payload;
+    expect(review.entries.find((e) => e.decision_id === "dec_2")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/Ningún ejecutor puede aplicarla/) });
+    await locateOriginals(m);
+    const s = await sheet(m, "teacher_preview");
+    expect(s.validation.issues.some((i) => i.code === "deferred_unsupported" && i.severity === "warning")).toBe(false);
+  });
+
+  it("its need not covered: never deferred to a sheet that ignores it; the teacher decides in the review (no delivery, no new unit)", async () => {
+    const m = await magic(fractionsAnalysis(), [onText("unused")]);
+    const plan = (await q<{ payload: { decisions: Array<{ id: string; target: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan' order by created_at desc limit 1", [m.id]))[0]!.payload;
+    expect(plan.decisions.some((d) => d.target === "ctt_1")).toBe(true); // the profile really has that need: the decision is valid
+    expect(m.status).toMatchObject({ status: "awaiting_plan_review", phase: "awaiting_review", nextAction: "review_plan" });
+    const report = (await q<{ payload: { execution: { blockers: string[] } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'execution_report' order by created_at desc limit 1", [m.id]))[0]!.payload;
+    expect(report.execution.blockers.join(" ")).toMatch(/solo sabe separar visualmente actividades/);
+    expect(await count("public.adaptation_versions where adaptation_id = $1", [m.id])).toBe(0);
+    expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [m.id]))[0]!.state).toBe("reserved");
+  });
+});
+
+describe("8.2A.1 · Sistema CLARO is the product design, on screen and in the PDF", () => {
+  it("the production model and its print HTML are CLARO, renderer v4", async () => {
+    const m = await magic(fractionsAnalysis(), []);
+    await locateOriginals(m);
+    const screen = await sheet(m, "student");
+    expect(screen.model.design).toBe("claro");
+    expect(html(screen.model)).toContain('data-design="claro"');
+    const print = await sheet(m, "student", true);
+    const out = await renderPrintHtml(print.model, print.loaded.pinned);
+    expect(out.html).toContain('data-design="claro"');
+    expect(print.model.rendererVersion).toBe(MATERIAL_RENDERER_VERSION);
+    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v4");
+  });
 });

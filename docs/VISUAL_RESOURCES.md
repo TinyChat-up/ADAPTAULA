@@ -177,3 +177,34 @@ comercial. Además, las obras derivadas *share-alike* necesitan revisión legal 
   decisiones visuales (limitación previa del mock).
 - **Adaptación parada antes de 8.2A:** una adaptación que se quedó en la revisión del plan por una decisión visual se recupera con
   «Crear ficha» desde esa revisión: el *preflight* se vuelve a ejecutar con estas reglas. No se migra nada.
+
+## Hotfix 8.2A.1 · estado de entrega coherente
+
+**Un solo cálculo.** `readinessOf` (`src/lib/render/readiness.ts`) decide si una ficha entregada se puede imprimir, con la misma
+regla que la vista del alumno y el PDF. Lo usan la pantalla de la adaptación, la vista de la ficha, las listas (inicio, historial,
+material y perfil) y la exportación.
+
+**Mientras falte un visual imprescindible:**
+- la pantalla dice «La ficha está casi lista · Falta completar un recurso» y la acción principal es «Completar ficha», sin «Descargar
+  PDF»;
+- las listas muestran «Casi lista · falta un recurso»;
+- el PDF responde **409 `resource_pending`** con «Falta completar un recurso de la ficha…»; nunca el 503 técnico «inténtalo en unos
+  minutos». El bloqueo se mantiene aunque alguien llame directamente al endpoint.
+
+Las listas leen las filas sin descargar cada objeto (`verify: false`). La ficha, las rutas de imagen y el PDF siempre verifican el
+sha-256.
+
+**Imagen que el análisis atribuye al original (migración 021).** El servidor no puede comprobar si la imagen está realmente en el
+PDF. Por eso el docente ve dos acciones:
+- «Localizar en el original»;
+- «No está en el original · Añadir imagen»: su imagen sustituye a esa, solo en esta adaptación, y se fija en el PDF por id +
+  sha-256.
+
+Nunca se localiza una zona arbitraria ni se inventa la imagen. Un visual del original nunca se omite: lo impiden el servidor y una
+restricción de la base de datos.
+
+**Decisiones de presentación.** El *preflight* solo deja para el renderer un `segment`/`reorganize` sin apoyo cuando el destino es una
+actividad o el documento (lo único que el renderer sabe separar visualmente). Sobre un texto, un visual o una sección es
+`unsupported`. La recomendación automática solo la deja fuera si sus necesidades ya las cubren otras decisiones o la presentación, y
+registra el motivo. En caso contrario, «Hacer magia» se detiene en la revisión y decide el docente: no se entrega una ficha que ignora
+la decisión.

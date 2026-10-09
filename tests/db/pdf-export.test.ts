@@ -124,7 +124,8 @@ describe("GET /api/adaptations/[id]/pdf · authorisation and states", () => {
     as(w);
     const res = await get(w.id);
     expect(res.status).toBe(409);
-    expect((await errorOf(res)).code).toBe("not_renderable");
+    // A known, fixable cause: said as such (never the technical «inténtalo en unos minutos»).
+    expect(await errorOf(res)).toEqual({ code: "resource_pending", message: "Falta completar un recurso de la ficha (una imagen). Complétalo en la ficha y podrás descargar el PDF." });
     expect(engineCalls).toHaveLength(0);
   }, 60_000);
 

@@ -18,7 +18,7 @@ const noop = async () => {
   throw new Error("an action ran during render");
 };
 const actions: AdaptationActions = { start: noop, submit: noop, generate: noop, reopen: noop, retry: noop, cancel: noop };
-const view = (dto = status(), extra: { plan?: typeof plan | null; readyInfo?: { version: number; createdAt: string; visualsPending: number } | null; canWrite?: boolean } = {}) =>
+const view = (dto = status(), extra: { plan?: typeof plan | null; readyInfo?: { version: number; createdAt: string; visualsPending: number; printable: boolean } | null; canWrite?: boolean } = {}) =>
   html(createElement(AdaptationView, { initial: dto, plan: extra.plan ?? null, context, readyInfo: extra.readyInfo ?? null, actions, canWrite: extra.canWrite ?? true }));
 const form = () => html(createElement(PlanReviewForm, { plan, context, deferredIds: ["dec_4"], submit: noop, onSaved: () => {}, onRefresh: () => {} }));
 
@@ -209,7 +209,7 @@ describe("read-only members", () => {
 
 describe("result screens", () => {
   it("ready: success, version and date, the sheet and its PDF as next steps, no document, no fake rendering", () => {
-    const out = view(ready(), { readyInfo: { version: 2, createdAt: "2026-10-05T10:30:00Z", visualsPending: 0 } });
+    const out = view(ready(), { readyInfo: { version: 2, createdAt: "2026-10-05T10:30:00Z", visualsPending: 0, printable: true } });
     expect(out).toContain("La ficha está lista");
     expect(out).toContain("Versión 2");
     expect(out).toContain("Ver la ficha");

@@ -47,7 +47,7 @@ export function AdaptationView({
   initial: AdaptationStatusDto;
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
-  readyInfo: { version: number; createdAt: string; visualsPending: number } | null;
+  readyInfo: { version: number; createdAt: string; visualsPending: number; printable: boolean } | null;
   actions: AdaptationActions;
   /** False for read-only members: every state is visible, no command is offered and nothing is asked to run. */
   canWrite: boolean;

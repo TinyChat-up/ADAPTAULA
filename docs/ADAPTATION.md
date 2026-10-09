@@ -520,10 +520,11 @@ regla conoce una ficha concreta). Mismo renderer para pantalla y PDF (HTML/CSS �
 - **Paginación.** El enunciado de una actividad (con sus pasos y requisitos) nunca se separa de su primera zona de respuesta.
   Deuda conocida: los saltos de página lógicos del documento pueden dejar media página vacía (casos B y D).
 
-## Sistema CLARO — identidad editorial (Phase 8, aprobada; activación pendiente)
+## Sistema CLARO — identidad editorial (Phase 8, aprobada; activa desde 8.2A.1)
 
 Variante del mismo renderer (`buildRenderModel(doc, { design: "claro" })` → `data-design="claro"` → capa CSS acotada en
-`material.css`); el producto sigue con el diseño actual hasta la autorización final. Paleta azul Adaptaula `#23426B`, verde petróleo
+`material.css`). Desde 8.2A.1 es el diseño del producto: `PRODUCT_DESIGN` en `src/lib/render/load.ts` (`sheetModel`) la aplica a la
+vista y al PDF. Es `material_renderer@v4`. Paleta azul Adaptaula `#23426B`, verde petróleo
 `#227E81` (solo ayudas), azul niebla `#EFF3F7` (orientación), blanco; Inter; columna guía con 01, 02…; cabecera con marca discreta;
 escala por etapa multiplicada por el `font_scale` del perfil. Reglas reutilizables añadidas con ella (valen para ambos diseños):
 apoyos de escritura dentro de su actividad, actividad con tabla unida a su tabla, lo que introduce una actividad (su parte de la

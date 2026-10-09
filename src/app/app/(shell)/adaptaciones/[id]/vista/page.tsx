@@ -14,6 +14,7 @@ import { warningLines } from "@/lib/adaptation/presentation/view-model";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { loadRenderInput, sheetModel } from "@/lib/render/load";
+import { readinessOf } from "@/lib/render/readiness";
 
 export const metadata: Metadata = { title: "Ficha adaptada" };
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
 
   const { model, validation } = sheetModel(loaded, student ? "student" : "teacher_preview");
   const needs = visualNeedsOf(loaded);
+  const readiness = readinessOf(loaded);
   const here = `/app/adaptaciones/${id}/vista`;
   const locateHref = (visualId: string) => `/app/materiales/${loaded.materialId}/visuales/${visualId}?volver=${encodeURIComponent(here)}`;
 
@@ -65,7 +67,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
           </LinkButton>
         </nav>
         {/* The PDF is always the student's sheet; a sheet the student view cannot show is not offered for download. */}
-        {validation.status === "not_renderable" ? null : <PdfDownload adaptationId={id} />}
+        {readiness.printable ? <PdfDownload adaptationId={id} /> : null}
       </div>
 
       {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} />}
