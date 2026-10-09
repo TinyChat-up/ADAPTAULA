@@ -56,7 +56,7 @@ describe("client/server boundaries", () => {
   });
 
   it("the service-role client is only imported from allowed server areas", () => {
-    const allowed = ["app/api/", "app/admin/", "lib/ai/", "lib/billing/", "lib/usage/", "lib/materials/", "lib/adaptation/orchestration/server.ts", "lib/supabase/admin.ts"];
+    const allowed = ["app/api/", "app/admin/", "lib/ai/", "lib/billing/", "lib/usage/", "lib/materials/", "lib/adaptation/orchestration/server.ts", "lib/adaptation/resources/server.ts", "lib/supabase/admin.ts"];
     const offenders = files
       .filter((f) => /@\/lib\/supabase\/admin|\.\/admin["']/.test(source.get(f)!) && !allowed.some((a) => rel(f).startsWith(a)))
       .map(rel);

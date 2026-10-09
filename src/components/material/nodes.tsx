@@ -70,11 +70,18 @@ function Image({ node, mode, design }: Props<"image">) {
       </figure>
     );
   }
-  // Student sheet: never a stand-in image and never a pretence that it exists. The teacher view marks the gap.
-  if (mode !== "teacher_preview") return null;
+  // Student sheet: never a stand-in image and never a pretence that it exists. The teacher view marks the gap. A visual the teacher
+  // decided to go without leaves no trace on the sheet.
+  if (mode !== "teacher_preview" || node.state === "omitted") return null;
   return (
     <div className="ms-missing" role="note">
-      {node.state === "pending" ? "Imagen prevista (todavía no existe)" : node.essential ? "Falta una imagen necesaria del material original" : "Falta una imagen del material original"}
+      {node.state === "pending"
+        ? node.essential
+          ? "Falta un recurso visual imprescindible (no está en el original)"
+          : "Apoyo visual opcional sin recurso"
+        : node.essential
+          ? "Falta una imagen necesaria del material original"
+          : "Falta una imagen del material original"}
       {node.caption ? ` · ${node.caption}` : ""}
     </div>
   );

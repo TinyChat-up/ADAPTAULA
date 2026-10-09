@@ -1,4 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
+import type { ResourceDeps } from "@/lib/adaptation/resources/service";
+import { resourceHarness } from "./resource-harness";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceDeps } from "@/lib/adaptation/orchestration/service";
 import type { VisualDeps } from "@/lib/materials/visuals/service";
@@ -24,7 +26,7 @@ const fakeEngine: PdfEngine = {
     return { pdf, timings: { launchMs: 0, contentMs: 0, readyMs: 0, pdfMs: 0, totalMs: 0 }, readiness: { readyState: "complete", fontFamily: "", loadedWeights: [], images: 0, brokenImages: 0, stableFrames: true }, blockedRequests: [], engine: {} };
   },
 };
-const session: { role: Role; userId: string; workspaceId: string; deps: ServiceDeps; visuals: VisualDeps } = { role: "owner", userId: "", workspaceId: "", deps: null as never, visuals: null as never };
+const session: { role: Role; userId: string; workspaceId: string; deps: ServiceDeps; visuals: VisualDeps; resources: ResourceDeps } = { role: "owner", userId: "", workspaceId: "", deps: null as never, visuals: null as never, resources: null as never };
 
 vi.mock("@/lib/api/context", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api/context")>("@/lib/api/context");
@@ -33,6 +35,7 @@ vi.mock("@/lib/api/context", async () => {
 vi.mock("@/lib/auth/session", () => ({ getSupabase: async () => ({}) }));
 vi.mock("@/lib/adaptation/orchestration/server", () => ({ serviceDeps: () => session.deps }));
 vi.mock("@/lib/materials/visuals/server", () => ({ visualDeps: () => session.visuals }));
+vi.mock("@/lib/adaptation/resources/server", () => ({ resourceDeps: () => session.resources }));
 vi.mock("@/lib/render/print/server", () => ({ pdfEngine: () => fakeEngine }));
 
 const { GET } = await import("@/app/api/adaptations/[id]/pdf/route");
@@ -47,7 +50,7 @@ beforeEach(async () => {
   await db.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'");
 });
 
-const as = (w: World, role: Role = "owner") => Object.assign(session, { role, userId: w.user.id, workspaceId: w.user.workspaceId, deps: w.deps, visuals: w.visuals.deps });
+const as = (w: World, role: Role = "owner") => Object.assign(session, { role, userId: w.user.id, workspaceId: w.user.workspaceId, deps: w.deps, visuals: w.visuals.deps, resources: resourceHarness(db, w.user).deps });
 const get = (id: string) => GET(new Request(`http://localhost/api/adaptations/${id}/pdf`), { params: Promise.resolve({ id }) } as never);
 const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
 

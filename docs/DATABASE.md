@@ -252,6 +252,17 @@ is_system_admin() returns boolean
 
 Buckets privados: `source-materials`, `generated-assets`, `exports`. Ruta de los originales: `<workspace_id>/<user_id>/<material_id>/<uuid>.<ext>` (la política comprueba la primera carpeta; el nombre original del fichero es solo metadato en `material_files.original_name`). Política de `storage.objects`: `select` si `is_workspace_member((storage.foldername(name))[1]::uuid)`; las escrituras se hacen con URL firmada emitida por el servidor o con service role. Las descargas usan URLs firmadas de corta duración (60-300 s).
 
+## Recursos visuales de una adaptación (migración 020)
+
+`adaptation_visual_resources`: la respuesta del docente a un visual que una decisión pidió y que el original no tiene. Puede ser `provided` (un PNG normalizado en el bucket privado `generated-assets`, en `<workspace>/<adaptación>/resources/<sha256>.png`, con `sha256`, dimensiones, `source = 'teacher_upload'` y `rights_confirmed`) u `omitted` (decisión explícita, con `created_by`). Hay columnas `license` y `attribution` previstas para un catálogo futuro.
+
+- Filas inmutables, con una activa por `(adaptation_id, decision_id)`.
+- RLS de lectura para los miembros; el navegador no puede escribir.
+- Las escribe `set_adaptation_visual_resource`, solo `service_role`, con candado, idempotente.
+- Se borran en cascada con la adaptación.
+
+Ver `docs/VISUAL_RESOURCES.md`.
+
 ## Funciones SQL de negocio
 
 - `workspace_plan(ws) returns plans` — plan efectivo (sin suscripción vigente = `free`). Solo `service_role`.

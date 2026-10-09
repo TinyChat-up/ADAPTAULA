@@ -126,15 +126,23 @@ export function WarningsList({ lines }: { lines: string[] }) {
   );
 }
 
-export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto; materialId: string; info: { version: number; createdAt: string } | null }) {
+export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto; materialId: string; info: { version: number; createdAt: string; visualsPending: number } | null }) {
   const copy = readyTitle(dto);
   const lines = warningLines(dto);
   const version = info?.version ?? dto.currentVersion;
+  // Delivered, but the printed sheet still waits for an image: the next step is to complete it on the sheet, not a new adaptation.
+  const pending = info?.visualsPending ?? 0;
   return (
     <Card className="space-y-4">
-      <Alert tone={lines.length > 0 ? "warning" : "success"} title={copy.title}>
-        <p>{copy.body}</p>
-      </Alert>
+      {pending > 0 ? (
+        <Alert tone="warning" title="La ficha está casi lista">
+          <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
+        </Alert>
+      ) : (
+        <Alert tone={lines.length > 0 ? "warning" : "success"} title={copy.title}>
+          <p>{copy.body}</p>
+        </Alert>
+      )}
       <p className="text-sm text-muted-foreground">
         {version ? `Versión ${version}` : null}
         {info ? ` · ${formatDateTime(info.createdAt)}` : null}
@@ -146,8 +154,8 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
         </div>
       ) : null}
       <div className="flex flex-wrap items-start gap-3 pt-1">
-        <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>Ver la ficha</LinkButton>
-        <PdfDownload adaptationId={dto.id} />
+        <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>{pending > 0 ? "Completar la ficha" : "Ver la ficha"}</LinkButton>
+        {pending > 0 ? null : <PdfDownload adaptationId={dto.id} />}
       </div>
       <BackLinks materialId={materialId} />
     </Card>

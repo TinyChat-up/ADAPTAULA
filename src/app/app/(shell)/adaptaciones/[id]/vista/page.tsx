@@ -5,6 +5,8 @@ import { ChevronLeft } from "lucide-react";
 import { PdfDownload } from "@/components/material/pdf-download";
 import { MaterialSheet } from "@/components/material/sheet";
 import { TeacherPanel } from "@/components/material/teacher-panel";
+import { VisualNeedsPanel } from "@/components/material/visual-needs-panel";
+import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
 import { LinkButton } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { Card, PageHeader } from "@/components/ui/layout";
@@ -45,6 +47,9 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
   }
 
   const { model, validation } = sheetModel(loaded, student ? "student" : "teacher_preview");
+  const needs = visualNeedsOf(loaded);
+  const here = `/app/adaptaciones/${id}/vista`;
+  const locateHref = (visualId: string) => `/app/materiales/${loaded.materialId}/visuales/${visualId}?volver=${encodeURIComponent(here)}`;
 
   return (
     <div className="space-y-6">
@@ -63,6 +68,8 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
         {validation.status === "not_renderable" ? null : <PdfDownload adaptationId={id} />}
       </div>
 
+      {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} />}
+
       {student && validation.status === "not_renderable" ? (
         <Alert tone="warning" title="Esta ficha todavía no se puede mostrar completa.">
           Revisa la vista docente para ver qué falta.
@@ -78,15 +85,6 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
           validation={validation}
           version={loaded.version.version}
           observations={warningLines(loaded.status)}
-          visuals={loaded.visuals.map((state) => {
-            const block = loaded.document.pages.flatMap((p) => p.blocks).find((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === state.visualId);
-            return {
-              state,
-              label: (block?.type === "image" ? block.caption : undefined) ?? "Recurso visual de la actividad",
-              essential: loaded.requiredVisuals.includes(state.visualId),
-              locateHref: canWrite ? `/app/materiales/${loaded.materialId}/visuales/${state.visualId}?volver=${encodeURIComponent(`/app/adaptaciones/${id}/vista`)}` : null,
-            };
-          })}
         />
       )}
     </div>

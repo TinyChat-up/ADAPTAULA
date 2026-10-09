@@ -8,6 +8,7 @@ import { UNAUTHORIZED_CODES, REDUNDANCY_CODES, authorizedBlockTypes, targetKindO
 import { activityExpansion, type ActivityExpansion } from "./redundancy";
 import type { ReviewedPlan } from "./plan-review";
 import { checkOf } from "./review";
+import { visualTreatment } from "./visual-needs";
 
 /**
  * Deterministic audit of one generation against the reviewed plan (docs/ADAPTATION.md § Generador). It does not trust the
@@ -78,6 +79,8 @@ export function auditGeneration(input: {
       const kind = targetKindOf(analysis, target);
       // Deterministic composition (a segmented source text is labelled, not written) is not a generated block.
       if (b.type === "reading_text") return !(d.action === "segment" && kind === "text");
+      // Nor is the reserved place of a visual the decision asks for (docs/VISUAL_RESOURCES.md): nothing was drawn.
+      if (b.type === "image" && b.source.kind === "requested") return !(b.source.decision_id === d.id && visualTreatment(d, analysis)?.kind === "requested");
       return !authorizedBlockTypes(d, kind).has(b.type);
     });
   });

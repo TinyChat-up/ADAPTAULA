@@ -1,4 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
+import type { ResourceDeps } from "@/lib/adaptation/resources/service";
+import { resourceHarness } from "../db/resource-harness";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -21,7 +23,7 @@ import { OUT_DIR } from "./harness";
  * serverless Chromium and the production validation; then the PDF is read back with pdf.js. Times are recorded, never asserted.
  */
 
-const session: { userId: string; workspaceId: string; deps: ServiceDeps; visuals: VisualDeps } = { userId: "", workspaceId: "", deps: null as never, visuals: null as never };
+const session: { userId: string; workspaceId: string; deps: ServiceDeps; visuals: VisualDeps; resources: ResourceDeps } = { userId: "", workspaceId: "", deps: null as never, visuals: null as never, resources: null as never };
 vi.mock("@/lib/api/context", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api/context")>("@/lib/api/context");
   return { ...actual, getApiContext: async () => ({ ctx: { user: { id: session.userId }, workspace: { id: session.workspaceId }, role: "teacher" } }) };
@@ -29,6 +31,7 @@ vi.mock("@/lib/api/context", async () => {
 vi.mock("@/lib/auth/session", () => ({ getSupabase: async () => ({}) }));
 vi.mock("@/lib/adaptation/orchestration/server", () => ({ serviceDeps: () => session.deps }));
 vi.mock("@/lib/materials/visuals/server", () => ({ visualDeps: () => session.visuals }));
+vi.mock("@/lib/adaptation/resources/server", () => ({ resourceDeps: () => session.resources }));
 
 const { GET } = await import("@/app/api/adaptations/[id]/pdf/route");
 
@@ -38,7 +41,7 @@ const report: Array<Record<string, unknown>> = [];
 beforeAll(async () => {
   db = await createTestDb();
   world = await deliveredWithVisuals(db);
-  Object.assign(session, { userId: world.user.id, workspaceId: world.user.workspaceId, deps: world.deps, visuals: world.visuals.deps });
+  Object.assign(session, { userId: world.user.id, workspaceId: world.user.workspaceId, deps: world.deps, visuals: world.visuals.deps, resources: resourceHarness(db, world.user).deps });
 }, 180_000);
 // Written next to the PDFs (vitest hides the console of passing tests); `scripts/smoke-pdf.mjs` prints it.
 afterAll(() => writeFileSync(path.join(OUT_DIR, "export-report.json"), JSON.stringify(report, null, 2)));
