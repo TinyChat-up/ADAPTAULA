@@ -117,15 +117,18 @@ describe("the renderer and a visual a decision asked for", () => {
 
 describe("what the teacher reads and may do", () => {
   const needs: VisualNeed[] = [
-    { key: "vis_1", origin: "original", essential: true, status: "to_select", label: "Figura 1", activity: "Actividad 1", message: "Esta actividad necesita una imagen del documento original." },
-    { key: "dec_7", origin: "requested", essential: true, status: "to_provide", label: "Recta numérica", activity: "Actividad 4", message: "Esta actividad necesita un recurso visual que no está en el documento original." },
-    { key: "dec_8", origin: "requested", essential: false, status: "to_provide", label: "Pictograma", activity: "Actividad 3", message: "Apoyo visual opcional: la ficha se puede imprimir sin él." },
+    { key: "vis_1", origin: "original", essential: true, status: "to_select", label: "Figura 1", activity: "Actividad 1", message: "Esta actividad necesita una imagen del documento original.", omittable: false },
+    { key: "dec_7", origin: "requested", essential: true, status: "to_provide", label: "Recta numérica", activity: "Actividad 4", message: "Esta actividad necesita un recurso visual que no está en el documento original. No tiene alternativa en la ficha: añádelo para poder imprimirla.", omittable: false },
+    { key: "dec_8", origin: "requested", essential: false, status: "to_provide", label: "Pictograma", activity: "Actividad 3", message: "Apoyo visual opcional: la ficha se puede imprimir sin él.", omittable: true },
   ];
   const panel = (canWrite: boolean) => renderToStaticMarkup(createElement(VisualNeedsPanel, { needs, adaptationId: "a1", canWrite, locateHref: (v: string) => `/app/materiales/m/visuales/${v}` }));
 
   it("plain messages and only the safe actions; no technical state ever", () => {
     const out = panel(true);
-    for (const text of ["Seleccionar imagen", "Añadir recurso", "Continuar sin esta imagen", "Faltan 2 imágenes para poder imprimir la ficha", "Esta actividad necesita una imagen del documento original."]) expect(out).toContain(text);
+    for (const text of ["Seleccionar imagen", "Añadir recurso", "Faltan 2 imágenes para poder imprimir la ficha", "Esta actividad necesita una imagen del documento original.", "No tiene alternativa en la ficha"]) expect(out).toContain(text);
+    // Only the optional support can be left out: one «Continuar sin esta imagen», never for an essential without alternative.
+    expect(out.match(/>Continuar sin esta imagen</g)).toHaveLength(1);
+    expect(out).toContain("Es un apoyo opcional");
     expect(out).not.toMatch(/visual_crop|asset_missing|render_unresolved|missing_locator|not_renderable|dec_\d|vis_\d<|sha256|storage/);
   });
 

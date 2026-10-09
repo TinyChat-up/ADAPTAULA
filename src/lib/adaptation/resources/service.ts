@@ -26,6 +26,13 @@ export interface RequestedVisual {
   essential: boolean;
   /** For the teacher: what the decision wanted the visual for. Never the student's text. */
   purpose: string;
+  /**
+   * Whether the sheet may go to print without it. An optional support may always be left out. An essential one only when the
+   * same decision left a real alternative in the delivered sheet (a written support it produced: steps, a key idea, a
+   * glossary…), so the activity stays solvable; otherwise it stays pending until the teacher provides the image. Visuals of the
+   * original are never omittable at all (they are not requested resources).
+   */
+  omittable: boolean;
 }
 
 export type ResourceState =
@@ -58,16 +65,23 @@ export interface ResourceActor {
   canWrite: boolean;
 }
 
-export type ResourceResult = { ok: true; state: ResourceState; reused: boolean } | { ok: false; code: "forbidden" | "not_found" | "invalid" | "storage_failed" };
+export type ResourceResult = { ok: true; state: ResourceState; reused: boolean } | { ok: false; code: "forbidden" | "not_found" | "invalid" | "storage_failed" | "needs_resource" };
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
+/** Blocks that can stand in for a missing visual: content a student can use, written for the same decision. */
+const ALTERNATIVE_TYPES = new Set(["help_box", "list", "checklist", "vocabulary", "worked_example", "sentence_starters", "planner", "table", "chart", "paragraph"]);
+
 export function requestedVisuals(document: MaterialDocument): RequestedVisual[] {
+  const blocks = allBlocks(document);
   const seen = new Set<string>();
-  return allBlocks(document).flatMap((b) => {
+  return blocks.flatMap((b) => {
     if (b.type !== "image" || b.source.kind !== "requested" || seen.has(b.source.decision_id)) return [];
-    seen.add(b.source.decision_id);
-    return [{ decisionId: b.source.decision_id, essential: b.source.essential === true, purpose: b.source.purpose }];
+    const decisionId = b.source.decision_id;
+    seen.add(decisionId);
+    const essential = b.source.essential === true;
+    const alternative = blocks.some((x) => x.id !== b.id && ALTERNATIVE_TYPES.has(x.type) && x.trace.origin !== "original" && x.trace.decision_ids.includes(decisionId));
+    return [{ decisionId, essential, purpose: b.source.purpose, omittable: !essential || alternative }];
   });
 }
 
@@ -109,11 +123,16 @@ export async function provideVisualResource(deps: ResourceDeps, actor: ResourceA
   return { ok: true, state: { decisionId: input.decisionId, status: "provided", resourceId: row.id, sha256: sha }, reused: row.reused };
 }
 
-/** «Continuar sin esta imagen»: recorded as the teacher's explicit decision (who and when), never a silent drop. */
+/**
+ * «Continuar sin esta imagen»: recorded as the teacher's explicit decision (who and when), never a silent drop, and ONLY where
+ * the sheet stays solvable without it (`omittable`). An essential visual with no alternative is refused: the teacher's consent is
+ * not enough, the sheet stays pending until the image is provided.
+ */
 export async function omitVisualResource(deps: ResourceDeps, actor: ResourceActor, input: { adaptationId: string; decisionId: string }): Promise<ResourceResult> {
   if (!RESOURCE_DECISION.test(input.decisionId)) return { ok: false, code: "invalid" };
   const auth = await authorised(deps, actor, input.adaptationId, input.decisionId);
   if (!auth.ok) return auth;
+  if (!auth.requested.omittable) return { ok: false, code: "needs_resource" };
   const row = await deps.admin.setResource({ workspaceId: auth.adaptation.workspace_id, adaptationId: auth.adaptation.id, decisionId: input.decisionId, resolution: "omitted", storagePath: null, sha256: null, width: null, height: null, bytes: null, rightsConfirmed: false, userId: actor.userId });
   return { ok: true, state: { decisionId: input.decisionId, status: "omitted" }, reused: row.reused };
 }

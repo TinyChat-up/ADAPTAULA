@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
  * delivered version: nothing is regenerated, no new adaptation, no quota. The server validates the image on its bytes; this form
  * only collects it. Errors stay next to the field (`aria-describedby`), never only in a toast.
  */
-export function ResourceActions({ adaptationId, decisionId, canOmit, hasResource }: { adaptationId: string; decisionId: string; canOmit: boolean; hasResource: boolean }) {
+export function ResourceActions({ adaptationId, decisionId, canOmit, essential, hasResource }: { adaptationId: string; decisionId: string; canOmit: boolean; essential: boolean; hasResource: boolean }) {
   const router = useRouter();
   const uid = useId();
   const [open, setOpen] = useState(false);
@@ -64,7 +64,11 @@ export function ResourceActions({ adaptationId, decisionId, canOmit, hasResource
           <ConfirmDialog
             triggerLabel="Continuar sin esta imagen"
             title="¿Continuar sin esta imagen?"
-            description="La actividad original no la incluía, así que se puede resolver sin ella. La ficha se imprimirá sin la imagen y la decisión quedará registrada. Podrás añadirla más tarde."
+            description={
+              essential
+                ? "La ficha incluye una alternativa escrita para esta actividad, así que se puede resolver sin la imagen. Se imprimirá sin ella y la decisión quedará registrada. Podrás añadirla más tarde."
+                : "Es un apoyo opcional: la actividad se resuelve igual sin él. La decisión quedará registrada y podrás añadirlo más tarde."
+            }
             confirmLabel="Continuar sin ella"
             confirmVariant="primary"
             pending={pending === "omit"}

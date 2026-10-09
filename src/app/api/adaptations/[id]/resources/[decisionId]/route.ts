@@ -25,6 +25,7 @@ const MESSAGES = {
   invalid: "Revisa los datos y vuelve a intentarlo.",
   rights: "Confirma que puedes usar esta imagen en tu clase.",
   storage_failed: "No hemos podido guardar la imagen. Inténtalo de nuevo.",
+  needs_resource: "Esta imagen es imprescindible para resolver la actividad y la ficha no tiene alternativa: añádela para poder imprimirla.",
 } as const;
 
 const valid = (id: string, decisionId: string) => z.uuid().safeParse(id).success && RESOURCE_DECISION.test(decisionId);
@@ -43,7 +44,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
 
 function answer(result: ResourceResult) {
   if (result.ok) return reply({ ok: true, status: result.state.status }, 200);
-  const status = result.code === "not_found" ? 404 : result.code === "forbidden" ? 403 : result.code === "storage_failed" ? 503 : 422;
+  const status = result.code === "not_found" ? 404 : result.code === "forbidden" ? 403 : result.code === "storage_failed" ? 503 : result.code === "needs_resource" ? 409 : 422;
   return reply({ ok: false, message: MESSAGES[result.code] }, status);
 }
 

@@ -27,7 +27,7 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
         </LinkButton>
       ) : null}
       {canWrite && need.origin === "requested" ? (
-        <ResourceActions adaptationId={adaptationId} decisionId={need.key} canOmit={need.status === "to_provide"} hasResource={need.status === "provided"} />
+        <ResourceActions adaptationId={adaptationId} decisionId={need.key} canOmit={need.status === "to_provide" && need.omittable} essential={need.essential} hasResource={need.status === "provided"} />
       ) : null}
     </li>
   );

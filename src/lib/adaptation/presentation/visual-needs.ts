@@ -19,6 +19,8 @@ export interface VisualNeed {
   label: string;
   activity: string | null;
   message: string;
+  /** «Continuar sin esta imagen» is offered (and accepted by the server) only where the sheet stays solvable without it. */
+  omittable: boolean;
 }
 
 const activityOf = (document: MaterialDocument, blockId: string | undefined) => {
@@ -32,10 +34,13 @@ function originalMessage(essential: boolean, status: VisualNeedStatus, page?: nu
   return essential ? "Esta actividad necesita una imagen del documento original." : "Hay una imagen del documento original que se puede incluir si quieres.";
 }
 
-function requestedMessage(essential: boolean, status: VisualNeedStatus) {
+function requestedMessage(essential: boolean, status: VisualNeedStatus, omittable: boolean) {
   if (status === "provided") return "Recurso añadido.";
   if (status === "omitted") return "Se decidió continuar sin este recurso.";
-  return essential ? "Esta actividad necesita un recurso visual que no está en el documento original." : "Apoyo visual opcional: la ficha se puede imprimir sin él.";
+  if (!essential) return "Apoyo visual opcional: la ficha se puede imprimir sin él.";
+  return omittable
+    ? "Esta actividad necesita un recurso visual que no está en el documento original. La ficha incluye una alternativa escrita."
+    : "Esta actividad necesita un recurso visual que no está en el documento original. No tiene alternativa en la ficha: añádelo para poder imprimirla.";
 }
 
 export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }> }): VisualNeed[] {
@@ -44,12 +49,12 @@ export function visualNeedsOf(input: { document: MaterialDocument; visuals: Visu
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === v.visualId);
     const essential = input.requiredVisuals.includes(v.visualId);
     const status: VisualNeedStatus = v.status === "ready" ? "ready" : "to_select";
-    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message: originalMessage(essential, status, v.provenance?.page) };
+    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message: originalMessage(essential, status, v.provenance?.page), omittable: false };
   });
   const requested: VisualNeed[] = input.requested.map((r) => {
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "requested" && b.source.decision_id === r.decisionId);
     const status: VisualNeedStatus = r.state.status === "provided" ? "provided" : r.state.status === "omitted" ? "omitted" : "to_provide";
-    return { key: r.decisionId, origin: "requested", essential: r.essential, status, label: r.purpose, activity: activityOf(input.document, block?.id), message: requestedMessage(r.essential, status) };
+    return { key: r.decisionId, origin: "requested", essential: r.essential, status, label: r.purpose, activity: activityOf(input.document, block?.id), message: requestedMessage(r.essential, status, r.omittable), omittable: r.omittable };
   });
   return [...original, ...requested];
 }

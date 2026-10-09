@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { createCanvas } from "@napi-rs/canvas";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
 import { VisualNeedsPanel } from "@/components/material/visual-needs-panel";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
@@ -28,6 +28,8 @@ import { attachSource, visualHarness } from "./visual-harness";
  * calls). Each case ends in a complete, correct sheet or in a clear action for the teacher that resolves it on the SAME
  * adaptation: never a silent block and never a wrong delivery (docs/VISUAL_RESOURCES.md).
  */
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }));
+
 let db: PGlite;
 let pdf: Uint8Array;
 beforeAll(async () => {
@@ -91,6 +93,15 @@ async function locateOriginals(m: Awaited<ReturnType<typeof magic>>) {
 function withChart(): MaterialAnalysis {
   const base = fractionsAnalysis();
   return { ...base, visuals: base.visuals.map((v) => (v.id === "vis_2" ? { ...v, kind: "chart" as const, title: "Partes coloreadas por tira", chart: { type: "bar" as const, categories: ["Tira A", "Tira B"], series: [{ name: "", values: [1, 2] }], x_label: "Tira", y_label: "Partes", unit: "partes" } } : v)) };
+}
+
+/** The production export chain with an engine that only records it was reached: blocked sheets never get that far. */
+async function exportPdf(m: Awaited<ReturnType<typeof magic>>) {
+  const { exportAdaptationPdf } = await import("@/lib/render/pdf-export");
+  let reached = false;
+  const engine = { name: "probe", render: async () => { reached = true; throw new Error("probe"); } } as never;
+  const result = await exportAdaptationPdf({ service: m.deps, visuals: m.visuals.deps, resources: m.resources.deps, engine }, m.actor, m.id);
+  return result.ok ? { ok: true } : { ok: false, code: result.code, ...(reached ? { engineReached: true } : {}) };
 }
 
 async function teacherPng(width = 640, height = 360) {
@@ -201,7 +212,8 @@ describe("D · an essential visual that is not in the original", () => {
     const before = await sheet(m, "teacher_preview");
     expect(before.validation.status).toBe("not_renderable");
     const need = blockingNeeds(before.needs).find((x) => x.origin === "requested")!;
-    expect(need).toMatchObject({ essential: true, status: "to_provide", activity: "Actividad 4", message: "Esta actividad necesita un recurso visual que no está en el documento original." });
+    expect(need).toMatchObject({ essential: true, status: "to_provide", activity: "Actividad 4", omittable: false });
+    expect(need.message).toMatch(/^Esta actividad necesita un recurso visual que no está en el documento original\. No tiene alternativa/);
     // Never a stand-in image in the student's sheet.
     expect(html(sheetModel(before.loaded, "student").model)).not.toContain("<img");
 
@@ -230,22 +242,62 @@ describe("D · an essential visual that is not in the original", () => {
     expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [m.id]))[0]!.state).toBe("consumed");
   });
 
-  it("or the teacher decides to go on without it: recorded (who, when), the student's sheet has no trace of it and prints", async () => {
+  it("without an alternative it can NOT be skipped: refused on the server, a forced row is ignored, the PDF stays blocked until it is added", async () => {
     const m = await magic(fractionsAnalysis(), [newEssential("act_4")]);
-    const need = blockingNeeds((await sheet(m)).needs).find((x) => x.origin === "requested")!;
     await locateOriginals(m);
+    const need = blockingNeeds((await sheet(m)).needs).find((x) => x.origin === "requested")!;
+    expect(need).toMatchObject({ omittable: false });
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toEqual({ ok: false, code: "needs_resource" });
+    expect(await count("public.adaptation_visual_resources where adaptation_id = $1", [m.id])).toBe(0);
+    // Even a recorded omission (an old row, a race, a direct call) does not make the sheet printable without the visual.
+    await as(db, "service_role", null, () => db.query("select public.set_adaptation_visual_resource($1, $2, $3, 'omitted', null, null, null, null, null, false, $4)", [m.user.workspaceId, m.id, need.key, m.user.id]));
+    const forced = await sheet(m, "teacher_preview");
+    expect(forced.validation.status).toBe("not_renderable");
+    expect(blockingNeeds(forced.needs).map((x) => [x.key, x.status])).toEqual([[need.key, "to_provide"]]);
+    const panel = renderToStaticMarkup(createElement(VisualNeedsPanel, { needs: forced.needs, adaptationId: m.id, canWrite: true, locateHref: (v: string) => v }));
+    expect(panel).not.toContain(">Continuar sin esta imagen<");
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
+    // Resolved by adding it: same adaptation, the PDF is now allowed (the engine is reached).
+    await provideVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key, ...(await teacherPng()), rightsConfirmed: true });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
+    expect(await count("public.adaptations where request_key = $1", [m.key])).toBe(1);
+    expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [m.id]))[0]!.state).toBe("consumed");
+  });
+
+  it("with a real alternative written for the same decision it can be skipped: recorded (who, when), the alternative is printed", async () => {
+    const withAlternative: Extra = (refs) => ({ ...newEssential("act_4")(refs), supports: [{ kind: "step_list", uses_task_data: false }] });
+    const m = await magic(fractionsAnalysis(), [withAlternative]);
+    await locateOriginals(m);
+    const before = await sheet(m);
+    const need = blockingNeeds(before.needs).find((x) => x.origin === "requested")!;
+    expect(need).toMatchObject({ omittable: true });
+    const alternative = allBlocks(before.loaded.document).find((b) => b.type === "list" && b.trace.decision_ids.includes(need.key));
+    expect(alternative).toBeDefined();
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
     const omitted = await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key });
     expect(omitted).toMatchObject({ ok: true, reused: false, state: { status: "omitted" } });
-    expect((await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).ok && true).toBe(true);
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toMatchObject({ ok: true, reused: true });
     const row = (await q<{ resolution: string; created_by: string; storage_path: string | null }>("select resolution, created_by, storage_path from public.adaptation_visual_resources where adaptation_id = $1 and superseded_at is null", [m.id]))[0]!;
     expect(row).toEqual({ resolution: "omitted", created_by: m.user.id, storage_path: null });
     const s = await sheet(m, "student", true);
     expect(s.validation.status).not.toBe("not_renderable");
-    expect(s.validation.issues.some((i) => i.code === "image_omitted" && i.severity === "info")).toBe(true);
     const student = html(s.model);
     expect(student.match(/<img /g)).toHaveLength(2); // the two figures of the original; nothing stands in for the omitted one
     expect(student).not.toContain("/resources/");
-    expect(blockingNeeds(s.needs)).toEqual([]);
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
+  });
+});
+
+describe("an essential visual of the ORIGINAL (a question that reads a figure) is never skippable", () => {
+  it("there is no omission path for it at all, and the PDF stays blocked until it is selected", async () => {
+    const m = await magic(fractionsAnalysis(), []);
+    const s = await sheet(m, "teacher_preview");
+    expect(blockingNeeds(s.needs).every((x) => x.origin === "original" && !x.omittable)).toBe(true);
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "vis_2" })).toEqual({ ok: false, code: "invalid" });
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: "dec_1" })).toEqual({ ok: false, code: "not_found" });
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "not_renderable" });
+    await locateOriginals(m);
+    expect(await exportPdf(m)).toEqual({ ok: false, code: "render_failed", engineReached: true });
   });
 });
 
@@ -259,6 +311,10 @@ describe("E · an optional visual support", () => {
     expect(need).toMatchObject({ essential: false, status: "to_provide", message: "Apoyo visual opcional: la ficha se puede imprimir sin él." });
     expect(blockingNeeds(s.needs)).toEqual([]);
     expect(html(s.model)).not.toContain("Apoyo visual opcional");
+    // An optional support may be left out explicitly, idempotently.
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toMatchObject({ ok: true, reused: false });
+    expect(await omitVisualResource(m.resources.deps, m.actor, { adaptationId: m.id, decisionId: need.key })).toMatchObject({ ok: true, reused: true });
+    expect((await sheet(m)).needs.find((x) => x.key === need.key)?.status).toBe("omitted");
   });
 });
 

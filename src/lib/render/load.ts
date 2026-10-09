@@ -90,7 +90,12 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   // decision to go on without it, or still pending. Pinned for a PDF exactly like a crop (id + sha-256).
   const requested = requestedVisuals(parsed.data);
   const resolvedResources = options.resources ? await resolveResources(options.resources, id, requested.map((r) => r.decisionId), { withBytes: options.pin }) : { states: {}, bytes: {} };
-  const stateOf = (decisionId: string): ResourceState => resolvedResources.states[decisionId] ?? { decisionId, status: "pending" };
+  // An omission counts only where the sheet stays solvable without the visual: a recorded «continue without it» for an essential
+  // visual with no alternative (an old row, a race) leaves it pending, so the sheet is not printed without it.
+  const stateOf = (decisionId: string): ResourceState => {
+    const state = resolvedResources.states[decisionId] ?? { decisionId, status: "pending" };
+    return state.status === "omitted" && !requested.find((r) => r.decisionId === decisionId)?.omittable ? { decisionId, status: "pending" } : state;
+  };
   const resources: Record<string, { src: string } | { omitted: true }> = {};
   for (const r of requested) {
     const state = stateOf(r.decisionId);
