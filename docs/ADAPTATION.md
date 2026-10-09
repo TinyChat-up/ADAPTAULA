@@ -644,10 +644,21 @@ En cada una se comprueba: validación sin incidencias, A4, solo Inter, ninguna p
 | Diez páginas lógicas | 11 | 115 KB | ≈0,41–0,45 s |
 
 **Deuda declarada.**
-- **Runtime de Vercel: DEFERRED.** No se ha comprobado en Vercel que Chromium arranque, ni el tamaño real de la Function, el arranque en frío, la memoria o los tiempos. Se valida con el entorno definitivo; no se reintroduce un endpoint de humo ahora.
+- **Runtime de Vercel: DEFERRED.** No se ha comprobado en Vercel que Chromium arranque, ni el tamaño real de la Function, el arranque en frío, la memoria o los tiempos. Se valida con el entorno definitivo; no se reintroduce un endpoint de humo ahora. *Actualización (hotfix PDF en producción):* ver «Fallo en producción» abajo.
 - Sin límite de frecuencia ni de concurrencia propio para exportar: cada petición lanza un Chromium (≈160–180 MB de RSS).
 - Sin caché: exportar dos veces renderiza dos veces.
 - El *bundle* de la ruta incluye `@napi-rs/canvas` sin usarlo (33 MB).
+
+**Fallo en producción (hotfix PDF).** «Descargar PDF» fallaba siempre en Vercel. Se reprodujo en Amazon Linux 2023 + Node 24 (la base de las Functions de Vercel), con `VERCEL=1`, **solo los ficheros de la traza** de la ruta, código de solo lectura, `/tmp` como único directorio escribible y un usuario sin privilegios. Hubo dos causas:
+1. **La ruta no cargaba (HTTP 500, no 503).** `playwright-core` exige su `browsers.json` en cuanto se carga, y la traza no lo incluía. Turbopack importa los paquetes externos al evaluar el módulo de la ruta, así que la ruta entera fallaba antes de autenticar: una petición anónima daba 500 cuando la ruta hermana daba 401. Por eso nunca se registraba `pdf_export_failed`; el log de Vercel muestra `Failed to load external module playwright-core-…: Cannot find module …/playwright-core/browsers.json`. El cliente mostraba el texto genérico, que coincide con el del 503. Es muy probablemente también el «500 vacío» del endpoint de humo de la 5.2A. Corrección: `browsers.json` en `PDF_FILES` (`next.config.ts`). Con ella, la misma Function simulada responde 401 sin sesión.
+2. **Dos exportaciones a la vez en una instancia nueva.** Vercel reutiliza instancias para peticiones concurrentes: cada exportación empezaba a descomprimir Chromium y una podía ejecutar el binario a medio escribir (`spawn ETXTBSY`). Se reprodujo en 2 de 3 arranques en frío. Corrección: una sola descompresión por proceso, compartida por todas las exportaciones (`chromiumExecutable` en `engine.ts`); 4 de 4 en verde después. Lo cubre `tests/pdf/cold-start.test.ts`.
+
+Guardas nuevas:
+- `smoke:pdf` exige `browsers.json` en la traza y **carga** `@sparticuz/chromium` y `playwright-core` en un proceso aparte, desde una copia con solo los ficheros trazados. Las dos comprobaciones fallan con el build anterior.
+- La suite PDF completa (33 pruebas: sencilla, tabla, varias páginas, visual fijado, Sistema CLARO y exportación por la ruta real sin IA ni cuota) pasa en ese runtime de Amazon Linux.
+- `pdf_export_failed` distingue `stage: "html"` (preparar el documento) de `stage: "engine"` (Chromium) y, en el segundo caso, añade el `detail` técnico del motor, nunca contenido de la ficha.
+
+Sigue sin validarse en una Function **real** de Vercel: la comprobación final es la descarga en producción tras desplegar.
 
 ## Evals
 
