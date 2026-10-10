@@ -46,16 +46,25 @@ export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, ada
   if (!readiness.printable) return { ok: false, code: readiness.reason === "resource_pending" ? "resource_pending" : "not_renderable" };
   const { model } = sheetModel(loaded, "student");
 
-  let result: PdfRenderResult;
-  let prepareMs: number;
-  let images: number;
+  let print: Awaited<ReturnType<typeof renderPrintHtml>>;
   try {
-    const print = await renderPrintHtml(model, loaded.pinned);
-    prepareMs = performance.now() - started;
-    images = print.assets.length;
+    print = await renderPrintHtml(model, loaded.pinned);
+  } catch (error) {
+    // A code (`asset_unpinned`, `css_unresolved`, `ENOENT`…) or the error's name: never a message that could quote the sheet.
+    const code = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : null;
+    logger.error("pdf_export_failed", { adaptationId, stage: "html", reason: code ?? (error instanceof Error ? error.name : "unknown") });
+    return { ok: false, code: "render_failed" };
+  }
+  const prepareMs = performance.now() - started;
+  const images = print.assets.length;
+
+  let result: PdfRenderResult;
+  try {
     result = await deps.engine.render(print.html, { fontFamily: print.fontFamily, fontWeights: print.fontWeights });
   } catch (error) {
-    logger.error("pdf_export_failed", { adaptationId, stage: "render", reason: error instanceof PdfEngineError ? error.code : error instanceof Error ? error.name : "unknown" });
+    // The engine's detail is technical (a launch error, a timeout, a count): never the sheet's content.
+    const reason = error instanceof PdfEngineError ? error.code : error instanceof Error ? error.name : "unknown";
+    logger.error("pdf_export_failed", { adaptationId, stage: "engine", reason, ...(error instanceof PdfEngineError && error.detail ? { detail: error.detail.slice(0, 200) } : {}) });
     return { ok: false, code: "render_failed" };
   }
 

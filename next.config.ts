@@ -7,11 +7,13 @@ import { packageFiles } from "./next.tracing";
 const RASTER_FILES = packageFiles("pdfjs-dist", ["package.json", "legacy/build/pdf.worker.mjs", "standard_fonts/**/*"]);
 
 /**
- * The compressed serverless Chromium the PDF export unpacks to /tmp on first use: read BY PATH, so the tracer cannot find it. The
- * sheet's stylesheet and fonts are found by the tracer on its own (listing them again only duplicates entries). Both are checked
- * after every build by `scripts/smoke-pdf.mjs`.
+ * Read BY PATH at run time, so the tracer cannot find them: the compressed serverless Chromium the PDF export unpacks to /tmp on
+ * first use, and the `browsers.json` that `playwright-core` requires as soon as it loads (without it the route's module fails to
+ * load and every PDF is a 500). The sheet's stylesheet and fonts are found by the tracer on its own (listing them again only
+ * duplicates entries). All are checked after every build by `scripts/smoke-pdf.mjs`, which also loads both packages from the
+ * traced files alone.
  */
-const PDF_FILES = packageFiles("@sparticuz/chromium", ["bin/*"]);
+const PDF_FILES = [...packageFiles("@sparticuz/chromium", ["bin/*"]), ...packageFiles("playwright-core", ["browsers.json"])];
 
 const nextConfig: NextConfig = {
   // Los E2E arrancan su propio `next dev` con otro directorio de build para no chocar con el servidor de desarrollo del docente/dev.

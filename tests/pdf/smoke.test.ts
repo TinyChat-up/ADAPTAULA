@@ -1,7 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import type { Block } from "@/lib/schemas/material-document";
 import { bodyText, MARGIN_PX, type PageAnalysis } from "./analyze";
 import { ANSWER_KEY_SECRET, SPANISH, TEACHER_ONLY, chart, checklist, document, heading, image, instruction, lines, paragraph, pin, redVisual, rotatedCropVisual, steps, studentModel, table, withSecretKey } from "./fixtures";
@@ -64,11 +63,6 @@ const contentHeightPx = (page: PageAnalysis) => page.heightPx - 2 * MARGIN_PX;
 let tallest = 0;
 
 describe("smoke:pdf · motor real, renderer real", () => {
-  beforeAll(() => {
-    // A fresh temporary directory: the first render extracts the serverless Chromium (a cold start of a new instance).
-    process.env.TMPDIR = mkdtempSync(path.join(tmpdir(), "adaptaula-pdf-"));
-  });
-
   afterAll(() => {
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(path.join(OUT_DIR, "report.json"), JSON.stringify(report, null, 2));
@@ -76,12 +70,11 @@ describe("smoke:pdf · motor real, renderer real", () => {
     console.table(report);
   });
 
-  it("básico (arranque en frío: extrae Chromium) y caracteres españoles", async () => {
+  it("básico y caracteres españoles (el arranque en frío de una instancia nueva: cold-start.test.ts)", async () => {
     const p = await printPdf("basico", studentModel(withSecretKey(document([[heading("Ficha básica"), paragraph(SPANISH), instruction("Lee el texto y responde."), lines("1", "¿Qué animal aparece en el texto?", 3)]]))));
     common(p);
     expect(extracted(p.pages[0]!.text)).toContain(SPANISH);
     expect(p.result.engine.chromium).toMatch(/^153\./);
-    report.at(-1)!.cold = true;
   });
 
   it("básico en caliente (Chromium ya extraído)", async () => {

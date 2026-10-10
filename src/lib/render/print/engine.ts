@@ -60,6 +60,20 @@ const require = createRequire(path.join(process.cwd(), "package.json"));
 // The serverless build's own flags, minus the two that would weaken the page's isolation: the sheet needs neither.
 const UNSAFE_FLAGS = new Set(["--disable-web-security", "--allow-running-insecure-content"]);
 
+/**
+ * Chromium is unpacked to /tmp once per instance. Two exports arriving together on a new instance (concurrent requests share it)
+ * would each start unpacking, and one could run the binary while the other is still writing it (`spawn ETXTBSY`): one unpacking
+ * per process, shared by every export; retried on the next export if it failed.
+ */
+let unpacked: Promise<string> | null = null;
+function chromiumExecutable(): Promise<string> {
+  unpacked ??= Sparticuz.executablePath().catch((error: unknown) => {
+    unpacked = null;
+    throw error;
+  });
+  return unpacked;
+}
+
 /** Read at run time, for provenance only. Some packages do not export their package.json: walk up from their entry point. */
 function packageVersion(name: string): string | null {
   try {
@@ -128,7 +142,7 @@ export function createChromiumPdfEngine(options: ChromiumEngineOptions = {}): Pd
 
       let browser: Browser;
       try {
-        const executablePath = await Sparticuz.executablePath();
+        const executablePath = await chromiumExecutable();
         browser = await chromium.launch({ executablePath, args: Sparticuz.args.filter((a) => !UNSAFE_FLAGS.has(a)), headless: true, timeout: timeoutMs });
       } catch (error) {
         throw new PdfEngineError("launch_failed", (error as Error).message.split("\n")[0]);

@@ -5,12 +5,16 @@
  *      via `playwright-core` → PDF → `validatePdf` → pdf.js text + 100 ppp PNG per page. Artefacts in `.pdf-smoke/`.
  *      `tests/pdf/export.test.ts` drives the product route `GET /api/adaptations/[id]/pdf` end to end (PGlite, real crops).
  *   2. Reads that route's server trace (`.nft.json`, so run after `next build`) and checks it carries what the engine reads by
- *      path at run time: the compressed Chromium, `playwright-core`, `material.css` and the sheet fonts, all by physical path.
+ *      path at run time: the compressed Chromium, `playwright-core` (and its `browsers.json`), `material.css` and the sheet fonts,
+ *      all by physical path.
+ *   3. Copies ONLY the traced files to a scratch directory (what the Function gets) and loads there, in a separate Node process,
+ *      the external packages the route imports. A file the tracer missed makes the route's module fail to load: every PDF a 500.
  * Limits (stated, not hidden): it runs on this machine (the serverless Chromium needs Linux, like Vercel). It does not execute the
  * Function in Vercel's runtime: that validation is DEFERRED (docs/ADAPTATION.md § Exportación PDF).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const root = process.cwd();
@@ -38,6 +42,7 @@ const checks = {
   "Chromium serverless comprimido (@sparticuz/chromium/bin/chromium.br)": /@sparticuz\/chromium\/bin\/chromium\.br$/,
   "@sparticuz/chromium (código)": /@sparticuz\/chromium\/build\/.+\.js$/,
   "playwright-core": /playwright-core\/lib\/.+\.js$/,
+  "playwright-core/browsers.json (lo exige al cargarse)": /playwright-core\/browsers\.json$/,
   "material.css": /src\/components\/material\/material\.css$/,
   "Inter-Regular.woff2": /src\/components\/material\/fonts\/Inter-Regular\.woff2$/,
   "Inter-SemiBold.woff2": /src\/components\/material\/fonts\/Inter-SemiBold\.woff2$/,
@@ -53,6 +58,32 @@ const logical = posix.filter((f) => f.startsWith(`${root.split(path.sep).join("/
 if (logical.length > 0) fail(`la traza incluye ${logical.length} rutas lógicas de @sparticuz/chromium (symlink de pnpm)`);
 const tracedBytes = traced.filter((f) => existsSync(f) && statSync(f).isFile()).reduce((n, f) => n + statSync(f).size, 0);
 console.log(`\nsmoke:pdf · traza de /api/adaptations/[id]/pdf: ${traced.length} ficheros, ${mb(tracedBytes)} (Chromium comprimido incluido)`);
+
+// 3. The route's externals (`<dist>/node_modules/<pkg>-<hash>`, Turbopack) loaded from the traced files alone.
+const stage = mkdtempSync(path.join(tmpdir(), "adaptaula-function-"));
+for (const file of traced) {
+  if (!file.startsWith(root + path.sep)) continue;
+  const target = path.join(stage, path.relative(root, file));
+  mkdirSync(path.dirname(target), { recursive: true });
+  const stat = lstatSync(file);
+  if (stat.isSymbolicLink()) symlinkSync(readlinkSync(file), target);
+  // The compressed binaries are only read when Chromium is unpacked, never to load the package.
+  else if (stat.isFile() && !file.endsWith(".br")) copyFileSync(file, target);
+}
+const externalsDir = path.join(stage, dist, "node_modules");
+const externals = [...new Set(traced.map((f) => path.relative(path.join(root, dist, "node_modules"), f)).filter((r) => !r.startsWith("..")).map((r) => r.split(path.sep).slice(0, r.startsWith("@") ? 2 : 1).join("/")))];
+for (const name of ["@sparticuz/chromium", "playwright-core"]) {
+  const external = externals.find((e) => e.startsWith(`${name}-`));
+  if (!external) fail(`la traza de la exportación no incluye el módulo externo ${name}`);
+  const loader = `import { createRequire } from "node:module"; import { pathToFileURL } from "node:url"; await import(pathToFileURL(createRequire(process.argv[1] + "/").resolve(process.argv[2])).href);`;
+  try {
+    execFileSync(process.execPath, ["--input-type=module", "-e", loader, externalsDir, external], { cwd: stage, stdio: ["ignore", "ignore", "pipe"] });
+  } catch (error) {
+    fail(`${name} no carga con solo los ficheros trazados (la ruta daría 500): ${String(error.stderr ?? error.message).split("\n").find((l) => /^\s*\w*Error:/.test(l))?.trim() ?? "error"}`);
+  }
+}
+rmSync(stage, { recursive: true, force: true });
+console.log(`smoke:pdf · la ruta carga con solo su traza: ${["@sparticuz/chromium", "playwright-core"].join(", ")}`);
 
 const report = path.join(root, ".pdf-smoke/export-report.json");
 if (existsSync(report)) {
