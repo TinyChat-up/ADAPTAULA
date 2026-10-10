@@ -64,6 +64,7 @@ export function status(overrides: Partial<AdaptationStatusDto> = {}): Adaptation
     ambiguousAttempt: false,
     generationsUsed: 0,
     regenerationAvailable: true,
+    automaticStop: null,
     ...overrides,
   };
 }

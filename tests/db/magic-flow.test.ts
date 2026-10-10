@@ -170,14 +170,14 @@ describe("«Hacer magia»: material + perfil → ficha final, sin aprobación hu
   });
 });
 
-describe("«Hacer magia» when the reviewer blocks: never delivered, no loop, the person decides", () => {
-  it("a blocked review is not delivered; the unit stays reserved; nothing generates again by itself", async () => {
+describe("«Hacer magia» when the reviewer blocks with no safe correction: never delivered, no loop, an honest stop", () => {
+  it("a finding about the whole sheet (its tone) has no safe correction: not delivered, «could not finish automatically», editing only offered", async () => {
     const t = await teacher({ reviewer: async (_i, _c, input) => ({ draft: blockingReview(input), runs: [] }) });
     const created = await t.start("automatic");
     const id = created.ok ? created.data.adaptationId : "";
     await t.runAll(id);
     const blocked = await t.status(id);
-    expect(blocked).toMatchObject({ status: "blocked", phase: "blocked", delivered: false, nextAction: "review_plan", regenerationAvailable: true });
+    expect(blocked).toMatchObject({ status: "blocked", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, delivered: false, nextAction: "review_plan", regenerationAvailable: true });
     expect(await entitlement(id)).toBe("reserved");
     // Further run requests, the recovery cron, an explicit continuation: nothing runs again.
     await t.runAll(id);
@@ -219,7 +219,7 @@ describe("«Hacer magia» when the reviewer blocks: never delivered, no loop, th
 });
 
 describe("«Hacer magia» under the 7B failure budget", () => {
-  it("a generation the budget refuses is not a crash: the plan is reviewed, nothing generates, the screen offers «Crear ficha»", async () => {
+  it("a generation the budget refuses is not a crash: nothing generates, and the teacher is told it could not finish automatically (no «Crear ficha» to accept)", async () => {
     const t = await teacher();
     const created = await t.start("automatic");
     const id = created.ok ? created.data.adaptationId : "";
@@ -230,8 +230,10 @@ describe("«Hacer magia» under the 7B failure budget", () => {
       );
     }
     expect(await processAdaptationStage(t.orchestrator, id)).toMatchObject({ outcome: "completed", status: "generation_queued" });
-    expect(await t.status(id)).toMatchObject({ status: "generation_queued", nextAction: "start_generation" });
+    expect(await t.status(id)).toMatchObject({ status: "generation_queued", phase: "automatic_incomplete", automaticStop: { reason: "generation_refused" }, nextAction: "none" });
     expect(await startGeneration(t.deps, t.actor, id)).toMatchObject({ ok: false, code: "failure_budget" });
+    // The refusal is recorded: refreshing the page does not try again and again.
+    expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect([t.spy.planner, t.spy.generator, t.spy.reviewer]).toEqual([1, 0, 0]);
     expect(await entitlement(id)).toBe("reserved");

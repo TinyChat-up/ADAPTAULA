@@ -49,6 +49,14 @@ export function responseFor(activity: AnalysisActivity): ResponseSpec {
  * The answer area of an adapted activity: the original's, unless a decision changes how the student answers. Closed formats
  * need a generated answer key and are not supported by generator v1: they keep the original area.
  */
+/**
+ * Open answer formats the assembler sets by itself on an activity (`responseForDecision`): a shorter answer area, the keyboard or an
+ * oral/alternative answer. Nothing is written for them, so no model is needed. The closed formats need an answer key: none.
+ */
+export const DETERMINISTIC_RESPONSES = ["write_text_short", "keyboard", "oral_or_alternative"] as const satisfies readonly NonNullable<Decision["response_target"]>[];
+export const isDeterministicResponse = (decision: Pick<Decision, "action" | "response_target">) =>
+  decision.action === "change_response_format" && decision.response_target !== undefined && (DETERMINISTIC_RESPONSES as readonly string[]).includes(decision.response_target);
+
 export function responseForDecision(activity: AnalysisActivity, target: Decision["response_target"]): ResponseSpec {
   const lines = activity.answer_area.lines ?? 3;
   if (target === "keyboard") return { kind: "oral_or_alternative", mode: "keyboard", lines };
@@ -211,10 +219,15 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     for (const block of placeholders.get(unit.ref) ?? []) ordered.push({ page: unit.page, block });
     // Segmenting a source text is deterministic: the paragraphs stay word for word, only labelled. No model rewrites them.
     const segmenting = decisions.filter((d) => d.action === "segment");
+    // An open answer format is set by the assembler too (a shorter area, the keyboard, an oral answer): the prompt is untouched.
+    const responding = decisions.find(isDeterministicResponse);
+    const activity = analysis.activities.find((a) => a.id === unit.ref);
     const literal = unit.blocks.map((b) =>
       segmenting.length > 0 && b.type === "reading_text"
         ? { ...b, segment_labels: b.paragraphs.map((_, i) => `Parte ${i + 1}`), trace: { origin: "adapted" as const, source_refs: b.trace.source_refs, decision_ids: segmenting.map((d) => d.id) } }
-        : { ...b, trace: { ...b.trace, decision_ids: decisions.filter((d) => d.action === "keep").map((d) => d.id) } },
+        : responding && activity && b.type === "activity"
+          ? { ...b, response: responseForDecision(activity, responding.response_target), trace: { origin: "adapted" as const, source_refs: b.trace.source_refs, decision_ids: [responding.id] } }
+          : { ...b, trace: { ...b.trace, decision_ids: decisions.filter((d) => d.action === "keep").map((d) => d.id) } },
     );
     const blocks = replaced.get(unit.ref) ?? literal;
     for (const block of [...blocks, ...(after.get(unit.ref) ?? [])]) ordered.push({ page: unit.page, block });

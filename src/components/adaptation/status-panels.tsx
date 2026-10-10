@@ -9,7 +9,7 @@ import { Alert } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
 import { PdfDownload } from "@/components/material/pdf-download";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
-import { DEFERRED_NOTE, STATUS_COPY } from "@/lib/adaptation/presentation/copy";
+import { AUTOMATIC_STOP_COPY, DEFERRED_NOTE, STATUS_COPY } from "@/lib/adaptation/presentation/copy";
 import { failureView, readyTitle, stageStates, warningLines, workingCopy } from "@/lib/adaptation/presentation/view-model";
 import { formatDateTime } from "@/lib/format/date";
 import { cn } from "@/lib/utils/cn";
@@ -61,7 +61,7 @@ export function StartPanel({ busy, onStart, cancel, canCancel }: { busy: boolean
 }
 
 export function WorkingPanel({ dto, offline, cancel }: { dto: AdaptationStatusDto; offline: boolean; cancel: ReactNode }) {
-  const copy = workingCopy(dto.progress);
+  const copy = workingCopy(dto.progress, { mode: dto.creationMode, step: dto.step });
   return (
     <Card className="space-y-5">
       <div className="space-y-1">
@@ -70,7 +70,7 @@ export function WorkingPanel({ dto, offline, cancel }: { dto: AdaptationStatusDt
         <p className="text-sm text-muted-foreground">Puedes seguir usando Adaptaula: la adaptación se guarda y podrás volver a esta página.</p>
       </div>
       <ol className="space-y-3" aria-label="Fases de la adaptación">
-        {stageStates(dto.progress, { mode: dto.creationMode, generationQueued: dto.status === "generation_queued" }).map((stage) => (
+        {stageStates(dto.progress, { mode: dto.creationMode, generationQueued: dto.status === "generation_queued", step: dto.step }).map((stage) => (
           <li key={stage.key} aria-current={stage.state === "active" ? "step" : undefined} className="flex items-center gap-3">
             {stage.state === "done" ? (
               <Check aria-hidden className="size-5 shrink-0 text-success" />
@@ -136,7 +136,7 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
   return (
     <Card className="space-y-4">
       {pending > 0 ? (
-        <Alert tone="warning" title="La ficha está casi lista · Falta completar un recurso">
+        <Alert tone="warning" title={dto.creationMode === "automatic" ? AUTOMATIC_STOP_COPY.visual : "La ficha está casi lista · Falta completar un recurso"}>
           <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
         </Alert>
       ) : !printable ? (

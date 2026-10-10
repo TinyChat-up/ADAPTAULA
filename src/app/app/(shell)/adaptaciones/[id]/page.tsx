@@ -18,10 +18,12 @@ import {
 export const metadata: Metadata = { title: "Adaptación" };
 export const dynamic = "force-dynamic";
 
-export default async function AdaptationPage({ params }: PageProps<"/app/adaptaciones/[id]">) {
+export default async function AdaptationPage({ params, searchParams }: PageProps<"/app/adaptaciones/[id]">) {
   const { id } = await params;
+  // «Revisar y editar» after «Hacer magia» stopped: an explicit choice of the teacher, never a default.
+  const editing = (await searchParams).editar === "1";
   const ctx = await requireWorkspace();
-  const data = await loadAdaptationPage(ctx, id);
+  const data = await loadAdaptationPage(ctx, id, { editing });
   if (!data) notFound();
 
   const actions: AdaptationActions = {
@@ -40,7 +42,7 @@ export default async function AdaptationPage({ params }: PageProps<"/app/adaptac
         Volver al material
       </Link>
       <PageHeader title="Adaptación" description={data.profileName ? `${data.context.materialTitle} · para ${data.profileName}` : data.context.materialTitle} />
-      <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} />
+      <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} editing={editing} />
     </div>
   );
 }

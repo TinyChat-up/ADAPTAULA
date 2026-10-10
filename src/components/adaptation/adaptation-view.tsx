@@ -13,6 +13,7 @@ import { createPoller, shouldPoll, type Poller } from "@/lib/adaptation/presenta
 import { createRunDispatcher, type RunDispatcher } from "@/lib/jobs/run-dispatcher";
 import { screenFor } from "@/lib/adaptation/presentation/view-model";
 import { BlockedPanel, CancelControl, CancelledPanel, FailedPanel, GeneratePanel, ReadOnlyPanel, ReadyPanel, StartPanel, WorkingPanel } from "./status-panels";
+import { AutomaticIncompletePanel } from "./automatic-panels";
 import { PlanReviewForm, type SubmitReview } from "./plan-review-form";
 
 export interface AdaptationActions {
@@ -43,6 +44,7 @@ export function AdaptationView({
   readyInfo,
   actions,
   canWrite,
+  editing = false,
 }: {
   initial: AdaptationStatusDto;
   plan: AdaptationPlanDto | null;
@@ -51,6 +53,8 @@ export function AdaptationView({
   actions: AdaptationActions;
   /** False for read-only members: every state is visible, no command is offered and nothing is asked to run. */
   canWrite: boolean;
+  /** The teacher chose «Revisar y editar» after «Hacer magia» stopped (`?editar=1`): only then is the plan screen shown. */
+  editing?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initial);
@@ -164,7 +168,10 @@ export function AdaptationView({
   const runNow = () => runnerRef.current?.kick(true);
 
   const cancel = <CancelControl busy={busy} onCancel={() => void run(actions.cancel)} />;
-  const screen = screenFor(status);
+  const screen = screenFor(status, { editing: editing && canWrite });
+  const editHref = `/app/adaptaciones/${id}?editar=1`;
+  /** «Revisar y editar», only on the teacher's click: a blocked sheet is reopened first (that is a new generation later). */
+  const edit = () => (status.status === "blocked" ? void run(actions.reopen, () => router.push(editHref)) : router.push(editHref));
   // A read-only member sees the same states without commands (the server would refuse them anyway).
   const shown = canWrite ? status : { ...status, canCancel: false, canRetry: false };
   const deferredIds = saved?.deferredDecisions ?? status.execution?.deferredDecisions ?? [];
@@ -172,7 +179,7 @@ export function AdaptationView({
     status.creationMode === "automatic"
       ? status.generationsUsed > 0
         ? "Corrige lo que necesites y vuelve a crear la ficha."
-        : "No hemos podido preparar la ficha automáticamente. Revisa cómo se adaptará el material y créala desde aquí."
+        : "Has elegido revisar la propuesta: cambia lo que necesites y crea la ficha."
       : status.generationsUsed > 0
         ? "Corrige lo que necesites y vuelve a crear la ficha."
         : undefined;
@@ -227,6 +234,7 @@ export function AdaptationView({
           </div>
         )
       ) : null}
+      {screen === "automatic_incomplete" ? <AutomaticIncompletePanel dto={status} materialId={context.materialId} busy={busy} canWrite={canWrite} onEdit={edit} cancel={cancel} /> : null}
       {screen === "ready" ? <ReadyPanel dto={status} materialId={context.materialId} info={readyInfo} /> : null}
       {screen === "blocked" ? <BlockedPanel dto={status} materialId={context.materialId} busy={busy} canWrite={canWrite} onReopen={() => void run(actions.reopen, () => setSaved(null))} /> : null}
       {screen === "failed" ? <FailedPanel dto={shown} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }), runNow)} cancel={cancel} /> : null}

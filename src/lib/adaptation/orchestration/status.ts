@@ -11,7 +11,14 @@ import { isDelivered, type AdaptationStatus } from "./state-machine";
 
 export type ProgressStage = "preparing" | "planning" | "awaiting_review" | "generating" | "reviewing" | "ready" | "blocked" | "failed" | "cancelled";
 export type NextAction = "none" | "start_planning" | "review_plan" | "start_generation" | "retry" | "cancel" | "view_result";
-export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | "recoverable_failure" | "action_required" | "cancelled";
+export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | "recoverable_failure" | "action_required" | "cancelled" | "automatic_incomplete";
+
+/**
+ * Why «Hacer magia» could not finish the sheet by itself. `needs_decision`: a need of the profile that nothing the system can do
+ * covers; `quality`: the quality review found a problem with no safe automatic correction (or the generations ran out);
+ * `generation_refused`: the cost guards refused another generation.
+ */
+export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused";
 
 export interface StatusArtifacts {
   planValidation?: { counts: { valid: number; review: number; blocked: number } } | null;
@@ -21,6 +28,12 @@ export interface StatusArtifacts {
   hasPlan?: boolean;
   hasPlanReview?: boolean;
   hasVersion?: boolean;
+  /** Who made the latest plan review: the server («Hacer magia») or a person who took over. */
+  latestReviewKind?: "auto" | "teacher" | "eval" | null;
+  /** A stop recorded for the latest review (the cost guards refused its generation). */
+  automaticStop?: string | null;
+  /** Needs (dimension keys) the automatic resolution could not cover. */
+  unresolvedNeeds?: string[];
 }
 
 export interface AdaptationStatusDto {
@@ -49,6 +62,8 @@ export interface AdaptationStatusDto {
   /** Product generations used (distinct generation inputs; a technical retry of the same one does not count) and whether another one is still possible. */
   generationsUsed: number;
   regenerationAvailable: boolean;
+  /** «Hacer magia» stopped without a finished sheet (phase `automatic_incomplete`); null otherwise. Needs are dimension keys. */
+  automaticStop: { reason: AutomaticStopReason; needs: string[] } | null;
 }
 
 /**
@@ -111,6 +126,17 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
   let phase: StatusPhase;
   let progress: ProgressStage;
   let nextAction: NextAction = "none";
+  let automaticStop: AdaptationStatusDto["automaticStop"] = null;
+  const cycles = generationCyclesOf(snapshot.jobs);
+  // «Hacer magia» while the server still decides (no person took over): it either works, finishes, or stops honestly. It is never
+  // left waiting for a plan approval nobody asked for.
+  const magic = row.creation_mode === "automatic" && artifacts.latestReviewKind !== "teacher";
+  const stopped = (reason: AutomaticStopReason, next: NextAction) => ({
+    phase: "automatic_incomplete" as const,
+    progress: (status === "blocked" ? "blocked" : "awaiting_review") as ProgressStage,
+    nextAction: next,
+    automaticStop: { reason, needs: reason === "needs_decision" ? (artifacts.unresolvedNeeds ?? []) : [] },
+  });
   switch (status) {
     case "queued":
       phase = "working";
@@ -122,10 +148,15 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       progress = "planning";
       break;
     case "awaiting_plan_review":
-      if (row.creation_mode === "automatic" && artifacts.hasPlanReview !== true) {
+      if (magic && artifacts.hasPlanReview !== true) {
         // «Hacer magia» with a fresh plan: the server crosses the gate itself (the run request resumes it), nobody has to review.
         phase = "working";
         progress = "planning";
+        break;
+      }
+      if (magic && cycles === 0) {
+        // The server's own resolution could not be executed: a need nothing covers. Editing is offered, never imposed.
+        ({ phase, progress, nextAction, automaticStop } = stopped("needs_decision", "review_plan"));
         break;
       }
       phase = "awaiting_review";
@@ -133,6 +164,10 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       nextAction = "review_plan";
       break;
     case "generation_queued":
+      if (magic && !activeStage("generation") && artifacts.automaticStop === "generation_refused") {
+        ({ phase, progress, nextAction, automaticStop } = stopped("generation_refused", "none"));
+        break;
+      }
       phase = "working";
       progress = activeStage("generation") ? "generating" : "preparing";
       nextAction = activeStage("generation") ? "none" : "start_generation";
@@ -152,6 +187,10 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       nextAction = delivered ? "view_result" : "none";
       break;
     case "blocked":
+      if (magic) {
+        ({ phase, progress, nextAction, automaticStop } = stopped("quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
+        break;
+      }
       phase = "blocked";
       progress = "blocked";
       // A blocked adaptation is recoverable (reopen the review, correct, generate again) while it has generations left.
@@ -196,7 +235,8 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
         }
       : null,
     ambiguousAttempt: snapshot.jobs.some((j) => j.ambiguous && (j.status === "processing" || j.status === "queued")) || failure?.code === "ambiguous_attempt",
-    generationsUsed: generationCyclesOf(snapshot.jobs),
-    regenerationAvailable: generationCyclesOf(snapshot.jobs) < MAX_GENERATION_CYCLES,
+    generationsUsed: cycles,
+    regenerationAvailable: cycles < MAX_GENERATION_CYCLES,
+    automaticStop,
   };
 }

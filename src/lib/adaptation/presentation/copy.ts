@@ -142,7 +142,8 @@ export const STATUS_COPY = {
   awaitingReview: { title: "Esperando tu revisión", body: "La adaptación está preparada. Revísala antes de crear la ficha." },
   needsGeneration: { title: "Todo listo para crear la ficha", body: "Ya puedes crear la ficha con los cambios que has elegido." },
   generating: { title: "Creando la ficha", body: "Estamos creando la ficha adaptada." },
-  reviewing: { title: "Revisando el resultado", body: "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas." },
+  organizing: { title: "Organizando las actividades", body: "Estamos decidiendo cómo aplicar cada cambio con lo que sabemos hacer bien." },
+  reviewing: { title: "Comprobando el resultado", body: "Estamos comprobando que se mantienen los objetivos y que las ayudas no revelan respuestas." },
   ready: { title: "La ficha está lista", body: "Ya puedes ver la ficha tal como la verá el alumnado y descargarla en PDF." },
   readyWithWarnings: { title: "La ficha está lista, con observaciones", body: "Conviene que revises estos puntos antes de usarla." },
   blocked: { title: "La ficha necesita una revisión antes de estar lista", body: "Al revisar el resultado hemos encontrado algo que conviene corregir. Todavía no se ha entregado ninguna ficha." },
@@ -164,11 +165,34 @@ export const CREATION_COPY = {
 export const STAGES = [
   { key: "analysis", label: "Analizando el material" },
   { key: "planning", label: "Preparando la adaptación" },
+  { key: "organizing", label: "Organizando las actividades" },
   { key: "awaiting_review", label: "Tu revisión" },
   { key: "generating", label: "Creando la ficha" },
-  { key: "reviewing", label: "Revisando el resultado" },
-  { key: "ready", label: "Lista" },
+  { key: "reviewing", label: "Comprobando el resultado" },
+  { key: "ready", label: "Ficha lista" },
 ] as const;
+
+/**
+ * «Hacer magia» could not finish the sheet by itself (status phase `automatic_incomplete`). Plain words: what happened and what the
+ * teacher may do; never a technical state. The unit of the plan is only used when a sheet is delivered.
+ */
+export const AUTOMATIC_STOP_COPY = {
+  title: "No hemos podido completar automáticamente esta ficha",
+  needs_decision: {
+    body: "El perfil pide algo que todavía no sabemos aplicar automáticamente a este material sin dejar de atenderlo.",
+    hint: "Si quieres, revisa la propuesta y decide tú cómo atenderlo. No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan.",
+  },
+  quality: {
+    body: "Al comprobar el resultado hemos encontrado algo que no podemos corregir automáticamente sin perder lo que el perfil necesita.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Si quieres, revisa la propuesta y cambia lo que necesites.",
+  },
+  generation_refused: {
+    body: "Ahora mismo no podemos preparar más fichas en tu espacio de trabajo.",
+    hint: "Inténtalo más tarde. No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan.",
+  },
+  edit: "Revisar y editar",
+  visual: "No hemos podido completar automáticamente esta ficha porque necesita un recurso visual",
+} as const;
 
 export const QUOTA_COPY = {
   exhausted: "Has utilizado las adaptaciones disponibles de este periodo.",

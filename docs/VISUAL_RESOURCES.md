@@ -208,3 +208,26 @@ actividad o el documento (lo único que el renderer sabe separar visualmente). S
 `unsupported`. La recomendación automática solo la deja fuera si sus necesidades ya las cubren otras decisiones o la presentación, y
 registra el motivo. En caso contrario, «Hacer magia» se detiene en la revisión y decide el docente: no se entrega una ficha que ignora
 la decisión.
+
+## «Hacer magia» y los visuales (2026-10-10) · límite para Phase 8.2B
+
+Qué hace «Hacer magia» sola con los visuales:
+- **Reutiliza** un visual del original **ya localizado**: su recorte fijado por hash.
+- **Reconstruye** tablas y gráficos con datos verificables del análisis: no necesitan imagen.
+- **No confunde** un visual decorativo (`role: decorative`) con uno necesario.
+- **Incluye apoyos visuales opcionales** solo cuando el plan los justifica, y nunca bloquean la ficha.
+
+**Auditoría: ¿puede localizar sola un recurso original que ya está en el PDF? Hoy no.** El análisis (`MaterialAnalysis v3`) guarda de cada visual la página, el tipo, el papel y su descripción, pero **no su posición**. Los localizadores (`visual_locators`) los crea siempre una persona («Localizar en el original»). Recortar una zona sin saber cuál sería inventar, y por eso no se hace. Tampoco se generan imágenes ni hay biblioteca de pictogramas.
+
+**Comportamiento honesto.** Cuando un visual imprescindible no se puede obtener automáticamente (un original sin localizar o un recurso nuevo esencial), la ficha se entrega en «No hemos podido completar automáticamente esta ficha porque necesita un recurso visual»:
+- «Completar ficha» lleva a la misma adaptación, sin consumir otra unidad;
+- no hay PDF hasta completarla (409 `resource_pending`);
+- nunca se presenta como terminada;
+- no se abre la edición del plan.
+
+**Para Phase 8.2B** (sin implementar):
+- localización automática de visuales originales, con regiones en el contrato del análisis o extracción de las imágenes embebidas del PDF, validada sobre los bytes;
+- biblioteca de pictogramas con licencia compatible;
+- generación de imágenes, si se decide.
+
+Con esas piezas, las paradas por recurso visual de «Hacer magia» se reducirán sin cambiar la regla: un visual imprescindible nunca se omite.

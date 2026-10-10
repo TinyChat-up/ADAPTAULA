@@ -4,9 +4,11 @@ import { AdaptationPlanSchema, type AdaptationPlan } from "@/lib/schemas/adaptat
 import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
-import type { AiReviewDraft } from "@/lib/schemas/pedagogical-review";
+import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import { allBlocks } from "@/lib/schemas/material-document";
 import { AIError } from "@/lib/ai/errors";
-import { buildAdaptationContext } from "../context";
+import { resolveAutomatically } from "../automatic-resolution";
+import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
 import { fingerprint } from "../fingerprint";
@@ -15,7 +17,7 @@ import { buildGeneratorInputV2, normalizeGeneration } from "../generator";
 import { classifyPlan } from "../invariants";
 import { modelFacingAnalysis } from "../model-input";
 import { applicablePlan } from "../plan";
-import { autoReview, normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
+import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { normalizePlanFor } from "../plan-v2";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
@@ -35,9 +37,12 @@ import type { PipelineVersions } from "./versions";
  *   createAdaptation → [queued] → runPlanningStage → [awaiting_plan_review] ⟶ teacher ⟶ submitPlanReview → [generation_queued]
  *   → runGenerationStage → [generating → reviewing_deterministic → reviewing_ai] → [ready | blocked]
  *
- * An adaptation created in `automatic` mode («Hacer magia») crosses the gate with `continueAutomatically`: the server submits the
- * recommendation (`autoReview`, the same policy as the offline pipeline) once per plan, through the same `submitPlanReview`, and
- * queues the same generation job. Nothing else differs: same jobs, fencing, limits, entitlement and mandatory reviewer.
+ * An adaptation created in `automatic` mode («Hacer magia») crosses the gate with `continueAutomatically`: the server submits its
+ * capability-aware resolution (`resolveAutomatically`, the same policy as the offline pipeline) once per plan, through the same
+ * `submitPlanReview`, and queues the same generation job. A quality review that fails is corrected by `correctAutomatically` when a
+ * safe correction exists (within the same generation limit). Nothing else differs: same jobs, fencing, limits, entitlement and
+ * mandatory reviewer. Nobody is asked to approve the plan; when the sheet cannot be finished automatically the adaptation stops
+ * honestly (the status says why) and the teacher MAY choose to edit it.
  *
  * Guarantees, and their limits:
  *  - IDEMPOTENT APPLICATION STATE: every stage output is persisted under "stage + input fingerprint + versions" and checked
@@ -428,7 +433,7 @@ async function currentPlan(store: AdaptationStore, snapshot: PipelineSnapshot, l
  * and not persisted. A valid one builds the effective plan and runs the execution preflight: with an `unsupported` decision
  * nothing is queued and the adaptation stays in `awaiting_plan_review`.
  */
-export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: string, reviewInput: unknown): Promise<SubmitReviewResult> {
+export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: string, reviewInput: unknown, audit: Record<string, unknown> = {}, options: { hold?: boolean } = {}): Promise<SubmitReviewResult> {
   const store = deps.store;
   const snapshot = await store.getPipeline(adaptationId);
   if (!snapshot) throw new NotFoundError();
@@ -459,21 +464,47 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
   const reviewFp = fingerprint(review);
   await store.putArtifact(adaptationId, null, "plan_review", raw.fingerprint, reviewFp, review);
   const execution = planExecutability(reviewed, loaded.analysis, loaded.context);
-  await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, execution }), { review_fingerprint: reviewFp, plan_fingerprint: raw.fingerprint, effective: reviewed.effective.decisions.map((d) => d.id), execution, effective_valid: reviewed.effectiveValidation.valid });
+  await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, execution }), { ...audit, review_fingerprint: reviewFp, plan_fingerprint: raw.fingerprint, effective: reviewed.effective.decisions.map((d) => d.id), execution, effective_valid: reviewed.effectiveValidation.valid });
 
-  if (execution.blockers.length > 0 || !reviewed.effectiveValidation.valid) return { ok: true, executable: false, reviewFingerprint: reviewFp, execution };
+  if (execution.blockers.length > 0 || !reviewed.effectiveValidation.valid || options.hold) return { ok: true, executable: false, reviewFingerprint: reviewFp, execution };
   await store.transition(adaptationId, "awaiting_plan_review", "generation_queued");
   return { ok: true, executable: true, reviewFingerprint: reviewFp, execution };
 }
 
 /**
- * «Hacer magia»: crosses the human gate for an adaptation created in `automatic` mode. The server submits the recommendation
- * (`autoReview`: what is not blocked is applied, what is blocked is left out) through the SAME `submitPlanReview`, and queues the
- * SAME generation job; the deterministic and pedagogical reviews still decide whether anything is delivered.
+ * Why «Hacer magia» stopped without a sheet, recorded next to the review it concerns (an `execution_report` that carries no
+ * execution): the cost guards refused the generation. The other stops are read from the state itself (see `status.ts`).
+ */
+export type AutomaticStopCode = "generation_refused";
+
+async function recordAutomaticStop(store: AdaptationStore, adaptationId: string, reviewFp: string, code: AutomaticStopCode, detail: string) {
+  await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, automatic_stop: code, detail }), { review_fingerprint: reviewFp, automatic_stop: code, detail });
+}
+
+/** Queues the generation of the review just saved; the cost guards may refuse it, which is recorded (not a crash, not a loop). */
+async function enqueueAutomatically(deps: OrchestratorDeps, adaptationId: string, reviewFp: string): Promise<GenerationResult | null> {
+  try {
+    return await enqueueGeneration(deps, adaptationId);
+  } catch (error) {
+    if (error instanceof GenerationLimitError || error instanceof FailureBudgetError) {
+      const detail = error instanceof FailureBudgetError ? "failure_budget" : "generation_limit";
+      deps.log?.warn("automatic_generation_refused", { adaptationId, code: detail });
+      await recordAutomaticStop(deps.store, adaptationId, reviewFp, "generation_refused", detail);
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * «Hacer magia»: crosses the human gate for an adaptation created in `automatic` mode. The server submits its capability-aware
+ * resolution (`resolveAutomatically`: what can be executed is applied, what cannot gets an equivalent alternative or is left out
+ * only when nothing important is lost) through the SAME `submitPlanReview`, and queues the SAME generation job; the deterministic
+ * and pedagogical reviews still decide whether anything is delivered. The resolution of every decision is kept in the execution
+ * report (audit). A decision that answers a high need and that nothing can execute stays approved, so the preflight stops: the
+ * adaptation waits, honestly, for the teacher to CHOOSE to edit it (never sent there by itself).
  * Idempotent and bounded: it acts only in `automatic` mode, only while awaiting the plan review, and only if the current plan has
- * no review yet. Once a review exists (this one, or the teacher's after reopening a blocked sheet) the person decides: a
- * recommendation that cannot be executed, or a reviewer that blocks, falls back to the human review and never loops.
- * The review is deterministic (same plan, same fingerprint), so two racing calls store one review and one job.
+ * no review yet. The review is deterministic (same plan, same fingerprint), so two racing calls store one review and one job.
  */
 export async function continueAutomatically(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
   const store = deps.store;
@@ -489,21 +520,114 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
   const raw = await currentPlan(store, snapshot, loaded);
   if (!raw) return null;
   if ((await store.listArtifacts(adaptationId, "plan_review")).some((a) => a.input_fingerprint === raw.fingerprint)) return null;
-  const submitted = await submitPlanReview(deps, adaptationId, autoReview(raw.plan, loaded.analysis, loaded.context));
+  const resolution = resolveAutomatically(raw.plan, loaded.analysis, loaded.context);
+  // Saved in every case (audit, and what the status reads); held when a high need is left without any executable decision.
+  const submitted = await submitPlanReview(deps, adaptationId, resolution.review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id) } }, { hold: resolution.unresolved.length > 0 });
   if (!submitted.ok || !submitted.executable) {
-    deps.log?.warn("automatic_review_needs_person", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code });
+    deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;
   }
+  return enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
+}
+
+/**
+ * The automatic path picked up again after an interruption (the process died between two steps, a refresh): continue the gate,
+ * correct a blocked sheet, or queue a generation whose review was saved but never queued. Never after a teacher took over, never
+ * again after the cost guards refused (that stop is recorded), and never more than the limits allow.
+ */
+export async function resumeAutomatically(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
+  const snapshot = await deps.store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic") return null;
+  if (snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return null;
+  const status = snapshot.adaptation.status as AdaptationStatus;
+  if (status === "awaiting_plan_review") return continueAutomatically(deps, adaptationId);
+  if (status === "blocked") return correctAutomatically(deps, adaptationId);
+  if (status !== "generation_queued") return null;
+  const last = (await deps.store.listArtifacts(adaptationId, "plan_review")).at(-1);
+  if (!last || (last.payload as { reviewer?: { kind?: string } }).reviewer?.kind !== "auto") return null;
+  const stopped = (await deps.store.listArtifacts(adaptationId, "execution_report")).some((a) => (a.payload as { review_fingerprint?: string; automatic_stop?: string }).review_fingerprint === last.fingerprint && a.payload.automatic_stop !== undefined);
+  return stopped ? null : enqueueAutomatically(deps, adaptationId, last.fingerprint);
+}
+
+const CORRECTION_REASON = "La revisión de calidad encontró un problema en lo que produjo: se mantiene el original";
+
+/**
+ * «Hacer magia» after a quality review that blocks: the one SAFE correction is to leave out the decisions whose own blocks the
+ * review found wrong (their part goes back to the original, which the review accepts by construction) and generate again, inside
+ * the same limit of generations (`MAX_GENERATION_CYCLES`, enforced by the database too). It is attempted only when:
+ *   · the adaptation is automatic, blocked, and its last review is still the server's (a teacher who took over decides alone);
+ *   · EVERY failing check points at blocks or targets of applied decisions (a finding about the whole sheet, such as its tone, has
+ *     no safe correction);
+ *   · leaving them out loses no high need that nothing else covers;
+ *   · the corrected review is executable.
+ * Otherwise nothing changes: the sheet stays undelivered and the teacher is told it could not be finished automatically.
+ */
+export async function correctAutomatically(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
+  const store = deps.store;
+  const snapshot = await store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic" || snapshot.adaptation.status !== "blocked") return null;
+  if (generationCyclesOf(snapshot.jobs) >= MAX_GENERATION_CYCLES) return null;
+  let loaded: Loaded;
   try {
-    return await enqueueGeneration(deps, adaptationId);
+    loaded = load(snapshot);
   } catch (error) {
-    // The cost guards refuse the job: the review stays saved and the screen offers «Crear ficha», which explains the refusal.
-    if (error instanceof GenerationLimitError || error instanceof FailureBudgetError) {
-      deps.log?.warn("automatic_generation_refused", { adaptationId, code: error instanceof FailureBudgetError ? "failure_budget" : "generation_limit" });
-      return null;
-    }
+    if (error instanceof AdaptationError) return null;
     throw error;
   }
+  const raw = await currentPlan(store, snapshot, loaded);
+  const last = (await store.listArtifacts(adaptationId, "plan_review")).at(-1);
+  if (!raw || !last) return null;
+  const previous = PlanReviewSchema.parse(last.payload);
+  if (previous.reviewer.kind !== "auto" || previous.plan_fingerprint !== raw.fingerprint) return null;
+  const reviewed = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context);
+
+  // The blocked version, rebuilt exactly (same generation, same deterministic ids) to read what each failing block traces to.
+  const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: generationFingerprint(raw.fingerprint, last.fingerprint, loaded.versions) });
+  if (!generationArtifact) return null;
+  const generation = (generationArtifact.payload as { generation: ReturnType<typeof normalizeGeneration> }).generation;
+  const document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: generation.segments, newBlockId: sequentialIds() });
+  const documentFp = fingerprint(document);
+  const reviewsOf = async (kind: "pedagogical_review" | "deterministic_review") =>
+    (await store.listArtifacts(adaptationId, kind)).map((a) => (a.payload as { review?: PedagogicalReview }).review).filter((r): r is PedagogicalReview => r?.document_fingerprint === documentFp);
+  const review = (await reviewsOf("pedagogical_review")).at(-1) ?? (await reviewsOf("deterministic_review")).at(-1);
+  if (!review) return null;
+  const failing = review.checks.filter((c) => c.status === "FAIL" && !c.teacher_override);
+  if (failing.length === 0) return null;
+
+  const effective = reviewed.effective.decisions;
+  const applied = new Set(effective.filter((d) => d.action !== "keep").map((d) => d.id));
+  const blocks = allBlocks(document);
+  const implicated = (targets: readonly string[]) => {
+    const ids = new Set<string>();
+    for (const t of targets) {
+      if (t.startsWith("blk_")) for (const id of blocks.find((b) => b.id === t)?.trace.decision_ids ?? []) if (applied.has(id)) ids.add(id);
+      if (t.startsWith("dec_") && applied.has(t)) ids.add(t);
+      for (const d of effective) if (d.target === t && applied.has(d.id)) ids.add(d.id);
+    }
+    return ids;
+  };
+  const perCheck = failing.map((c) => implicated(c.targets));
+  if (perCheck.some((ids) => ids.size === 0)) return null;
+  const drop = new Set(perCheck.flatMap((ids) => [...ids]));
+  const kept = effective.filter((d) => !drop.has(d.id));
+  const high = (dim: string) => loaded.context.needs.some((n) => n.dimension === dim && n.level === "high");
+  const losesHighNeed = effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => high(dim) && !isResolvedByPresentation(dim, loaded.context.presentation) && !kept.some((k) => k.dimensions.includes(dim))));
+  if (losesHighNeed) return null;
+
+  const corrected = { ...previous, entries: previous.entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: CORRECTION_REASON } : e)) };
+  const check = reviewPlan(raw.plan, corrected, loaded.analysis, loaded.context);
+  if (planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid) return null;
+
+  try {
+    await reopenPlanReview(deps, adaptationId);
+  } catch (error) {
+    if (error instanceof GenerationLimitError) return null;
+    throw error;
+  }
+  const submitted = await submitPlanReview(deps, adaptationId, corrected, { automatic: { correction_of: last.fingerprint, dropped: [...drop], failing: failing.map((c) => c.check) } });
+  if (!submitted.ok || !submitted.executable) return null;
+  deps.log?.warn("automatic_correction_queued", { adaptationId, dropped: drop.size, checks: failing.map((c) => c.check).join(",") });
+  return enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
