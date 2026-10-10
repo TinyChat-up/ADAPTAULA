@@ -4,6 +4,7 @@ import { CLOSED_RESPONSES, type Decision } from "@/lib/schemas/adaptation-plan";
 import { SUPPORT_V2_KINDS, SupportV2Schema, type SupportV2Kind } from "@/lib/schemas/generated-segments-v2";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { isResolvedByPresentation } from "./context";
+import { isDeterministicResponse } from "./document";
 import { authorizedKinds, decisionsToGenerateV2 } from "./generated-v2";
 import type { ReviewOutcome, ReviewedDecision, ReviewedPlan } from "./plan-review";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
@@ -23,9 +24,11 @@ import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-
  */
 export const EXECUTION_ROUTES = ["ai_generation", "deterministic", "presentation", "deferred_to_renderer", "unsupported"] as const;
 export type ExecutionRoute = (typeof EXECUTION_ROUTES)[number];
+export { DETERMINISTIC_RESPONSES, isDeterministicResponse } from "./document";
 
 /** Layout-only actions: with no support to write they only ask for a different arrangement of what is already there. */
 const LAYOUT_ACTIONS = new Set<Decision["action"]>(["segment", "reorganize"]);
+
 
 
 /**
@@ -86,6 +89,7 @@ export function classifyDecisionExecution(decision: Decision, analysis: Material
   if (decisionsToGenerateV2([decision], analysis, context).length > 0) return { route: "ai_generation", reason: "Hay un apoyo autorizado o una consigna larga que reescribir" };
   const text = analysis.texts.find((t) => t.id === decision.target);
   if (decision.action === "remove") return { route: "deterministic", reason: "El ensamblador omite el elemento" };
+  if (isDeterministicResponse(decision) && analysis.activities.some((a) => a.id === decision.target)) return { route: "deterministic", reason: "El ensamblador cambia el espacio de respuesta de la actividad" };
   if (decision.action === "segment" && text?.kind === "reading_text") return { route: "deterministic", reason: "El ensamblador etiqueta los párrafos del texto fuente sin tocarlos" };
   const visual = VISUAL_ACTIONS.has(decision.action) ? visualTreatment(decision, analysis) : null;
   if (visual?.kind === "original") {

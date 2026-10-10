@@ -89,7 +89,9 @@ describe("every effective decision has an executor, or the preflight says why no
 
   it("pipeline: `requireExecutable` stops before the generator when something cannot be executed", async () => {
     const analysis = frac;
-    const planner = { plan: async () => ({ draft: { decisions: [nothingToRun], summary: [] }, runs: [] }) };
+    // No executor and no alternative (attention focus by rewording a short instruction), for a HIGH need: it is not left out.
+    const noAlternative = { ...nothingToRun, strategies: ["attention_focus" as const] };
+    const planner = { plan: async () => ({ draft: { decisions: [noAlternative], summary: [] }, runs: [] }) };
     const run = (requireExecutable: boolean) =>
       runAdaptation({ profile: EXECUTIVE_EXPERIMENT_PROFILE, education: { stage: null, grade: null, subject: null }, analysis, adaptationType: "accessibility", policy: 2 }, { planner, generator: createMockGenerator(), reviewer: null, requireExecutable });
     await expect(run(true)).rejects.toBeInstanceOf(ExecutionBlockedError);

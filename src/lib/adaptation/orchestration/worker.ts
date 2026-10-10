@@ -1,6 +1,6 @@
 import "server-only";
 import { logger } from "@/lib/logger";
-import { continueAutomatically, latestReviewFingerprint, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { continueAutomatically, correctAutomatically, latestReviewFingerprint, resumeAutomatically, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import type { StageName } from "./store";
 
 /**
@@ -73,7 +73,12 @@ async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: 
     return { ...planned, status: status ?? planned.status };
   }
   const review = await latestReviewFingerprint(deps.store, adaptationId);
-  return review ? runGenerationStage(deps, adaptationId, review) : { outcome: "rejected", status: "generation_queued", code: "plan_review_required" };
+  if (!review) return { outcome: "rejected", status: "generation_queued", code: "plan_review_required" };
+  const generated = await runGenerationStage(deps, adaptationId, review);
+  // «Hacer magia»: a quality review that blocks is corrected when a safe correction exists (bounded by the generation limit).
+  if (generated.status !== "blocked") return generated;
+  const corrected = await correctAutomatically(deps, adaptationId);
+  return corrected?.outcome === "enqueued" || corrected?.outcome === "reused" ? { ...generated, status: corrected.status } : generated;
 }
 
 /**
@@ -84,9 +89,9 @@ async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: 
 export async function processAdaptationStage(deps: OrchestratorDeps, adaptationId: string): Promise<StageOutcome | null> {
   let snapshot = await deps.store.getPipeline(adaptationId);
   let job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
-  // An automatic adaptation whose plan finished but whose continuation did not (the process died in between): resume it now.
-  if (!job && snapshot?.adaptation.creation_mode === "automatic" && snapshot.adaptation.status === "awaiting_plan_review") {
-    if (!(await continueAutomatically(deps, adaptationId))) return null;
+  // An automatic adaptation interrupted between two steps (the process died, a refresh): resume it now.
+  if (!job && snapshot?.adaptation.creation_mode === "automatic") {
+    if (!(await resumeAutomatically(deps, adaptationId))) return null;
     snapshot = await deps.store.getPipeline(adaptationId);
     job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
   }

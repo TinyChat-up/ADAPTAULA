@@ -294,7 +294,13 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const artifacts = await deps.reader.getArtifacts(adaptationId, STATUS_KINDS);
   const latest = (kind: ArtifactKind) => artifacts.filter((a) => a.kind === kind).at(-1)?.payload as Record<string, unknown> | undefined;
   const validation = latest("plan_validation") as { classification?: { counts: { valid: number; review: number; blocked: number } } } | undefined;
-  const execution = latest("execution_report") as { execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] } } | undefined;
+  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> } };
+  const reports = artifacts.filter((a) => a.kind === "execution_report").map((a) => a.payload as Report);
+  // The real preflight report (a recorded stop carries no execution), and what was recorded for the latest review.
+  const execution = reports.filter((r) => r.execution).at(-1);
+  const lastReview = artifacts.filter((a) => a.kind === "plan_review").at(-1);
+  const forLastReview = lastReview ? reports.filter((r) => r.review_fingerprint === lastReview.fingerprint) : [];
+  const unresolvedNeeds = [...new Set(forLastReview.flatMap((r) => r.automatic?.outcomes ?? []).filter((o) => o.kind === "unresolved").flatMap((o) => o.uncovered))];
   const merged = latest("pedagogical_review") as { review?: PedagogicalReview; pending?: string[] } | undefined;
   const deterministic = latest("deterministic_review") as { review?: PedagogicalReview } | undefined;
   const extra: StatusArtifacts = {
@@ -305,6 +311,9 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     hasPlan: artifacts.some((a) => a.kind === "plan"),
     hasPlanReview: artifacts.some((a) => a.kind === "plan_review"),
     hasVersion: (await deps.reader.getVersion(adaptationId, null)) !== null,
+    latestReviewKind: ((lastReview?.payload as { reviewer?: { kind?: "auto" | "teacher" | "eval" } } | undefined)?.reviewer?.kind ?? null),
+    automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
+    unresolvedNeeds,
   };
   return { ok: true, data: buildStatusDto(snapshot, extra) };
 }
@@ -345,7 +354,8 @@ export async function getAdaptationPlan(deps: ServiceDeps, actor: Actor, adaptat
   if (!plan || !validation) return { ok: false, code: "not_found" };
   const decisions = (plan.payload as { decisions: Array<Record<string, unknown>> }).decisions;
   const classification = (validation.payload as { classification: { decisions: Array<{ id: string; status: "valid" | "review" | "blocked"; issues: Array<{ flag: string; severity: string; message: string }> }>; counts: AdaptationPlanDto["counts"] } }).classification;
-  const execution = artifacts.filter((a) => a.kind === "execution_report").at(-1)?.payload as { execution?: { blockers: string[] } } | undefined;
+  // The preflight report of the latest review (a recorded automatic stop carries no execution).
+  const execution = artifacts.filter((a) => a.kind === "execution_report" && (a.payload as { execution?: unknown }).execution).at(-1)?.payload as { execution?: { blockers: string[] } } | undefined;
   const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
   const analysis = snapshot ? parseStoredAnalysis(snapshot.analysis.analysis).analysis : null;
   const reviews = artifacts.filter((a) => a.kind === "plan_review" && a.input_fingerprint === plan.fingerprint).at(-1)?.payload as { entries?: Array<{ decision_id: string; restrictions?: string[] }> } | undefined;

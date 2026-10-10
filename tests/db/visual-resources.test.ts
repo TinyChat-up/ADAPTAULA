@@ -379,7 +379,8 @@ describe("8.2A.1 · one state everywhere: adaptation screen, sheet, lists and PD
     expect(r).toEqual({ printable: false, pendingResources: 2, reason: "resource_pending" });
     expect(await readiness(m, false)).toEqual(r); // the list's row-only reading agrees with the verified one
     const out = panel(m, { visualsPending: r.pendingResources, printable: r.printable });
-    expect(out).toContain("La ficha está casi lista · Falta completar un recurso");
+    // «Hacer magia»: said as what it is, it could not be completed automatically because it needs a visual resource.
+    expect(out).toContain("No hemos podido completar automáticamente esta ficha porque necesita un recurso visual");
     expect(out).toContain("Completar ficha");
     expect(out).not.toMatch(/La ficha está lista|Descargar PDF/);
     expect(listState("ready", false, false, !r.printable)).toEqual({ label: "Casi lista · falta un recurso", group: "attention", cta: "Completar ficha" });
@@ -439,11 +440,11 @@ describe("8.2A.1 · a layout decision the renderer cannot execute never reaches 
     expect(s.validation.issues.some((i) => i.code === "deferred_unsupported" && i.severity === "warning")).toBe(false);
   });
 
-  it("its need not covered: never deferred to a sheet that ignores it; the teacher decides in the review (no delivery, no new unit)", async () => {
+  it("its need not covered (a high one): never deferred to a sheet that ignores it; «Hacer magia» stops honestly, editing only offered (no delivery, no new unit)", async () => {
     const m = await magic(fractionsAnalysis(), [onText("unused")]);
     const plan = (await q<{ payload: { decisions: Array<{ id: string; target: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan' order by created_at desc limit 1", [m.id]))[0]!.payload;
     expect(plan.decisions.some((d) => d.target === "ctt_1")).toBe(true); // the profile really has that need: the decision is valid
-    expect(m.status).toMatchObject({ status: "awaiting_plan_review", phase: "awaiting_review", nextAction: "review_plan" });
+    expect(m.status).toMatchObject({ status: "awaiting_plan_review", phase: "automatic_incomplete", automaticStop: { reason: "needs_decision", needs: ["instruction_chunking"] }, nextAction: "review_plan" });
     const report = (await q<{ payload: { execution: { blockers: string[] } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'execution_report' order by created_at desc limit 1", [m.id]))[0]!.payload;
     expect(report.execution.blockers.join(" ")).toMatch(/solo sabe separar visualmente actividades/);
     expect(await count("public.adaptation_versions where adaptation_id = $1", [m.id])).toBe(0);

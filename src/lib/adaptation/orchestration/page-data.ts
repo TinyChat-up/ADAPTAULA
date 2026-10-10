@@ -17,7 +17,7 @@ import { resourceDeps } from "@/lib/adaptation/resources/server";
 
 export interface AdaptationPageData {
   status: AdaptationStatusDto;
-  /** Only while the teacher has to review it: the plan is not needed (nor sent to the browser) in any other state. */
+  /** Only while the teacher reviews it (or chose to, after «Hacer magia» stopped): not sent to the browser in any other state. */
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
   /**
@@ -36,7 +36,7 @@ export interface AdaptationPageData {
  * missing one are all `null` (a 404). The browser receives plain data: the status DTO, the plan for the review and labels
  * derived from the stored analysis; never the generated document, prompts, model data or learner data.
  */
-export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Promise<AdaptationPageData | null> {
+export async function loadAdaptationPage(ctx: WorkspaceContext, id: string, options: { editing?: boolean } = {}): Promise<AdaptationPageData | null> {
   const supabase = await getSupabase();
   const deps = serviceDeps(supabase);
   const actor: Actor = { userId: ctx.user.id, workspaceId: ctx.workspace.id, canWrite: hasRole(ctx.role, WRITE_ROLES) };
@@ -51,7 +51,10 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string): Pro
     getMaterialDetail(ctx.workspace.id, row.material_id),
     getCatalog(),
     getSubjects(),
-    status.nextAction === "review_plan" && status.phase === "awaiting_review" ? getAdaptationPlan(deps, actor, id) : Promise.resolve(null),
+    // The plan goes to the browser only for a review: the teacher's own, or the one they CHOSE after «Hacer magia» stopped.
+    status.nextAction === "review_plan" && (status.phase === "awaiting_review" || (options.editing === true && status.phase === "automatic_incomplete" && status.status === "awaiting_plan_review"))
+      ? getAdaptationPlan(deps, actor, id)
+      : Promise.resolve(null),
     status.phase === "ready" && row.current_version > 0 ? deps.reader.getVersion(id, row.current_version) : Promise.resolve(null),
     profileNameOf(supabase, id),
   ]);
@@ -110,13 +113,19 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
   const materialIds = [...new Set(rows.map((r) => r.material_id as string))];
   const profileIds = [...new Set(rows.map((r) => r.learner_profile_id as string | null).filter((v): v is string => Boolean(v)))];
   const automaticAwaiting = rows.filter((r) => r.creation_mode === "automatic" && r.status === "awaiting_plan_review").map((r) => r.id as string);
+  // «Hacer magia» that may have stopped without a sheet: what matters is whether its latest plan review is still the server's.
+  const automaticOpen = rows.filter((r) => r.creation_mode === "automatic" && ["awaiting_plan_review", "blocked", "generation_queued"].includes(r.status as string)).map((r) => r.id as string);
   const [jobs, materials, profiles, reviewed] = await Promise.all([
     supabase.from("adaptation_jobs").select("adaptation_id").in("adaptation_id", ids).in("status", ["queued", "processing"]),
     supabase.from("materials").select("id, title").in("id", materialIds),
     profileIds.length ? supabase.from("learner_profiles").select("id, display_name").in("id", profileIds) : Promise.resolve({ data: [] as Array<{ id: string; display_name: string }> }),
-    automaticAwaiting.length ? supabase.from("adaptation_artifacts").select("adaptation_id").eq("kind", "plan_review").in("adaptation_id", automaticAwaiting) : Promise.resolve({ data: [] as Array<{ adaptation_id: string }> }),
+    automaticOpen.length
+      ? supabase.from("adaptation_artifacts").select("adaptation_id, kind:payload->reviewer->>kind, created_at").eq("kind", "plan_review").in("adaptation_id", automaticOpen).order("created_at")
+      : Promise.resolve({ data: [] as Array<{ adaptation_id: string; kind: string | null }> }),
   ]);
   const hasReview = new Set((reviewed.data ?? []).map((a) => a.adaptation_id as string));
+  const latestKind = new Map((reviewed.data ?? []).map((a) => [a.adaptation_id as string, (a as { kind: string | null }).kind]));
+  const stopped = (id: string) => latestKind.get(id) === "auto";
   // A delivered sheet still waiting for an essential visual reads «casi lista» here too, like its own page and its PDF.
   const pendingIds = await pendingDelivered(supabase, rows.filter((r) => r.status === "ready").map((r) => r.id as string));
   const running = new Set((jobs.data ?? []).map((j) => j.adaptation_id as string));
@@ -128,7 +137,7 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
-    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string), pendingIds.has(r.id as string)),
+    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string), pendingIds.has(r.id as string), stopped(r.id as string)),
   }));
 }
 

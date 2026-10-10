@@ -31,10 +31,15 @@ const STATES: Record<string, (running: boolean, automaticPending: boolean) => Li
   cancelled: () => ({ label: "Cancelada", group: "closed", cta: "Abrir" }),
 };
 
+/** «Hacer magia» stopped without a sheet (see `buildStatusDto`, phase `automatic_incomplete`): said as such, never «esperando tu revisión». */
+export const AUTOMATIC_INCOMPLETE: ListState = { label: "No se pudo completar automáticamente", group: "attention", cta: "Ver qué pasó" };
+
 /** `automaticPending`: created with «Hacer magia» and its plan not reviewed yet (the server continues it; see `buildStatusDto`). */
 /** `resourcePending`: delivered, but its sheet waits for an essential visual (`readinessOf`): «casi lista», never «preparada». */
-export function listState(status: string, running: boolean, automaticPending = false, resourcePending = false): ListState {
+/** `automaticStopped`: created with «Hacer magia», still decided by the server, and stopped without a sheet. */
+export function listState(status: string, running: boolean, automaticPending = false, resourcePending = false, automaticStopped = false): ListState {
   if (status === "ready" && resourcePending) return { label: "Casi lista · falta un recurso", group: "attention", cta: "Completar ficha" };
+  if (automaticStopped && !running && (status === "awaiting_plan_review" || status === "blocked" || status === "generation_queued")) return AUTOMATIC_INCOMPLETE;
   const of = Object.prototype.hasOwnProperty.call(STATES, status) ? STATES[status] : undefined;
   return of ? of(running, automaticPending) : { label: "En curso", group: "working", cta: "Abrir" };
 }

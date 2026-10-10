@@ -4,14 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 import { AdaptationView, type AdaptationActions } from "@/components/adaptation/adaptation-view";
 import { PlanReviewForm } from "@/components/adaptation/plan-review-form";
 import { StartAdaptationCard } from "@/components/adaptation/start-adaptation-card";
-import { BlockedPanel, WorkingPanel } from "@/components/adaptation/status-panels";
+import { BlockedPanel, ReadyPanel, WorkingPanel } from "@/components/adaptation/status-panels";
 import { buildStatusDto } from "@/lib/adaptation/orchestration/status";
 import type { PipelineSnapshot } from "@/lib/adaptation/orchestration/store";
-import { CREATION_COPY, STAGES } from "@/lib/adaptation/presentation/copy";
+import { AUTOMATIC_STOP_COPY, CREATION_COPY, STAGES } from "@/lib/adaptation/presentation/copy";
+import { listState } from "@/lib/adaptation/presentation/list";
 import { buildReview, initialFormState } from "@/lib/adaptation/presentation/review-form";
 import { screenFor, stageStates } from "@/lib/adaptation/presentation/view-model";
 import { createRunDispatcher } from "@/lib/jobs/run-dispatcher";
-import { awaitingReview, context, plan, status } from "../support/adaptation-ui-fixtures";
+import { awaitingReview, context, plan, ready, status } from "../support/adaptation-ui-fixtures";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }));
 
@@ -91,16 +92,37 @@ describe("B/C/H · the status the screen reads", () => {
     expect(screenFor(dto)).toBe("working");
   });
 
-  it("once a review exists (not executable, or reopened after a block) the person decides, in both modes", () => {
-    expect(buildStatusDto(snapshot(), { hasPlanReview: true })).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan" });
+  it("magic whose own resolution could not be executed: an honest stop (never the plan screen by itself); editing is only offered", () => {
+    const dto = buildStatusDto(snapshot(), { hasPlanReview: true, latestReviewKind: "auto", unresolvedNeeds: ["working_memory_support"] });
+    expect(dto).toMatchObject({ phase: "automatic_incomplete", nextAction: "review_plan", automaticStop: { reason: "needs_decision", needs: ["working_memory_support"] } });
+    expect(screenFor(dto)).toBe("automatic_incomplete");
+    // Only when the teacher chose «Revisar y editar».
+    expect(screenFor(dto, { editing: true })).toBe("review");
+  });
+
+  it("once a person takes over (their review, or reopening after a block) the manual rules apply, in both modes", () => {
+    expect(buildStatusDto(snapshot(), { hasPlanReview: true, latestReviewKind: "teacher" })).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan", automaticStop: null });
+    const reopened = buildStatusDto(snapshot({}, [{ id: "11111111-1111-4111-8111-111111111112", stage: "generation", status: "completed", attempts: 1, max_attempts: 3, step: null, progress: 100, locked_until: null, input_fingerprint: "a".repeat(64), error: null, ambiguous: false }]), { hasPlanReview: true, latestReviewKind: "auto" });
+    expect(reopened).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan" });
     expect(buildStatusDto(snapshot({ creation_mode: "review" }), { hasPlanReview: false })).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan", creationMode: "review" });
+  });
+
+  it("magic blocked by the quality review, or refused by the cost guards: an honest stop, never «Crear ficha» to accept", () => {
+    expect(buildStatusDto(snapshot({ status: "blocked" }), { hasPlanReview: true, latestReviewKind: "auto" })).toMatchObject({ phase: "automatic_incomplete", automaticStop: { reason: "quality" }, nextAction: "review_plan" });
+    expect(buildStatusDto(snapshot({ status: "generation_queued" }), { hasPlanReview: true, latestReviewKind: "auto", automaticStop: "generation_refused" })).toMatchObject({ phase: "automatic_incomplete", automaticStop: { reason: "generation_refused" }, nextAction: "none" });
+    // The same reviewed-by-a-teacher states keep their manual screens.
+    expect(buildStatusDto(snapshot({ status: "blocked", creation_mode: "review" }), { hasPlanReview: true, latestReviewKind: "teacher" })).toMatchObject({ phase: "blocked" });
   });
 
   it("progress in product language: the stages, in order, without the review step for magic, and never a percentage", () => {
     const magic = stageStates("generating", { mode: "automatic" });
-    expect(magic.map((s) => s.label)).toEqual(["Analizando el material", "Preparando la adaptación", "Creando la ficha", "Revisando el resultado", "Lista"]);
-    expect(magic.map((s) => s.state)).toEqual(["done", "done", "active", "pending", "pending"]);
+    expect(magic.map((s) => s.label)).toEqual(["Analizando el material", "Preparando la adaptación", "Organizando las actividades", "Creando la ficha", "Comprobando el resultado", "Ficha lista"]);
+    expect(magic.map((s) => s.state)).toEqual(["done", "done", "done", "active", "pending", "pending"]);
+    // «Organizando las actividades» is a real step (the planning job validating and resolving the plan), never a timer.
+    expect(stageStates("planning", { mode: "automatic", step: "validating" }).find((s) => s.state === "active")?.label).toBe("Organizando las actividades");
+    expect(stageStates("planning", { mode: "automatic", step: "planning" }).find((s) => s.state === "active")?.label).toBe("Preparando la adaptación");
     expect(stageStates("generating", { mode: "review" }).map((s) => s.label)).toContain("Tu revisión");
+    expect(stageStates("generating", { mode: "review" }).map((s) => s.label)).not.toContain("Organizando las actividades");
     expect(stageStates("preparing", { mode: "automatic", generationQueued: true }).find((s) => s.state === "active")?.label).toBe("Creando la ficha");
     expect(stageStates("ready", { mode: "automatic" }).every((s) => s.state === "done")).toBe(true);
     expect(STAGES.map((s) => s.label).join(" ")).not.toMatch(INTERNAL);
@@ -148,12 +170,37 @@ describe("E/F · «Así prepararemos esta ficha»", () => {
     expect(review.entries.map((e) => [e.decision_id, e.action])).toEqual(plan.decisions.map((d) => [d.id, d.status === "blocked" ? "rejected" : "approved"]));
   });
 
-  it("after a magic adaptation could not be finished automatically, or after a block, it explains why the teacher is here", () => {
-    const fallback = view(status({ ...awaitingReview(), creationMode: "automatic", hasPlanReview: true }), { plan });
-    expect(fallback).toContain("No hemos podido preparar la ficha automáticamente.");
+  it("magic that stopped shows the honest panel, NOT the plan; the plan appears only when the teacher chose to edit", () => {
+    const stopped = status({ status: "awaiting_plan_review", phase: "automatic_incomplete", progress: "awaiting_review", nextAction: "review_plan", creationMode: "automatic", hasPlanReview: true, automaticStop: { reason: "needs_decision", needs: ["working_memory_support"] } });
+    const out = view(stopped, { plan });
+    expect(out).toContain("No hemos podido completar automáticamente esta ficha");
+    expect(out).toContain("Revisar y editar");
+    expect(out).not.toContain("Así prepararemos esta ficha");
+    expect(out).not.toContain("Crear ficha");
+    expect(visible(out)).not.toMatch(INTERNAL);
+    const chosen = html(createElement(AdaptationView, { initial: stopped, plan, context, readyInfo: null, actions, canWrite: true, editing: true }));
+    expect(chosen).toContain("Así prepararemos esta ficha");
+    expect(chosen).toContain("Has elegido revisar la propuesta");
+    // Read-only: the state, never the action (and never the plan, even with the parameter).
+    const readOnly = html(createElement(AdaptationView, { initial: stopped, plan, context, readyInfo: null, actions, canWrite: false, editing: true }));
+    expect(readOnly).toContain("No hemos podido completar automáticamente esta ficha");
+    expect(readOnly).not.toMatch(/Revisar y editar|Así prepararemos esta ficha/);
     const afterBlock = view(status({ ...awaitingReview(), creationMode: "automatic", hasPlanReview: true, generationsUsed: 1 }), { plan });
     expect(afterBlock).toContain("Corrige lo que necesites y vuelve a crear la ficha.");
-    expect(view(awaitingReview(), { plan })).not.toMatch(/No hemos podido preparar la ficha automáticamente|Corrige lo que necesites/);
+  });
+
+  it("magic blocked with no safe correction: never «Ficha lista», never a download; editing offered while generations remain", () => {
+    const blocked = status({ status: "blocked", phase: "automatic_incomplete", progress: "blocked", nextAction: "review_plan", creationMode: "automatic", generationsUsed: 1, automaticStop: { reason: "quality", needs: [] } });
+    const out = view(blocked);
+    expect(out).toContain("No hemos podido completar automáticamente esta ficha");
+    expect(out).not.toMatch(/Ficha lista|La ficha está lista|Descargar PDF/);
+    expect(out).toContain("Revisar y editar");
+    const exhausted = view({ ...blocked, nextAction: "none", regenerationAvailable: false, generationsUsed: 3 });
+    expect(exhausted).not.toContain("Revisar y editar");
+    expect(exhausted).toContain("Ya se han preparado tres versiones");
+    const refused = view(status({ status: "generation_queued", phase: "automatic_incomplete", progress: "awaiting_review", nextAction: "none", creationMode: "automatic", automaticStop: { reason: "generation_refused", needs: [] } }));
+    expect(refused).toContain("Ahora mismo no podemos preparar más fichas");
+    expect(refused).not.toMatch(/Crear ficha|Revisar y editar/);
   });
 
   it("read-only members see the state but no «Crear ficha» and no «Cambiar»", () => {
@@ -173,5 +220,25 @@ describe("C · the screen runs the next stage as soon as the previous one queued
     for (let i = 0; i < 12; i++) await Promise.resolve();
     expect(seen).toEqual(["generation_queued", "ready"]);
     expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("«Hacer magia» and an essential visual it cannot produce automatically", () => {
+  it("says so honestly on the same adaptation: «Completar ficha», no PDF, never «La ficha está lista»", () => {
+    const out = html(createElement(ReadyPanel, { dto: ready({ creationMode: "automatic" }), materialId: context.materialId, info: { version: 1, createdAt: "2026-10-10T10:00:00Z", visualsPending: 1, printable: false } }));
+    expect(out).toContain(AUTOMATIC_STOP_COPY.visual);
+    expect(AUTOMATIC_STOP_COPY.visual).toBe("No hemos podido completar automáticamente esta ficha porque necesita un recurso visual");
+    expect(out).toContain("Completar ficha");
+    expect(out).toContain("no hace falta crear otra adaptación");
+    expect(out).not.toMatch(/Descargar PDF|La ficha está lista/);
+    // The manual path keeps its own wording.
+    const manual = html(createElement(ReadyPanel, { dto: ready(), materialId: context.materialId, info: { version: 1, createdAt: "2026-10-10T10:00:00Z", visualsPending: 1, printable: false } }));
+    expect(manual).toContain("La ficha está casi lista");
+  });
+
+  it("the history says it the same way: a stopped magic adaptation is never «esperando tu revisión»", () => {
+    for (const s of ["awaiting_plan_review", "blocked", "generation_queued"]) expect(listState(s, false, false, false, true)).toMatchObject({ label: "No se pudo completar automáticamente", group: "attention" });
+    expect(listState("blocked", false)).toMatchObject({ label: "Necesita una revisión" });
+    expect(listState("generation_queued", true, false, false, true)).toMatchObject({ label: "Creando la ficha" });
   });
 });
