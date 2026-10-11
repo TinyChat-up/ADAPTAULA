@@ -190,6 +190,8 @@ export const AUTOMATIC_STOP_COPY = {
     body: "Ahora mismo no podemos preparar más fichas en tu espacio de trabajo.",
     hint: "Inténtalo más tarde. No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan.",
   },
+  /** No generation left to try or nothing to reopen: what is true, without offering a review that cannot happen. */
+  qualityFinal: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes cancelarla o crear una nueva desde el material.",
   edit: "Revisar y editar",
   visual: "No hemos podido completar automáticamente esta ficha porque necesita un recurso visual",
 } as const;

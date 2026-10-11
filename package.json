@@ -27,6 +27,7 @@
     "eval:analysis:sanity": "node --env-file-if-exists=.env.local --import tsx evals/material-analysis/sanity.ts",
     "eval:analysis:preflight": "node --env-file-if-exists=.env.local --import tsx evals/material-analysis/preflight.ts",
     "jobs:adaptations": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/run-adaptation-jobs.ts",
+    "jobs:recover": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/recover-adaptation.ts",
     "eval:adaptation:mock": "node --import tsx evals/adaptation/run.ts",
     "eval:adaptation:planner": "node --env-file-if-exists=.env.local --import tsx evals/adaptation/planner-run.ts",
     "eval:adaptation:generator": "node --env-file-if-exists=.env.local --import tsx evals/adaptation/generator-run.ts",

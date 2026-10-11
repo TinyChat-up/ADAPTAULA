@@ -360,6 +360,56 @@ La pantalla dice «No hemos podido completar automáticamente esta ficha», nunc
 
 **Recursos visuales.** Los recursos originales localizados se reutilizan; tablas y gráficos con datos verificados se reconstruyen; un visual imprescindible que no se puede obtener automáticamente deja la ficha en «No hemos podido completar automáticamente esta ficha porque necesita un recurso visual» → «Completar ficha», en la misma adaptación y sin otra unidad. Límite para Phase 8.2B: `docs/VISUAL_RESOURCES.md` § «Hacer magia y los visuales».
 
+#### Hotfix: «Hacer magia» fallaba en `generator_validation` (2026-10-11)
+
+**Caso real.** Matemáticas, 4.º de Primaria: seis decisiones ejecutables y el job de generación en `failed` con `generator_validation`. Se reproduce con datos sintéticos equivalentes en `tests/unit/generation-regression.test.ts`, que repite las mismas incidencias y los mismos números.
+
+**Causa raíz.**
+1. `buildGeneratorInputV2` calculaba `instruction_policy` **por actividad** y no por decisión. La consigna de act_3 (32 palabras) admite reescritura, así que también dec_2, que solo añade un ejemplo resuelto y una lista de control, recibió `"rewrite"`. El modelo obedeció y el normalizador descartó correctamente esa reescritura (`rewrite_not_needed`).
+2. La auditoría contaba `rewrite_not_needed` entre las «propuestas no autorizadas». Así fallaba el check «el generador no propuso nada fuera de lo autorizado», aunque nada de esa reescritura llegaba a la ficha. Era el **único** check en fallo.
+3. Al ser `non_retryable`, no había reintento. Un reintento manual habría reutilizado el mismo artefacto y habría fallado igual. Además, la corrección automática de «Hacer magia» solo actuaba sobre bloqueos del revisor (`blocked`), no sobre `failed`.
+
+`support_over_budget` (44/40 y 68/64) **no** era bloqueante. Los 68/64 venían de contar como palabras las claves del JSON (`items`, `problem`, `steps`, `result`); además, los títulos no se contaban aunque el prompt sí los incluye.
+
+**Corrección.**
+- **Política de reescritura por decisión** (`designatedRewriter`): solo reescribe la primera decisión aplicada con acción de reescritura, y solo si la consigna es larga. Una decisión que añade apoyos nunca reescribe. Dos decisiones sobre la misma actividad nunca producen dos versiones de la tarea.
+- **Reescritura descartada** (`DISCARDED_REWRITE_CODES`): queda registrada como hallazgo y no hace fallar la generación, porque se conserva la consigna original o la reescritura de su decisión. Las demás propuestas no autorizadas siguen haciendo fallar la auditoría.
+- **Dos decisiones sobre la misma actividad se combinan sin duplicar**: los apoyos de una se comparan con lo que ya se ve de esa actividad, incluida la reescritura de la otra.
+- **Presupuesto de los apoyos** (revisado antes del merge):
+  - Se cuenta lo que lee el alumno (`supportVisibleWords`, con títulos y sin claves), igual que lo pide el prompt.
+  - Un **ejemplo resuelto** suma una asignación propia (`WORKED_EXAMPLE_ALLOWANCE`, 40 palabras): un modelo del procedimiento no puede ser más corto que sus pasos necesarios, y sus pasos nunca se cortan. El generador recibe ese mismo presupuesto.
+  - **Tolerancia pequeña**: +15 % o 6 palabras. Es la imprecisión normal de un modelo al contar; dentro de ella se acepta y se registra. Así queda el caso real como regresión no bloqueante: dec_1 en 46/40 (con su título) y dec_2 en 64/104.
+  - **Por encima de la tolerancia**, primero una **condensación segura**: se quitan los títulos opcionales y los elementos que casi repiten lo ya visible, nunca por debajo del mínimo de la lista. No se toca nada que diga algo nuevo, ni el ejemplo resuelto, ni una secuencia de pasos, ni los huecos de un planificador.
+  - **Si aún no cabe**, el apoyo está fuera de presupuesto: la auditoría falla («ningún apoyo supera su presupuesto más allá de la tolerancia»), atribuida a su decisión. No hay aceptación general hasta el doble. «Hacer magia» lo regenera con un límite explícito de palabras (ver la reparación más abajo); en «Revisar antes de crear» no se repara a espaldas del docente.
+- **Ejemplo resuelto antes de la actividad a la que ayuda.** Es un modelo a seguir, así que no va detrás del espacio de respuesta. En la paginación con tareas por página acompaña a su actividad; los ejemplos de fichas antiguas, que van detrás de su actividad, se quedan donde estaban.
+- **Reparación automática acotada en «Hacer magia»** (`planRepair`, compartida por `repairGenerationAutomatically` y `correctAutomatically`). Solo actúa si **todos** los checks en fallo apuntan a decisiones aplicadas, y siempre primero el contenido:
+  1. **Reparar el contenido.** La decisión se mantiene y se regenera con una **restricción** que nombra lo que hay que corregir: un límite explícito de palabras; solo los apoyos autorizados; no repetir frases; conservar los datos y condiciones; tono adecuado a la edad; no insinuar la respuesta… Es un texto fijo del servidor, nunca el del revisor, y viaja al generador por el contrato v2 (`restrictions`).
+  2. **Dejar fuera la decisión** solo si vuelve a fallar con esa misma restricción, y solo si **todas** sus necesidades (alta, media o baja) siguen cubiertas por otra decisión que se mantiene o por la presentación (`losesCoverage`). Su parte vuelve al original y queda registrado el motivo.
+  3. **Si no, la parada honesta.** Nunca una ficha técnicamente válida con adaptaciones importantes omitidas.
+
+  Todo ocurre en la misma adaptación, con la misma unidad y dentro de las 3 generaciones. Un fallo no atribuible (un original alterado, una decisión inexistente) no se repara.
+- **Huellas de los artefactos de generación.** Ahora incluyen su entrada. Si una regeneración producía exactamente el mismo contenido, la restricción unique `(adaptación, tipo, huella)` dejaba su artefacto inalcanzable y la siguiente reparación no lo encontraba. La misma entrada sigue dando la misma huella, así que no se duplica nada al reanudar.
+- **Trazas.** Los avisos del orquestador llegan al log del servidor; antes, en producción, no tenían destino. `generation_audit_failed` registra los nombres de los checks y las decisiones implicadas, nunca contenido.
+
+#### Recuperar una adaptación fallida tras desplegar (operación administrativa, nunca automática)
+
+Requisitos: una adaptación en `failed` por `generator_validation`, con su unidad **reservada y sin consumir**, y su generación ya guardada.
+
+1. **Auditar el estado real** (solo lectura, en el SQL Editor de Supabase):
+   ```sql
+   select status, failure_code, creation_mode, current_version, delivered_at from public.adaptations where id = '<id>';
+   select state, reserve_key, reserved_at, consumed_at, released_at, release_reason from public.adaptation_entitlements where adaptation_id = '<id>';
+   select units, idempotency_key, created_at from public.usage_events
+     where idempotency_key in (select reserve_key from public.adaptation_entitlements where adaptation_id = '<id>')
+        or idempotency_key in (select 'refund:' || reserve_key from public.adaptation_entitlements where adaptation_id = '<id>');
+   select stage, status, attempts, input_fingerprint, error, created_at from public.adaptation_jobs where adaptation_id = '<id>' order by created_at;
+   select kind, count(*) from public.adaptation_artifacts where adaptation_id = '<id>' group by kind;
+   ```
+   Lo esperable: `failed` / `generator_validation`; derecho `reserved`, sin `consumed_at` ni `released_at`; un `+1` en `usage_events` sin devolución; un job de generación `failed`; artefactos `plan`, `plan_review`, `execution_report` y `generation`. No se toca `usage_events` ni se devuelve ninguna unidad.
+2. **Dry run** (solo lectura, sin IA): `pnpm jobs:recover -- --id <id>`. Repite la auditoría actual y la revisión determinista sobre la generación guardada y devuelve `recoverable` con su motivo.
+3. **Aplicar** solo si es `recoverable: true`: `pnpm jobs:recover -- --id <id> --apply`. Encola la generación con **la misma entrada**: no es un ciclo nuevo y no llama al generador. No ejecuta nada más.
+4. La siguiente visita del docente a la adaptación la ejecuta. Reutiliza la generación, hace una llamada al revisor y, si se entrega, consume **la misma unidad** reservada al crearla.
+
 Garantías del camino automático: actúa una sola vez por plan (solo en `automatic`, solo en `awaiting_plan_review` y solo si el plan actual no tiene ya una revisión; la revisión es determinista, así que dos peticiones simultáneas guardan una revisión y un job). Si el proceso muere entre dos pasos, la siguiente petición `/run` lo reanuda. El perfil es la fuente de verdad: no se vuelve a preguntar nada ni hay campos clínicos. Las adaptaciones anteriores a 019 quedan en `review`.
 
 **Versiones fijadas.** Al crear la adaptación se resuelven una vez y se persisten (`pipeline_versions`): analysis schema 3, planner v2, plan canónico 1, política de contexto 2, generator v2, documento 1, reviewer v1, revisión 1, más el alias y el modelo que ese alias significaba y los topes de salida. Cada etapa, reintento o reanudación lee la fila, nunca el entorno ni los valores por defecto de hoy (planner y generator por defecto siguen siendo v1; v1 no se elimina). El contexto minimizado y su huella también se fijan al crear; si el análisis del material cambia, la etapa falla con `stale_analysis`.

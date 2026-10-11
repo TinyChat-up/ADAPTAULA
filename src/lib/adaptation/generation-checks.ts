@@ -4,7 +4,7 @@ import { allBlocks, type Block, type MaterialDocument } from "@/lib/schemas/mate
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { buildDocument, sequentialIds } from "./document";
 import { stableStringify } from "./fingerprint";
-import { UNAUTHORIZED_CODES, REDUNDANCY_CODES, authorizedBlockTypes, targetKindOf, type NormalizedGeneration } from "./generated";
+import { DISCARDED_REWRITE_CODES, UNAUTHORIZED_CODES, REDUNDANCY_CODES, authorizedBlockTypes, targetKindOf, type NormalizedGeneration } from "./generated";
 import { activityExpansion, type ActivityExpansion } from "./redundancy";
 import type { ReviewedPlan } from "./plan-review";
 import { checkOf } from "./review";
@@ -16,10 +16,18 @@ import { visualTreatment } from "./visual-needs";
  * did exactly what was approved: nothing more, nothing less, and nothing else changed.
  */
 
+/** The audit check of a support beyond its word budget and tolerance (a repair asks for an explicit word limit). */
+export const OUT_OF_BUDGET_CHECK = "ningún apoyo supera su presupuesto más allá de la tolerancia";
+
 export interface AuditCheck {
   name: string;
   ok: boolean;
   detail: string;
+  /**
+   * The applied decisions whose own output makes this check fail (empty: the failure cannot be pinned on a decision, e.g. an
+   * original element that changed). What a bounded automatic repair may leave out; never shown to the teacher.
+   */
+  decisions?: string[];
 }
 
 export interface GenerationAudit {
@@ -59,7 +67,9 @@ export function auditGeneration(input: {
   const effectiveIds = new Set(reviewed.effective.decisions.map((d) => d.id));
   const blocks = allBlocks(document);
   const checks: AuditCheck[] = [];
-  const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  const add = (name: string, ok: boolean, detail: string, decisions: readonly (string | null)[] = []) => checks.push({ name, ok, detail, ...(ok ? {} : { decisions: [...new Set(decisions.filter((d): d is string => d !== null && effectiveIds.has(d)))] }) });
+  /** Applied decisions that wrote blocks for an element of the original. */
+  const writersOf = (ref: string) => blocks.filter((b) => b.trace.origin !== "original" && b.trace.source_refs.includes(ref)).flatMap((b) => b.trace.decision_ids);
 
   const missing = analysis.activities.filter((a) => !reviewed.effective.decisions.some((d) => d.target === a.id && d.action === "remove") && !blocks.some((b) => b.type === "activity" && b.trace.source_refs.includes(a.id)));
   add("todas las actividades originales siguen presentes", missing.length === 0, missing.length === 0 ? `${analysis.activities.length} de ${analysis.activities.length}` : `faltan ${missing.map((a) => a.id).join(", ")}`);
@@ -68,7 +78,7 @@ export function auditGeneration(input: {
   add("ningún bloque procede de una decisión no aplicada (rechazada, bloqueada o sin revisar)", fromNonEffective.length === 0, fromNonEffective.length === 0 ? "ninguno" : fromNonEffective.join(", "));
 
   const unauthorized = generation.issues.filter((i) => UNAUTHORIZED_CODES.includes(i.code));
-  add("el generador no propuso nada fuera de lo autorizado", unauthorized.length === 0, unauthorized.length === 0 ? "nada fuera de sus decisiones" : unauthorized.map((i) => `${i.code}${i.decision_id ? `(${i.decision_id})` : ""}`).join(", "));
+  add("el generador no propuso nada fuera de lo autorizado", unauthorized.length === 0, unauthorized.length === 0 ? "nada fuera de sus decisiones" : unauthorized.map((i) => `${i.code}${i.decision_id ? `(${i.decision_id})` : ""}`).join(", "), unauthorized.map((i) => i.decision_id));
 
   const badBlocks = blocks.filter((b) => {
     if (b.trace.origin === "original" || b.trace.origin === "structure") return false;
@@ -84,7 +94,7 @@ export function auditGeneration(input: {
       return !authorizedBlockTypes(d, kind).has(b.type);
     });
   });
-  add("cada bloque generado es de un tipo que su decisión autoriza", badBlocks.length === 0, badBlocks.length === 0 ? "sí" : badBlocks.map((b) => `${b.id}:${b.type}`).join(", "));
+  add("cada bloque generado es de un tipo que su decisión autoriza", badBlocks.length === 0, badBlocks.length === 0 ? "sí" : badBlocks.map((b) => `${b.id}:${b.type}`).join(", "), badBlocks.flatMap((b) => b.trace.decision_ids));
 
   // Everything without an effective decision must be copied identically from the analysis.
   const literal = buildDocument({ analysis, plan: { ...reviewed.effective, decisions: [] }, context, generated: null, newBlockId: sequentialIds("l") });
@@ -110,11 +120,13 @@ export function auditGeneration(input: {
   const expansion = activityExpansion(analysis, document);
   const exact = expansion.filter((e) => e.exactRepeats > 0);
   // v2 drops exact repeats itself, so any left is a bug; v1 (historical) did not and is only observed.
-  if (generation.version === 2) add("ninguna frase se repite literalmente dentro de una actividad", exact.length === 0, exact.length === 0 ? "sin repeticiones literales" : exact.map((e) => `${e.id}×${e.exactRepeats}`).join(", "));
+  if (generation.version === 2) add("ninguna frase se repite literalmente dentro de una actividad", exact.length === 0, exact.length === 0 ? "sin repeticiones literales" : exact.map((e) => `${e.id}×${e.exactRepeats}`).join(", "), exact.flatMap((e) => writersOf(e.id)));
+  const outOfBudget = generation.issues.filter((i) => i.code === "support_out_of_budget");
+  if (generation.version === 2) add(OUT_OF_BUDGET_CHECK, outOfBudget.length === 0, outOfBudget.length === 0 ? "en proporción" : outOfBudget.map((i) => `${i.decision_id}: ${i.detail}`).join("; "), outOfBudget.map((i) => i.decision_id));
   const findings = [
     ...exact.filter(() => generation.version !== 2).map((e) => `${e.id}: ${e.exactRepeats} repeticiones literales`),
     ...expansion.filter((e) => e.nearRepeats > 0).map((e) => `${e.id}: ${e.nearRepeats} repeticiones casi literales`),
-    ...generation.issues.filter((i) => ["near_duplicate", "support_over_budget", "planner_label_restates"].includes(i.code)).map((i) => `${i.decision_id}: ${i.code} (${i.detail})`),
+    ...generation.issues.filter((i) => ["near_duplicate", "support_over_budget", "support_condensed", "planner_label_restates", ...DISCARDED_REWRITE_CODES].includes(i.code)).map((i) => `${i.decision_id}: ${i.code} (${i.detail})`),
   ];
 
   const traced = blocks.filter((b) => b.trace.origin !== "structure" && b.trace.source_refs.length === 0 && b.trace.decision_ids.length === 0);
@@ -134,7 +146,7 @@ export function auditGeneration(input: {
   }
 
   const executed = generation.requested.length === generation.generated.length + generation.declined.length;
-  add("todas las decisiones aprobadas se ejecutaron o se rechazaron de forma estructurada", executed && generation.ignored.length === 0, `solicitadas ${generation.requested.length} · generadas ${generation.generated.length} · rechazadas por el modelo ${generation.declined.length} · ignoradas ${generation.ignored.length}`);
+  add("todas las decisiones aprobadas se ejecutaron o se rechazaron de forma estructurada", executed && generation.ignored.length === 0, `solicitadas ${generation.requested.length} · generadas ${generation.generated.length} · rechazadas por el modelo ${generation.declined.length} · ignoradas ${generation.ignored.length}`, generation.ignored);
 
   return {
     checks,

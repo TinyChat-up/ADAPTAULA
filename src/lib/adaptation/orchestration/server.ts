@@ -1,4 +1,5 @@
 import "server-only";
+import { logger } from "@/lib/logger";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serverEnv } from "@/lib/config/env.server";
 import { providerFor } from "@/lib/ai/runtime";
@@ -41,7 +42,10 @@ export function productionServices(versions: PipelineVersions, analysis: Paramet
 
 export const orchestratorDeps = (): OrchestratorDeps => {
   const store = adaptationStore();
-  return { store, services: productionServices, entitlements: dbEntitlements(store) };
+  // The orchestrator's warnings (automatic stops, corrections, a failed generation audit) reach the server log: scalar fields
+  // only (ids, codes, check names), never content.
+  const log = { warn: (event: string, data: Record<string, unknown>) => logger.warn(event, Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === null || ["string", "number", "boolean"].includes(typeof v) ? (v as string | number | boolean | null) : JSON.stringify(v)]))) };
+  return { store, services: productionServices, entitlements: dbEntitlements(store), log };
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */
