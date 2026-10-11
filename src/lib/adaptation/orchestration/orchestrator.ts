@@ -6,7 +6,6 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { allBlocks } from "@/lib/schemas/material-document";
-import { AIError } from "@/lib/ai/errors";
 import { resolveAutomatically } from "../automatic-resolution";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { buildDocument, sequentialIds } from "../document";
@@ -21,7 +20,7 @@ import { modelFacingAnalysis } from "../model-input";
 import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
-import { normalizePlanFor } from "../plan-v2";
+import { checkPlanDraft, repairNotes, type PlanDraftDiagnosis } from "../planner-draft";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
@@ -311,13 +310,13 @@ async function stopOnAmbiguity(deps: OrchestratorDeps, run: StageRun, loaded: Lo
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** A planner call, persisted under its own input fingerprint BEFORE anything is derived from it (and reused on resume). */
-async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loaded, services: PipelineServices, callFp: string, repairOf?: Parameters<AdaptationPlanner["plan"]>[0]["repairOf"]): Promise<unknown> {
+async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loaded, services: PipelineServices, callFp: string, repairOf?: Parameters<AdaptationPlanner["plan"]>[0]["repairOf"], maxOutputTokens?: number): Promise<unknown> {
   const existing = await deps.store.findArtifact(run.job.adaptation_id, "planner_draft", { inputFingerprint: callFp });
   if (existing) return existing.payload.draft;
   if (!(await deps.store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
   let answered;
   try {
-    answered = await services.planner.plan({ context: loaded.context, material: modelFacingAnalysis(loaded.analysis), ...(repairOf ? { repairOf } : {}) });
+    answered = await services.planner.plan({ context: loaded.context, material: modelFacingAnalysis(loaded.analysis), ...(repairOf ? { repairOf } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}) });
   } catch (error) {
     const { code } = classifyAIFailure(error, "planning");
     await deps.store.recordAiRun(failedRow(error, loaded.versions.planner, "plan", "adaptation_planner", code, run.ids, callFp, repairOf ? "repair" : "initial"));
@@ -330,6 +329,73 @@ async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loade
   await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, outputFp, { draft: answered.draft, version: loaded.versions.planner.prompt_version, repair: repairOf !== undefined });
   await deps.store.clearProviderCall(run.lease.jobId, run.lease.attempt);
   return answered.draft;
+}
+
+/** More room for an answer that was cut off: double the version's budget, within a fixed ceiling (bounded cost). */
+export const PLANNER_REPAIR_OUTPUT_CEILING = 16_000;
+const truncationBudget = (versionBudget: number) => Math.min(versionBudget * 2, PLANNER_REPAIR_OUTPUT_CEILING);
+
+type DraftAttempt = { ok: true; plan: AdaptationPlan } | { ok: false; diagnosis: PlanDraftDiagnosis };
+
+/**
+ * One planner answer judged: the model's draft (or the parsed value of a rejected one) gets its unequivocal fixes, the contract and
+ * the need references; the result is a plan or a content-free diagnosis. A refusal or a provider error is not a draft: it goes up.
+ * A rejected answer that the fixes make valid is stored as this call's draft (so a resume reuses it, no new call).
+ */
+async function draftAttempt(deps: OrchestratorDeps, run: StageRun, loaded: Loaded, services: PipelineServices, callFp: string, repairOf?: Parameters<AdaptationPlanner["plan"]>[0]["repairOf"], maxOutputTokens?: number): Promise<DraftAttempt> {
+  const version = loaded.versions.planner.prompt_version;
+  const budget = maxOutputTokens ?? loaded.versions.planner.max_output_tokens;
+  const base = { stage: "planning" as const, schema: `DraftAdaptationPlan v${version}`, prompt_version: version, max_output_tokens: budget, repair_attempted: repairOf !== undefined };
+  let draft: unknown;
+  let outputTokens: number | null = null;
+  try {
+    draft = await plannerDraft(deps, run, loaded, services, callFp, repairOf, maxOutputTokens);
+  } catch (error) {
+    if (!(error instanceof RejectedStageOutput) || !error.detail || error.detail.kind === "refused") throw error;
+    // The call's outcome is known (an answer, rejected): this attempt is not ambiguous any more.
+    await deps.store.clearProviderCall(run.lease.jobId, run.lease.attempt);
+    const detail = error.detail;
+    if (detail.kind !== "schema" || detail.json === undefined) {
+      return { ok: false, diagnosis: { ...base, kind: detail.kind, issues: detail.issues, truncated: detail.kind === "truncated", output_tokens: detail.outputTokens, deterministic_fixes: [] } };
+    }
+    draft = detail.json;
+    outputTokens = detail.outputTokens;
+    const fixed = checkPlanDraft(version, draft, loaded.analysis, loaded.context);
+    if (fixed.ok) {
+      await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, fingerprint({ input: callFp, draft: fixed.draft }), { draft: fixed.draft, version, repair: repairOf !== undefined, deterministic_fixes: fixed.fixes });
+      deps.log?.warn("planner_draft_fixed", { adaptationId: run.job.adaptation_id, fixes: fixed.fixes.join("; ").slice(0, 400) });
+      return { ok: true, plan: fixed.plan };
+    }
+    return { ok: false, diagnosis: { ...base, kind: fixed.kind, issues: fixed.issues, truncated: false, output_tokens: outputTokens, deterministic_fixes: fixed.fixes } };
+  }
+  const checked = checkPlanDraft(version, draft, loaded.analysis, loaded.context);
+  if (checked.ok) {
+    if (checked.fixes.length > 0) deps.log?.warn("planner_draft_fixed", { adaptationId: run.job.adaptation_id, fixes: checked.fixes.join("; ").slice(0, 400) });
+    return { ok: true, plan: checked.plan };
+  }
+  return { ok: false, diagnosis: { ...base, kind: checked.kind, issues: checked.issues, truncated: false, output_tokens: outputTokens, deterministic_fixes: checked.fixes } };
+}
+
+/**
+ * The content-free record of a rejected planner answer (a `planner_draft` artifact that carries no draft, under its own input) and
+ * its log line: stage, contract and prompt version, kind, invalid paths and rules, cut-off or not, tokens, repair, final reason.
+ * Never the model's text, the material or anything about the learner.
+ */
+async function recordDraftRejection(deps: OrchestratorDeps, run: StageRun, callFp: string, diagnosis: PlanDraftDiagnosis) {
+  await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", fingerprint({ rejected: callFp }), fingerprint({ rejected: callFp, diagnosis }), { rejected: true, diagnosis });
+  deps.log?.warn("planner_output_rejected", {
+    adaptationId: run.job.adaptation_id,
+    jobId: run.job.id,
+    schema: diagnosis.schema,
+    kind: diagnosis.kind,
+    truncated: diagnosis.truncated,
+    outputTokens: diagnosis.output_tokens,
+    maxOutputTokens: diagnosis.max_output_tokens,
+    paths: diagnosis.issues.map((i) => i.path).join(",").slice(0, 400),
+    codes: [...new Set(diagnosis.issues.map((i) => i.code))].join(","),
+    repairAttempted: diagnosis.repair_attempted,
+    finalReason: diagnosis.final_reason ?? null,
+  });
 }
 
 export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: string, options: { acknowledgeAmbiguous?: boolean; enqueueOnly?: boolean } = {}): Promise<StageOutcome> {
@@ -379,25 +445,40 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
     if (current === "queued") await advance(store, adaptationId, current, "planning");
 
     const services = deps.services(loaded.versions, loaded.analysis);
-    const version = loaded.versions.planner.prompt_version;
     await store.setStep(job.id, job.attempts, "planning", 30);
 
-    const draft = await plannerDraft(deps, run, loaded, services, inputFp);
-    const normalize = (d: unknown) => {
-      try {
-        return normalizePlanFor(version, d, loaded.analysis, loaded.context);
-      } catch (error) {
-        throw new AIError("invalid_output", `planner draft rejected: ${error instanceof Error ? error.name : "unknown"}`, { cause: error });
+    let first = await draftAttempt(deps, run, loaded, services, inputFp);
+    // ONE repair call per attempt of the planning job, whatever needed it: an answer that breaks the contract (with its exact fields, and more room
+    // if it was cut off), or a valid plan with blocking issues (the existing policy). Never the same request again without news.
+    let repairUsed = false;
+    if (!first.ok) {
+      repairUsed = true;
+      await recordDraftRejection(deps, run, inputFp, first.diagnosis);
+      const notes = repairNotes(first.diagnosis.kind, first.diagnosis.issues);
+      const budget = first.diagnosis.truncated ? truncationBudget(loaded.versions.planner.max_output_tokens) : undefined;
+      const repairFp = fingerprint({ input: inputFp, schema_repair: notes, budget: budget ?? null });
+      const second = await draftAttempt(deps, run, loaded, services, repairFp, notes, budget);
+      if (!second.ok) {
+        const final = { ...second.diagnosis, repair_attempted: true, final_reason: `el borrador no cumple el contrato tras una reparación (${second.diagnosis.kind})` };
+        await recordDraftRejection(deps, run, repairFp, final);
+        deps.log?.warn("planning_failed", { adaptationId, reason: final.final_reason, kind: final.kind, paths: final.issues.map((i) => i.path).join(","), truncated: final.truncated });
+        throw new AdaptationError("planner_schema", final.final_reason);
       }
-    };
-    let plan = normalize(draft);
+      first = second;
+    }
+    let plan = first.plan;
     let checked = applicablePlan(plan, loaded.analysis, loaded.context);
-    if (!checked.validation.valid) {
-      // One repair with the blocking issues (the existing policy); whatever still blocks is never applied.
+    if (!checked.validation.valid && !repairUsed) {
+      // Whatever still blocks is never applied; a repair that breaks the contract keeps the first plan (its blocked decisions out).
       const issues = checked.validation.issues.filter((i) => i.severity === "block");
       const repairFp = fingerprint({ input: inputFp, repair: issues });
-      plan = normalize(await plannerDraft(deps, run, loaded, services, repairFp, issues));
-      checked = applicablePlan(plan, loaded.analysis, loaded.context);
+      const repaired = await draftAttempt(deps, run, loaded, services, repairFp, issues);
+      if (repaired.ok) {
+        plan = repaired.plan;
+        checked = applicablePlan(plan, loaded.analysis, loaded.context);
+      } else {
+        await recordDraftRejection(deps, run, repairFp, { ...repaired.diagnosis, repair_attempted: true, final_reason: "la reparación de los bloqueos no cumple el contrato: se conserva el primer plan" });
+      }
     }
     const validation = checked.validation;
     const classification = classifyPlan(plan, validation);
@@ -1210,4 +1291,76 @@ export async function recoverFailedGeneration(deps: OrchestratorDeps, adaptation
   if (!options.apply) return report;
   const queued = await runGenerationStage(deps, adaptationId, reviewArtifact.fingerprint, { enqueueOnly: true });
   return { ...report, queued: queued.outcome === "enqueued" || queued.outcome === "reused" };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Operator recovery of a planning that failed with `planner_schema` before the bounded repair existed (never automatic)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface PlanningRecoveryReport {
+  adaptationId: string;
+  status: AdaptationStatus;
+  creationMode: CreationMode;
+  failureCode: string | null;
+  entitlement: { state: string; consumedAt: string | null } | null;
+  /** Planning jobs of this adaptation, oldest first: status and error code only. */
+  planningJobs: Array<{ status: string; code: string | null }>;
+  /** A plan already exists for the adaptation's current input (then nothing needs planning again). */
+  planExists: boolean;
+  recoverable: boolean;
+  reason: string;
+  /** With `apply`: the planning job queued again (the same adaptation, the same reserved unit). */
+  queued?: boolean;
+}
+
+/**
+ * For an operator, after this fix: can an adaptation whose planning failed with `planner_schema` be planned again WITHOUT a new
+ * adaptation or a new unit? Read-only unless `apply`. Requires: `failed`, failure `planner_schema` on a planning job, its unit
+ * reserved and never consumed or released, and no plan for its current input. With `apply` it queues the planning job again
+ * (`failed → queued`, the database's own transition, inside the workspace's failure budget). Nothing runs here and no provider is
+ * called: the teacher's next visit runs it, now with the diagnosis and the single bounded repair (at most two planner calls).
+ */
+export async function recoverFailedPlanning(deps: OrchestratorDeps, adaptationId: string, options: { apply?: boolean } = {}): Promise<PlanningRecoveryReport> {
+  const store = deps.store;
+  const snapshot = await store.getPipeline(adaptationId);
+  if (!snapshot) throw new NotFoundError();
+  const row = snapshot.adaptation;
+  const entitlementRecord = await store.getEntitlement(adaptationId);
+  const planning = snapshot.jobs.filter((j) => j.stage === "planning");
+  const report: PlanningRecoveryReport = {
+    adaptationId,
+    status: row.status as AdaptationStatus,
+    creationMode: row.creation_mode,
+    failureCode: row.failure_code ?? snapshot.jobs.at(-1)?.error?.code ?? null,
+    entitlement: entitlementRecord ? { state: entitlementRecord.state, consumedAt: entitlementRecord.consumed_at } : null,
+    planningJobs: planning.map((j) => ({ status: j.status, code: j.error?.code ?? null })),
+    planExists: false,
+    recoverable: false,
+    reason: "",
+  };
+  const stop = (reason: string) => ({ ...report, reason });
+  if (row.status !== "failed") return stop(`la adaptación no está en failed (${row.status})`);
+  if (report.failureCode !== "planner_schema") return stop(`el fallo no es planner_schema (${report.failureCode ?? "desconocido"})`);
+  if (snapshot.jobs.at(-1)?.stage !== "planning") return stop("el último job no es de planificación");
+  if (snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return stop("ya hay un job en curso");
+  if (entitlementRecord?.state !== "reserved" || entitlementRecord.consumed_at !== null) return stop("la unidad no está reservada sin consumir: no se recupera por aquí");
+  let loaded: Loaded;
+  try {
+    loaded = load(snapshot);
+  } catch (error) {
+    if (error instanceof AdaptationError) return stop(`entrada no válida (${error.code}): hay que crear la adaptación de nuevo`);
+    throw error;
+  }
+  report.planExists = (await currentPlan(store, snapshot, loaded)) !== null;
+  if (report.planExists) return stop("ya hay un plan para esta entrada: no hace falta planificar de nuevo");
+  report.recoverable = true;
+  report.reason = "recuperable: la misma adaptación vuelve a planificarse con la reserva que ya tiene; como máximo dos llamadas al planificador (una reparación acotada)";
+  if (!options.apply) return report;
+  try {
+    const queued = await enqueuePlanning(deps, adaptationId);
+    return { ...report, queued: queued.outcome === "enqueued" || queued.outcome === "reused", ...(queued.outcome === "enqueued" || queued.outcome === "reused" ? {} : { reason: `no se pudo encolar (${queued.code ?? queued.outcome})` }) };
+  } catch (error) {
+    if (error instanceof FailureBudgetError) return { ...report, recoverable: false, queued: false, reason: "el presupuesto de fallos del espacio de trabajo no admite otra llamada ahora: reintentar más tarde" };
+    throw error;
+  }
 }

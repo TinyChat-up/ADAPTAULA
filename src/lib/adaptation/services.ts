@@ -33,6 +33,8 @@ export interface PlannerInput {
   material: ModelFacingAnalysis;
   /** Issues of the previous attempt, for the single repair. Paths and rules only, never learner data. */
   repairOf?: PlanIssue[];
+  /** Output budget of THIS call, when the pipeline gives a cut-off answer more room (bounded there); else the version's. */
+  maxOutputTokens?: number;
 }
 
 export interface GeneratorInput {
@@ -71,11 +73,23 @@ export interface PedagogicalReviewer {
  * The model answered (and was paid) but its answer was rejected (refused, cut off or not matching the contract). Carries the
  * real record of that call so the cost is kept in `ai_runs` even though the stage fails: quota may be given back, spend never.
  */
+/** Why an answer was rejected, without its content: what the pipeline diagnoses, logs and may repair. */
+export interface RejectionDetail {
+  kind: "truncated" | "not_json" | "schema" | "refused";
+  /** Paths and rules of the invalid fields (`schema`). */
+  issues: Array<{ path: string; code: string; rule: string }>;
+  /** The parsed, UNTRUSTED value of a `schema` failure: kept in memory for a deterministic repair, never persisted or logged. */
+  json?: unknown;
+  outputTokens: number;
+  maxOutputTokens: number;
+}
+
 export class RejectedStageOutput extends AIError {
   constructor(
     code: "refusal" | "truncated" | "invalid_output",
     message: string,
     readonly run: StageRunRecord,
+    readonly detail?: RejectionDetail,
   ) {
     super(code, message);
     this.name = "RejectedStageOutput";
