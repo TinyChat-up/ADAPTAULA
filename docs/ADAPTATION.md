@@ -844,6 +844,23 @@ Guardas nuevas:
 
 Sigue sin validarse en una Function **real** de Vercel: la comprobación final es la descarga en producción tras desplegar.
 
+**Verificación sobre el artefacto de despliegue (hotfix `browsers.json`, 2026-10-11).** El error de producción (`Failed to load external module playwright-core-c2c2c0d62bbf034d: Cannot find module '/var/task/node_modules/.pnpm/playwright-core@1.63.0/node_modules/playwright-core/browsers.json'`) se reconstruyó sobre el artefacto que despliega Vercel, no sobre una traza *standalone*: `vercel build` en local, con el CLI fijado y sin desplegar, y la Function de `.vercel/output` montada solo con su `filePathMap`.
+- **Antes de la PR #15** (`6204247`): la traza tiene `coreBundle.js` pero no `browsers.json`, y la Function de Vercel tampoco (406 ficheros). Una petición anónima a esa Function da 500 con exactamente el error de producción.
+- **Con la PR #15** (`25c5fef`) y en `main` (`fc09b5c`): `browsers.json` está en la traza y en la Function (407 ficheros), en la ruta física que calcula `coreBundle.js` tras seguir el alias externo de Turbopack (`.next/node_modules/playwright-core-<hash>` → store de pnpm). La petición anónima llega a la autenticación: 401.
+- **Producción** (`fc09b5c`, 11-10-2026): `GET /api/adaptations/<id>/pdf` sin sesión da **401** en 5 de 5 peticiones (`x-matched-path: /api/adaptations/[id]/pdf`). El 401 lo emite `getApiContext` dentro de la propia Function, porque `proxy.ts` no cubre `/api/adaptations`. Si faltara `browsers.json`, sería un 500: la carga del módulo ocurre antes de autenticar, como se comprobó en local retirando el archivo.
+
+No hacía falta otra corrección del *tracing*: la configuración de la PR #15 llega a la Function. Lo que faltaba era una guarda sobre el artefacto real:
+
+**`pnpm smoke:vercel-pdf`** (en `pnpm check`). Ejecuta `vercel build` (CLI fijado, ajustes de proyecto locales, variables públicas ficticias, nunca despliega) y monta la Function de la ruta PDF tal como la empaqueta Vercel: sus propios ficheros más el `filePathMap`, con los enlaces de pnpm y de Turbopack como enlaces. Comprueba cuatro cosas:
+1. `browsers.json` está donde lo busca `playwright-core` dentro de la Function.
+2. Con el launcher de Vercel (`___next_launcher.cjs`), un GET anónimo devuelve 401.
+3. El motor (Chromium serverless + `playwright-core`) imprime un PDF real usando solo esos ficheros. Es el éxito técnico del motor, separado del estado pedagógico de cada ficha.
+4. Control negativo: la misma Function sin `browsers.json` da 500 con el error de producción.
+
+**Verificación en Vercel (la hace el equipo, con sesión):**
+- Una ficha completa debe dar 200 `application/pdf`.
+- `336eb273-5818-411d-867c-2d9240aecb0d`, con dos visuales originales imprescindibles sin localizar, debe dar **409 `resource_pending`**. Es correcto: la ficha está incompleta y no es un fallo del motor.
+
 ## Evals
 
 `evals/adaptation/` (ver su README): tres materiales sintéticos modelados sobre los validados en la Fase 3 (Primaria fracciones, ESO geografía, Bachillerato argumentación) y perfiles funcionales de lectura, funciones ejecutivas, lenguaje, carga visual, reducción de escritura, conflicto apoyo/objetivo y ampliación. `pnpm eval:adaptation:mock` ejecuta el pipeline completo con los mocks (coste 0). No se evalúa si la ficha «queda bonita»: se evalúa que conserve el objetivo y aplique los apoyos.
