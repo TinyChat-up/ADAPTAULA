@@ -26,6 +26,50 @@ import { criticalTokens, describeToken, hasToken, normalizeText, wordCount } fro
 const REWRITING = new Set(["segment", "rephrase", "reduce", "reorganize", "change_response_format"]);
 
 /**
+ * The ONE decision allowed to rewrite an activity's instruction: the first applied decision on it whose action rewrites, and only
+ * when the instruction is long enough (`instructionNeedsRewrite`). A decision that only adds supports never rewrites; two
+ * rewriting decisions on the same activity never produce two versions of it. The generator is told exactly this
+ * (`instruction_policy`), and the normaliser accepts a rewrite only from this decision.
+ */
+export function designatedRewriter(effective: readonly Decision[], analysis: Pick<MaterialAnalysis, "activities">, context: Pick<AdaptationContext, "limits">, target: string): string | null {
+  const activity = analysis.activities.find((a) => a.id === target);
+  if (!activity || !instructionNeedsRewrite(activity, context.limits.max_instruction_words)) return null;
+  return effective.find((d) => d.target === target && REWRITING.has(d.action))?.id ?? null;
+}
+
+/**
+ * The words a student reads in a support, the same thing the generator is asked to count against `support_budget_words`: titles,
+ * items, labels, texts and every part of a worked example. Never the field names of the JSON.
+ */
+export function supportVisibleWords(s: SupportV2): number {
+  const title = "title" in s && s.title ? wordCount(s.title) : 0;
+  switch (s.kind) {
+    case "checklist":
+    case "step_list":
+    case "guiding_questions":
+    case "sentence_starters":
+      return title + s.items.reduce((n, item) => n + wordCount(item), 0);
+    case "planner":
+      return title + s.slots.reduce((n, slot) => n + wordCount(slot.label), 0);
+    case "reminder":
+    case "key_idea":
+    case "extension_task":
+      return wordCount(s.text);
+    case "glossary":
+      return s.items.reduce((n, g) => n + wordCount(g.term) + wordCount(g.definition), 0);
+    case "worked_example":
+      return wordCount(s.problem) + s.steps.reduce((n, step) => n + wordCount(step), 0) + wordCount(s.result);
+  }
+}
+
+/**
+ * How far a decision's supports may go over their budget and still be «on budget»: models count words approximately, and a few
+ * words more is not a longer sheet. Nothing is ever cut (shortening a support could change what it asks): over the tolerance it is
+ * reported, and over twice the budget it is a support out of proportion that the audit rejects (pinned on its decision).
+ */
+export const supportTolerance = (budget: number) => Math.max(6, Math.ceil(budget * 0.15));
+
+/**
  * Support kinds of a decision that contract v2 can write. `self_check` is a checklist of self-verification; `visual_cue` has no
  * v2 form (images are out of scope) and authorises nothing.
  */
@@ -106,10 +150,14 @@ const withItems = (support: SupportV2, items: string[]): SupportV2 => {
   }
 };
 
-const supportWords = (s: SupportV2): number => wordCount(JSON.stringify(s).replace(/"(kind|title|lines)":("[^"]*"|\d+),?/g, " ").replace(/[{}\[\]":,]/g, " "));
 
 export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: Pick<AdaptationContext, "limits">): NormalizedGeneration {
   const effective = new Map(reviewed.effective.decisions.map((d) => [d.id, d]));
+  const rewriterOf = (target: string) => designatedRewriter(reviewed.effective.decisions, analysis, context, target);
+  // What the student already sees of each target, across ALL its decisions: the designated rewrite is read first, so a support
+  // of another decision on the same activity never repeats it literally (two decisions on one activity combine, never duplicate).
+  const visibleOf = new Map<string, string>();
+  const segments = [...draft.segments].sort((a, b) => Number(rewriterOf(b.target) === b.decision_id) - Number(rewriterOf(a.target) === a.decision_id));
   const issues: GenerationIssue[] = [];
   const out = new Map<string, GeneratedSegments["segments"][number]>();
   const issue = (code: GenerationIssue["code"], decision_id: string | null, detail: string) => issues.push({ code, decision_id, detail });
@@ -122,7 +170,7 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
     issue("skipped_support", s.decision_id, `${s.support}: ${s.reason}`);
   }
 
-  for (const segment of draft.segments) {
+  for (const segment of segments) {
     const decision = effective.get(segment.decision_id);
     if (!decision) {
       const known = reviewed.decisions.find((d) => d.id === segment.decision_id);
@@ -139,12 +187,15 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
     if (closed) issue("unsupported_response_format", decision.id, `El formato ${decision.response_target} necesita una clave de respuestas: no soportado por el generador`);
 
     const blocks: DraftBlock[] = [];
-    let visible = activity ? normalizeText(`${activity.instruction} ${activity.context ?? ""}`) : "";
+    let visible = visibleOf.get(decision.target) ?? (activity ? normalizeText(`${activity.instruction} ${activity.context ?? ""}`) : "");
 
-    // --- rewrite: only for a long instruction, only if nothing is lost, never a copy of the original -------------------------
+    // --- rewrite: only the designated decision, only for a long instruction, only if nothing is lost, never a copy -------------
     if (segment.rewrite) {
-      const canRewrite = activity !== undefined && REWRITING.has(decision.action) && instructionNeedsRewrite(activity, context.limits.max_instruction_words);
-      if (!activity || !canRewrite) issue("rewrite_not_needed", decision.id, "La consigna es breve y clara (o la decisión no la reescribe): se conserva la original");
+      const canRewrite = activity !== undefined && rewriterOf(decision.target) === decision.id;
+      if (!activity || !canRewrite) {
+        const why = !activity || !instructionNeedsRewrite(activity, context.limits.max_instruction_words) ? "la consigna es breve y clara" : REWRITING.has(decision.action) ? "otra decisión ya reescribe esta consigna" : "la decisión solo añade apoyos";
+        issue("rewrite_not_needed", decision.id, `Reescritura descartada (${why}): se conserva la consigna original o la reescritura de su decisión`);
+      }
       else {
         const steps = [...new Map(segment.rewrite.steps.map((x) => [normalizeText(x), x])).values()].filter((x) => normalizeText(x) !== normalizeText(segment.rewrite!.lead));
         if (steps.length < segment.rewrite.steps.length) issue("duplicate_item_dropped", decision.id, "Pasos repetidos dentro de la reescritura");
@@ -173,8 +224,7 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
     // --- supports: authorised kinds only, exact repeats dropped, near repeats reported ------------------------------------
     const allowed = authorizedKinds(decision);
     const seenKinds = new Set<string>();
-    let added = 0;
-    let n = 1;
+    const accepted: SupportV2[] = [];
     for (const support of segment.supports) {
       if (!allowed.has(support.kind) || seenKinds.has(support.kind)) {
         issue("unauthorized_support", decision.id, `${support.kind}: ${seenKinds.has(support.kind) ? "repetido en la decisión" : "no autorizado por la decisión"}`);
@@ -208,12 +258,18 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
       }
       // A label like "Argumento 2" is structure; a long one or one with figures is the statement again.
       if (kept.kind === "planner" && kept.slots.some((s) => wordCount(s.label) > 5 || /\d/.test(s.label.replace(/\s\d$/, "")))) issue("planner_label_restates", decision.id, "Una etiqueta del planificador parece repetir la consigna");
-      added += supportWords(kept);
-      blocks.push(toBlock(kept, `${decision.id}-g${n++}`, trace(decision.action === "extend" ? "extension" : "support")));
+      accepted.push(kept);
       visible = `${visible} ${normalizeText(JSON.stringify(kept))}`;
     }
+    // --- budget: what the student reads, with a tolerance; reported, never cut ----------------------------------------------
     const budget = supportBudgetWords(activity);
-    if (added > budget) issue("support_over_budget", decision.id, `Los apoyos suman ${added} palabras y el presupuesto era ${budget}`);
+    const added = accepted.reduce((sum, s) => sum + supportVisibleWords(s), 0);
+    if (added > budget) issue("support_over_budget", decision.id, `Los apoyos suman ${added} palabras y el presupuesto era ${budget} (${added <= budget + supportTolerance(budget) ? "dentro de la tolerancia" : "fuera de la tolerancia"})`);
+    // Twice the budget: not a counting slip but a support out of proportion.
+    if (added > 2 * budget) issue("support_far_over_budget", decision.id, `Los apoyos suman ${added} palabras, más del doble de su presupuesto (${budget})`);
+    let n = 1;
+    for (const kept of accepted) blocks.push(toBlock(kept, `${decision.id}-g${n++}`, trace(decision.action === "extend" ? "extension" : "support")));
+    visibleOf.set(decision.target, visible);
 
     if (blocks.length === 0) continue;
     const existing = out.get(decision.id);

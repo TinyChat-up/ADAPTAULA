@@ -550,6 +550,21 @@ export async function resumeAutomatically(deps: OrchestratorDeps, adaptationId: 
 }
 
 const CORRECTION_REASON = "La revisión de calidad encontró un problema en lo que produjo: se mantiene el original";
+const REPAIR_REASON = "Lo que se generó para esta decisión no superó las comprobaciones: se mantiene el original";
+
+/** Leaving out `drop` would leave a HIGH need of the profile with nothing that attends it (neither another decision nor the presentation). */
+function losesHighNeed(effective: readonly AdaptationPlan["decisions"][number][], drop: ReadonlySet<string>, context: AdaptationContext): boolean {
+  const kept = effective.filter((d) => !drop.has(d.id));
+  const high = (dim: string) => context.needs.some((n) => n.dimension === dim && n.level === "high");
+  return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => high(dim) && !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim))));
+}
+
+/** The server's review with `drop` left out (their part goes back to the original), if it is still executable. */
+function reviewWithout(raw: AdaptationPlan, previous: PlanReview, drop: ReadonlySet<string>, reason: string, loaded: Loaded): PlanReview | null {
+  const corrected: PlanReview = { ...previous, entries: previous.entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason } : e)) };
+  const check = reviewPlan(raw, corrected, loaded.analysis, loaded.context);
+  return planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid ? null : corrected;
+}
 
 /**
  * «Hacer magia» after a quality review that blocks: the one SAFE correction is to leave out the decisions whose own blocks the
@@ -609,14 +624,9 @@ export async function correctAutomatically(deps: OrchestratorDeps, adaptationId:
   const perCheck = failing.map((c) => implicated(c.targets));
   if (perCheck.some((ids) => ids.size === 0)) return null;
   const drop = new Set(perCheck.flatMap((ids) => [...ids]));
-  const kept = effective.filter((d) => !drop.has(d.id));
-  const high = (dim: string) => loaded.context.needs.some((n) => n.dimension === dim && n.level === "high");
-  const losesHighNeed = effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => high(dim) && !isResolvedByPresentation(dim, loaded.context.presentation) && !kept.some((k) => k.dimensions.includes(dim))));
-  if (losesHighNeed) return null;
-
-  const corrected = { ...previous, entries: previous.entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: CORRECTION_REASON } : e)) };
-  const check = reviewPlan(raw.plan, corrected, loaded.analysis, loaded.context);
-  if (planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid) return null;
+  if (losesHighNeed(effective, drop, loaded.context)) return null;
+  const corrected = reviewWithout(raw.plan, previous, drop, CORRECTION_REASON, loaded);
+  if (!corrected) return null;
 
   try {
     await reopenPlanReview(deps, adaptationId);
@@ -754,12 +764,19 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 
     // 7. Deterministic review. A document that fails the generation audit without a deterministic FAIL is an invalid generation.
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    current = await advance(store, adaptationId, current, "reviewing_deterministic");
     const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
     const deterministic = assembleReview(input, deterministicChecks(input));
     const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation, document, review: deterministic });
     const hardFail = deterministic.checks.some((c) => c.status === "FAIL");
-    if (!audit.ok && !hardFail) throw new AdaptationError("generator_validation", `La generación no supera la auditoría: ${audit.checks.filter((c) => !c.ok).map((c) => c.name).join("; ").slice(0, 200)}`);
+    if (!audit.ok && !hardFail) {
+      const failing = audit.checks.filter((c) => !c.ok);
+      // Names and decision ids only: what an operator needs to know why, never content.
+      deps.log?.warn("generation_audit_failed", { adaptationId, checks: failing.map((c) => c.name).join("; "), decisions: [...new Set(failing.flatMap((c) => c.decisions ?? []))].join(",") });
+      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing });
+      if (repaired) return repaired;
+      throw new AdaptationError("generator_validation", `La generación no supera la auditoría: ${failing.map((c) => c.name).join("; ").slice(0, 200)}`);
+    }
+    current = await advance(store, adaptationId, current, "reviewing_deterministic");
     await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp });
 
     // 8. The version exists from here on (history), whatever the review says.
@@ -818,6 +835,47 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
   }
 }
 
+/**
+ * «Hacer magia» after a generation that fails its audit: the bounded, automatic repair. The decisions whose own output fails a
+ * check are left out (their part keeps the original) and the sheet is generated again, as a NEW generation of the SAME adaptation
+ * (same context, same unit, counted in `MAX_GENERATION_CYCLES`, which the database enforces too). Only when:
+ *   · the adaptation is automatic and its review is still the server's (a teacher who took over decides alone);
+ *   · there is a generation left;
+ *   · EVERY failing check is pinned on applied decisions (a changed original, a lost activity… are never «repaired» silently);
+ *   · leaving them out loses no high need of the profile, and the corrected review is executable.
+ * Otherwise null: the stage fails with `generator_validation`, as before, and nothing is delivered.
+ */
+async function repairGenerationAutomatically(
+  deps: OrchestratorDeps,
+  run: StageRun,
+  at: { snapshot: PipelineSnapshot; loaded: Loaded; raw: { plan: AdaptationPlan; fingerprint: string }; reviewArtifact: { fingerprint: string; payload: Record<string, unknown> }; failing: ReadonlyArray<{ name: string; decisions?: string[] }> },
+): Promise<GenerationResult | null> {
+  const { snapshot, loaded, raw, reviewArtifact, failing } = at;
+  const adaptationId = snapshot.adaptation.id;
+  if (snapshot.adaptation.creation_mode !== "automatic") return null;
+  const previous = PlanReviewSchema.parse(reviewArtifact.payload);
+  if (previous.reviewer.kind !== "auto" || previous.plan_fingerprint !== raw.fingerprint) return null;
+  // This generation is one cycle; another one must still fit.
+  const cycles = new Set([...snapshot.jobs.filter((j) => j.stage === "generation" && j.input_fingerprint).map((j) => j.input_fingerprint), run.job.input_fingerprint]).size;
+  if (cycles >= MAX_GENERATION_CYCLES) return null;
+  if (failing.some((c) => (c.decisions ?? []).length === 0)) return null;
+  const drop = new Set(failing.flatMap((c) => c.decisions ?? []));
+  const effective = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context).effective.decisions;
+  if (losesHighNeed(effective, drop, loaded.context)) return null;
+  const corrected = reviewWithout(raw.plan, previous, drop, REPAIR_REASON, loaded);
+  if (!corrected) return null;
+
+  // This generation ends here (its output stays as an artifact, no version); the adaptation goes back through the gate it came from.
+  if (!(await deps.store.completeStage(run.job.id, run.job.attempts))) throw new LeaseLostError();
+  await deps.store.transition(adaptationId, "generating", "awaiting_plan_review");
+  const submitted = await submitPlanReview(deps, adaptationId, corrected, { automatic: { repair_of: reviewArtifact.fingerprint, dropped: [...drop], failing: failing.map((c) => c.name) } });
+  if (!submitted.ok || !submitted.executable) return null;
+  deps.log?.warn("automatic_generation_repair_queued", { adaptationId, dropped: drop.size });
+  const queued = await enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
+  const status = ((await deps.store.getPipeline(adaptationId))?.adaptation.status ?? "generation_queued") as AdaptationStatus;
+  return { outcome: "completed", status, jobId: run.job.id, delivered: false, code: "generator_validation", ...(queued ? {} : { detail: "repair_not_queued" }) };
+}
+
 /** Reopens a blocked adaptation for a new teacher review (the previous version and review stay as history). */
 export async function reopenPlanReview(deps: OrchestratorDeps, adaptationId: string): Promise<AdaptationStatus> {
   const snapshot = await deps.store.getPipeline(adaptationId);
@@ -868,4 +926,91 @@ export async function enqueueGeneration(deps: OrchestratorDeps, adaptationId: st
     }
   }
   return runGenerationStage(deps, adaptationId, review, { enqueueOnly: true });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Operator recovery of a generation that failed under an earlier version of the audit (never automatic)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface GenerationRecoveryReport {
+  adaptationId: string;
+  status: AdaptationStatus;
+  creationMode: CreationMode;
+  failureCode: string | null;
+  entitlement: { state: string; consumedAt: string | null } | null;
+  generationsUsed: number;
+  /** The persisted generation the retry would reuse (no new generator call). */
+  generationReused: boolean;
+  /** The audit and the deterministic review of that same generation, re-run with the CURRENT code: check names only. */
+  auditFailing: string[];
+  deterministicFailing: string[];
+  recoverable: boolean;
+  reason: string;
+  /** With `apply`: the generation job queued (same input: not a new generation cycle). */
+  queued?: boolean;
+}
+
+/**
+ * For an operator, after a fix: can an adaptation whose generation failed (`generator_validation`) be delivered from what it already
+ * has, without a new adaptation or a new unit? Read-only unless `apply`. It reuses the persisted plan, review and generation (the
+ * same input fingerprint, so no generator call and no new generation cycle), re-runs the audit and the deterministic review with
+ * the current code, and checks that the unit is still reserved (never consumed, never released). With `apply` and only if all of
+ * that holds, it queues the generation job; the teacher's next visit runs it (one reviewer call) and the delivery consumes the
+ * SAME reserved unit. Nothing is run here, no provider is called, no unit is touched.
+ */
+export async function recoverFailedGeneration(deps: OrchestratorDeps, adaptationId: string, options: { apply?: boolean } = {}): Promise<GenerationRecoveryReport> {
+  const store = deps.store;
+  const snapshot = await store.getPipeline(adaptationId);
+  if (!snapshot) throw new NotFoundError();
+  const row = snapshot.adaptation;
+  const entitlementRecord = await store.getEntitlement(adaptationId);
+  const report: GenerationRecoveryReport = {
+    adaptationId,
+    status: row.status as AdaptationStatus,
+    creationMode: row.creation_mode,
+    failureCode: row.failure_code ?? snapshot.jobs.at(-1)?.error?.code ?? null,
+    entitlement: entitlementRecord ? { state: entitlementRecord.state, consumedAt: entitlementRecord.consumed_at } : null,
+    generationsUsed: generationCyclesOf(snapshot.jobs),
+    generationReused: false,
+    auditFailing: [],
+    deterministicFailing: [],
+    recoverable: false,
+    reason: "",
+  };
+  const stop = (reason: string) => ({ ...report, reason });
+  if (row.status !== "failed") return stop(`la adaptación no está en failed (${row.status})`);
+  if (report.failureCode !== "generator_validation") return stop(`el fallo no es generator_validation (${report.failureCode ?? "desconocido"})`);
+  if (entitlementRecord?.state !== "reserved" || entitlementRecord.consumed_at !== null) return stop("la unidad no está reservada sin consumir: no se recupera por aquí");
+  let loaded: Loaded;
+  try {
+    loaded = load(snapshot);
+  } catch (error) {
+    if (error instanceof AdaptationError) return stop(`entrada no válida (${error.code})`);
+    throw error;
+  }
+  const raw = await currentPlan(store, snapshot, loaded);
+  const reviewFp = await latestReviewFingerprint(store, adaptationId);
+  const reviewArtifact = reviewFp ? await store.findArtifact(adaptationId, "plan_review", { fingerprint: reviewFp }) : null;
+  if (!raw || !reviewArtifact) return stop("no hay plan o revisión del plan actuales");
+  const reviewed = reviewPlan(raw.plan, PlanReviewSchema.parse(reviewArtifact.payload), loaded.analysis, loaded.context);
+  const execution = planExecutability(reviewed, loaded.analysis, loaded.context);
+  if (execution.blockers.length > 0 || !reviewed.effectiveValidation.valid) return stop("la revisión guardada ya no es ejecutable");
+  const inputFp = generationFingerprint(raw.fingerprint, reviewArtifact.fingerprint, loaded.versions);
+  const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: inputFp });
+  if (!generationArtifact) return stop("no hay generación guardada para esta entrada: recuperarla exigiría otra llamada al generador");
+  report.generationReused = true;
+  const generation = (generationArtifact.payload as { generation: ReturnType<typeof normalizeGeneration> }).generation;
+  const document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: generation.segments, newBlockId: sequentialIds() });
+  const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
+  const deterministic = assembleReview(input, deterministicChecks(input));
+  const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation, document, review: deterministic });
+  report.auditFailing = audit.checks.filter((c) => !c.ok).map((c) => c.name);
+  report.deterministicFailing = deterministic.checks.filter((c) => c.status === "FAIL").map((c) => c.check);
+  if (report.auditFailing.length > 0) return stop("la generación guardada sigue sin superar la auditoría con el código actual");
+  if (report.deterministicFailing.length > 0) return stop("la revisión determinista de esa generación tiene un FAIL: no se entregaría");
+  report.recoverable = true;
+  report.reason = "recuperable: misma entrada (sin generador, sin ciclo nuevo); falta la revisión pedagógica; consumirá la unidad ya reservada al entregarse";
+  if (!options.apply) return report;
+  const queued = await runGenerationStage(deps, adaptationId, reviewArtifact.fingerprint, { enqueueOnly: true });
+  return { ...report, queued: queued.outcome === "enqueued" || queued.outcome === "reused" };
 }

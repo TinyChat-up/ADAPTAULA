@@ -408,16 +408,26 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
       current = [];
       tasks = 0;
     };
+    // The source of each node of the page being built, to tell what leads into the next activity.
+    const sources: string[][] = [];
     for (const block of logical.blocks) {
       const node = nodeOf(block, ctx);
       // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed its group (see
-      // `taskGroups`), and what leads into that activity (a heading, an orientation, a help, its part of the reading) travels with it.
+      // `taskGroups`), and what leads into that activity (a heading, an orientation, a help, its part of the reading, its own
+      // worked example) travels with it. A worked example of ANOTHER activity (sheets assembled before examples went first) stays.
       if (node.kind === "activity" && max !== null && tasks >= (quotas[group] ?? max)) {
         const lead: RenderNode[] = [];
-        while (current.length > 0 && LEADS_INTO.has(current.at(-1)!.kind)) lead.unshift(current.pop()!);
+        const leads = (kind: RenderNode["kind"], refs: string[] | undefined) => LEADS_INTO.has(kind) || (kind === "worked_example" && (refs ?? []).some((r) => block.trace.source_refs.includes(r)));
+        while (current.length > 0 && leads(current.at(-1)!.kind, sources.at(current.length - 1))) {
+          lead.unshift(current.pop()!);
+          sources.splice(current.length, 1);
+        }
+        const leadSources = sources.splice(current.length);
         flush();
+        sources.length = 0;
         group += 1;
         current.push(...lead);
+        sources.push(...lead.map((_, i) => leadSources[i] ?? []));
       }
       // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.
       const previous = current.at(-1);
@@ -429,6 +439,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
         continue;
       }
       current.push(node);
+      sources.push(block.trace.source_refs);
       if (node.kind === "activity") tasks += 1;
     }
     flush();

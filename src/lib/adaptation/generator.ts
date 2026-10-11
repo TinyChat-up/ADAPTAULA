@@ -8,8 +8,8 @@ import { DraftGeneratedSegmentsSchema, type DraftGeneratedSegments } from "@/lib
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { decisionsToGenerate, normalizeGenerated, type NormalizedGeneration } from "./generated";
-import { authorizedKinds, decisionsToGenerateV2, normalizeGeneratedV2 } from "./generated-v2";
-import { instructionNeedsRewrite, instructionWords, supportBudgetWords } from "./proportion";
+import { authorizedKinds, decisionsToGenerateV2, designatedRewriter, normalizeGeneratedV2 } from "./generated-v2";
+import { instructionWords, supportBudgetWords } from "./proportion";
 import { appliedDecisions, type ReviewedPlan } from "./plan-review";
 import { statedAnswer } from "@/lib/analysis/answers";
 import { RejectedStageOutput, rejectedRun, type MaterialGenerator, type StageRunRecord } from "./services";
@@ -156,7 +156,8 @@ export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: Material
           response_target: d.response_target ?? null,
           restrictions: rd.restrictions,
           guidance: d.note ?? null,
-          instruction_policy: activity ? (instructionNeedsRewrite(activity, context.limits.max_instruction_words) ? "rewrite" : "keep") : null,
+          // Per DECISION, never per activity: only the decision that rewrites this instruction may rewrite it.
+          instruction_policy: activity ? (designatedRewriter(reviewed.effective.decisions, analysis, context, d.target) === d.id ? "rewrite" : "keep") : null,
           original_words: activity ? instructionWords(activity) : null,
           support_budget_words: supportBudgetWords(activity),
         };

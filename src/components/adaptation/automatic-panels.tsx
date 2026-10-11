@@ -46,7 +46,7 @@ export function AutomaticIncompletePanel({
       {reason === "quality" && !dto.regenerationAvailable ? (
         <p className="text-sm">Ya se han preparado tres versiones de esta ficha y ninguna ha superado la comprobación de calidad. Si quieres intentarlo de nuevo, crea una adaptación nueva desde el material.</p>
       ) : null}
-      <p className="text-sm text-muted-foreground">{copy.hint}</p>
+      <p className="text-sm text-muted-foreground">{canEdit || reason !== "quality" ? copy.hint : AUTOMATIC_STOP_COPY.qualityFinal}</p>
       <div className="flex flex-wrap items-center gap-3">
         {canEdit ? (
           <Button variant="secondary" onClick={onEdit} disabled={busy}>

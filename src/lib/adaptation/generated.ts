@@ -50,10 +50,17 @@ export type GenerationIssueCode =
   | "skipped_support"
   | "near_duplicate"
   | "support_over_budget"
+  | "support_far_over_budget"
   | "planner_label_restates";
 
 /** The model proposed something its decisions do not authorise (counted as non-compliance; the server already dropped it). */
-export const UNAUTHORIZED_CODES: readonly GenerationIssueCode[] = ["unapproved_decision", "target_mismatch", "unauthorized_block", "multiple_activity_blocks", "unauthorized_support", "rewrite_not_needed"];
+export const UNAUTHORIZED_CODES: readonly GenerationIssueCode[] = ["unapproved_decision", "target_mismatch", "unauthorized_block", "multiple_activity_blocks", "unauthorized_support"];
+/**
+ * The model rewrote an instruction its decision does not rewrite (a decision that only adds supports, an instruction that is
+ * already short, or one another decision rewrites). The server discards the rewrite and the original (or the designated
+ * rewrite) stays: nothing outside the plan reaches the sheet, so it is recorded, never a reason to discard the whole generation.
+ */
+export const DISCARDED_REWRITE_CODES: readonly GenerationIssueCode[] = ["rewrite_not_needed"];
 /** The model wrote something redundant or lossy that the server dropped or replaced by the original. */
 export const REDUNDANCY_CODES: readonly GenerationIssueCode[] = ["rewrite_lost_requirements", "rewrite_copies_original", "redundant_support_dropped", "duplicate_item_dropped"];
 

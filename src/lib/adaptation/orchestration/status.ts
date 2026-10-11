@@ -201,6 +201,12 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       progress = "cancelled";
       break;
     default:
+      // «Hacer magia» whose generation failed its checks with no safe automatic repair: what it is, not a technical error.
+      if (magic && failure?.code === "generator_validation") {
+        ({ phase, progress, nextAction, automaticStop } = stopped("quality", "none"));
+        progress = "failed";
+        break;
+      }
       phase = failure?.kind === "retryable" ? "recoverable_failure" : "action_required";
       progress = "failed";
       nextAction = isRetryable(failure) ? "retry" : "cancel";

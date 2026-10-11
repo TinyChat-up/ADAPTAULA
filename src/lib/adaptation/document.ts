@@ -174,6 +174,7 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   const head: Block[] = [];
   const tail: Block[] = [];
   const after = new Map<string, Block[]>();
+  const before = new Map<string, Block[]>();
   const replaced = new Map<string, Block[]>();
 
   for (const segment of generated?.segments ?? []) {
@@ -191,7 +192,12 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
       // goes after the untouched original (generator v2 supports-only segments would otherwise erase the activity).
       replaced.set(segment.target, [...(replaced.get(segment.target) ?? []), ...blocks]);
     } else {
-      after.set(segment.target, [...(after.get(segment.target) ?? []), ...blocks]);
+      // A worked example is a model to follow: it goes BEFORE the activity it helps (an analogous problem, never the task's own),
+      // not after the student's answer space. Every other support follows the activity.
+      const isExample = (b: Block) => b.type === "worked_example" && analysis.activities.some((a) => a.id === segment.target);
+      const examples = blocks.filter(isExample);
+      if (examples.length > 0) before.set(segment.target, [...(before.get(segment.target) ?? []), ...examples]);
+      after.set(segment.target, [...(after.get(segment.target) ?? []), ...blocks.filter((b) => !isExample(b))]);
     }
   }
 
@@ -216,7 +222,7 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   for (const unit of units) {
     const decisions = decisionsFor(unit.ref);
     if (decisions.some((d) => d.action === "remove")) continue;
-    for (const block of placeholders.get(unit.ref) ?? []) ordered.push({ page: unit.page, block });
+    for (const block of [...(placeholders.get(unit.ref) ?? []), ...(before.get(unit.ref) ?? [])]) ordered.push({ page: unit.page, block });
     // Segmenting a source text is deterministic: the paragraphs stay word for word, only labelled. No model rewrites them.
     const segmenting = decisions.filter((d) => d.action === "segment");
     // An open answer format is set by the assembler too (a shorter area, the keyboard, an oral answer): the prompt is untouched.
