@@ -2,6 +2,7 @@ import { ImageIcon } from "lucide-react";
 import { LinkButton } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { blockingNeeds, type VisualNeed } from "@/lib/adaptation/presentation/visual-needs";
+import { AutoLocateButton } from "./auto-locate-button";
 import { ResourceActions } from "./resource-actions";
 
 /**
@@ -24,7 +25,7 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
       {canWrite && need.origin === "original" ? (
         <div className="flex flex-wrap items-start gap-2">
           <LinkButton size="sm" variant={need.status === "ready" ? "secondary" : "primary"} href={locateHref(need.key)}>
-            {need.status === "ready" ? "Cambiar la selección" : "Localizar en el original"}
+            {need.status !== "ready" ? "Localizar en el original" : need.locatedBy === "automatic" ? "Cambiar" : "Cambiar la selección"}
           </LinkButton>
           {need.status !== "ready" ? (
             // The analysis says it is in the original, but that cannot be checked here: if the teacher does not find it, they add
@@ -54,9 +55,9 @@ export function VisualNeedsPanel({ needs, adaptationId, canWrite, locateHref }: 
         <Alert tone="warning" title={blocking.length === 1 ? "Falta una imagen para poder imprimir la ficha" : `Faltan ${blocking.length} imágenes para poder imprimir la ficha`}>
           {canWrite ? "Complétala aquí: no hace falta crear otra adaptación." : "Tienes acceso de solo lectura: quien edita este espacio de trabajo puede completarla."}
         </Alert>
-      ) : open.length === 0 ? null : (
-        <p className="text-sm text-muted-foreground">La ficha se puede imprimir. Puedes añadir los apoyos opcionales si quieres.</p>
-      )}
+      ) : null}
+      {canWrite && needs.some((n) => n.origin === "original" && n.status === "to_select") ? <AutoLocateButton adaptationId={adaptationId} /> : null}
+      {blocking.length === 0 && open.length > 0 ? <p className="text-sm text-muted-foreground">La ficha se puede imprimir. Puedes añadir los apoyos opcionales si quieres.</p> : null}
       <ul className="space-y-3">
         {needs.map((need) => (
           <NeedRow key={need.key} need={need} adaptationId={adaptationId} canWrite={canWrite} locateHref={locateHref} />

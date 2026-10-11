@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import type { VisualAssetFailure, VisualState } from "@/lib/render/visual-assets";
+import { VisualSpecSchema, type VisualSpec } from "@/lib/visuals/spec";
+import { SPEC_EXTRACTOR_VERSION } from "./auto/extract";
 import { NormalizedBoundsSchema, pixelRect, withMargin, type NormalizedBounds } from "./geometry";
 import { RasterError, cropPng, engineProvenance, pageBox, pageCount, renderPage, sameBox, type PageBox } from "./raster";
-import { VISUAL_CROP_RECIPE, assetIdentity, assetInstancePath, recipeFingerprint, type VisualLocator } from "./recipe";
+import { VISUAL_CROP_RECIPE, assetIdentity, assetInstancePath, recipeFingerprint, type LocatorMethod, type VisualLocator } from "./recipe";
 
 /**
  * Visual locators and their crops. The browser only ever sends a page and a rectangle; everything else (which material, which
@@ -26,7 +28,8 @@ export interface LocatorRow {
   source_sha256: string;
   locator_version: number;
   revision: number;
-  method: "human";
+  method: LocatorMethod;
+  confidence?: number | null;
   page: number;
   x: number;
   y: number;
@@ -49,6 +52,16 @@ export interface AssetRow {
   sha256: string;
 }
 
+/** A verified reconstruction of an automatically located visual (migration 022), immutable, addressed by its sha-256. */
+export interface SpecRow {
+  id: string;
+  locator_id: string;
+  visual_id: string;
+  extractor_version: string;
+  spec: unknown;
+  spec_sha256: string;
+}
+
 export interface MaterialForVisuals {
   id: string;
   workspace_id: string;
@@ -66,8 +79,8 @@ export interface VisualDeps {
   /** Reads with the USER's rights (RLS): another workspace's material, locator, asset or object is simply not there. */
   reader: {
     material(id: string): Promise<MaterialForVisuals | null>;
-    /** Each locator with ALL its instances, newest first. */
-    activeLocators(materialId: string, analysisFingerprint: string): Promise<Array<LocatorRow & { assets: AssetRow[] }>>;
+    /** Each locator with ALL its instances, newest first, and its reconstructions (when it was located automatically). */
+    activeLocators(materialId: string, analysisFingerprint: string): Promise<Array<LocatorRow & { assets: AssetRow[]; specs?: SpecRow[] }>>;
     asset(id: string): Promise<AssetRow | null>;
     readObject(path: string): Promise<Uint8Array | null>;
   };
@@ -75,7 +88,11 @@ export interface VisualDeps {
   admin: {
     source(materialId: string): Promise<{ mime: string; storagePath: string } | null>;
     download(path: string): Promise<Uint8Array | null>;
-    createLocator(input: { workspaceId: string; materialId: string; analysisFingerprint: string; visualId: string; sourceSha256: string; page: number; bounds: NormalizedBounds; pageBox: PageBox; userId: string }): Promise<{ id: string; revision: number }>;
+    /**
+     * A person's locator supersedes the active one. An automatic one (`method: "auto"`, with its confidence and evidence) never
+     * does: if a locator is already active it is returned unchanged with `created: false`.
+     */
+    createLocator(input: { workspaceId: string; materialId: string; analysisFingerprint: string; visualId: string; sourceSha256: string; page: number; bounds: NormalizedBounds; pageBox: PageBox; userId: string | null; method?: LocatorMethod; confidence?: number; evidence?: Record<string, unknown> }): Promise<{ id: string; revision: number; created?: boolean }>;
     locator(id: string): Promise<LocatorRow | null>;
     activeLocator(materialId: string, analysisFingerprint: string, visualId: string): Promise<LocatorRow | null>;
     /** Every instance of a logical crop, newest first. */
@@ -128,7 +145,7 @@ async function authorisedMaterial(deps: VisualDeps, actor: VisualActor, material
   return { material, analysis, analysisFingerprint: fingerprint(analysis) };
 }
 
-async function loadSource(deps: VisualDeps, materialId: string, expectedSha: string | null) {
+export async function loadSource(deps: Pick<VisualDeps, "admin">, materialId: string, expectedSha: string | null) {
   const source = await deps.admin.source(materialId);
   if (!source || !expectedSha) return null;
   const bytes = await deps.admin.download(source.storagePath);
@@ -159,7 +176,7 @@ async function verifiedInstance(read: (path: string) => Promise<Uint8Array | nul
  * A new render is never compared with an older instance as a condition of correctness, and no object is ever replaced by bytes
  * other than the ones its row certifies.
  */
-export async function produceVisualAsset(deps: VisualDeps, locatorId: string, preloaded?: { mime: string; bytes: Uint8Array }): Promise<{ ok: true } | { ok: false; failure: VisualAssetFailure }> {
+export async function produceVisualAsset(deps: Pick<VisualDeps, "admin">, locatorId: string, preloaded?: { mime: string; bytes: Uint8Array }): Promise<{ ok: true } | { ok: false; failure: VisualAssetFailure }> {
   const row = await deps.admin.locator(locatorId);
   if (!row) return { ok: false, failure: "geometry_missing" };
   const fail = async (failure: VisualAssetFailure) => {
@@ -298,25 +315,29 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
   for (const visualId of input.visualIds) {
     const locator = active.find((l) => l.visual_id === visualId && l.source_sha256 === input.sourceSha256);
     if (!locator) {
-      out.states[visualId] = { visualId, status: "missing_locator" };
+      out.states[visualId] = { visualId, status: "missing_locator", resolution: "D" };
       continue;
     }
-    const provenance = { page: locator.page, revision: locator.revision, method: locator.method };
+    const provenance = { page: locator.page, revision: locator.revision, method: locator.method, ...(locator.method === "auto" && typeof locator.confidence === "number" ? { confidence: locator.confidence } : {}) };
     const identity = assetIdentity(toLocator(locator));
     const instances = locator.assets.filter((a) => a.recipe_version === VISUAL_CROP_RECIPE.version && a.identity === identity);
     if (instances.length === 0) {
-      out.states[visualId] = locator.last_failure ? { visualId, status: "extraction_failed", failure: locator.last_failure, provenance } : { visualId, status: "located_processing", provenance };
+      out.states[visualId] = locator.last_failure ? { visualId, status: "extraction_failed", failure: locator.last_failure, provenance, resolution: "D" } : { visualId, status: "located_processing", provenance, resolution: "D" };
       continue;
     }
+    const ready = (instance: AssetRow): VisualState => {
+      const spec = locator.method === "auto" ? verifiedSpec(locator.specs ?? []) : null;
+      return { visualId, status: "ready", provenance, resolution: locator.method === "human" ? "A" : spec ? "C" : "B", ...(spec ? { spec } : {}), widthMm: Math.round(((instance.width * 25.4) / VISUAL_CROP_RECIPE.dpi) * 10) / 10 };
+    };
     // Lists only (`verify: false`): an instance row counts without reading its object; the sheet and the PDF always verify.
     if (input.verify === false && !input.withBytes) {
-      out.states[visualId] = { visualId, status: "ready", provenance };
+      out.states[visualId] = ready(instances[0]!);
       continue;
     }
     const verified = await verifiedInstance((path) => deps.reader.readObject(path), instances);
-    if ("failure" in verified) out.states[visualId] = { visualId, status: "extraction_failed", failure: verified.failure, provenance };
+    if ("failure" in verified) out.states[visualId] = { visualId, status: "extraction_failed", failure: verified.failure, provenance, resolution: "D" };
     else {
-      out.states[visualId] = { visualId, status: "ready", provenance };
+      out.states[visualId] = ready(verified.instance);
       if (input.withBytes) {
         out.bytes[visualId] = verified.stored;
         out.instances[visualId] = { assetId: verified.instance.id, sha256: verified.instance.sha256 };
@@ -324,6 +345,14 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
     }
   }
   return out;
+}
+
+/** The reconstruction of the current extractor, only if it is a valid spec AND its bytes are the ones its row certifies. */
+function verifiedSpec(specs: readonly SpecRow[]): VisualSpec | null {
+  const row = specs.find((s) => s.extractor_version === SPEC_EXTRACTOR_VERSION);
+  if (!row || fingerprint(row.spec) !== row.spec_sha256) return null;
+  const parsed = VisualSpecSchema.safeParse(row.spec);
+  return parsed.success ? parsed.data : null;
 }
 
 /**

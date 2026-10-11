@@ -16,11 +16,11 @@ const sheet = (exampleRef: string) => {
     answer_key: [],
   });
 };
-const pages = (doc: ReturnType<typeof sheet>) => buildRenderModel(doc, { mode: "student" }).model.pages.map((p) => p.nodes.map((n) => n.kind));
+const pages = (doc: ReturnType<typeof sheet>) => buildRenderModel(doc, { mode: "student" }).model.pages.map((p) => p.nodes.flatMap((n) => (n.kind === "activity" ? [...n.leads.map((l) => `lead:${l.kind}`), n.kind] : [n.kind])));
 
 describe("pagination of a worked example", () => {
-  it("an example of the NEXT activity (placed before it) moves to its page with it", () => {
-    expect(pages(sheet("act_2"))).toEqual([["activity"], ["worked_example", "activity"]]);
+  it("an example of the NEXT activity (placed before it) moves to its page with it, inside it as what leads into it", () => {
+    expect(pages(sheet("act_2"))).toEqual([["activity"], ["lead:worked_example", "activity"]]);
   });
 
   it("an example of the PREVIOUS activity (sheets assembled before this change) stays where it was", () => {

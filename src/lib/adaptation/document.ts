@@ -4,6 +4,7 @@ import type { GeneratedSegments } from "@/lib/schemas/ai-contracts";
 import { MATERIAL_DOCUMENT_SCHEMA_VERSION, MaterialDocumentSchema, createBlockId, type Block, type DraftBlock, type MaterialDocument, type ResponseSpec } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { statedAnswer } from "@/lib/analysis/answers";
+import { comparisonFromText } from "@/lib/visuals/comparison";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
 /**
@@ -23,8 +24,16 @@ interface Unit {
 
 const REPLACING = new Set(["rephrase", "segment", "reorganize", "change_response_format", "reduce"]);
 
+/** Formats answered ON a figure of the sheet (marking a number line, colouring a bar): the figure is the answer space. */
+const ON_FIGURE = new Set<AnalysisActivity["response_format"]>(["mark", "draw"]);
+export const answeredOnFigure = (activity: AnalysisActivity) => activity.answer_area.type === "none" && ON_FIGURE.has(activity.response_format) && activity.resource_ids.some((r) => r.startsWith("vis_"));
+
 export function responseFor(activity: AnalysisActivity): ResponseSpec {
   const area = activity.answer_area;
+  // «Escribe >, < o = en cada casilla»: one empty box per printed pair, never a writing area (it would hide what is compared).
+  const comparison = comparisonFromText(activity.instruction, activity.context);
+  if (comparison) return { kind: "comparison", spec: comparison.spec };
+  if (answeredOnFigure(activity)) return { kind: "none" };
   switch (area.type) {
     case "line":
       return { kind: "lines", lines: 1 };
@@ -105,8 +114,8 @@ function visualBlock(v: AnalysisVisual, id: string): Block | null {
  * Source order from the metadata the analysis really has, never from text: page first, then the position of the item's
  * section (sections are listed in reading order), then kind (texts, visuals, activities) and the number of its id (items are
  * listed in reading order within their kind). Items without a section come first on their page. Known limit: the analysis does
- * not record the order BETWEEN kinds inside one section (a visual that follows an activity in the same section is placed
- * before it); fixing that needs an explicit order in the analysis contract, which is closed (docs/ADAPTATION.md).
+ * not record the order BETWEEN kinds inside one section. A figure or an example that an activity uses is placed by that use, right
+ * before the activity (`anchorResources`); anything else keeps this order, never a guessed position.
  */
 function sourceOrder(analysis: MaterialAnalysis, item: { id: string; page: number; section_id: string | null }, kindRank: number): Unit["order"] {
   const section = item.section_id === null ? -1 : analysis.sections.findIndex((s) => s.id === item.section_id);
@@ -131,7 +140,9 @@ function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, ne
   const textIds = new Map(units.filter((u) => u.ref.startsWith("ctt_")).map((u) => [u.ref, u.blocks[0]!.id]));
   for (const a of analysis.activities) {
     const resource_block_ids = a.resource_ids.map((r) => visualIds.get(r) ?? textIds.get(r)).filter((x): x is string => x !== undefined);
-    const prompt = a.context ? `${a.instruction}\n\n${a.context}` : a.instruction;
+    // The printed pairs of a comparison are drawn by its answer area: the prompt keeps the instruction, never the pairs twice.
+    const drawnContext = a.context !== null && comparisonFromText(a.instruction, a.context)?.pairsOnly === true;
+    const prompt = a.context && !drawnContext ? `${a.instruction}\n\n${a.context}` : a.instruction;
     units.push({
       ref: a.id,
       page: a.page,
@@ -139,7 +150,38 @@ function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, ne
       blocks: [{ id: newId(), type: "activity", label: a.label ?? undefined, prompt, resource_block_ids, response: responseFor(a), trace: { origin: "original", source_refs: [a.id], decision_ids: [] } }],
     });
   }
-  return units.sort((x, y) => x.order[0] - y.order[0] || x.order[1] - y.order[1] || x.order[2] - y.order[2] || x.order[3] - y.order[3]);
+  const sorted = units.sort((x, y) => x.order[0] - y.order[0] || x.order[1] - y.order[1] || x.order[2] - y.order[2] || x.order[3] - y.order[3]);
+  return anchorResources(analysis, sorted);
+}
+
+/** Texts that only make sense next to the activity that uses them (an example, a formula…), unlike a reading or a heading. */
+const ANCHORED_TEXT_KINDS = new Set<AnalysisText["kind"]>(["example", "formula", "definition", "note"]);
+
+/**
+ * Each figure and each example travels with the FIRST activity that uses it on its page: right before it, in its own order. The
+ * link is the analysis's reference (`resource_ids`), never a vertical position. Without it a sheet put every figure on top, away
+ * from the instruction that asks about it, and an example far from its problem. A resource used by no activity, or only by
+ * activities of another page, keeps its source order.
+ */
+function anchorResources(analysis: MaterialAnalysis, units: Unit[]): Unit[] {
+  const anchorOf = new Map<string, string>();
+  for (const unit of units) {
+    const activity = analysis.activities.find((a) => a.id === unit.ref);
+    if (!activity) continue;
+    for (const ref of activity.resource_ids) {
+      if (anchorOf.has(ref)) continue;
+      const visual = analysis.visuals.find((v) => v.id === ref);
+      const text = analysis.texts.find((t) => t.id === ref);
+      const anchorable = (visual && visual.page === activity.page) || (text && text.page === activity.page && ANCHORED_TEXT_KINDS.has(text.kind));
+      if (anchorable && units.some((u) => u.ref === ref)) anchorOf.set(ref, activity.id);
+    }
+  }
+  const out: Unit[] = [];
+  for (const unit of units) {
+    if (anchorOf.has(unit.ref)) continue;
+    out.push(...units.filter((u) => anchorOf.get(u.ref) === unit.ref), unit);
+  }
+  return out;
 }
 
 function rekeyBlocks(target: string, blocks: DraftBlock[], decisions: Decision[], units: Unit[], newId: () => string): { blocks: Block[]; ids: Map<string, string> } {
@@ -280,7 +322,8 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     const isTask = block.type === "activity";
     const overflow = isTask && maxTasks !== null && tasks >= maxTasks;
     if ((page !== currentPage || overflow) && pages[pages.length - 1]!.blocks.length > 0) {
-      pages.push({ blocks: [] });
+      // What leads into the activity that opens the new page (its figure, its example) goes with it: never a lonely figure.
+      pages.push({ blocks: page === currentPage ? takeLeads(pages[pages.length - 1]!.blocks, block, analysis) : [] });
       tasks = 0;
     }
     currentPage = page;
@@ -309,6 +352,19 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     pages: pages.filter((p) => p.blocks.length > 0),
     answer_key: answerKey,
   });
+}
+
+/** The trailing blocks of a page that belong to `activity` (its anchored resources, the supports placed before it), removed from it. */
+function takeLeads(blocks: Block[], activity: Block, analysis: MaterialAnalysis): Block[] {
+  const own = new Set(activity.trace.source_refs);
+  for (const a of analysis.activities) if (own.has(a.id)) for (const r of a.resource_ids) own.add(r);
+  const leads: Block[] = [];
+  while (blocks.length > 1) {
+    const last = blocks[blocks.length - 1]!;
+    if (last.type === "activity" || last.trace.source_refs.length === 0 || !last.trace.source_refs.every((r) => own.has(r))) break;
+    leads.unshift(blocks.pop()!);
+  }
+  return leads;
 }
 
 /** The reserved place of a visual the original does not have. Its accessible name is neutral until the teacher provides it. */

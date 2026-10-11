@@ -1,5 +1,6 @@
 import type { Block, MaterialDocument } from "@/lib/schemas/material-document";
 import { allBlocks } from "@/lib/schemas/material-document";
+import { fractionText } from "@/lib/visuals/spec";
 
 /** Everything a student can read in a block. The answer key and teacher notes are not student-facing and never included. */
 export function studentText(block: Block): string {
@@ -20,7 +21,9 @@ export function studentText(block: Block): string {
             ? [...r.left, ...r.right].map((o) => o.text)
             : r.kind === "fill_blank"
               ? [r.text, ...(r.word_bank ?? [])]
-              : [];
+              : r.kind === "comparison"
+                ? r.spec.items.map((i) => `${fractionText(i.left)} ☐ ${fractionText(i.right)}`)
+                : [];
       return [block.label ?? "", block.prompt, ...(block.steps ?? []), ...(block.requirements ?? []), ...response].join("\n");
     }
     case "list":

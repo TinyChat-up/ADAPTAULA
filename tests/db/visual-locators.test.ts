@@ -151,7 +151,7 @@ describe("identity, retry, correction and history", () => {
     const second = await resolveFor(s);
     expect(first.states["vis_1"]!.status).toBe("ready");
     expect(second.bytes["vis_1"]).toEqual(first.bytes["vis_1"]);
-    expect((await resolveFor(s, ["vis_1"], "f".repeat(64))).states["vis_1"]).toEqual({ visualId: "vis_1", status: "missing_locator" });
+    expect((await resolveFor(s, ["vis_1"], "f".repeat(64))).states["vis_1"]).toEqual({ visualId: "vis_1", status: "missing_locator", resolution: "D" });
     expect((await resolveVisuals(s.h.deps, { materialId: s.material, analysisFingerprint: ANALYSIS_FP, sourceSha256: "e".repeat(64), visualIds: ["vis_1"] })).states["vis_1"]!.status).toBe("missing_locator");
     const columns = await q<{ column_name: string }>("select column_name from information_schema.columns where table_name in ('material_visual_locators', 'material_visual_assets')");
     expect(columns.map((c) => c.column_name)).not.toContain("adaptation_id");

@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { prerenderToNodeStream } from "react-dom/static";
 import { MaterialSheet } from "@/components/material/sheet";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
-import type { RenderModel } from "@/lib/render/model";
+import { mapNodes, type RenderModel } from "@/lib/render/model";
 import { MATERIAL_RENDERER_VERSION } from "@/lib/render/version";
 import { modelAssetRefs, PinnedAssetError, assetRef, verifyPinnedAsset, type PinnedAsset } from "./pinned-assets";
 import { cssFingerprint, fontFingerprint, loadSheetFonts, readSheetCss, SHEET_FONT } from "./sheet-assets";
@@ -79,7 +79,7 @@ export async function renderPrintHtml(model: RenderModel, pinnedAssets: readonly
     ...model,
     pages: model.pages.map((page) => ({
       ...page,
-      nodes: page.nodes.map((node) => (node.kind === "image" && node.state === "available" && node.src ? { ...node, src: dataUri("image/png", byRef.get(node.src)!.bytes) } : node)),
+      nodes: mapNodes(page.nodes, (node) => (node.kind === "image" && node.state === "available" && node.src ? { ...node, src: dataUri("image/png", byRef.get(node.src)!.bytes) } : node)),
     })),
   };
 

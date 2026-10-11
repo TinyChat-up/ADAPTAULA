@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { RenderDesign, RenderMode, RenderNode } from "@/lib/render/model";
 import { Chart } from "./chart";
+import { Figure } from "./figure";
 import { Paragraphs, Runs } from "./inline";
 import { Response } from "./responses";
 
@@ -23,67 +24,57 @@ function Heading({ node }: Props<"heading">) {
 
 function Activity({ node, mode, design }: Props<"activity">) {
   return (
-    <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}>
-      <div className="ms-activity-head">
-        {node.label ? <span className="ms-num">{guideLabel(node.label, design)}</span> : null}
-        <div className="ms-prompt">
-          <Paragraphs paragraphs={node.prompt} />
-          {node.steps.length > 0 ? (
-            <ol className="ms-steps">
-              {node.steps.map((s, i) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ol>
-          ) : null}
-          {node.requirements.length > 0 ? (
-            <ul className="ms-reqs">
-              {node.requirements.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      </div>
-      {node.supports.length > 0 ? (
-        // The activity's own helps, after what to do and before where to answer.
-        <div className="ms-activity-supports">
-          {node.supports.map((support) => (
-            <NodeView key={support.key} node={support} mode={mode} {...(design ? { design } : {})} />
+    <>
+      {node.leads.length > 0 ? (
+        // What the student needs before the task (its example): kept with the task by CSS, outside its numbered column.
+        <div className="ms-activity-leads">
+          {node.leads.map((lead) => (
+            <NodeView key={lead.key} node={lead} mode={mode} {...(design ? { design } : {})} />
           ))}
         </div>
       ) : null}
-      <div className="ms-answer">
-        <Response response={node.response} />
-      </div>
-    </section>
-  );
-}
-
-function Image({ node, mode, design }: Props<"image">) {
-  if (node.state === "available") {
-    return (
-      <figure className="ms-figure">
-        {design === "claro" ? <p className="ms-cue">Observa</p> : null}
-        {/* eslint-disable-next-line @next/next/no-img-element -- a private, already-authorised asset URL; sizing is the sheet's */}
-        <img src={node.src} alt={node.alt} />
-        {node.caption ? <figcaption className="ms-caption">{node.caption}</figcaption> : null}
-      </figure>
-    );
-  }
-  // Student sheet: never a stand-in image and never a pretence that it exists. The teacher view marks the gap. A visual the teacher
-  // decided to go without leaves no trace on the sheet.
-  if (mode !== "teacher_preview" || node.state === "omitted") return null;
-  return (
-    <div className="ms-missing" role="note">
-      {node.state === "pending"
-        ? node.essential
-          ? "Falta un recurso visual imprescindible (no está en el original)"
-          : "Apoyo visual opcional sin recurso"
-        : node.essential
-          ? "Falta una imagen necesaria del material original"
-          : "Falta una imagen del material original"}
-      {node.caption ? ` · ${node.caption}` : ""}
-    </div>
+      <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}>
+        <div className="ms-activity-head">
+          {node.label ? <span className="ms-num">{guideLabel(node.label, design)}</span> : null}
+          <div className="ms-prompt">
+            <Paragraphs paragraphs={node.prompt} />
+            {node.steps.length > 0 ? (
+              <ol className="ms-steps">
+                {node.steps.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ol>
+            ) : null}
+            {node.requirements.length > 0 ? (
+              <ul className="ms-reqs">
+                {node.requirements.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+        {node.figures.length > 0 ? (
+          // The figures it asks about, right after what to do: they never leave the instruction.
+          <div className="ms-activity-figures">
+            {node.figures.map((figure) => (
+              <NodeView key={figure.key} node={figure} mode={mode} {...(design ? { design } : {})} />
+            ))}
+          </div>
+        ) : null}
+        {node.supports.length > 0 ? (
+          // The activity's own helps, after what to do and before where to answer.
+          <div className="ms-activity-supports">
+            {node.supports.map((support) => (
+              <NodeView key={support.key} node={support} mode={mode} {...(design ? { design } : {})} />
+            ))}
+          </div>
+        ) : null}
+        <div className="ms-answer">
+          <Response response={node.response} />
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -168,7 +159,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
     </figure>
   ),
   chart: ({ node, design }) => <Chart node={node} cue={design === "claro" ? "Observa" : undefined} />,
-  image: Image,
+  image: Figure,
   help_box: ({ node }) => (
     <aside className="ms-help" data-variant={node.variant}>
       <p className="ms-help-title">{node.title ?? HELP_TITLE[node.variant]}</p>

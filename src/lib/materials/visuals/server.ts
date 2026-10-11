@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadSource } from "../storage";
-import type { AssetRow, LocatorRow, VisualDeps } from "./service";
+import type { AssetRow, LocatorRow, SpecRow, VisualDeps } from "./service";
 
 /**
  * Production `VisualDeps`. Reads go through the USER's client (RLS on the tables and the storage policy on the private
@@ -10,7 +10,7 @@ import type { AssetRow, LocatorRow, VisualDeps } from "./service";
  * material. No signed URL is created or stored: crops are streamed by an authorised route.
  */
 const BUCKET = "generated-assets";
-const LOCATOR_COLUMNS = "id, workspace_id, material_id, analysis_fingerprint, visual_id, source_sha256, locator_version, revision, method, page, x, y, w, h, page_box, superseded_at, last_failure";
+const LOCATOR_COLUMNS = "id, workspace_id, material_id, analysis_fingerprint, visual_id, source_sha256, locator_version, revision, method, page, x, y, w, h, page_box, superseded_at, last_failure, confidence";
 const ASSET_COLUMNS = "id, locator_id, identity, recipe_version, storage_path, width, height, bytes, sha256";
 
 // Supabase Storage refuses to replace an existing object without upsert ("Duplicate", reported as 409).
@@ -19,10 +19,10 @@ const isDuplicate = (error: unknown) => {
   return !!e && (String(e.statusCode) === "409" || e.status === 409 || /already exists|duplicate/i.test(e.message ?? ""));
 };
 const toBytes = async (blob: Blob | null) => (blob ? new Uint8Array(await blob.arrayBuffer()) : null);
-const locatorOf = (r: Record<string, unknown>): LocatorRow => ({ ...(r as unknown as LocatorRow), x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) });
+const SPEC_COLUMNS = "id, locator_id, visual_id, extractor_version, spec, spec_sha256";
+const locatorOf = (r: Record<string, unknown>): LocatorRow => ({ ...(r as unknown as LocatorRow), x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h), confidence: r.confidence === null || r.confidence === undefined ? null : Number(r.confidence) });
 
 export function visualDeps(supabase: SupabaseClient): VisualDeps {
-  const admin = createAdminClient();
   return {
     reader: {
       async material(id) {
@@ -32,8 +32,10 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
       async activeLocators(materialId, analysisFingerprint) {
         const { data: locators } = await supabase.from("material_visual_locators").select(LOCATOR_COLUMNS).eq("material_id", materialId).eq("analysis_fingerprint", analysisFingerprint).is("superseded_at", null);
         if (!locators?.length) return [];
-        const { data: assets } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).in("locator_id", locators.map((l) => l.id)).order("created_at", { ascending: false }).order("id", { ascending: false });
-        return locators.map((l) => ({ ...locatorOf(l), assets: ((assets ?? []) as AssetRow[]).filter((a) => a.locator_id === l.id) }));
+        const ids = locators.map((l) => l.id);
+        const { data: assets } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).in("locator_id", ids).order("created_at", { ascending: false }).order("id", { ascending: false });
+        const { data: specs } = await supabase.from("material_visual_specs").select(SPEC_COLUMNS).in("locator_id", ids);
+        return locators.map((l) => ({ ...locatorOf(l), assets: ((assets ?? []) as AssetRow[]).filter((a) => a.locator_id === l.id), specs: ((specs ?? []) as SpecRow[]).filter((s) => s.locator_id === l.id) }));
       },
       async asset(id) {
         const { data } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).eq("id", id).maybeSingle();
@@ -44,7 +46,13 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
         return error ? null : toBytes(data);
       },
     },
-    admin: {
+    admin: visualAdmin(createAdminClient()),
+  };
+}
+
+/** The service-role side alone: what a server job uses after it has authorised the material by other means (its adaptation). */
+export function visualAdmin(admin: SupabaseClient): VisualDeps["admin"] {
+  return {
       async source(materialId) {
         const { data } = await admin.from("material_files").select("storage_path, mime_type").eq("material_id", materialId).eq("kind", "source").limit(1);
         const file = data?.[0];
@@ -58,7 +66,7 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
           p_analysis: i.analysisFingerprint,
           p_visual: i.visualId,
           p_source: i.sourceSha256,
-          p_method: "human",
+          p_method: i.method ?? "human",
           p_page: i.page,
           p_x: i.bounds.x,
           p_y: i.bounds.y,
@@ -66,9 +74,10 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
           p_h: i.bounds.h,
           p_page_box: i.pageBox,
           p_user: i.userId,
+          ...(i.method === "auto" ? { p_confidence: i.confidence, p_evidence: i.evidence } : {}),
         });
         if (error || !data) throw new Error("No se ha podido guardar la localización.");
-        return data as { id: string; revision: number };
+        return data as { id: string; revision: number; created?: boolean };
       },
       async locator(id) {
         const { data } = await admin.from("material_visual_locators").select(LOCATOR_COLUMNS).eq("id", id).maybeSingle();
@@ -103,6 +112,5 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
       async setFailure(locatorId, failure) {
         await admin.from("material_visual_locators").update({ last_failure: failure }).eq("id", locatorId);
       },
-    },
   };
 }

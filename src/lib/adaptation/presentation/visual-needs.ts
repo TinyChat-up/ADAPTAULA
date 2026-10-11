@@ -21,6 +21,8 @@ export interface VisualNeed {
   message: string;
   /** «Continuar sin esta imagen» is offered (and accepted by the server) only where the sheet stays solvable without it. */
   omittable: boolean;
+  /** Who located an original visual that is ready: the teacher, or the automatic locator (the teacher can always change it). */
+  locatedBy?: "teacher" | "automatic";
 }
 
 const activityOf = (document: MaterialDocument, blockId: string | undefined) => {
@@ -29,7 +31,10 @@ const activityOf = (document: MaterialDocument, blockId: string | undefined) => 
   return activity?.type === "activity" ? (activity.label ? `Actividad ${activity.label}` : "Una actividad") : null;
 };
 
-function originalMessage(essential: boolean, status: VisualNeedStatus, page?: number) {
+function originalMessage(essential: boolean, status: VisualNeedStatus, state?: VisualState) {
+  const page = state?.provenance?.page;
+  if (status === "ready" && state?.resolution === "C") return `Figura del documento original redibujada con las mismas partes y marcas (localizada automáticamente en la página ${page}).`;
+  if (status === "ready" && state?.provenance?.method === "auto") return `Imagen del documento original localizada automáticamente en la página ${page}.`;
   if (status === "ready") return page ? `Imagen del documento original incluida (seleccionada en la página ${page}).` : "Imagen del documento original incluida.";
   return essential
     ? "Esta actividad necesita una imagen del documento original. Localízala en el original o, si no está, añade la tuya."
@@ -50,8 +55,9 @@ export function visualNeedsOf(input: { document: MaterialDocument; visuals: Visu
     const essential = input.requiredVisuals.includes(v.visualId);
     const teacher = v.status !== "ready" && (input.teacherImages ?? []).includes(v.visualId);
     const status: VisualNeedStatus = v.status === "ready" ? "ready" : teacher ? "provided" : "to_select";
-    const message = teacher ? "Imagen añadida por ti: no se encontró en el documento original." : originalMessage(essential, status, v.provenance?.page);
-    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message, omittable: false };
+    const message = teacher ? "Imagen añadida por ti: no se encontró en el documento original." : originalMessage(essential, status, v);
+    const locatedBy = status === "ready" ? (v.provenance?.method === "auto" ? ("automatic" as const) : ("teacher" as const)) : undefined;
+    return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message, omittable: false, ...(locatedBy ? { locatedBy } : {}) };
   });
   const requested: VisualNeed[] = input.requested.map((r) => {
     const block = blocks.find((b) => b.type === "image" && b.source.kind === "requested" && b.source.decision_id === r.decisionId);
