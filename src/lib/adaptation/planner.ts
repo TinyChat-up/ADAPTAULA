@@ -9,6 +9,7 @@ import { DraftAdaptationPlanV2Schema, type DraftAdaptationPlanV2 } from "@/lib/s
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { modelFacingAnalysis, modelFacingAnalysisV2 } from "./model-input";
 import { plannerContextV2 } from "./plan-v2";
+import { zodIssues } from "./planner-draft";
 import { RejectedStageOutput, rejectedRun, type AdaptationPlanner, type StageRunRecord } from "./services";
 
 /**
@@ -94,14 +95,14 @@ export async function callPlanner(params: PlannerCallParams): Promise<PlannerCal
 }
 
 export type PlanDraft = DraftAdaptationPlan | DraftAdaptationPlanV2;
-export type PlanParse = { outcome: "ok"; draft: PlanDraft } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[] };
+export type PlanParse = { outcome: "ok"; draft: PlanDraft } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; json?: unknown; error?: import("zod").ZodError };
 
 /** Stop reason first (a cut-off answer is never parsed), then JSON, then the contract. */
 export function parsePlanResponse(response: StructuredResponse, version: number = 1): PlanParse {
   if (response.stopReason === "refusal") return { outcome: "refused", issues: ["El modelo rechazó la petición."] };
   if (response.stopReason === "max_tokens") return { outcome: "truncated", issues: ["La salida alcanzó el límite de tokens."] };
   const parsed: ParseOutcome<PlanDraft> = version === 2 ? parseStructured(response.text, DraftAdaptationPlanV2Schema) : parseStructured(response.text, DraftAdaptationPlanSchema);
-  return parsed.ok ? { outcome: "ok", draft: parsed.data } : { outcome: parsed.kind, issues: parsed.issues };
+  return parsed.ok ? { outcome: "ok", draft: parsed.data } : { outcome: parsed.kind, issues: parsed.issues, ...(parsed.kind === "schema" ? { json: parsed.json, ...(parsed.error ? { error: parsed.error } : {}) } : {}) };
 }
 
 export { describeIssues };
@@ -112,12 +113,21 @@ export { describeIssues };
  */
 export function createModelPlanner(deps: { analysis: MaterialAnalysis; selection: ModelSelection; provider: AIProvider; maxOutputTokens: number; version?: number }): AdaptationPlanner {
   return {
-    plan: async ({ context, repairOf }) => {
-      const { response, run } = await callPlanner({ ...deps, context, ...(repairOf ? { repairOf } : {}) });
+    plan: async ({ context, repairOf, maxOutputTokens }) => {
+      const budget = maxOutputTokens ?? deps.maxOutputTokens;
+      const { response, run } = await callPlanner({ ...deps, maxOutputTokens: budget, context, ...(repairOf ? { repairOf } : {}) });
       const parsed = parsePlanResponse(response, deps.version ?? 1);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
-        throw new RejectedStageOutput(code, `planner output rejected: ${parsed.outcome}`, rejectedRun(run, code));
+        // Paths and rules only: the parsed value travels in memory for a deterministic repair and is never logged.
+        const issues = parsed.error ? zodIssues(parsed.error, parsed.json) : [];
+        throw new RejectedStageOutput(code, `planner output rejected: ${parsed.outcome}`, rejectedRun(run, code), {
+          kind: parsed.outcome,
+          issues,
+          ...(parsed.outcome === "schema" ? { json: parsed.json } : {}),
+          outputTokens: response.usage.outputTokens,
+          maxOutputTokens: budget,
+        });
       }
       return { draft: parsed.draft, runs: [run] };
     },

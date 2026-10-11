@@ -427,6 +427,64 @@ La pantalla dice «No hemos podido completar automáticamente esta ficha», nunc
 - **Última revisión `auto`, en `blocked`, menos de 3 generaciones y sin parada registrada:** al desplegar, **la siguiente visita del docente** intentará la corrección automática. Si encuentra una segura, es una generación más con la misma unidad; si no, registra la parada. Si no se quiere ese intento, hay que decidirlo antes de desplegar.
 - **3 generaciones usadas:** no se puede recuperar sin una adaptación nueva. La base de datos lo impide (`enqueue_adaptation_stage`).
 
+#### Hotfix: «Hacer magia» fallaba en planning con `planner_schema` (2026-10-11)
+
+**Caso real.** «Fracciones en situaciones cotidianas», 4.º de Primaria, cinco actividades. Adaptación `5aa33558-5e46-4114-8afc-3385376e62d3`, job `fdae7ec2-ded6-4dec-b4d9-d85c9a160c26` (`planning`, `failed`, `{"code":"planner_schema"}`). Se repetía después de borrar y reanalizar. No hay acceso a la respuesta real del modelo: no se guardaba en ninguna parte. El caso se reproduce con respuestas sintéticas representativas (`tests/db/planner-schema-repair.test.ts`). La clase exacta del caso real se confirma con el SQL de solo lectura `docs/qa/hotfix-planner-schema/diagnose.sql`: `output_tokens` de la llamada frente al tope fijado.
+
+**Recorrido.** `MaterialAnalysis` + perfil → `AdaptationContext` → llamada `adaptation_planner@v2`. El contrato va como JSON Schema en el prompt (`delivery: "prompted"`): no hay decodificación restringida, así que el modelo puede devolver JSON que no cumple el esquema. Después vienen el corte por `max_tokens`, el parseo del JSON, Zod `DraftAdaptationPlan v2`, la resolución de `need_refs` y la normalización a `AdaptationPlan v1`, y por último los invariantes pedagógicos.
+
+**Causa.** Cualquier incumplimiento del contrato terminaba igual, en una sola llamada:
+- `RejectedStageOutput` o `AIError("invalid_output")` se clasificaban como `planner_schema`, que no es reintentable;
+- no había ninguna reparación: la reparación existente solo cubría los bloqueos del validador;
+- no se guardaba ningún diagnóstico. El job solo registraba `{"code":"planner_schema"}` y `ai_runs.error_code` sobrescribía también el tipo, así que no se distinguía un corte (`max_tokens`) de un JSON inválido.
+
+Clases reproducidas con el código anterior, todas con el mismo `{"code":"planner_schema"}`:
+- respuesta cortada;
+- JSON mal formado;
+- valor de enum desconocido;
+- campo obligatorio ausente;
+- más de 4 `need_refs`;
+- `note: null`;
+- referencia a una necesidad inexistente. Esta es un error de **normalización** presentado como de esquema.
+
+**Contrato frente a prompt.**
+- El JSON Schema que ve el modelo coincide con Zod, salvo el `refine` de `visual`: reutilizar o transformar un visual exige `source_visual`, y el modelo no lo ve.
+- El prompt pide «reunir las necesidades y estrategias afines» en cada decisión, pero el contrato limita a 4 `need_refs` y 3 estrategias por decisión. Con perfiles de 5 o más necesidades, el modelo puede chocar con ese límite.
+- El tope de salida fijado del planificador es de 4000 tokens. En Sonnet 5.5, sin parámetro `thinking`, el razonamiento adaptativo está activo y consume ese mismo tope.
+
+No se cambia el prompt publicado (v2) ni se amplía el esquema.
+
+**Corrección** (`src/lib/adaptation/planner-draft.ts` y `runPlanningStage`):
+1. **Diagnóstico sin contenido.** Para cada respuesta rechazada se guarda un artefacto `planner_draft` con `rejected: true` y su `diagnosis`. Recoge:
+   - etapa, contrato y versión del prompt;
+   - tipo: `truncated`, `not_json`, `schema` o `normalization`;
+   - rutas y reglas inválidas (código Zod o `missing`);
+   - si se cortó, con tokens y tope;
+   - los arreglos deterministas aplicados;
+   - si se intentó reparar y el motivo final.
+
+   El mismo diagnóstico va a los logs `planner_output_rejected` y `planning_failed`. Nunca se guardan el texto del modelo, el material ni datos del alumno. El valor parseado solo vive en memoria.
+2. **Arreglos deterministas, solo inequívocos y registrados.**
+   - `null` en un campo opcional cuenta como ausente;
+   - los valores repetidos de una lista se dejan en uno;
+   - `need_01` o `NEED_1` se leen como `need_1`;
+   - se ignoran mayúsculas y espacios en enums e ids;
+   - una `note` de más de 160 caracteres se omite, y en `summary` se omiten los puntos de más de 160 caracteres y los que pasen de 5.
+
+   No se adivina nunca: una 5.ª necesidad, una estrategia desconocida o un campo ausente van a la reparación.
+3. **Una sola llamada de reparación por intento del job** (`repairNotes`). Un fallo transitorio del proveedor sigue reintentando el job como antes, hasta `max_attempts`. Le dice al modelo el campo y la regla exactos, con texto fijo del servidor y nunca con lo que escribió. Si la respuesta se cortó, le pide un plan completo y más breve, con el doble de margen de salida y un techo de 16.000 tokens (`PLANNER_REPAIR_OUTPUT_CEILING`). Si se usa para el contrato, no hay otra para los bloqueos del validador: lo bloqueado nunca se aplica. Si la reparación de bloqueos incumple el contrato, se conserva el primer plan.
+4. **Parada honesta.** Si la reparación también falla, queda `failed` con `planner_schema` y el motivo registrado. El mensaje ya no promete «Puedes volver a intentarlo», que era falso porque `canRetry` era `false`. La unidad sigue reservada.
+
+Los invariantes pedagógicos no cambian: una actividad inexistente en el plan pasa el contrato (es un id) y la bloquea el validador. «Hacer magia» sigue sin pedir aprobación; «Revisar antes de crear» sigue esperando al docente.
+
+**Coste adicional máximo.** Una llamada más al planificador por intento del job, solo cuando la primera respuesta falla. Un contrato incumplido no es reintentable, así que en la práctica es una llamada por planificación. Con los precios de Sonnet 5.5 ($2 de entrada y $10 de salida por millón de tokens) y unos 6.500 tokens de entrada, el peor caso es una reparación tras un corte con 8.000 tokens de salida: unos 0,09 $. El resto de reparaciones, con unos 1.000 tokens de salida, rondan los 0,02 $.
+
+**Recuperar `5aa33558…`** (operación administrativa, nunca automática). Antes de nada, el SQL de solo lectura: estado `failed`/`planner_schema`, unidad `reserved` sin consumir ni liberar y presupuesto de fallos del espacio de trabajo. Después:
+- `pnpm jobs:recover -- --id 5aa33558-5e46-4114-8afc-3385376e62d3`: dry run, solo lectura;
+- `pnpm jobs:recover -- --id 5aa33558-5e46-4114-8afc-3385376e62d3 --apply`: reencola la planificación de la **misma** adaptación (`failed → queued`, dentro del presupuesto de fallos). No llama a nadie.
+
+La siguiente visita del docente la ejecuta, con como máximo dos llamadas al planificador. «Hacer magia» continúa sola y la unidad reservada se consume solo al entregar. Ni adaptación nueva, ni unidad nueva, ni cambios en `usage_events`.
+
 #### Recuperar una adaptación fallida tras desplegar (operación administrativa, nunca automática)
 
 Requisitos: una adaptación en `failed` por `generator_validation`, con su unidad **reservada y sin consumir**, y su generación ya guardada.
@@ -450,7 +508,7 @@ Garantías del camino automático: actúa una sola vez por plan (solo en `automa
 
 **Versiones fijadas.** Al crear la adaptación se resuelven una vez y se persisten (`pipeline_versions`): analysis schema 3, planner v2, plan canónico 1, política de contexto 2, generator v2, documento 1, reviewer v1, revisión 1, más el alias y el modelo que ese alias significaba y los topes de salida. Cada etapa, reintento o reanudación lee la fila, nunca el entorno ni los valores por defecto de hoy (planner y generator por defecto siguen siendo v1; v1 no se elimina). El contexto minimizado y su huella también se fijan al crear; si el análisis del material cambia, la etapa falla con `stale_analysis`.
 
-**Etapa de planificación** (`runPlanningStage`, idempotente): re-verifica contexto y análisis, llama al planner, persiste el borrador, normaliza a `AdaptationPlan v1`, valida (una reparación como máximo, solo por bloqueos del validador; un borrador inválido no se repara), persiste plan y clasificación y pasa a `awaiting_plan_review`. **PlanReview** (`submitPlanReview`): crea una revisión inmutable ligada a la huella del plan bruto; una aprobación de una decisión bloqueada, una edición que sigue bloqueada o una revisión de otro plan se rechazan sin persistir; una válida construye el plan efectivo y ejecuta el preflight de rutas; con una decisión `unsupported` (o un plan efectivo con bloqueos) no se encola nada y se queda en `awaiting_plan_review`. **Generación** (`runGenerationStage`): comprueba que la revisión sigue siendo del plan actual y repite el preflight antes de cualquier job; envía solo `ai_generation`; normaliza; ensambla; revisión determinista; persiste la versión; un FAIL determinista bloquea sin llamar al revisor; si no, ReviewContext, revisor, fusión con precedencias y cierre. Un documento que no supera la auditoría de generación (sin FAIL determinista) es una generación inválida: ninguna versión.
+**Etapa de planificación** (`runPlanningStage`, idempotente): re-verifica contexto y análisis, llama al planner, persiste el borrador, normaliza a `AdaptationPlan v1`, valida (una sola llamada de reparación por intento del job: la del contrato, si el borrador lo incumple, o la de los bloqueos del validador; ver «Hotfix: planner_schema»), persiste plan y clasificación y pasa a `awaiting_plan_review`. **PlanReview** (`submitPlanReview`): crea una revisión inmutable ligada a la huella del plan bruto; una aprobación de una decisión bloqueada, una edición que sigue bloqueada o una revisión de otro plan se rechazan sin persistir; una válida construye el plan efectivo y ejecuta el preflight de rutas; con una decisión `unsupported` (o un plan efectivo con bloqueos) no se encola nada y se queda en `awaiting_plan_review`. **Generación** (`runGenerationStage`): comprueba que la revisión sigue siendo del plan actual y repite el preflight antes de cualquier job; envía solo `ai_generation`; normaliza; ensambla; revisión determinista; persiste la versión; un FAIL determinista bloquea sin llamar al revisor; si no, ReviewContext, revisor, fusión con precedencias y cierre. Un documento que no supera la auditoría de generación (sin FAIL determinista) es una generación inválida: ninguna versión.
 
 **Entrega.** Una adaptación está *entregada* solo si está en `ready`, `current_version` apunta a una versión persistida y su `PedagogicalReview` es `approved` o `approved_with_warnings` (los avisos se persisten para la interfaz). Un plan, un borrador, una generación inválida o un documento `blocked`/`needs_revision` **no** son una entrega: la versión se conserva para auditoría, la adaptación queda `blocked` y `delivered_at` sigue nulo. Esa definición es la que usan las cuotas (docs/BILLING.md § Adaptaciones): la unidad se reserva al crear (atómica con la fila), se consume atómicamente con la primera entrega y solo se libera cancelando una adaptación nunca entregada; `blocked`, `failed` y los reintentos conservan la reserva.
 

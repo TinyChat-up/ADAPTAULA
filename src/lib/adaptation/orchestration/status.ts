@@ -80,7 +80,7 @@ export const generationCyclesOf = (jobs: ReadonlyArray<{ stage: string; input_fi
 export const PUBLIC_ERROR_MESSAGES: Readonly<Record<AdaptationErrorCode, string>> = {
   invalid_input: "No hemos podido preparar esta adaptación con los datos actuales.",
   stale_analysis: "El análisis del material ha cambiado. Vuelve a crear la adaptación.",
-  planner_schema: "No hemos podido preparar la propuesta de adaptación. Puedes volver a intentarlo.",
+  planner_schema: "No hemos podido preparar la propuesta de adaptación para este material. No se ha gastado ninguna adaptación de tu plan.",
   planner_validation: "La propuesta de adaptación necesita tu revisión.",
   plan_review_required: "Falta tu revisión de la propuesta antes de continuar.",
   stale_review: "Tu revisión corresponde a una propuesta anterior. Revísala de nuevo.",

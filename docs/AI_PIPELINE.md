@@ -184,7 +184,7 @@ Reparación y regeneración comparten un máximo de 3 llamadas por intento del j
 Reglas generales del producto:
 
 1. Errores transitorios (429, 5xx, timeouts): reintento del SDK (2) con backoff.
-2. Salida no válida según el schema: un intento de reparación enviando el error de validación; si vuelve a fallar, el paso falla.
+2. Salida no válida según el schema: un intento de reparación enviando el error de validación; si vuelve a fallar, el paso falla. En la planificación de adaptaciones, antes se aplican los arreglos inequívocos y se registra un diagnóstico sin contenido. Una respuesta cortada se regenera una vez con el doble de margen, hasta 16.000 tokens (docs/ADAPTATION.md § Hotfix `planner_schema`).
 3. `PROVIDER_FALLBACK`: si un proveedor está caído, el alias tiene un `fallback` configurado con el otro proveedor (solo para fallos de proveedor, no de contenido).
 4. Si el job falla sin entregar material: `refund_quota`, `ai_runs` con el error, y la UI muestra *"No hemos podido terminar esta adaptación. No se ha descontado de tu límite."*
 

@@ -12,7 +12,8 @@ export function extractJsonText(text: string): string {
 
 export type ParseOutcome<T> =
   | { ok: true; data: T }
-  | { ok: false; kind: "not_json" | "schema"; issues: string[] };
+  /** `json`: the parsed (untrusted) value of a `schema` failure, for a caller that diagnoses or repairs it. Never persisted here. */
+  | { ok: false; kind: "not_json" | "schema"; issues: string[]; json?: unknown; error?: z.ZodError };
 
 /** Short, content-free descriptions of what failed validation (paths and rules, never values). */
 export function describeIssues(error: z.ZodError, max = 15): string[] {
@@ -27,5 +28,5 @@ export function parseStructured<T>(text: string, schema: z.ZodType<T>): ParseOut
     return { ok: false, kind: "not_json", issues: ["La respuesta no es JSON válido."] };
   }
   const result = schema.safeParse(json);
-  return result.success ? { ok: true, data: result.data } : { ok: false, kind: "schema", issues: describeIssues(result.error) };
+  return result.success ? { ok: true, data: result.data } : { ok: false, kind: "schema", issues: describeIssues(result.error), json, error: result.error };
 }
