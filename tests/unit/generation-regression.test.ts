@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildDocument, sequentialIds } from "@/lib/adaptation/document";
 import { planExecutability } from "@/lib/adaptation/execution";
-import { auditGeneration } from "@/lib/adaptation/generation-checks";
-import { normalizeGeneratedV2 } from "@/lib/adaptation/generated-v2";
+import { OUT_OF_BUDGET_CHECK, auditGeneration } from "@/lib/adaptation/generation-checks";
+import { WORKED_EXAMPLE_ALLOWANCE, normalizeGeneratedV2, supportTolerance, supportVisibleWords } from "@/lib/adaptation/generated-v2";
 import { buildGeneratorInputV2 } from "@/lib/adaptation/generator";
 import { autoReview, reviewPlan } from "@/lib/adaptation/plan-review";
 import { instructionWords, supportBudgetWords } from "@/lib/adaptation/proportion";
@@ -92,28 +92,57 @@ describe("two decisions on the same activity combine without duplicating", () =>
   });
 });
 
-describe("support budgets: counted on what the student reads, with a tolerance, controlled beyond it", () => {
-  const longChecklist = { kind: "checklist" as const, items: ["Cuento con mucho cuidado todas las partes iguales en que está dividida la figura del rectángulo", "Miro el número de abajo de la fracción para saber en cuántas partes iguales se divide la unidad", "Miro el número de arriba de la fracción para saber cuántas de esas partes debo colorear ahora", "Coloreo con un solo color y repaso al final que no me sobra ni me falta ninguna parte"] };
+describe("support budgets: a small tolerance, a safe condensation, and an explicit limit beyond it", () => {
+  const budgetOf = (id: string) => buildGeneratorInputV2(reviewed, analysis, ctx).approved.decisions.find((d) => d.id === id)!.support_budget_words;
+  const items = (id: string, g: ReturnType<typeof run>["generation"]) => {
+    const block = g.segments.segments.find((s) => s.decision_ids.includes(id))!.blocks[0]!;
+    return block.type === "checklist" ? { title: block.title, items: block.items } : null;
+  };
 
-  it("beyond the tolerance (but under twice the budget): reported as such and kept WHOLE; nothing is ever cut", () => {
-    const { generation, audit } = run(withSegment("dec_1", { supports: [longChecklist] }));
-    expect(generation.issues.find((i) => i.code === "support_over_budget" && i.decision_id === "dec_1")?.detail).toMatch(/fuera de la tolerancia/);
-    const block = generation.segments.segments.find((s) => s.decision_ids.includes("dec_1"))!.blocks[0]!;
-    expect(block.type === "checklist" ? block.items : []).toEqual(longChecklist.items);
+  it("the generator is given the same budget the server applies: a worked example gets its own allowance (its steps are never cut)", () => {
+    expect([budgetOf("dec_1"), budgetOf("dec_2"), budgetOf("dec_4")]).toEqual([40, 64 + WORKED_EXAMPLE_ALLOWANCE, 24]);
+    expect(supportTolerance(40)).toBe(6);
+  });
+
+  it("over the tolerance, the server first condenses SAFELY (optional title, items that nearly repeat the task) and it fits: accepted", () => {
+    const wordy = { kind: "checklist" as const, title: "Antes de colorear la figura del ejercicio", items: ["La figura es un rectángulo dividido en cuatro partes iguales", "Cuento una por una las partes iguales que tiene la figura entera", "Miro el número de abajo de la fracción para saber cuántas partes hay", "Coloreo sin salirme de las líneas y repaso al final que está bien"] };
+    expect(supportVisibleWords(wordy)).toBeGreaterThan(46);
+    const { generation, audit } = run(withSegment("dec_1", { supports: [wordy] }));
+    expect(generation.issues.find((i) => i.code === "support_condensed" && i.decision_id === "dec_1")?.detail).toMatch(/título de checklist.*1 elemento\(s\) casi repetidos/);
+    // What says something new stays whole; nothing is cut inside an item.
+    expect(items("dec_1", generation)).toEqual({ title: undefined, items: wordy.items.slice(1) });
+    expect(generation.issues.some((i) => i.code === "support_out_of_budget")).toBe(false);
     expect(audit.ok).toBe(true);
   });
 
-  it("twice the budget is a support out of proportion: the audit rejects it, pinned on its decision (a genuine failure)", () => {
-    const huge = { kind: "worked_example" as const, problem: "Calcula 1/7 + 3/7 y simplifica si se puede, explicando cada paso con detalle y con tus propias palabras.", steps: [
+  it("still over after the safe condensation (here +60 %, well under twice): NOT accepted — the audit fails, pinned on its decision", () => {
+    const longChecklist = { kind: "checklist" as const, items: ["Cuento con cuidado todas las partes iguales en que está dividida la figura", "Miro el número de abajo para saber en cuántas partes iguales se divide", "Miro el número de arriba para saber cuántas de esas partes debo colorear", "Coloreo con un solo color y repaso que no me sobra ni me falta ninguna"] };
+    const { generation, audit } = run(withSegment("dec_1", { supports: [longChecklist] }));
+    const words = supportVisibleWords(longChecklist);
+    expect(words).toBeGreaterThan(46);
+    expect(words).toBeLessThan(80);
+    expect(items("dec_1", generation)?.items).toEqual(longChecklist.items); // kept whole: never cut to fit
+    expect(audit.checks.filter((c) => !c.ok).map((c) => [c.name, c.decisions])).toEqual([[OUT_OF_BUDGET_CHECK, ["dec_1"]]]);
+  });
+
+  it("a worked example within its allowance is accepted whole; one far beyond it fails, and its steps are never removed to fit", () => {
+    const fits = { kind: "worked_example" as const, problem: "Calcula 1/7 + 3/7 y simplifica si se puede.", steps: ["Miro si los denominadores son iguales: los dos son 7.", "Sumo solo los numeradores: 1 + 3 = 4.", "Mantengo el denominador común: queda 4/7.", "Busco divisores comunes de 4 y 7: no hay, no se simplifica."], result: "1/7 + 3/7 = 4/7" };
+    expect(run(withSegment("dec_2", { rewrite: undefined, supports: [fits] })).audit.ok).toBe(true);
+    const huge = {
+      ...fits,
+      problem: "Calcula 1/7 + 3/7 y simplifica si se puede. Explica cada paso con detalle y con tus propias palabras, di por qué lo haces así, comprueba el resultado con un dibujo de tiras y escribe al final una frase que resuma lo que has aprendido sobre sumar fracciones con el mismo denominador.",
+      steps: [
         "Primero observo con atención que las dos fracciones tienen exactamente el mismo denominador, que en este ejemplo es siete.",
         "Después sumo únicamente los numeradores, uno más tres, y obtengo cuatro como nuevo numerador de la fracción final.",
         "A continuación copio sin cambiarlo el denominador común, porque el tamaño de cada parte de la unidad no varía.",
         "Luego busco divisores comunes de cuatro y de siete para decidir si la fracción obtenida admite alguna simplificación.",
         "Finalmente compruebo el resultado dibujando una tira dividida en siete partes y coloreando las cuatro que he sumado.",
-      ], result: "1/7 + 3/7 = 4/7, que ya no se puede simplificar más porque 4 y 7 no tienen divisores comunes." };
-    const { audit } = run(withSegment("dec_2", { rewrite: undefined, supports: [huge] }));
-    const failing = audit.checks.filter((c) => !c.ok);
-    expect(failing.map((c) => [c.name, c.decisions])).toEqual([["ningún apoyo duplica su presupuesto de palabras", ["dec_2"]]]);
+      ],
+    };
+    const { generation, audit } = run(withSegment("dec_2", { rewrite: undefined, supports: [huge] }));
+    const example = generation.segments.segments.find((s) => s.decision_ids.includes("dec_2"))!.blocks.find((b) => b.type === "worked_example");
+    expect(example?.type === "worked_example" ? example.steps : []).toEqual(huge.steps);
+    expect(audit.checks.filter((c) => !c.ok).map((c) => [c.name, c.decisions])).toEqual([[OUT_OF_BUDGET_CHECK, ["dec_2"]]]);
   });
 });
 

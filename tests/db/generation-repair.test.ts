@@ -26,12 +26,15 @@ const count = async (sql: string, params: unknown[]) => Number((await q<{ c: str
 const entitlement = async (id: string) => (await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [id]))[0]?.state;
 const planReviews = (id: string) => q<{ payload: { reviewer: { kind: string }; entries: Array<{ decision_id: string; action: string; reason: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review' order by created_at", [id]);
 
-/** The real plan, as the planner draft v2 the server normalises (needs by position). */
-const planner = async (_inner: AdaptationPlanner, _call: number, input: Parameters<AdaptationPlanner["plan"]>[0]) => {
+/** The real plan (or a variant of it), as the planner draft v2 the server normalises (needs by position). */
+const plannerWith = (decisions: ReturnType<typeof realDecisions>) => async (_inner: AdaptationPlanner, _call: number, input: Parameters<AdaptationPlanner["plan"]>[0]) => {
   const ref = (dim: string) => `need_${input.context.needs.findIndex((n) => n.dimension === dim) + 1}`;
-  const decisions = realDecisions().map(({ dimensions, ...rest }) => ({ ...rest, need_refs: dimensions.map(ref) }));
-  return { draft: { decisions, summary: ["Plan de prueba"] }, runs: [] } as never;
+  return { draft: { decisions: decisions.map(({ dimensions, ...rest }) => ({ ...rest, need_refs: dimensions.map(ref) })), summary: ["Plan de prueba"] }, runs: [] } as never;
 };
+const planner = plannerWith(realDecisions());
+/** Restrictions the generation carries for a decision (what a repair asked it to fix). */
+const restrictionsOf = (input: GenInput, id: string) => input.reviewed.decisions.find((d) => d.id === id)?.restrictions ?? [];
+const longChecklist = { kind: "checklist" as const, items: ["Cuento con cuidado todas las partes iguales en que está dividida la figura", "Miro el número de abajo para saber en cuántas partes iguales se divide", "Miro el número de arriba para saber cuántas de esas partes debo colorear", "Coloreo con un solo color y repaso que no me sobra ni me falta ninguna"] };
 
 type GenInput = Parameters<MaterialGenerator["generate"]>[0];
 /** The real answer, restricted to the decisions this generation carries; `tweak` plays what the model got wrong this time. */
@@ -47,12 +50,12 @@ const unauthorizedOn = (id: string) => (draft: DraftGeneratedSegmentsV2): DraftG
 });
 
 let n = 0;
-async function teacher(gen: ReturnType<typeof generator>) {
+async function teacher(gen: ReturnType<typeof generator>, plan = planner) {
   const u = await createUser(db, `repair-${++n}@example.com`);
   const material = await seedMaterial(db, u, mathAnalysis());
   const learner = await seedLearner(db, u);
   const spy = newSpy();
-  const orchestrator = makeDeps(db, scriptedServices(spy, { planner, generator: gen }));
+  const orchestrator = makeDeps(db, scriptedServices(spy, { planner: plan, generator: gen }));
   orchestrator.entitlements = dbEntitlements(orchestrator.store);
   const deps: ServiceDeps = { orchestrator, reader: readerFor(db, u), resolveVersions: versions };
   const actor: Actor = { userId: u.id, workspaceId: u.workspaceId, canWrite: true };
@@ -93,23 +96,61 @@ describe("the real case (Matemáticas 4.º Primaria) now finishes by itself", ()
 });
 
 describe("«Hacer magia»: bounded automatic repair of a generation that fails its audit", () => {
-  it("a defect pinned on one decision whose need another decision covers: that part keeps the original, generated again, delivered", async () => {
-    const t = await teacher(generator((d, call) => (call === 1 ? unauthorizedOn("dec_4")(d) : d)));
+  it("content first: the failing decision is regenerated with a restriction that names the fix — kept, not removed — and delivered", async () => {
+    // The model gets dec_4 wrong until it is told precisely what to fix.
+    const t = await teacher(generator((d, _call, input) => (restrictionsOf(input, "dec_4").length === 0 ? unauthorizedOn("dec_4")(d) : d)));
     const id = await t.start("automatic");
     await t.runAll(id);
     expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
     expect(t.seen.some((s) => s.phase === "awaiting_review" || s.phase === "action_required" || s.phase === "automatic_incomplete")).toBe(false);
     const reviews = await planReviews(id);
     expect(reviews.map((r) => r.payload.reviewer.kind)).toEqual(["auto", "auto"]);
-    expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/no superó las comprobaciones/) });
-    // The worked example and the checklist of dec_2 were never touched.
-    expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_2")).toMatchObject({ action: "approved" });
-    expect(t.spy.generatorInputs[1]!.decisions).not.toContain("dec_4");
+    const repaired = reviews[1]!.payload.entries;
+    expect(repaired.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "approved", restrictions: [expect.stringMatching(/solo los apoyos que autoriza/)] });
+    expect(repaired.every((e) => e.action !== "rejected")).toBe(true); // nothing of the plan was left out
+    expect(t.spy.generatorInputs[1]!.decisions).toContain("dec_4");
     expect([t.spy.planner, t.spy.generator, t.spy.reviewer]).toEqual([1, 2, 1]);
     // Same adaptation, one reservation, one consumption.
     expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
     expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
     expect(await entitlement(id)).toBe("consumed");
+  });
+
+  it("a support out of budget is regenerated with an explicit word limit (never cut, never accepted as is) and delivered", async () => {
+    const t = await teacher(generator((d, _call, input) => (restrictionsOf(input, "dec_1").some((r) => /como máximo 40 palabras/.test(r)) ? d : { ...d, segments: d.segments.map((s) => (s.decision_id === "dec_1" ? { ...s, supports: [longChecklist] } : s)) })));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
+    const entry = (await planReviews(id))[1]!.payload.entries.find((e) => e.decision_id === "dec_1");
+    expect(entry).toMatchObject({ action: "approved", restrictions: [expect.stringMatching(/como máximo 40 palabras visibles/)] });
+    expect(t.spy.generator).toBe(2);
+    expect(await entitlement(id)).toBe("consumed");
+  });
+
+  it("a decision that fails again after its repair is NOT dropped when a need it attends (here a MEDIUM one) has no other support: honest stop", async () => {
+    // dec_1 alone attends «checklist_support» (medium in this profile); the model never fixes it.
+    const variant = realDecisions().map((d, i) => (i === 0 ? { ...d, dimensions: ["checklist_support" as const] } : d));
+    const t = await teacher(generator(unauthorizedOn("dec_1")), plannerWith(variant));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "failed", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, delivered: false });
+    const reviews = await planReviews(id);
+    expect(reviews).toHaveLength(2); // the content repair was tried once
+    expect(reviews.flatMap((r) => r.payload.entries).some((e) => e.decision_id === "dec_1" && e.action === "rejected")).toBe(false);
+    expect(t.spy.generator).toBe(2);
+    expect(await entitlement(id)).toBe("reserved");
+  });
+
+  it("only after its repair failed again, and only with every need still covered, is a decision left out (its part keeps the original)", async () => {
+    // dec_4 (working memory) also covered by dec_2: the model never fixes dec_4.
+    const t = await teacher(generator(unauthorizedOn("dec_4")));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 3 });
+    const reviews = await planReviews(id);
+    expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "approved" });
+    expect(reviews[2]!.payload.entries.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/volvió a fallar tras corregirlo.*siguen cubiertas/) });
+    expect(t.spy.generator).toBe(3);
   });
 
   it("a genuine failure that no decision explains is NOT repaired silently: no sheet, an honest stop, the unit kept", async () => {

@@ -50,7 +50,8 @@ export type GenerationIssueCode =
   | "skipped_support"
   | "near_duplicate"
   | "support_over_budget"
-  | "support_far_over_budget"
+  | "support_condensed"
+  | "support_out_of_budget"
   | "planner_label_restates";
 
 /** The model proposed something its decisions do not authorise (counted as non-compliance; the server already dropped it). */

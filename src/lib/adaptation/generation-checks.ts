@@ -16,6 +16,9 @@ import { visualTreatment } from "./visual-needs";
  * did exactly what was approved: nothing more, nothing less, and nothing else changed.
  */
 
+/** The audit check of a support beyond its word budget and tolerance (a repair asks for an explicit word limit). */
+export const OUT_OF_BUDGET_CHECK = "ningún apoyo supera su presupuesto más allá de la tolerancia";
+
 export interface AuditCheck {
   name: string;
   ok: boolean;
@@ -118,12 +121,12 @@ export function auditGeneration(input: {
   const exact = expansion.filter((e) => e.exactRepeats > 0);
   // v2 drops exact repeats itself, so any left is a bug; v1 (historical) did not and is only observed.
   if (generation.version === 2) add("ninguna frase se repite literalmente dentro de una actividad", exact.length === 0, exact.length === 0 ? "sin repeticiones literales" : exact.map((e) => `${e.id}×${e.exactRepeats}`).join(", "), exact.flatMap((e) => writersOf(e.id)));
-  const outOfProportion = generation.issues.filter((i) => i.code === "support_far_over_budget");
-  if (generation.version === 2) add("ningún apoyo duplica su presupuesto de palabras", outOfProportion.length === 0, outOfProportion.length === 0 ? "en proporción" : outOfProportion.map((i) => `${i.decision_id}: ${i.detail}`).join("; "), outOfProportion.map((i) => i.decision_id));
+  const outOfBudget = generation.issues.filter((i) => i.code === "support_out_of_budget");
+  if (generation.version === 2) add(OUT_OF_BUDGET_CHECK, outOfBudget.length === 0, outOfBudget.length === 0 ? "en proporción" : outOfBudget.map((i) => `${i.decision_id}: ${i.detail}`).join("; "), outOfBudget.map((i) => i.decision_id));
   const findings = [
     ...exact.filter(() => generation.version !== 2).map((e) => `${e.id}: ${e.exactRepeats} repeticiones literales`),
     ...expansion.filter((e) => e.nearRepeats > 0).map((e) => `${e.id}: ${e.nearRepeats} repeticiones casi literales`),
-    ...generation.issues.filter((i) => ["near_duplicate", "support_over_budget", "planner_label_restates", ...DISCARDED_REWRITE_CODES].includes(i.code)).map((i) => `${i.decision_id}: ${i.code} (${i.detail})`),
+    ...generation.issues.filter((i) => ["near_duplicate", "support_over_budget", "support_condensed", "planner_label_restates", ...DISCARDED_REWRITE_CODES].includes(i.code)).map((i) => `${i.decision_id}: ${i.code} (${i.detail})`),
   ];
 
   const traced = blocks.filter((b) => b.trace.origin !== "structure" && b.trace.source_refs.length === 0 && b.trace.decision_ids.length === 0);

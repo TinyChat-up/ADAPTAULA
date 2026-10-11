@@ -156,7 +156,7 @@ describe("«Hacer magia» never drops an important need to finish, and says so",
 });
 
 describe("«Hacer magia» after a quality review that fails", () => {
-  it("FAIL caused by one decision's blocks: corrected automatically (that part goes back to the original) and delivered; one unit, one adaptation", async () => {
+  it("FAIL caused by one decision's blocks: repaired automatically (regenerated with what to fix) and delivered; one unit, one adaptation", async () => {
     const t = await teacher({
       planner: plannerOf([checklistDoc, plannerAct5]),
       reviewer: (inner, call, input) => reviewWith(inner, input, call === 1 ? { check: "no_infantilization", status: "FAIL", targets: [firstAdapted(input)], detail: "Tono infantil en el apoyo" } : null),
@@ -168,19 +168,20 @@ describe("«Hacer magia» after a quality review that fails", () => {
     expect(t.seen.some((s) => s.phase === "ready" && s.review?.verdict === "needs_revision")).toBe(false);
     const reviews = await planReviews(id);
     expect(reviews.map((r) => r.payload.reviewer.kind)).toEqual(["auto", "auto"]);
-    expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_1")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/se mantiene el original/) });
+    // Content first: dec_1 is kept and regenerated with a restriction naming the fix, not removed.
+    expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_1")).toMatchObject({ action: "approved", restrictions: [expect.stringMatching(/sin infantilizar/)] });
     expect([t.spy.planner, t.spy.generator, t.spy.reviewer]).toEqual([1, 2, 2]);
     expect(await entitlement(id)).toBe("consumed");
     expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
     expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
   });
 
-  it("FAIL whose only correction would leave a high need without any support: not corrected, never delivered, an honest stop", async () => {
+  it("FAIL that persists after the content repair, on the only decision attending a need: not dropped, never delivered, an honest stop", async () => {
     const t = await teacher({ planner: plannerOf([checklistDoc]), reviewer: (inner, _c, input) => reviewWith(inner, input, { check: "no_infantilization", status: "FAIL", targets: [firstAdapted(input)], detail: "Tono infantil" }) });
     const id = await t.magic();
     await t.runAll(id);
     expect(await t.status(id)).toMatchObject({ status: "blocked", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, delivered: false });
-    expect(t.spy.generator).toBe(1);
+    expect(t.spy.generator).toBe(2); // the content repair was tried once
     expect(await entitlement(id)).toBe("reserved");
   });
 

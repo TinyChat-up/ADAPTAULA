@@ -63,10 +63,17 @@ export function supportVisibleWords(s: SupportV2): number {
 }
 
 /**
- * How far a decision's supports may go over their budget and still be «on budget»: models count words approximately, and a few
- * words more is not a longer sheet. Nothing is ever cut (shortening a support could change what it asks): over the tolerance it is
- * reported, and over twice the budget it is a support out of proportion that the audit rejects (pinned on its decision).
+ * Support budgets (docs/ADAPTATION.md § Presupuesto de los apoyos). A decision's supports get `supportBudgetWords` of the activity;
+ * a worked example adds its own allowance, because a model of the procedure cannot be shorter than its necessary steps (and its
+ * steps are never cut). Up to the TOLERANCE over it is a counting slip (models count words approximately): accepted, reported.
+ * Beyond it, the server first condenses safely (optional titles, items that nearly repeat what is already visible: nothing new
+ * is lost); if it still does not fit, the support is out of budget and the audit rejects the generation, pinned on its decision
+ * («Hacer magia» then regenerates it with an explicit word limit). There is no blanket acceptance «up to twice the budget».
  */
+export const WORKED_EXAMPLE_ALLOWANCE = 40;
+export function decisionSupportBudget(decision: Pick<Decision, "supports">, activity: Parameters<typeof supportBudgetWords>[0]): number {
+  return supportBudgetWords(activity) + (authorizedKinds(decision).has("worked_example") ? WORKED_EXAMPLE_ALLOWANCE : 0);
+}
 export const supportTolerance = (budget: number) => Math.max(6, Math.ceil(budget * 0.15));
 
 /**
@@ -151,6 +158,34 @@ const withItems = (support: SupportV2, items: string[]): SupportV2 => {
 };
 
 
+/**
+ * The SAFE condensation of a decision's supports: optional titles go, and so do list items that nearly repeat what the student
+ * already sees (never below the list's minimum). Nothing else: a worked example, its steps, a sequence of steps, an organiser's
+ * slots and every item that says something new are kept whole.
+ */
+function condense(supports: readonly SupportV2[], nearRepeats: ReadonlySet<string>): { supports: SupportV2[]; removed: string[] } {
+  const removed: string[] = [];
+  const out = supports.map((s) => {
+    let next: SupportV2 = s;
+    if ((next.kind === "checklist" || next.kind === "planner") && next.title) {
+      next = { ...next, title: undefined } as SupportV2;
+      removed.push(`título de ${s.kind}`);
+    }
+    const items = itemsOf(next);
+    if (items && next.kind !== "step_list") {
+      const minimum = 1;
+      const keep = items.filter((item) => !nearRepeats.has(item));
+      const kept = keep.length >= minimum ? keep : items.slice(0, minimum);
+      if (kept.length < items.length && (next.kind === "checklist" || next.kind === "guiding_questions" || next.kind === "sentence_starters")) {
+        removed.push(`${items.length - kept.length} elemento(s) casi repetidos de ${s.kind}`);
+        next = withItems(next, kept);
+      }
+    }
+    return next;
+  });
+  return { supports: out, removed };
+}
+
 export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: Pick<AdaptationContext, "limits">): NormalizedGeneration {
   const effective = new Map(reviewed.effective.decisions.map((d) => [d.id, d]));
   const rewriterOf = (target: string) => designatedRewriter(reviewed.effective.decisions, analysis, context, target);
@@ -225,6 +260,8 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
     const allowed = authorizedKinds(decision);
     const seenKinds = new Set<string>();
     const accepted: SupportV2[] = [];
+    /** Items that nearly repeat something already visible: kept (fidelity), but the first thing a condensation removes. */
+    const nearRepeats = new Set<string>();
     for (const support of segment.supports) {
       if (!allowed.has(support.kind) || seenKinds.has(support.kind)) {
         issue("unauthorized_support", decision.id, `${support.kind}: ${seenKinds.has(support.kind) ? "repetido en la decisión" : "no autorizado por la decisión"}`);
@@ -242,7 +279,10 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
             issue("duplicate_item_dropped", decision.id, `${support.kind}: un elemento repite literalmente algo ya visible`);
             continue;
           }
-          if (sentencesOf(item).some((s) => sentencesOf(visible).some((v) => overlap(s, v) >= NEAR_DUPLICATE_OVERLAP))) issue("near_duplicate", decision.id, `${support.kind}: un elemento repite casi literalmente algo ya visible`);
+          if (sentencesOf(item).some((s) => sentencesOf(visible).some((v) => overlap(s, v) >= NEAR_DUPLICATE_OVERLAP))) {
+            issue("near_duplicate", decision.id, `${support.kind}: un elemento repite casi literalmente algo ya visible`);
+            nearRepeats.add(item);
+          }
           keptItems.push(item);
         }
         if (keptItems.length === 0) {
@@ -262,13 +302,22 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
       visible = `${visible} ${normalizeText(JSON.stringify(kept))}`;
     }
     // --- budget: what the student reads, with a tolerance; reported, never cut ----------------------------------------------
-    const budget = supportBudgetWords(activity);
-    const added = accepted.reduce((sum, s) => sum + supportVisibleWords(s), 0);
-    if (added > budget) issue("support_over_budget", decision.id, `Los apoyos suman ${added} palabras y el presupuesto era ${budget} (${added <= budget + supportTolerance(budget) ? "dentro de la tolerancia" : "fuera de la tolerancia"})`);
-    // Twice the budget: not a counting slip but a support out of proportion.
-    if (added > 2 * budget) issue("support_far_over_budget", decision.id, `Los apoyos suman ${added} palabras, más del doble de su presupuesto (${budget})`);
+    const budget = decisionSupportBudget(decision, activity);
+    const limit = budget + supportTolerance(budget);
+    const wordsOf = (list: readonly SupportV2[]) => list.reduce((sum, s) => sum + supportVisibleWords(s), 0);
+    let fitted = accepted;
+    if (wordsOf(fitted) > limit) {
+      const condensed = condense(accepted, nearRepeats);
+      if (condensed.removed.length > 0) {
+        fitted = condensed.supports;
+        issue("support_condensed", decision.id, `Apoyo condensado sin perder contenido nuevo: ${condensed.removed.join(", ")}`);
+      }
+    }
+    const added = wordsOf(fitted);
+    if (added > budget) issue("support_over_budget", decision.id, `Los apoyos suman ${added} palabras y el presupuesto era ${budget} (${added <= limit ? "dentro de la tolerancia" : "fuera de la tolerancia"})`);
+    if (added > limit) issue("support_out_of_budget", decision.id, `Los apoyos suman ${added} palabras: superan su presupuesto (${budget}) más allá de la tolerancia (${limit - budget})`);
     let n = 1;
-    for (const kept of accepted) blocks.push(toBlock(kept, `${decision.id}-g${n++}`, trace(decision.action === "extend" ? "extension" : "support")));
+    for (const kept of fitted) blocks.push(toBlock(kept, `${decision.id}-g${n++}`, trace(decision.action === "extend" ? "extension" : "support")));
     visibleOf.set(decision.target, visible);
 
     if (blocks.length === 0) continue;

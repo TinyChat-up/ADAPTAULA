@@ -8,8 +8,8 @@ import { DraftGeneratedSegmentsSchema, type DraftGeneratedSegments } from "@/lib
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { decisionsToGenerate, normalizeGenerated, type NormalizedGeneration } from "./generated";
-import { authorizedKinds, decisionsToGenerateV2, designatedRewriter, normalizeGeneratedV2 } from "./generated-v2";
-import { instructionWords, supportBudgetWords } from "./proportion";
+import { authorizedKinds, decisionSupportBudget, decisionsToGenerateV2, designatedRewriter, normalizeGeneratedV2 } from "./generated-v2";
+import { instructionWords } from "./proportion";
 import { appliedDecisions, type ReviewedPlan } from "./plan-review";
 import { statedAnswer } from "@/lib/analysis/answers";
 import { RejectedStageOutput, rejectedRun, type MaterialGenerator, type StageRunRecord } from "./services";
@@ -159,7 +159,7 @@ export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: Material
           // Per DECISION, never per activity: only the decision that rewrites this instruction may rewrite it.
           instruction_policy: activity ? (designatedRewriter(reviewed.effective.decisions, analysis, context, d.target) === d.id ? "rewrite" : "keep") : null,
           original_words: activity ? instructionWords(activity) : null,
-          support_budget_words: supportBudgetWords(activity),
+          support_budget_words: decisionSupportBudget(d, activity),
         };
       }),
     },
