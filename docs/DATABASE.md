@@ -265,6 +265,23 @@ Ver `docs/VISUAL_RESOURCES.md`.
 
 **Migración 021.** La clave admite también `vis_N`: la imagen que aporta el docente cuando un visual que el análisis atribuye al original no está en él. Una restricción impide omitir un `vis_N`. La función, la RLS y los permisos no cambian.
 
+## Visuales automáticos (migración 022, Phase 8.2B.1)
+
+- **`material_visual_locators`** admite `method = 'auto'`. Un localizador automático siempre lleva `confidence ≥ 0,75` y `evidence`
+  (señales y coordenadas, sin contenido). Uno humano no lleva ninguna de las dos (restricción). `create_visual_locator` recibe
+  `p_confidence`/`p_evidence` y, con `auto`, nunca sustituye a un localizador activo: devuelve `created: false`.
+- **`material_visual_specs`:** la reconstrucción verificada (VisualSpec v1) de un localizador `auto` con `spec_sha256`, la versión
+  del extractor y las medidas de su verificación.
+  - Inmutable; única por `(locator_id, extractor_version)`.
+  - Un trigger exige que el localizador sea automático y del mismo material y visual.
+- **`material_visual_autolocations`:** una ejecución por `(material, análisis, original, versión del motor)`, con su estado, el
+  resultado por visual (A/B/C/D, confianza, motivo y señales) y `vision_calls`. La reserva atómica es `claim_visual_autolocation`
+  (solo `service_role`); una ejecución a medias se retoma pasados 10 minutos.
+- RLS de lectura para los miembros. El navegador no puede escribir.
+- `ai_runs.purpose` admite `locate_visual`.
+
+Ver `docs/VISUAL_RESOURCES.md` § Visuales automáticos.
+
 ## Funciones SQL de negocio
 
 - `workspace_plan(ws) returns plans` — plan efectivo (sin suscripción vigente = `free`). Solo `service_role`.

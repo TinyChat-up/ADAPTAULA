@@ -15,12 +15,13 @@ import type { DeferredInput } from "./deferred";
 import { buildRenderModel, type RenderMode, type RenderModel, type RenderValidation } from "./model";
 import { assetRef, type PinnedAsset } from "./print/pinned-assets";
 import { failureOfState, type VisualAssetFailure, type VisualState } from "./visual-assets";
+import type { VisualSpec } from "@/lib/visuals/spec";
 
 export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string }>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[] };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[] };
 
 export interface RenderLoadOptions {
   /**
@@ -131,6 +132,8 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   const subjectSlug = parsed.data.meta.subject;
   const subjectName = subjectSlug && deps.reader.getSubjectName ? await deps.reader.getSubjectName(subjectSlug) : null;
   const sourceOf = (visualId: string) => (options.pin ? assetRef(pinned[visualId]!) : visualSrc(id, visualId));
+  // Choice C: the verified reconstruction is drawn instead of the crop (screen and PDF alike); A and B print the crop at its size.
+  const figures = Object.fromEntries(states.flatMap((s) => (s.status === "ready" && s.resolution === "C" && s.spec ? [[s.visualId, s.spec]] : [])));
   return {
     kind: "ok",
     status,
@@ -139,12 +142,13 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     deferred,
     requiredVisuals: context.success ? context.data.material.required_visuals : [],
     assets: {
-      ...Object.fromEntries(states.filter((s) => s.status === "ready" && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId) }])),
+      ...Object.fromEntries(states.filter((s) => s.status === "ready" && !figures[s.visualId] && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId), ...(s.widthMm ? { widthMm: s.widthMm } : {}) }])),
       ...Object.fromEntries(teacherImages.map((v) => {
         const state = resolvedResources.states[v] as Extract<ResourceState, { status: "provided" }>;
         return [v, { src: options.pin ? assetRef({ assetId: state.resourceId, sha256: state.sha256 }) : resourceSrc(id, v) }];
       })),
     },
+    figures,
     assetFailures: Object.fromEntries(states.flatMap((s) => {
       const failure = teacherImages.includes(s.visualId) ? undefined : failureOfState(s);
       return failure ? [[s.visualId, failure]] : [];
@@ -164,5 +168,5 @@ export const PRODUCT_DESIGN = "claro" as const;
 
 /** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
 export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
-  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
+  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, figures: loaded.figures, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
 }

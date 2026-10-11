@@ -143,7 +143,8 @@ El contrato ya distingue de dónde viene cada recurso:
 
 | Recurso | Dónde vive hoy | Ampliación prevista |
 | --- | --- | --- |
-| Imagen del documento original | `image` `original` + localizador + `visual_crop@v1` | Localizador automático evaluable (opción B) |
+| Imagen del documento original | `image` `original` + localizador (humano o `auto`, 8.2B.1) + `visual_crop@v1` | — |
+| Figura matemática simple del original | `material_visual_specs` (VisualSpec v1) dibujada por el renderer propio (8.2B.1) | Más tipos de figura, con otra versión del extractor |
 | Gráfico o tabla estructurados | `chart` / `table` con datos verificados | — |
 | Imagen del docente | `adaptation_visual_resources` `source = 'teacher_upload'` | — |
 | Pictogramas de acciones e instrucciones, secuencias visuales | `image` `requested` con `style: "icon"` | `source = 'catalog'` + `license` + `attribution` (columnas ya previstas, otra migración para el valor) |
@@ -225,9 +226,144 @@ Qué hace «Hacer magia» sola con los visuales:
 - nunca se presenta como terminada;
 - no se abre la edición del plan.
 
-**Para Phase 8.2B** (sin implementar):
-- localización automática de visuales originales, con regiones en el contrato del análisis o extracción de las imágenes embebidas del PDF, validada sobre los bytes;
+**Para Phase 8.2B** (la localización automática ya está hecha en 8.2B.1, ver la sección siguiente):
+- ~~localización automática de visuales originales~~ (8.2B.1);
 - biblioteca de pictogramas con licencia compatible;
 - generación de imágenes, si se decide.
 
 Con esas piezas, las paradas por recurso visual de «Hacer magia» se reducirán sin cambiar la regla: un visual imprescindible nunca se omite.
+
+## Visuales automáticos y reconstrucción matemática (Phase 8.2B.1, migración 022)
+
+«Hacer magia» localiza por sí misma los visuales que el análisis identificó, los recorta y reconstruye las figuras matemáticas
+simples. El docente no marca regiones. Es la misma arquitectura de 8.2A: mismo localizador (`material_visual_locators`), misma
+receta de recorte (`visual_crop@v1`), mismo renderer, misma ficha y mismo PDF. No hay un segundo pipeline.
+
+### Por qué había que seleccionar a mano
+
+`MaterialAnalysis v3` guarda de cada visual la página, el tipo, el papel y la descripción, pero no su posición. Hasta ahora el único
+método de localización era `human`, que exigía la migración 016. Además el documento colocaba todos los visuales de una sección
+antes de sus actividades. El orden entre tipos no está en el análisis, así que la figura acababa arriba, lejos de su enunciado.
+
+### Cómo se localiza (`src/lib/materials/visuals/auto/`)
+
+1. **Geometría de la página.** Se renderiza la página tal como se ve, con el mismo rasterizador que los recortes (100 ppp para
+   localizar). Se lee la capa de texto del PDF con pdf.js sobre la misma superficie: CropBox y `/Rotate`. Una figura es la tinta
+   que queda al quitar el texto. Se descartan las reglas y líneas de respuesta, los marcos de página, las motas y las cajas vacías.
+2. **Anclas de actividad.** Se busca la línea impresa donde empieza cada instrucción del análisis. La zona de una actividad va desde
+   su ancla hasta la siguiente.
+3. **Firma del tipo.** Una recta numérica es un trazo horizontal largo cruzado por al menos tres trazos cortos. Una barra es un
+   rectángulo cerrado con divisiones verticales. Una figura genérica es cualquier otra tinta que no es texto. El tipo se deduce de
+   `kind` y de las palabras del propio análisis; nunca de la tarea.
+4. **Confianza explícita** (`locate.ts`):
+
+   | Señal | Peso |
+   | --- | --- |
+   | Firma del tipo (figura genérica: 0,15) | 0,30 |
+   | En la zona de su actividad | 0,25 |
+   | Única en esa zona o al menos 0,15 por delante de la siguiente | 0,20 |
+   | Recorte limpio: hay tinta, no ocupa media página y no corta texto corrido ajeno. **Obligatorio** | 0,15 |
+   | Acuerdo con la hipótesis de visión (IoU ≥ 0,5 y confianza del modelo ≥ 0,7) | 0,20 |
+
+   Se acepta con **≥ 0,75**. Las etiquetas impresas junto a la figura entran en el recorte, incluidas las fracciones apiladas. El
+   texto corrido nunca entra.
+5. **Visión solo si hace falta.** Si algo queda sin resolver y hay proveedor configurado, se hace **una** llamada por página con
+   `visual_locator@v1` y el alias `STANDARD`, a través de `src/lib/ai`. Hay como máximo 3 páginas por versión del material. La
+   respuesta es una **hipótesis**: solo suma si cae sobre una región que la geometría ya encontró. Un rectángulo sin figura queda
+   en un máximo de 0,60 y se rechaza.
+6. **Guardado.** Se crea un localizador `auto` con su `confidence` y su `evidence`: señales, zona, coordenadas en PDF y ppp, nunca
+   texto del material. Nunca sustituye a un localizador activo. El recorte sale de `produceVisualAsset`: privado, inmutable y con
+   sha-256.
+
+Coordenadas: el localizador sigue usando la superficie normalizada de 016. Para auditar, `toPdfRect` las devuelve al espacio de
+usuario del PDF deshaciendo `/Rotate`. Se ha comprobado contra `convertToPdfPoint` de pdf.js, también con una página guardada de
+lado.
+
+### VisualSpec v1 (`src/lib/visuals/spec.ts`) y renderer SVG propio
+
+| `kind` | Datos | Verificación |
+| --- | --- | --- |
+| `fraction_bar` | `parts`, `shaded` (índices) | Partes iguales (±4 %). Cada parte, claramente sombreada o claramente blanca. Sin texto dentro |
+| `number_line` | `start`, `end`, `divisions`, `labels` (las del original, por marca) | Marcas equidistantes (±4 %). Extremos rotulados. Cada etiqueta vale exactamente lo que su marca (aritmética racional). Sin tinta ajena sobre la recta: un punto o una X impiden reconstruir |
+| `part_whole` | `shape`, `parts`, `shaded` | Como la barra. Hoy solo se dibuja; no se extrae |
+| `comparison` | `items` (pares de fracciones) | Se lee del enunciado impreso solo si pide «<, > o =», cada fracción pertenece a un par y ningún par muestra ya la relación |
+
+Ningún tipo tiene un campo para una marca, un punto, un signo o una solución, así que el contrato no puede llevar la respuesta. El
+renderer (`src/components/material/visual-spec.tsx`) dibuja con elementos SVG de React a partir de números validados. No usa
+cadenas de marcado, enlaces, scripts, recursos externos, `style` ni `foreignObject`. Mide en milímetros y el sombreado es gris
+#767676 (contraste > 4,5:1, legible en blanco y negro). Si un spec no se verifica, se usa el recorte del original.
+
+Ejemplo verificado (fixture sintética «Fracciones en situaciones cotidianas»): barra `{parts: 8, shaded: [0,1,2]}`, recta
+`{start: 0, end: 1, divisions: 4, labels: 0, 1/4, 1/2, 3/4, 1}` y comparación `2/3 ☐ 3/5 · 4/8 ☐ 1/2` (dos casillas vacías).
+
+### Elección automática y auditable
+
+| | Cuándo | Qué se imprime |
+| --- | --- | --- |
+| **A** | Un docente localizó la figura | Su recorte, tal cual |
+| **B** | Localizada automáticamente | El recorte original: píxeles del original, recorte ajustado y tamaño físico |
+| **C** | Localizada automáticamente y con VisualSpec verificado | La reconstrucción |
+| **D** | No localizada o recorte fallido | Nada. Si es imprescindible, la parada honesta de siempre (409 `resource_pending`) |
+
+`resolveVisuals` lo decide a partir del estado guardado. Un spec solo cuenta si coincide con su sha-256. La ejecución de cada
+versión del material (`material_visual_autolocations.result`) registra, por visual, la elección, la confianza, el motivo y las
+señales. Solo se buscan los visuales `required` e `informative` que se dibujan como imagen: nunca uno decorativo ni ilustrativo
+presentado como apoyo, y nunca una tabla o un gráfico, que se reconstruyen con sus datos.
+
+### Cada figura con su actividad (sin posición vertical)
+
+- **Documento** (`anchorResources`): una figura o un texto de tipo `example`/`formula`/`definition`/`note` se coloca justo antes de
+  la primera actividad que lo usa (`resource_ids`) en su página. Al partir por `max_tasks_per_page` viaja con ella (`takeLeads`).
+- **Modelo de render:** la actividad lleva `leads` (su ejemplo, antes del enunciado) y `figures` (sus figuras, justo después). En
+  CSS, enunciado, figura y ejemplo nunca se separan (`break-after: avoid`, `break-inside: avoid`).
+- **Respuestas deterministas:** la comparación da `response: comparison`, con una casilla vacía por par y sin la caja enorme. Marcar
+  o colorear la propia figura (`mark`/`draw` sin área) da `response: none`: la figura es el espacio de respuesta. El control
+  `instructions_complete` lo acepta.
+- El recorte se imprime a su **tamaño físico** (`widthMm`), nunca estirado al 92 % de la columna.
+
+### Modos
+
+- **«Hacer magia»:** antes de entregar la ficha, el orquestador llama a `visuals.prepare`, sin aprobación del plan, sin selector y
+  sin edición forzada. Un fallo aquí nunca hace fallar la generación. Lo que no se resuelve es la parada honesta de la misma
+  adaptación.
+- **«Revisar antes de crear»:** no se localiza nada por sí solo. El docente puede pedirlo con «Buscar en el original»
+  (`POST /api/adaptations/[id]/visuals/auto`), que usa el mismo motor y las mismas reglas. Su localización manual siempre manda y
+  sustituye a la automática. Una reconstrucción solo se aplica a un localizador `auto`; lo garantiza un trigger.
+
+### Seguridad, privacidad y coste
+
+- Objetos privados en `generated-assets`, sin URL pública ni firmada.
+- RLS de lectura para los miembros y escritura solo del servidor. Las RPC, solo para `service_role`.
+- Las tablas nuevas son inmutables o acotadas: `material_visual_specs` es inmutable; en `material_visual_autolocations` solo cambia
+  el estado de la ejecución.
+- En los logs solo hay recuentos y códigos.
+- A la IA solo llegan la imagen de la página y las descripciones del análisis, nunca datos del alumnado. Todo va entre
+  `<untrusted_material>` y queda en `ai_runs` (`purpose = 'locate_visual'`) sin contenido.
+- **Idempotencia:** una sola ejecución por material, análisis, original y versión del motor. La reserva es atómica
+  (`claim_visual_autolocation`); una ejecución simultánea no hace nada y una repetida responde con lo registrado. Descargar el PDF
+  nunca vuelve a analizar.
+- No consume unidad de adaptación ni toca `usage_events`.
+- **Coste estimado:** 0 si basta la geometría (la ficha de fracciones). Si no, unos 0,005–0,01 USD por página con imagen A4 a
+  100 ppp (unos 1.300 tokens de imagen, más el prompt y unos 200 de salida), con un máximo de 3 páginas por versión del material.
+
+### Migración 022 y despliegue
+
+022 hace cuatro cambios:
+- añade `method 'auto'`, con `confidence`/`evidence` y la restricción ≥ 0,75;
+- rehace `create_visual_locator`: un automático nunca sustituye a un localizador activo;
+- crea `material_visual_specs` y `material_visual_autolocations`, con RLS, triggers y `claim_visual_autolocation`;
+- añade `ai_runs.purpose 'locate_visual'`.
+
+Se aplica antes de desplegar el código. Es compatible hacia atrás: las filas humanas no cambian. Sin claves de IA, la visión queda
+desactivada y solo actúa la geometría.
+
+### Límites (para 8.2B.2 y después)
+
+- **Imágenes sin capa de texto** (fotos o escaneos): no hay anclas y una figura genérica no llega a 0,75 sin visión. Se queda en D y
+  la localiza el docente.
+- **Maquetación a dos columnas:** las zonas se calculan por altura. Con dos columnas baja la confianza: hace falta visión o el
+  docente.
+- **Tipos reconstruibles:** solo la barra y la recta. `part_whole` se dibuja pero aún no se extrae. Los círculos, las rectas con
+  puntos dados y las comparaciones que no son de fracciones mantienen el recorte.
+- `src/lib/visuals/contracts.ts` reserva las procedencias `catalog` (8.2B.3) y `generated` (8.2B.2) y el contrato de petición de
+  generación. Una figura que un VisualSpec puede dibujar nunca se genera. Nada de esto está conectado.

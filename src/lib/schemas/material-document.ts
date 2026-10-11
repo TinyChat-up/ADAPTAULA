@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PresentationSchema } from "./adaptation-context";
 import { ADMIN_FIELD_TYPES, CHART_TYPES } from "./material-analysis";
+import { ComparisonSpecSchema } from "@/lib/visuals/spec";
 
 /**
  * MaterialDocument v1: the adapted sheet as semantic blocks, rendered by our own components with any template and printed
@@ -40,10 +41,10 @@ export type Trace = z.infer<typeof TraceSchema>;
 
 const Choice = z.object({ id: ItemId, text: ShortText });
 
-export const RESPONSE_KINDS = ["lines", "box", "grid", "table_cells", "choice", "fill_blank", "match", "order", "true_false", "oral_or_alternative", "none"] as const;
+export const RESPONSE_KINDS = ["lines", "box", "grid", "table_cells", "choice", "fill_blank", "match", "order", "true_false", "oral_or_alternative", "none", "comparison"] as const;
 export const CLOSED_RESPONSE_KINDS = ["choice", "fill_blank", "match", "order", "true_false"] as const;
 
-const ResponseSchema = z.discriminatedUnion("kind", [
+const RESPONSE_VARIANTS = [
   z.object({ kind: z.literal("lines"), lines: z.number().int().min(1).max(40) }),
   z.object({ kind: z.literal("box"), size: z.enum(["small", "medium", "large"]) }),
   z.object({ kind: z.literal("grid") }),
@@ -56,8 +57,15 @@ const ResponseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("true_false"), statements: z.array(Choice).min(1).max(12) }),
   z.object({ kind: z.literal("oral_or_alternative"), mode: z.enum(["oral", "keyboard", "other"]), lines: z.number().int().min(0).max(40) }),
   z.object({ kind: z.literal("none") }),
-]);
-export type ResponseSpec = z.infer<typeof ResponseSchema>;
+] as const;
+/** What a model may write (generator, block revision): the published contracts, unchanged. */
+const ResponseSchema = z.discriminatedUnion("kind", RESPONSE_VARIANTS);
+/**
+ * What a stored document may hold: also the answer areas only the server builds from the original's printed words. `comparison`:
+ * one EMPTY box between the two numbers of each item («2/3 ☐ 3/5»), drawn by our own renderer; the sign is never stored.
+ */
+const StoredResponseSchema = z.discriminatedUnion("kind", [...RESPONSE_VARIANTS, z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema })]);
+export type ResponseSpec = z.infer<typeof StoredResponseSchema>;
 
 const ImageSourceSchema = z.discriminatedUnion("kind", [
   /** A visual of the original material, reused as it is. */
@@ -76,7 +84,9 @@ const ImageSourceSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-function buildBlockSchema(idSchema: z.ZodString) {
+type AnyResponseSchema = typeof ResponseSchema | typeof StoredResponseSchema;
+
+function buildBlockSchema(idSchema: z.ZodString, responseSchema: AnyResponseSchema) {
   const block = <T extends string, S extends z.ZodRawShape>(type: T, shape: S) =>
     z.object({ id: idSchema, type: z.literal(type), trace: TraceSchema, ...shape });
 
@@ -98,7 +108,7 @@ function buildBlockSchema(idSchema: z.ZodString) {
       /** Requirements the student must see (extension, number of data, conditions). Never the answer. */
       requirements: z.array(ShortText).max(8).optional(),
       resource_block_ids: z.array(idSchema).max(8).optional(),
-      response: ResponseSchema,
+      response: responseSchema,
     }),
     block("list", { style: z.enum(["bullet", "numbered"]), items: z.array(ShortText).min(1).max(20) }),
     block("table", {
@@ -134,8 +144,8 @@ function buildBlockSchema(idSchema: z.ZodString) {
   ]);
 }
 
-export const BlockSchema = buildBlockSchema(BlockIdSchema);
-export const DraftBlockSchema = buildBlockSchema(DraftBlockIdSchema);
+export const BlockSchema = buildBlockSchema(BlockIdSchema, StoredResponseSchema);
+export const DraftBlockSchema = buildBlockSchema(DraftBlockIdSchema, ResponseSchema);
 export type Block = z.infer<typeof BlockSchema>;
 export type DraftBlock = z.infer<typeof DraftBlockSchema>;
 export type BlockType = Block["type"];
@@ -150,8 +160,8 @@ const AnswerKeyEntrySchema = (idSchema: z.ZodString) =>
     blanks: z.array(z.object({ key: ItemId, answer: ShortText })).max(20).optional(),
   });
 
-function buildDocumentSchema(idSchema: z.ZodString) {
-  const blockSchema = buildBlockSchema(idSchema);
+function buildDocumentSchema(idSchema: z.ZodString, responseSchema: AnyResponseSchema) {
+  const blockSchema = buildBlockSchema(idSchema, responseSchema);
   return z
     .object({
       schema_version: z.literal(MATERIAL_DOCUMENT_SCHEMA_VERSION),
@@ -193,8 +203,8 @@ function buildDocumentSchema(idSchema: z.ZodString) {
 }
 
 /** Stored, renderable document: the single source of truth for screen, editor and print. */
-export const MaterialDocumentSchema = buildDocumentSchema(BlockIdSchema);
-export const DraftMaterialDocumentSchema = buildDocumentSchema(DraftBlockIdSchema);
+export const MaterialDocumentSchema = buildDocumentSchema(BlockIdSchema, StoredResponseSchema);
+export const DraftMaterialDocumentSchema = buildDocumentSchema(DraftBlockIdSchema, ResponseSchema);
 export type MaterialDocument = z.infer<typeof MaterialDocumentSchema>;
 export type DraftMaterialDocument = z.infer<typeof DraftMaterialDocumentSchema>;
 

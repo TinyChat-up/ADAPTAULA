@@ -210,7 +210,16 @@ Hipótesis contrastadas con ambos materiales: **reproducidas** H4 (una decisión
 
 ## Orden fuente del documento
 
-El análisis registra para cada elemento su página y su sección, y las secciones están en orden de lectura. El ensamblador ordena ahora por (página, sección, tipo, número de id), sin heurísticas de texto, lo que corrige el caso de Bachillerato (el enunciado de la actividad 5 salía antes de la actividad 4). **Límite documentado:** el análisis no registra el orden entre tipos dentro de una misma sección (un visual que sigue a una actividad de su sección se coloca antes); arreglarlo exige un orden explícito en el contrato del análisis, que está cerrado, o en el renderer futuro.
+El análisis registra para cada elemento su página y su sección, y las secciones están en orden de lectura. El ensamblador ordena ahora por (página, sección, tipo, número de id), sin heurísticas de texto, lo que corrige el caso de Bachillerato (el enunciado de la actividad 5 salía antes de la actividad 4). **Límite documentado:** el análisis no registra el orden entre tipos dentro de una misma sección.
+
+**Desde 8.2B.1** (`anchorResources`), una figura, o un ejemplo, fórmula, definición o nota, que una actividad usa (`resource_ids`)
+se coloca justo antes de la primera actividad que lo usa en su página, y viaja con ella al partir por tareas. En el modelo de render
+la actividad lleva `leads` (su ejemplo, antes del enunciado) y `figures` (sus figuras, después del enunciado). Dos respuestas son
+ahora deterministas:
+- la comparación «<, > o =», con una casilla vacía por par;
+- marcar o colorear la propia figura, sin espacio de escritura.
+
+Ver `docs/VISUAL_RESOURCES.md` § Visuales automáticos.
 
 ## A/B real de generator v2 (Bachillerato, 2026-10-05)
 

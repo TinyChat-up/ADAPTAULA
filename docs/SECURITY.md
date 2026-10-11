@@ -49,6 +49,9 @@ El producto trata material educativo y perfiles de necesidades de menores (datos
 - PDFs cifrados o corruptos → rechazo con un mensaje claro. Ningún mensaje muestra detalles técnicos.
 - **Storage:** bucket privado; ruta `<workspace>/<usuario>/<material>/<uuid>.<ext>` generada por el servidor; la subida usa una URL firmada de un solo uso emitida tras resolver el workspace; no existen URLs públicas permanentes. La lectura va por `/api/materials/[id]/file`, que autoriza con la sesión del usuario (RLS) y redirige a una URL firmada de 60 s (o transmite PDFs pequeños para la vista previa).
 - **Ficheros huérfanos:** una subida no completada se limpia a las 60 min (cron diario); borrar un material elimina primero el fichero y luego la fila.
+- **Figuras reconstruidas (8.2B.1):** el SVG lo dibuja nuestro componente a partir de números validados con Zod (VisualSpec v1). No
+  hay cadenas de marcado, scripts, enlaces, recursos externos, `style` ni `foreignObject`, y un test lo comprueba. El PDF sigue
+  saliendo de Chromium sin red y con una CSP que no permite nada externo.
 - Escaneo de malware: no disponible en el MVP. Riesgo aceptado y documentado: los ficheros solo los procesan las APIs de los proveedores de IA y nuestro parser, nunca se ejecutan ni se sirven públicamente.
 
 ## Material no confiable e inyección de prompts

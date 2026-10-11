@@ -1,4 +1,5 @@
 import type { Block, MaterialDocument, ResponseSpec } from "@/lib/schemas/material-document";
+import { describeSpec, type ComparisonSpec, type VisualSpec } from "@/lib/visuals/spec";
 import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
 import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferred";
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
@@ -31,6 +32,8 @@ export type RenderResponse =
   | { kind: "order"; items: string[] }
   | { kind: "true_false"; statements: string[] }
   | { kind: "oral"; mode: "oral" | "keyboard" | "other"; lines: number }
+  /** One empty box between the two numbers of each printed pair (drawn by the VisualSpec renderer). */
+  | { kind: "comparison"; spec: ComparisonSpec }
   | { kind: "none" };
 
 export type RenderNode = { key: string } & (
@@ -42,11 +45,20 @@ export type RenderNode = { key: string } & (
    * `supports`: writing helps the document places right after a writing activity (an organiser, sentence starters). They are its
    * helps, so the sheet shows them between the prompt and the answer space: enunciado → apoyos → espacio de respuesta.
    */
-  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[] }
+  /**
+   * `leads`: what the student needs BEFORE the task (the original example it uses, an analogous worked example). `figures`: the
+   * original figures it asks about, right after its prompt. Both are resolved from the document's references, so a figure can never
+   * be printed away from its instruction: enunciado → figura → apoyos → espacio de respuesta.
+   */
+  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[]; leads: RenderNode[]; figures: RenderNode[] }
   | { kind: "list"; ordered: boolean; items: Run[][] }
   | { kind: "table"; caption?: string; unit?: string; headers: string[]; rows: string[][] }
   | { kind: "chart"; title?: string; chartType: "bar" | "line" | "pie" | "other"; categories: string[]; series: Array<{ label: string | null; values: number[] }>; unit?: string; xLabel?: string; yLabel?: string }
-  | { kind: "image"; state: "available" | "missing" | "pending" | "omitted"; src?: string; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure; origin: "original" | "requested" }
+  /**
+   * `spec`: a verified reconstruction of the original figure, drawn by our SVG renderer instead of the crop. `widthMm`: the crop's
+   * physical width in the original, so it prints at its own size (never stretched to the column).
+   */
+  | { kind: "image"; state: "available" | "missing" | "pending" | "omitted"; src?: string; spec?: VisualSpec; widthMm?: number; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure; origin: "original" | "requested" }
   | { kind: "help_box"; variant: "key_idea" | "reminder" | "tip" | "strategy"; title?: string; paragraphs: Run[][] }
   | { kind: "checklist"; title?: string; items: string[]; keepTogether: boolean }
   | { kind: "vocabulary"; title?: string; items: Array<{ term: string; definition: string }> }
@@ -134,6 +146,8 @@ export const chartPlottable = (n: PlottableChart): boolean => !hasNegative(n) &&
 
 export interface AssetSource {
   src: string;
+  /** Physical width of the figure in the original (mm), when known. */
+  widthMm?: number;
 }
 
 export interface BuildRenderOptions {
@@ -158,6 +172,8 @@ export interface BuildRenderOptions {
   subjectLabel?: string | null;
   /** Visual system (default `standard`). See `RenderDesign`. */
   design?: RenderDesign;
+  /** Verified reconstructions of original visuals by `vis_N` (choice C): drawn instead of their crop. */
+  figures?: Readonly<Record<string, VisualSpec>>;
 }
 
 export const NEUTRAL_VISUAL_LABEL = "Recurso visual de la actividad";
@@ -173,6 +189,39 @@ const WIDE_TABLE_COLUMNS = 8;
 /** Blocks that introduce what follows: they stay with the next activity when a page is closed before it (a reading placed right
  * before an activity is the part of the text that activity asks about). */
 const LEADS_INTO = new Set<RenderNode["kind"]>(["heading", "instruction", "help_box", "reading_text"]);
+/** What an activity shows after its prompt when it uses it (an original figure, a table, a chart). */
+const FIGURE_KINDS = new Set<RenderNode["kind"]>(["image", "table", "chart"]);
+/** What an activity shows before its prompt when it uses it (the original example, a formula). Never a long reading. */
+const LEAD_KINDS = new Set<RenderNode["kind"]>(["paragraph", "math"]);
+/** Rows a figure is allowed to add to a compact activity before it may split (the figure itself never leaves its prompt: CSS). */
+const FIGURE_ALLOWANCE = 6;
+const MM_PER_ROW = 8;
+function figureRows(n: RenderNode): number {
+  if (n.kind === "table") return n.rows.length + 1;
+  if (n.kind === "chart") return 8;
+  if (n.kind !== "image") return 0;
+  if (n.spec) return n.spec.kind === "number_line" ? 4 : n.spec.kind === "part_whole" ? 6 : 3;
+  return n.widthMm ? Math.ceil(n.widthMm / 3 / MM_PER_ROW) + 1 : 8;
+}
+function leadRows(n: RenderNode): number {
+  if (n.kind === "worked_example") return 2 + n.problem.length + n.steps.length;
+  if (n.kind === "paragraph") return n.paragraphs.reduce((r, p) => r + Math.max(1, Math.ceil(p.reduce((c, x) => c + x.text.length, 0) / 90)), 0);
+  return 2;
+}
+
+/** Every node of a sheet, including those inside an activity (its leads, figures and supports), in reading order. */
+export function flatNodes(nodes: readonly RenderNode[]): RenderNode[] {
+  return nodes.flatMap((n) => (n.kind === "activity" ? [...flatNodes(n.leads), n, ...flatNodes(n.figures), ...flatNodes(n.supports)] : [n]));
+}
+
+/** The same tree with `f` applied to every node, nested ones included (a print transform, never a content change). */
+export function mapNodes(nodes: readonly RenderNode[], f: (n: RenderNode) => RenderNode): RenderNode[] {
+  return nodes.map((n) => {
+    const mapped = f(n);
+    return mapped.kind === "activity" ? { ...mapped, leads: mapNodes(mapped.leads, f), figures: mapNodes(mapped.figures, f), supports: mapNodes(mapped.supports, f) } : mapped;
+  });
+}
+
 /** Responses that are written (where an organiser or sentence starters help). */
 const WRITING = new Set<RenderResponse["kind"]>(["lines", "box", "oral"]);
 
@@ -224,6 +273,8 @@ function responseOf(spec: ResponseSpec, requirements: readonly string[], answers
       return { kind: "true_false", statements: spec.statements.map((c) => c.text) };
     case "oral_or_alternative":
       return { kind: "oral", mode: spec.mode, lines: spec.lines };
+    case "comparison":
+      return { kind: "comparison", spec: spec.spec };
     case "none":
       return { kind: "none" };
   }
@@ -243,6 +294,7 @@ function activityRows(prompt: Run[][], steps: readonly string[], requirements: r
     : response.kind === "true_false" ? response.statements.length
     : response.kind === "oral" ? response.lines
     : response.kind === "fill_blank" ? 3 + Math.ceil(response.wordBank.length / 6)
+    : response.kind === "comparison" ? 2 * Math.ceil(response.spec.items.length / 3)
     : 0;
   return text + answer;
 }
@@ -279,7 +331,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       const steps = block.steps ?? [];
       const prompt = parseParagraphs(block.prompt);
       const response = responseOf(block.response, requirements, (block.resource_block_ids ?? []).some((ref) => ctx.tables.has(ref)));
-      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id), supports: [] };
+      return { key, kind: "activity", ...(block.label ? { label: block.label } : {}), prompt, steps, requirements, response, keepTogether: activityRows(prompt, steps, requirements, response) <= COMPACT_ROWS, isolate: ctx.isolate.has(block.id), supports: [], leads: [], figures: [] };
     }
     case "list":
       return { key, kind: "list", ordered: block.style === "numbered", items: block.items.map(parseInline) };
@@ -296,12 +348,16 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
         return resource ? { ...base, state: "available", src: resource.src } : { ...base, state: "pending" };
       }
       const ref = block.source.visual_ref;
+      const spec = ctx.options.figures?.[ref];
       const asset = ctx.options.assets?.[ref];
       const essential = ctx.options.requiredVisuals?.includes(ref) ?? false;
-      const failure = asset ? undefined : ctx.options.assetFailures?.[ref];
-      // The accessible name is the printed caption of the original when there is one; otherwise a neutral label. The analyzer's
-      // free description of the image is not verified, so it is never used as the student's text alternative.
-      return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src } : {}), alt: block.caption ?? NEUTRAL_VISUAL_LABEL, ...(block.caption ? { caption: block.caption } : {}), essential, ...(failure ? { failure } : {}), origin: "original" };
+      const failure = asset || spec ? undefined : ctx.options.assetFailures?.[ref];
+      // The accessible name is the printed caption of the original when there is one; otherwise a neutral label (or, for a
+      // reconstruction, the description of what it draws). The analyzer's free description of the image is not verified, so it is
+      // never used as the student's text alternative.
+      const alt = block.caption ?? (spec ? describeSpec(spec) : NEUTRAL_VISUAL_LABEL);
+      if (spec) return { key, kind: "image", state: "available", spec, alt, ...(block.caption ? { caption: block.caption } : {}), essential, origin: "original" };
+      return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src, ...(asset.widthMm ? { widthMm: asset.widthMm } : {}) } : {}), alt, ...(block.caption ? { caption: block.caption } : {}), essential, ...(failure ? { failure } : {}), origin: "original" };
     }
     case "help_box":
       return { key, kind: "help_box", variant: block.variant, ...(block.title ? { title: block.title } : {}), paragraphs: parseParagraphs(block.text) };
@@ -333,7 +389,7 @@ const textsOf = (n: RenderNode): string[] => {
     case "paragraph": return runs(n.paragraphs);
     case "reading_text": return n.paragraphs.map((p) => p.runs.map((r) => r.text).join(""));
     case "instruction": return [...runs(n.paragraphs), ...n.steps];
-    case "activity": return [...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf)];
+    case "activity": return [...n.leads.flatMap(textsOf), ...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf)];
     case "list": return runs(n.items);
     case "table": return [...n.headers, ...n.rows.flat()];
     case "help_box": return runs(n.paragraphs);
@@ -410,8 +466,27 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     };
     // The source of each node of the page being built, to tell what leads into the next activity.
     const sources: string[][] = [];
+    const blockIds: string[] = [];
     for (const block of logical.blocks) {
       const node = nodeOf(block, ctx);
+      // The figures and the example an activity uses travel INSIDE it (see `leads` / `figures`): the document places them right
+      // before the activity, and their link is the activity's own references, never their position on the page.
+      if (node.kind === "activity" && block.type === "activity") {
+        const own = new Set(block.resource_block_ids ?? []);
+        while (current.length > 0) {
+          const previous = current.at(-1)!;
+          const id = blockIds.at(-1)!;
+          const refs = sources.at(-1) ?? [];
+          const figure = FIGURE_KINDS.has(previous.kind) && own.has(id);
+          const lead = !figure && ((LEAD_KINDS.has(previous.kind) && own.has(id)) || (previous.kind === "worked_example" && refs.some((r) => block.trace.source_refs.includes(r))));
+          if (!figure && !lead) break;
+          current.pop();
+          sources.pop();
+          blockIds.pop();
+          (figure ? node.figures : node.leads).unshift(previous);
+        }
+        node.keepTogether = activityRows(node.prompt, node.steps, node.requirements, node.response) + node.figures.reduce((n, f) => n + figureRows(f), 0) + node.leads.reduce((n, l) => n + leadRows(l), 0) <= COMPACT_ROWS + FIGURE_ALLOWANCE;
+      }
       // max_tasks_per_page groups, it never removes: a new page starts BEFORE the activity that would exceed its group (see
       // `taskGroups`), and what leads into that activity (a heading, an orientation, a help, its part of the reading, its own
       // worked example) travels with it. A worked example of ANOTHER activity (sheets assembled before examples went first) stays.
@@ -423,11 +498,14 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
           sources.splice(current.length, 1);
         }
         const leadSources = sources.splice(current.length);
+        const leadIds = blockIds.splice(current.length);
         flush();
         sources.length = 0;
+        blockIds.length = 0;
         group += 1;
         current.push(...lead);
         sources.push(...lead.map((_, i) => leadSources[i] ?? []));
+        blockIds.push(...lead.map((_, i) => leadIds[i] ?? ""));
       }
       // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.
       const previous = current.at(-1);
@@ -440,12 +518,13 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
       }
       current.push(node);
       sources.push(block.trace.source_refs);
+      blockIds.push(block.id);
       if (node.kind === "activity") tasks += 1;
     }
     flush();
   }
 
-  const allNodes = pages.flatMap((p) => p.nodes);
+  const allNodes = flatNodes(pages.flatMap((p) => p.nodes));
   const validation = validate(allNodes, ctx, plan.outcomes, deferredKnown);
   const model: RenderModel = {
     rendererVersion: MATERIAL_RENDERER_VERSION,

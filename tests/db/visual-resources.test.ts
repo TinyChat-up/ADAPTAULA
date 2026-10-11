@@ -15,6 +15,7 @@ import { locateVisual } from "@/lib/materials/visuals/service";
 import { loadRenderInputWith, sheetModel } from "@/lib/render/load";
 import { readinessOf } from "@/lib/render/readiness";
 import { MATERIAL_RENDERER_VERSION } from "@/lib/render/version";
+import { flatNodes } from "@/lib/render/model";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import { listState } from "@/lib/adaptation/presentation/list";
 import { ReadyPanel } from "@/components/adaptation/status-panels";
@@ -200,7 +201,10 @@ describe("C · a chart that is represented by structured data", () => {
     const m = await magic(analysis, [transform("act_2", "vis_2")]);
     expect(m.status.status).toBe("ready");
     const s = await sheet(m, "student", true);
-    const chart = s.model.pages.flatMap((p) => p.nodes).find((node) => node.kind === "chart");
+    // Linked to the activity that uses it, it is drawn inside that activity, right after its prompt (8.2B.1).
+    const act2 = s.model.pages.flatMap((p) => p.nodes).find((node) => node.kind === "activity" && node.figures.some((f) => f.kind === "chart"));
+    expect(act2).toBeDefined();
+    const chart = flatNodes(s.model.pages.flatMap((p) => p.nodes)).find((node) => node.kind === "chart");
     const source = analysis.visuals.find((v) => v.id === "vis_2")!.chart!;
     expect(chart?.kind === "chart" && [chart.categories, chart.series.map((x) => x.values), chart.unit, chart.xLabel, chart.yLabel]).toEqual([source.categories, source.series.map((x) => x.values), source.unit, source.x_label, source.y_label]);
     // The chart is linked to the activity that uses it and needs no crop: only the figure (vis_1) is an image to select.

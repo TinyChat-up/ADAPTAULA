@@ -1,4 +1,6 @@
 import type { RenderResponse } from "@/lib/render/model";
+import { describeSpec } from "@/lib/visuals/spec";
+import { VisualSpecView } from "./visual-spec";
 
 const Lines = ({ count }: { count: number }) => (
   <div className="ms-lines" aria-hidden>
@@ -111,6 +113,13 @@ export function Response({ response }: { response: RenderResponse }) {
         <div>
           <p className="ms-note">{MODE_LABEL[response.mode]}</p>
           {response.lines > 0 ? <Lines count={response.lines} /> : null}
+        </div>
+      );
+    case "comparison":
+      // The printed pairs with one empty box each, where the student writes the sign.
+      return (
+        <div className="ms-comparison">
+          <VisualSpecView spec={response.spec} label={describeSpec(response.spec)} />
         </div>
       );
     case "none":

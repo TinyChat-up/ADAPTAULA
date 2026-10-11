@@ -21,6 +21,7 @@
 | `pedagogical_reviewer` | E | `AiReviewDraft` (solo comprobaciones no deterministas de `PedagogicalReview` v1) | STANDARD |
 | `block_reviser` | edición | `Block` | STANDARD · low |
 | `image_brief` | imágenes | `ImageBrief` | STANDARD · low |
+| `visual_locator` | 8.2B.1 | Hipótesis de rectángulos (`visual_locations`) | STANDARD |
 
 ## Diseño de cada prompt (v1)
 
@@ -69,6 +70,11 @@ Rol: revisor pedagógico independiente que **observa y evalúa, nunca corrige**.
 
 ### material_generator_v2 (publicado, no activo; `prompts/material-generator/v2.ts`)
 Versión nueva con su propio contrato de salida (`DraftGeneratedSegments v2`); v1 permanece disponible e inmutable. Mismo rol (ejecuta decisiones aprobadas, no las toma) con la **fuente canónica**: el sistema conserva la consigna y sus requisitos y el modelo solo escribe lo que las decisiones añaden, una vez y con una función distinta cada pieza; una consigna breve se conserva (`instruction_policy: "keep"`), los apoyos tienen un presupuesto de palabras y un apoyo que solo repetiría algo visible se declina en `skipped`. Ver `docs/ADAPTATION.md`.
+
+### visual_locator_v1 (publicado; `prompts/visual-locator/v1.ts`, `src/lib/materials/visuals/auto/vision.ts`)
+Localiza en la imagen de una página las figuras que el análisis ya identificó: un rectángulo normalizado y una confianza por
+figura, o `found=false`. Las descripciones van en `<untrusted_material>`. El servidor solo acepta un rectángulo que coincide con una
+región encontrada por su propia geometría.
 
 ### block_reviser_v1
 Modifica **únicamente** el bloque indicado según la petición del docente ("Pon un ejemplo antes", "Reduce las alternativas de 4 a 3"), respetando los objetivos protegidos y el perfil. Devuelve un bloque válido con el mismo `id` y el mismo tipo, salvo que la petición exija otro tipo compatible.

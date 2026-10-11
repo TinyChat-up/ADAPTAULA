@@ -170,6 +170,17 @@ ul.ms-list { list-style: disc; }
 .ms-figure { margin: 0; break-inside: avoid; display: flex; flex-direction: column; align-items: center; gap: .35em; }
 .ms-figure img { display: block; width: auto; height: auto; max-width: 92%; max-height: calc((var(--ms-page-h) - 2 * var(--ms-margin)) * .6); border: 1px solid var(--ms-rule-soft); }
 .ms-figure .ms-caption { margin: 0; font-weight: 400; font-size: .85em; color: var(--ms-soft); text-align: center; break-after: auto; }
+/* A crop prints at the size it had on paper (never stretched to the column); a reconstruction at its own millimetres. */
+.ms-figure img[data-physical] { max-width: 100%; }
+.ms-spec { display: block; max-width: 100%; height: auto; overflow: visible; color: var(--ms-ink); }
+/* An activity's example goes right before it and its figures right after its prompt: none of them is ever printed away from the
+   task, and none of them takes a page of its own (docs/VISUAL_RESOURCES.md § Colocación). */
+.ms-activity-leads { display: flex; flex-direction: column; gap: .5em; break-inside: avoid; break-after: avoid; }
+.ms-activity-figures { margin-top: .55em; display: flex; flex-direction: column; gap: .5em; break-inside: avoid; break-after: avoid; }
+.ms-activity-figures .ms-figure { align-items: flex-start; }
+.ms-activity-figures .ms-cue { display: none; }
+.ms-activity[data-numbered] > .ms-activity-figures { margin-left: calc(var(--ms-num-w) + var(--ms-num-gap)); }
+.ms-comparison .ms-spec { margin: .25em 0; }
 .ms-missing { border: 2px dashed var(--ms-ink); padding: .6em .8em; font-size: .85em; font-weight: 600; }
 
 /* Menos estímulos: menos superficies. `reduced` quita fondos y redondeos; `none` deja solo una raya de separación. */

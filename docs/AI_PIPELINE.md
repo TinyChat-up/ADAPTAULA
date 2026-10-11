@@ -141,6 +141,18 @@ Diseño completo en **`docs/ADAPTATION.md`** (ADR-020). Base offline implementad
 ### F · Render (sin IA)
 JSON aprobado → `MaterialRenderer` (pantalla) → impresión → PDF (ADR-007).
 
+### Localización de visuales del original — `visual_locator@v1` (Phase 8.2B.1)
+
+Primero actúa la geometría determinista: capa de texto del PDF, tinta, anclas de actividad y firmas de tipo. Solo si algo queda sin
+resolver se hace **una** llamada de visión por página, con un máximo de 3 por versión del material:
+- alias `STANDARD`, `purpose = 'locate_visual'`, desde `src/lib/materials/visuals/auto/vision.ts` por la capa `src/lib/ai`;
+- entrada: la imagen de la página y las descripciones del análisis, como material no confiable;
+- salida, validada con Zod: rectángulos con su confianza.
+
+La salida es una **hipótesis**: solo cuenta si coincide con una región que la geometría encontró. No consume unidad de adaptación y
+queda en caché por material y versión. Sin proveedor configurado (o con el `mock`), no se llama. Ver
+`docs/VISUAL_RESOURCES.md`.
+
 ### Revisión de un bloque — `block_reviser_v1`
 Entrada: el bloque, los bloques vecinos (contexto), la petición del docente ("Haz esta pregunta más corta"), el perfil funcional y los objetivos protegidos. Salida: **un** bloque compatible con `MaterialDocument` v1, con el mismo `id` y la misma trazabilidad. Por defecto STANDARD · low (ECONOMY en Free). Consume `block_revision`, no `adaptation`.
 

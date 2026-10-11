@@ -18,7 +18,9 @@ export const VISUAL_CROP_RECIPE = { version: "visual_crop@v1", dpi: 200, margin:
 export const recipeFingerprint = (recipe = VISUAL_CROP_RECIPE) => fingerprint(recipe);
 
 export const LOCATOR_VERSION = 1;
-export const LOCATOR_METHODS = ["human"] as const;
+/** `human`: a person drew the rectangle. `auto`: the automatic locator found it and validated it (migration 022). */
+export const LOCATOR_METHODS = ["human", "auto"] as const;
+export type LocatorMethod = (typeof LOCATOR_METHODS)[number];
 
 const Hex64 = z.string().regex(/^[a-f0-9]{64}$/);
 

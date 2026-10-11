@@ -7,7 +7,7 @@ import { classifyDecisionExecution } from "@/lib/adaptation/execution";
 import type { VisualNeed } from "@/lib/adaptation/presentation/visual-needs";
 import { imageKind, normaliseTeacherImage } from "@/lib/adaptation/resources/image";
 import { visualTreatment } from "@/lib/adaptation/visual-needs";
-import { buildRenderModel } from "@/lib/render/model";
+import { buildRenderModel, flatNodes } from "@/lib/render/model";
 import type { Decision } from "@/lib/schemas/adaptation-plan";
 import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/material-document";
 import { fractionsAnalysis } from "../../evals/adaptation/fixtures";
@@ -99,7 +99,8 @@ const sheetWith = (essential: boolean): MaterialDocument =>
     ],
     answer_key: [],
   });
-const imageNode = (m: ReturnType<typeof buildRenderModel>["model"]) => m.pages[0]!.nodes.find((x) => x.kind === "image");
+// The visual a decision asks for is the activity's own: it is drawn inside it, after its prompt.
+const imageNode = (m: ReturnType<typeof buildRenderModel>["model"]) => flatNodes(m.pages[0]!.nodes).find((x) => x.kind === "image");
 
 describe("the renderer and a visual a decision asked for", () => {
   it("essential and pending: not renderable, in plain words; optional and pending: a warning, never shown to the student", () => {

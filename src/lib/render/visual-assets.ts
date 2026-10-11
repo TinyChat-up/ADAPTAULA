@@ -1,7 +1,9 @@
+import type { VisualSpec } from "@/lib/visuals/spec";
+
 /**
- * What the renderer knows about the original visuals of a sheet: for each `vis_N`, either an authorised image source or the
- * reason there is none. Who located the visual (a person today, another validated method tomorrow) is not the renderer's
- * business: it only sees `ready` + a source, or a failure. Production and storage live in `src/lib/materials/visuals/`.
+ * What the renderer knows about the original visuals of a sheet: for each `vis_N`, either an authorised image source (or a
+ * verified reconstruction) or the reason there is none. Who located the visual (a person, or the validated automatic locator)
+ * only decides WHICH ready form is used (`VisualResolution`). Production and storage live in `src/lib/materials/visuals/`.
  */
 
 export const VISUAL_ASSET_FAILURES = [
@@ -31,12 +33,26 @@ export const FAILURE_COPY: Record<VisualAssetFailure, string> = {
 /** State of one visual for the teacher view. `located_processing`: located, recorte not produced yet (or being produced). */
 export type VisualStatus = "missing_locator" | "located_processing" | "ready" | "extraction_failed";
 
+/**
+ * How a visual reaches the sheet, decided explicitly and auditable (docs/VISUAL_RESOURCES.md § Elección automática):
+ *   A · the original as a PERSON located it (their crop, untouched);
+ *   B · the original as the automatic locator found it (original pixels, tight crop, printed at its physical size);
+ *   C · a verified reconstruction (VisualSpec) of an automatically located mathematical figure, drawn by our renderer;
+ *   D · unavailable (not located, or its crop failed): an essential one stops the sheet honestly.
+ */
+export type VisualResolution = "A" | "B" | "C" | "D";
+
 export interface VisualState {
   visualId: string;
   status: VisualStatus;
   failure?: VisualAssetFailure;
   /** Minimal provenance for the teacher: which page and revision, located how. Never storage paths or signed URLs. */
-  provenance?: { page: number; revision: number; method: "human" };
+  provenance?: { page: number; revision: number; method: "human" | "auto"; confidence?: number };
+  resolution?: VisualResolution;
+  /** Choice C: the verified spec (checked against its stored sha-256). */
+  spec?: VisualSpec;
+  /** Physical width of the crop in the original, in mm (recipe density), for printing it at its own size. */
+  widthMm?: number;
 }
 
 export function failureOfState(state: VisualState): VisualAssetFailure | undefined {

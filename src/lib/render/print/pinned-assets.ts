@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import type { RenderModel } from "@/lib/render/model";
+import { flatNodes, type RenderModel } from "@/lib/render/model";
 
 /**
  * A visual asset fixed for one export: the exact physical instance (asset id + sha-256), never "the newest crop of that visual".
@@ -49,8 +49,9 @@ export function verifyPinnedAsset(asset: PinnedAsset): void {
 /** Every image source of a print model must be a pin reference: no URL, path or route ever reaches the printed sheet. */
 export function modelAssetRefs(model: RenderModel): string[] {
   const refs = new Set<string>();
-  for (const node of model.pages.flatMap((p) => p.nodes)) {
-    if (node.kind !== "image" || node.state !== "available") continue;
+  for (const node of flatNodes(model.pages.flatMap((p) => p.nodes))) {
+    // A reconstruction (VisualSpec) is drawn by the sheet itself: it has no bytes to pin.
+    if (node.kind !== "image" || node.state !== "available" || node.spec) continue;
     const pin = node.src ? parseAssetRef(node.src) : null;
     if (!pin) throw new PinnedAssetError("asset_unpinned");
     refs.add(assetRef(pin));

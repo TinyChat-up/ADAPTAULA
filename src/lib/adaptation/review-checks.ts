@@ -4,6 +4,7 @@ import { OBJECTIVES_MAY_CHANGE } from "@/lib/schemas/adaptation-type";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { CLOSED_RESPONSE_KINDS, allBlocks, type Block, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { CheckResult, CheckStatus, ReviewCheck } from "@/lib/schemas/pedagogical-review";
+import { answeredOnFigure } from "./document";
 import { blocksFor, studentText, textOf } from "./document-text";
 import { CONSTRAINT_TYPES, answersOf, evaluatesOperation, evaluatesWriting, isLiteralSourceText, isOpenActivity, materialNumbers, quotedReferences } from "./facts";
 import { STAGE_RULES, infantilizingMatches } from "./stage-rules";
@@ -94,7 +95,8 @@ export function instructionsComplete(input: ReviewInput): CheckResult {
     if (missing.length > 0) note("FAIL", `${a.id} pierde ${list(missing.map(describeToken))}`, a.id, ...blocks.map((b) => b.id));
     const lostQuotes = quotedReferences(a.instruction).filter((q) => !normalizeText(text).includes(normalizeText(q)));
     if (lostQuotes.length > 0) note("FAIL", `${a.id} pierde la cita «${lostQuotes[0]}»`, a.id, ...blocks.map((b) => b.id));
-    if (a.response_format !== "none" && blocks.every((b) => b.type === "activity" && b.response.kind === "none")) note("FAIL", `${a.id} sin forma de responder`, a.id);
+    // Marking or colouring the activity's own figure is a way to respond: the figure is its answer space.
+    if (a.response_format !== "none" && !answeredOnFigure(a) && blocks.every((b) => b.type === "activity" && b.response.kind === "none")) note("FAIL", `${a.id} sin forma de responder`, a.id);
   }
   if (problems.length > 0) return result("instructions_complete", "FAIL", targets, `Consignas incompletas: ${list(problems)}`);
   return result("instructions_complete", "PASS", [], "Cada actividad conserva sus datos y una forma de responder");

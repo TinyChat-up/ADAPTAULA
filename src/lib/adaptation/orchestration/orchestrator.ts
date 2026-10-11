@@ -75,6 +75,12 @@ export interface OrchestratorDeps {
   /** Failed jobs of one stage after which a manual retry is refused (a person must cancel or escalate). */
   maxManualRetries?: number;
   log?: { warn: (event: string, data: Record<string, unknown>) => void };
+  /**
+   * «Hacer magia» and the original's figures (docs/VISUAL_RESOURCES.md § Visuales automáticos): before a sheet is delivered, its
+   * visuals are located, cropped and (simple mathematical figures) reconstructed without a person. Cached per material version,
+   * no adaptation unit, and it never fails a generation: what it could not resolve is the sheet's honest stop, as before.
+   */
+  visuals?: { prepare(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string }): Promise<void> };
 }
 
 const DEFAULTS = { leaseSeconds: 300, retryBackoffSeconds: 30, maxAttempts: 3 } as const;
@@ -1092,6 +1098,13 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 
     // 13. Delivered only if usable: approved / approved_with_warnings. Anything else keeps the version but is not a delivery.
     const usable = finalReview.verdict === "approved" || finalReview.verdict === "approved_with_warnings";
+    // «Hacer magia»: the original's figures are prepared before the delivery, so the sheet is ready with them (or says honestly
+    // which essential one it still lacks). «Revisar antes de crear» keeps the teacher in control: nothing is located for them.
+    if (usable && row.creation_mode === "automatic" && deps.visuals) {
+      await deps.visuals
+        .prepare({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint! })
+        .catch((error: unknown) => deps.log?.warn("automatic_visuals_failed", { adaptationId, reason: error instanceof Error ? error.name : "unknown" }));
+    }
     await store.finalize(adaptationId, run.lease, version.id, finalReview, usable ? "ready" : "blocked");
     if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
     if (usable) await (deps.entitlements ?? NO_ENTITLEMENTS).consume(entitlementTarget).catch(() => deps.log?.warn("entitlement_consume_failed", { adaptationId }));
