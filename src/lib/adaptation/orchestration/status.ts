@@ -30,7 +30,7 @@ export interface StatusArtifacts {
   hasVersion?: boolean;
   /** Who made the latest plan review: the server («Hacer magia») or a person who took over. */
   latestReviewKind?: "auto" | "teacher" | "eval" | null;
-  /** A stop recorded for the latest review (the cost guards refused its generation). */
+  /** A stop recorded for the latest review: the cost guards refused its generation, or no safe automatic correction was left. */
   automaticStop?: string | null;
   /** Needs (dimension keys) the automatic resolution could not cover. */
   unresolvedNeeds?: string[];
@@ -128,9 +128,14 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
   let nextAction: NextAction = "none";
   let automaticStop: AdaptationStatusDto["automaticStop"] = null;
   const cycles = generationCyclesOf(snapshot.jobs);
-  // «Hacer magia» while the server still decides (no person took over): it either works, finishes, or stops honestly. It is never
-  // left waiting for a plan approval nobody asked for.
-  const magic = row.creation_mode === "automatic" && artifacts.latestReviewKind !== "teacher";
+  // INVARIANT of «Hacer magia» (`automatic`): no state ever asks the teacher to approve a plan, correct decisions or «Revisar
+  // adaptación». It works, finishes, or stops honestly with editing OFFERED (phase `automatic_incomplete`), also after a teacher
+  // chose to edit. Only «Revisar antes de crear» (`review`) has the mandatory gate and the blocked review.
+  const automatic = row.creation_mode === "automatic";
+  // While the server still decides (no person took over) and no stop was recorded, a blocked sheet or a plan back at the gate after a
+  // generation is the automatic correction about to run (the run request resumes it): working, not stopped.
+  const magic = automatic && artifacts.latestReviewKind !== "teacher";
+  const correcting = magic && cycles > 0 && cycles < MAX_GENERATION_CYCLES && !artifacts.automaticStop;
   const stopped = (reason: AutomaticStopReason, next: NextAction) => ({
     phase: "automatic_incomplete" as const,
     progress: (status === "blocked" ? "blocked" : "awaiting_review") as ProgressStage,
@@ -154,9 +159,16 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
         progress = "planning";
         break;
       }
-      if (magic && cycles === 0) {
-        // The server's own resolution could not be executed: a need nothing covers. Editing is offered, never imposed.
-        ({ phase, progress, nextAction, automaticStop } = stopped("needs_decision", "review_plan"));
+      if (correcting) {
+        phase = "working";
+        progress = "reviewing";
+        break;
+      }
+      if (automatic) {
+        // Before any generation: the server's own resolution could not be executed (a need nothing covers). After one: no safe
+        // automatic correction. Editing is offered, never imposed.
+        const reason = cycles === 0 || (artifacts.unresolvedNeeds ?? []).length > 0 ? "needs_decision" : "quality";
+        ({ phase, progress, nextAction, automaticStop } = stopped(reason, cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
         break;
       }
       phase = "awaiting_review";
@@ -187,7 +199,12 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       nextAction = delivered ? "view_result" : "none";
       break;
     case "blocked":
-      if (magic) {
+      if (correcting) {
+        phase = "working";
+        progress = "reviewing";
+        break;
+      }
+      if (automatic) {
         ({ phase, progress, nextAction, automaticStop } = stopped("quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
         break;
       }
@@ -202,7 +219,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       break;
     default:
       // «Hacer magia» whose generation failed its checks with no safe automatic repair: what it is, not a technical error.
-      if (magic && failure?.code === "generator_validation") {
+      if (automatic && failure?.code === "generator_validation") {
         ({ phase, progress, nextAction, automaticStop } = stopped("quality", "none"));
         progress = "failed";
         break;

@@ -125,7 +125,9 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
   ]);
   const hasReview = new Set((reviewed.data ?? []).map((a) => a.adaptation_id as string));
   const latestKind = new Map((reviewed.data ?? []).map((a) => [a.adaptation_id as string, (a as { kind: string | null }).kind]));
-  const stopped = (id: string) => latestKind.get(id) === "auto";
+  // «Hacer magia» never reads «Necesita una revisión» / «Esperando tu revisión»: blocked or back at the gate is its own state, also
+  // after a teacher chose to edit (the same invariant as `buildStatusDto`).
+  const stopped = (id: string, status: string) => latestKind.get(id) === "auto" || (hasReview.has(id) && (status === "blocked" || status === "awaiting_plan_review"));
   // A delivered sheet still waiting for an essential visual reads «casi lista» here too, like its own page and its PDF.
   const pendingIds = await pendingDelivered(supabase, rows.filter((r) => r.status === "ready").map((r) => r.id as string));
   const running = new Set((jobs.data ?? []).map((j) => j.adaptation_id as string));
@@ -137,7 +139,7 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
     profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
-    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string), pendingIds.has(r.id as string), stopped(r.id as string)),
+    state: listState(r.status as string, running.has(r.id as string), automaticAwaiting.includes(r.id as string) && !hasReview.has(r.id as string), pendingIds.has(r.id as string), stopped(r.id as string, r.status as string)),
   }));
 }
 

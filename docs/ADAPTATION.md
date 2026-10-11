@@ -344,17 +344,17 @@ Un solo pipeline, dos maneras de recorrerlo, elegidas por el docente en el mater
 **Revisión pedagógica en «Hacer magia».**
 - **PASS:** se entrega.
 - **WARN:** se entrega con sus observaciones («no impiden usar la ficha»), sin pedir aprobación de cada una.
-- **FAIL:** nunca se entrega una ficha inválida. `correctAutomatically` intenta **una** corrección segura: deja fuera las decisiones cuyos propios bloques señala el hallazgo (esa parte vuelve al original) y genera de nuevo, dentro del mismo límite de 3 generaciones, que también aplica la base de datos. Cada intento interno es una generación y una revisión: no crea otra adaptación ni consume otra unidad. Solo se intenta si:
-  - **todos** los checks en FAIL apuntan a bloques o destinos de decisiones aplicadas (un hallazgo sobre toda la ficha, como el tono, no tiene corrección segura);
-  - quitarlas no deja sin atender una necesidad alta;
+- **FAIL:** nunca se entrega una ficha inválida. Primero, si una reescritura perdió contenido protegido, se repone el original sin llamar al modelo. Después, `correctAutomatically` repara las decisiones implicadas con la reparación acotada (`planRepair`, ver el hotfix «Hacer magia seguía obligando a revisar») y genera de nuevo, dentro del mismo límite de 3 generaciones, que también aplica la base de datos. Cada intento interno es una generación y una revisión: no crea otra adaptación ni consume otra unidad. Solo se intenta si:
+  - **todos** los checks en FAIL apuntan a bloques, unidades del original, elementos protegidos u objetivos que llevan a decisiones aplicadas (un hallazgo sobre toda la ficha, como el tono, no tiene corrección segura);
+  - ninguna necesidad (alta, media o baja) queda sin atender;
   - la revisión corregida es ejecutable.
 
 **Paradas honestas** (fase `automatic_incomplete` del `AdaptationStatusDto`, con `automaticStop.reason`):
 - `needs_decision`: una necesidad alta sin ejecutor ni alternativa. La pantalla nombra la necesidad.
-- `quality`: FAIL sin corrección segura, o generaciones agotadas.
+- `quality`: FAIL sin corrección segura, o generaciones agotadas. Desde el hotfix se **registra** (un `execution_report` con `automatic_stop: "quality"`), así que una visita o un refresco no la reintenta.
 - `generation_refused`: los límites de coste rechazaron la generación. Queda registrado y no se reintenta en bucle.
 
-La pantalla dice «No hemos podido completar automáticamente esta ficha», nunca «Ficha lista» ni «Crear ficha» para aceptar. Ofrece «Revisar y editar» (`?editar=1`; reabre si estaba bloqueada) como **alternativa voluntaria**: el plan solo se muestra si el docente lo elige. Cuando una persona envía su propia revisión, la adaptación sigue las reglas del modo manual. El historial muestra «No se pudo completar automáticamente». La unidad sigue reservada y se libera si se cancela; no se consume sin entrega. Sin migraciones: el estado se deduce de la última revisión del plan (servidor o persona), del estado y de las generaciones usadas; el rechazo por coste se anota en un `execution_report` sin `execution`.
+La pantalla dice «No hemos podido completar automáticamente esta ficha», nunca «Ficha lista» ni «Crear ficha» para aceptar. Ofrece «Revisar y editar» (`?editar=1`; reabre si estaba bloqueada) como **alternativa voluntaria**: el plan solo se muestra si el docente lo elige. Cuando una persona envía su propia revisión, el servidor ya no corrige por ella, pero la adaptación **sigue siendo de «Hacer magia»**: si se bloquea, la pantalla es la misma parada honesta, nunca «Revisar adaptación». El historial muestra «No se pudo completar automáticamente». La unidad sigue reservada y se libera si se cancela; no se consume sin entrega. Sin migraciones: el estado se deduce de la última revisión del plan (servidor o persona), del estado y de las generaciones usadas; el rechazo por coste se anota en un `execution_report` sin `execution`.
 
 **Progreso real.** Las fases son «Preparando la adaptación», «Organizando las actividades», «Creando la ficha», «Comprobando el resultado» y «Ficha lista». «Organizando las actividades» corresponde al paso real `validating` del job de planificación. No hay porcentajes ni nombres internos. Al terminar se va directamente a la ficha, sin clics de aceptación. Volver a abrir la página reanuda la misma adaptación (`resumeAutomatically`): continuar la puerta, corregir un bloqueo o encolar una generación guardada sin job, nunca dos veces.
 
@@ -390,6 +390,42 @@ La pantalla dice «No hemos podido completar automáticamente esta ficha», nunc
   Todo ocurre en la misma adaptación, con la misma unidad y dentro de las 3 generaciones. Un fallo no atribuible (un original alterado, una decisión inexistente) no se repara.
 - **Huellas de los artefactos de generación.** Ahora incluyen su entrada. Si una regeneración producía exactamente el mismo contenido, la restricción unique `(adaptación, tipo, huella)` dejaba su artefacto inalcanzable y la siguiente reparación no lo encontraba. La misma entrada sigue dando la misma huella, así que no se duplica nada al reanudar.
 - **Trazas.** Los avisos del orquestador llegan al log del servidor; antes, en producción, no tenían destino. `generation_audit_failed` registra los nombres de los checks y las decisiones implicadas, nunca contenido.
+
+#### Hotfix: «Hacer magia» seguía obligando al docente a revisar (2026-10-11)
+
+**Caso real.** «Fracciones en situaciones cotidianas», 4.º de Primaria, adaptación `757c2370-936e-4d03-8b9a-54defb91afae`. La pantalla mostraba «La ficha necesita una revisión antes de estar lista» y dos observaciones: «Comprueba que se conserva lo que debía mantenerse del material original» (`protected_elements_preserved`) y «Comprueba que las ayudas no revelan las respuestas» (`answers_not_leaked`). Pedía «Revisar adaptación». Ese texto y ese botón son el `BlockedPanel`, que solo aparece con la fase `blocked`. Hasta este hotfix, esa fase solo llegaba a «Hacer magia» cuando la última revisión del plan era de un **docente**. No hay acceso a la base de datos de producción, así que el caso se diagnostica con el SQL de solo lectura `docs/qa/hotfix-magic-never-review/diagnose.sql`, validado contra las migraciones en `tests/db/magic-never-review.test.ts`. No se presuponen los motivos del FAIL.
+
+**Causas en el código.**
+1. **Puerta obligatoria por la espalda.** «Hacer magia» volvía a `awaiting_plan_review` después de una generación en varios casos: una corrección que reabría y no llegaba a enviar su revisión (el proceso moría entre los dos pasos, o la revisión corregida no era ejecutable), una reparación de la auditoría que no se podía encolar, o una revisión que se quedaba obsoleta al generar. Con generaciones usadas, el estado daba la fase `awaiting_review` y la pantalla mostraba el **formulario del plan**, con «Corrige lo que necesites y vuelve a crear la ficha». Si el docente lo enviaba, su revisión pasaba a ser `teacher` y desde ahí el modo manual mandaba: un bloqueo posterior era «Revisar adaptación». Lo mismo ocurría si el docente había elegido «Revisar y editar» en una parada anterior.
+2. **FAIL no atribuibles.** `correctAutomatically` solo traducía a decisiones los destinos `blk_`, `dec_` y el destino exacto de una decisión. `protected_elements_preserved` señala elementos protegidos (`prt_…`) y `objectives_preserved`, objetivos (`obj_…`), así que esos FAIL no tenían corrección y la ficha se paraba. En `answers_not_leaked`, el destino de la actividad (`act_…`) arrastraba a todas sus decisiones, no solo al apoyo que revela.
+3. **Una parada que nadie reanudaba.** Si el proceso moría tras el bloqueo y antes de la corrección, la pantalla ya enseñaba la parada (fase no `working`) y la ruta `/run` no volvía a intentarlo.
+
+**Corrección.**
+- **Invariante** (`buildStatusDto`): en una adaptación `automatic` no hay fase `awaiting_review` ni `blocked`, quien sea que hiciera la última revisión. Solo hay tres finales:
+  - **trabajando:** la corrección está a punto de correr, porque la última revisión es del servidor, quedan generaciones y no hay parada registrada; la ruta `/run` la reanuda;
+  - **entregada:** `ready`, con `/vista` y el PDF;
+  - **parada honesta:** `automatic_incomplete`, con el motivo en lenguaje claro, las observaciones y «Revisar y editar» solo como opción. Mientras no se pueda reabrir, sin opción.
+  
+  El historial dice «No se pudo completar automáticamente», nunca «Necesita una revisión» ni «Esperando tu revisión». «Revisar antes de crear» conserva la puerta y «Revisar adaptación».
+- **Reponer el original** (`src/lib/adaptation/restoration.ts`, solo en «Hacer magia» con revisión del servidor). Si una reescritura generada hace fallar `protected_elements_preserved`, `constraints_preserved`, `required_data_preserved` o `instructions_complete`, se descarta solo esa reescritura: vuelve la consigna original, palabra por palabra, y se quedan los apoyos. La ficha se revisa otra vez desde cero con los mismos checks, y el resultado se acepta solo si quita fallos sin añadir ninguno, ni de la revisión ni de la auditoría. Nunca se vacía una decisión: si toda su adaptación era la reescritura, se regenera con la restricción de conservar los datos. No hay llamada al modelo ni generación nueva. Queda en el artefacto `deterministic_review` (`restored_originals`). El normalizador ya conservaba el original cuando una reescritura perdía datos críticos de la consigna (`rewrite_lost_requirements`); esto cubre lo que solo la revisión detecta, por ejemplo vocabulario protegido.
+- **Atribución precisa** (`correctAutomatically`):
+  - `prt_…` lleva a las decisiones aplicadas sobre sus actividades y recursos, y `obj_…` a las de sus actividades;
+  - en los checks de conservación se corrige la **decisión que reescribe** la unidad, si la hay;
+  - en `answers_not_leaked`, si el hallazgo nombra el bloque, **solo** la decisión de ese apoyo. Se regenera con «Ningún apoyo puede contener, calcular ni insinuar la respuesta de la actividad: un ejemplo usa otros datos; si no, guía el proceso sin dar el resultado.» El razonamiento sigue siendo del alumno.
+  
+  Lo demás no cambia: primero se repara el contenido; una decisión se deja fuera solo si vuelve a fallar y ninguna necesidad queda sin cubrir; si no se puede, la parada honesta.
+- **Reanudar sin duplicar.** Con la ficha en `blocked`, o de vuelta en la puerta tras una generación, la visita siguiente reanuda la corrección. Si la revisión corregida ya estaba guardada, encola esa misma. Si no queda nada seguro que hacer, **registra** la parada `quality`, y ninguna visita la reintenta. Todo es idempotente: misma revisión, misma huella, un job.
+- **Los checks siguen activos.** Nada se marca PASS ni se desactiva: la versión bloqueada conserva su FAIL como historial y la entregada pasa los mismos checks.
+
+**Qué ocurre ahora.**
+- **FAIL reparable:** se repara sola, en la misma adaptación y con la misma unidad, dentro de 3 generaciones. Se entrega y lleva directamente a `/vista`.
+- **FAIL no reparable** (un hallazgo sobre toda la ficha, o las 3 generaciones agotadas): «No hemos podido completar automáticamente esta ficha», con el motivo. No se entrega y la unidad sigue reservada; solo se libera si se cancela. «Revisar y editar» queda como opción.
+
+**La adaptación existente.** No se reanuda desde aquí ni se toca su cuota. Su recuperación depende de lo que diga el SQL:
+- **`creation_mode = 'review'`:** no es «Hacer magia»; «Revisar adaptación» es correcto en ese modo.
+- **Última revisión del plan `teacher`:** con este hotfix ve la parada honesta y puede elegir «Revisar y editar». El servidor no corrige sobre la revisión de una persona.
+- **Última revisión `auto`, en `blocked`, menos de 3 generaciones y sin parada registrada:** al desplegar, **la siguiente visita del docente** intentará la corrección automática. Si encuentra una segura, es una generación más con la misma unidad; si no, registra la parada. Si no se quiere ese intento, hay que decidirlo antes de desplegar.
+- **3 generaciones usadas:** no se puede recuperar sin una adaptación nueva. La base de datos lo impide (`enqueue_adaptation_stage`).
 
 #### Recuperar una adaptación fallida tras desplegar (operación administrativa, nunca automática)
 

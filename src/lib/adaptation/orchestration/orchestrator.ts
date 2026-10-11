@@ -13,11 +13,12 @@ import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
 import { fingerprint } from "../fingerprint";
 import { auditGeneration } from "../generation-checks";
-import { decisionSupportBudget } from "../generated-v2";
+import { decisionSupportBudget, designatedRewriter } from "../generated-v2";
 import { OUT_OF_BUDGET_CHECK } from "../generation-checks";
 import { buildGeneratorInputV2, normalizeGeneration } from "../generator";
 import { classifyPlan } from "../invariants";
 import { modelFacingAnalysis } from "../model-input";
+import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { normalizePlanFor } from "../plan-v2";
@@ -25,6 +26,7 @@ import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
 import { buildReviewScoped } from "../reviewer";
+import { preservationRefs, withOriginals } from "../restoration";
 import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
 import { AdaptationError, FAILURE_KIND, classifyAIFailure, type AdaptationErrorCode, type Stage } from "./errors";
@@ -475,9 +477,10 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
 
 /**
  * Why «Hacer magia» stopped without a sheet, recorded next to the review it concerns (an `execution_report` that carries no
- * execution): the cost guards refused the generation. The other stops are read from the state itself (see `status.ts`).
+ * execution): the cost guards refused the generation (`generation_refused`), or a sheet that failed its quality review has no safe
+ * automatic correction left (`quality`). The stop before any generation (a need nothing covers) is read from the state itself.
  */
-export type AutomaticStopCode = "generation_refused";
+export type AutomaticStopCode = "generation_refused" | "quality";
 
 async function recordAutomaticStop(store: AdaptationStore, adaptationId: string, reviewFp: string, code: AutomaticStopCode, detail: string) {
   await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, automatic_stop: code, detail }), { review_fingerprint: reviewFp, automatic_stop: code, detail });
@@ -542,7 +545,8 @@ export async function resumeAutomatically(deps: OrchestratorDeps, adaptationId: 
   if (!snapshot || snapshot.adaptation.creation_mode !== "automatic") return null;
   if (snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return null;
   const status = snapshot.adaptation.status as AdaptationStatus;
-  if (status === "awaiting_plan_review") return continueAutomatically(deps, adaptationId);
+  // At the gate: the first resolution if the plan has none yet; after a generation, an interrupted correction (or the honest stop).
+  if (status === "awaiting_plan_review") return (await continueAutomatically(deps, adaptationId)) ?? correctAutomatically(deps, adaptationId);
   if (status === "blocked") return correctAutomatically(deps, adaptationId);
   if (status !== "generation_queued") return null;
   const last = (await deps.store.listArtifacts(adaptationId, "plan_review")).at(-1);
@@ -568,7 +572,7 @@ const AUDIT_RESTRICTIONS: Readonly<Record<string, string>> = {
   "todas las decisiones aprobadas se ejecutaron o se rechazaron de forma estructurada": EXECUTE,
 };
 const REVIEW_RESTRICTIONS: Partial<Record<PedagogicalReview["checks"][number]["check"], string>> = {
-  answers_not_leaked: "Ningún apoyo puede contener, calcular ni insinuar la respuesta de la actividad del alumno; los ejemplos usan otros datos.",
+  answers_not_leaked: "Ningún apoyo puede contener, calcular ni insinuar la respuesta de la actividad: un ejemplo usa otros datos; si no, guía el proceso sin dar el resultado.",
   protected_elements_preserved: "Conserva intactos los datos, las condiciones y los elementos esenciales de la consigna.",
   required_data_preserved: "Conserva intactos los datos, las condiciones y los elementos esenciales de la consigna.",
   constraints_preserved: "Conserva intactos los datos, las condiciones y los elementos esenciales de la consigna.",
@@ -630,19 +634,61 @@ const addAsk = (asks: Map<string, Array<string | null>>, id: string, restriction
 
 /**
  * «Hacer magia» after a quality review that blocks, inside the same limit of generations (`MAX_GENERATION_CYCLES`, enforced by the
- * database too). The decisions whose own blocks the review found wrong are REPAIRED first: regenerated with a restriction that
+ * database too). The decisions whose own output the review found wrong are REPAIRED first: regenerated with a restriction that
  * names what to fix (`planRepair`). Only one that fails again after that is left out, and only if every need it attends stays
- * covered. Attempted only when:
- *   · the adaptation is automatic, blocked, and its last review is still the server's (a teacher who took over decides alone);
- *   · EVERY failing check points at blocks or targets of applied decisions (a finding about the whole sheet has no safe repair);
+ * covered. What each failing check points at is read precisely:
+ *   · a block → the decisions in its trace; a decision → itself; an activity or text → the decisions applied to it;
+ *   · a protected element → the decisions applied to its activities and resources (the one that rewrites them, when there is one);
+ *   · a revealed answer → ONLY the support that reveals it when the check names it (the rest of the activity is left alone).
+ * Attempted only when:
+ *   · the adaptation is automatic, blocked (or a correction of it was interrupted), and its last review is still the server's;
+ *   · EVERY failing check points at applied decisions (a finding about the whole sheet has no safe repair);
  *   · the repaired review is executable.
- * Otherwise nothing changes: the sheet stays undelivered and the teacher is told it could not be finished automatically.
+ * Otherwise nothing changes but one thing: the honest stop is RECORDED (`quality`), so the screen says so and no visit retries it.
+ * The sheet stays undelivered and its reserved unit untouched.
  */
 export async function correctAutomatically(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
+  let corrected: GenerationResult | null;
+  try {
+    corrected = await attemptCorrection(deps, adaptationId);
+  } catch (error) {
+    // Recorded before the error goes up: the screen must not stay «working» and send the run request again and again.
+    await recordQualityStop(deps, adaptationId);
+    throw error;
+  }
+  if (!corrected) await recordQualityStop(deps, adaptationId);
+  return corrected;
+}
+
+/**
+ * The honest stop of «Hacer magia» (nothing safe left to try), recorded once for the latest review. Only while it is really stopped:
+ * automatic, server-driven, no job running, blocked or back at the plan gate after a generation (the gate before any generation is
+ * the `needs_decision` stop, read from the state itself).
+ */
+async function recordQualityStop(deps: OrchestratorDeps, adaptationId: string): Promise<void> {
+  const snapshot = await deps.store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic") return;
+  if (snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return;
+  const status = snapshot.adaptation.status as AdaptationStatus;
+  if (status !== "blocked" && !(status === "awaiting_plan_review" && generationCyclesOf(snapshot.jobs) > 0)) return;
+  const last = (await deps.store.listArtifacts(adaptationId, "plan_review")).at(-1);
+  if (!last || (last.payload as { reviewer?: { kind?: string } }).reviewer?.kind !== "auto") return;
+  deps.log?.warn("automatic_stop_recorded", { adaptationId, status, cycles: generationCyclesOf(snapshot.jobs) });
+  await recordAutomaticStop(deps.store, adaptationId, last.fingerprint, "quality", status);
+}
+
+/** Checks whose targets name the units to keep intact: the decision that rewrites a unit is the one to repair. */
+const PRESERVING: ReadonlySet<string> = new Set(["protected_elements_preserved", "constraints_preserved", "required_data_preserved", "instructions_complete", "objectives_preserved"]);
+
+async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): Promise<GenerationResult | null> {
   const store = deps.store;
   const snapshot = await store.getPipeline(adaptationId);
-  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic" || snapshot.adaptation.status !== "blocked") return null;
-  if (generationCyclesOf(snapshot.jobs) >= MAX_GENERATION_CYCLES) return null;
+  if (!snapshot || snapshot.adaptation.creation_mode !== "automatic") return null;
+  const status = snapshot.adaptation.status as AdaptationStatus;
+  if (status !== "blocked" && status !== "awaiting_plan_review") return null;
+  if (snapshot.jobs.some((j) => j.status === "queued" || j.status === "processing")) return null;
+  const cycles = generationCyclesOf(snapshot.jobs);
+  if (cycles === 0 || cycles >= MAX_GENERATION_CYCLES) return null;
   let loaded: Loaded;
   try {
     loaded = load(snapshot);
@@ -657,11 +703,18 @@ export async function correctAutomatically(deps: OrchestratorDeps, adaptationId:
   if (previous.reviewer.kind !== "auto" || previous.plan_fingerprint !== raw.fingerprint) return null;
   const reviewed = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context);
 
-  // The blocked version, rebuilt exactly (same generation, same deterministic ids) to read what each failing block traces to.
+  // The blocked version, rebuilt exactly (same generation, same deterministic ids, same restoration) to read what each failing
+  // block traces to.
   const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: generationFingerprint(raw.fingerprint, last.fingerprint, loaded.versions) });
-  if (!generationArtifact) return null;
-  const generation = (generationArtifact.payload as { generation: ReturnType<typeof normalizeGeneration> }).generation;
-  const document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: generation.segments, newBlockId: sequentialIds() });
+  if (!generationArtifact) return status === "awaiting_plan_review" ? requeueSavedReview(deps, adaptationId, last.fingerprint, previous) : null;
+  const generation = (generationArtifact.payload as { generation: NormalizedGeneration }).generation;
+  let document;
+  try {
+    document = assembleAndCheck(loaded, reviewed, generation, true).document;
+  } catch (error) {
+    if (error instanceof AdaptationError) return null;
+    throw error;
+  }
   const documentFp = fingerprint(document);
   const reviewsOf = async (kind: "pedagogical_review" | "deterministic_review") =>
     (await store.listArtifacts(adaptationId, kind)).map((a) => (a.payload as { review?: PedagogicalReview }).review).filter((r): r is PedagogicalReview => r?.document_fingerprint === documentFp);
@@ -671,29 +724,47 @@ export async function correctAutomatically(deps: OrchestratorDeps, adaptationId:
   if (failing.length === 0) return null;
 
   const effective = reviewed.effective.decisions;
-  const applied = new Set(effective.filter((d) => d.action !== "keep").map((d) => d.id));
+  const applied = effective.filter((d) => d.action !== "keep");
+  const appliedIds = new Set(applied.map((d) => d.id));
   const blocks = allBlocks(document);
-  const implicated = (targets: readonly string[]) => {
+  const onUnit = (ref: string, preserving: boolean) => {
+    const on = applied.filter((d) => d.target === ref);
+    const rewriter = preserving ? designatedRewriter(effective, loaded.analysis, loaded.context, ref) : null;
+    return rewriter && appliedIds.has(rewriter) ? [rewriter] : on.map((d) => d.id);
+  };
+  const implicated = (check: string, targets: readonly string[]) => {
+    const preserving = PRESERVING.has(check);
+    const revealing = check === "answers_not_leaked" ? targets.filter((t) => t.startsWith("blk_")) : [];
     const ids = new Set<string>();
-    for (const t of targets) {
-      if (t.startsWith("blk_")) for (const id of blocks.find((b) => b.id === t)?.trace.decision_ids ?? []) if (applied.has(id)) ids.add(id);
-      if (t.startsWith("dec_") && applied.has(t)) ids.add(t);
-      for (const d of effective) if (d.target === t && applied.has(d.id)) ids.add(d.id);
+    for (const t of revealing.length > 0 ? revealing : targets) {
+      if (t.startsWith("blk_")) for (const id of blocks.find((b) => b.id === t)?.trace.decision_ids ?? []) if (appliedIds.has(id)) ids.add(id);
+      if (t.startsWith("dec_") && appliedIds.has(t)) ids.add(t);
+      if (/^(act|ctt|vis|sec)_/.test(t)) for (const id of onUnit(t, preserving)) ids.add(id);
+      if (t.startsWith("prt_")) {
+        const element = loaded.analysis.protected_elements.find((p) => p.id === t);
+        for (const ref of [...(element?.activity_ids ?? []), ...(element?.resource_ids ?? [])]) for (const id of onUnit(ref, preserving)) ids.add(id);
+      }
+      if (t.startsWith("obj_")) for (const a of loaded.analysis.activities.filter((x) => x.objective_ids.includes(t))) for (const id of onUnit(a.id, preserving)) ids.add(id);
     }
     return ids;
   };
-  const perCheck = failing.map((c) => ({ check: c.check, ids: implicated(c.targets) }));
-  if (perCheck.some((c) => c.ids.size === 0)) return null;
+  const perCheck = failing.map((c) => ({ check: c.check, ids: implicated(c.check, c.targets) }));
+  if (perCheck.some((c) => c.ids.size === 0)) {
+    deps.log?.warn("automatic_correction_unattributed", { adaptationId, checks: perCheck.filter((c) => c.ids.size === 0).map((c) => c.check).join(",") });
+    return null;
+  }
   const asks = new Map<string, Array<string | null>>();
   for (const { check, ids } of perCheck) for (const id of ids) addAsk(asks, id, REVIEW_RESTRICTIONS[check] ?? null);
   const repair = planRepair(raw.plan, previous, loaded, asks, CORRECTION_REASON);
   if (!repair) return null;
 
-  try {
-    await reopenPlanReview(deps, adaptationId);
-  } catch (error) {
-    if (error instanceof GenerationLimitError) return null;
-    throw error;
+  if (status === "blocked") {
+    try {
+      await reopenPlanReview(deps, adaptationId);
+    } catch (error) {
+      if (error instanceof GenerationLimitError) return null;
+      throw error;
+    }
   }
   const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { correction_of: last.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.check) } });
   if (!submitted.ok || !submitted.executable) return null;
@@ -701,9 +772,63 @@ export async function correctAutomatically(deps: OrchestratorDeps, adaptationId:
   return enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
 }
 
+/**
+ * A server review saved after a generation but never queued (the process died between saving it and queuing it): the SAME review is
+ * queued, nothing new is decided. Submitting it again is idempotent (same review, same fingerprint, same report).
+ */
+async function requeueSavedReview(deps: OrchestratorDeps, adaptationId: string, reviewFp: string, review: PlanReview): Promise<GenerationResult | null> {
+  const reports = (await deps.store.listArtifacts(adaptationId, "execution_report")).map((a) => a.payload as { review_fingerprint?: string; automatic_stop?: string; automatic?: { unresolved?: string[] } });
+  const own = reports.filter((r) => r.review_fingerprint === reviewFp);
+  if (own.length === 0 || own.some((r) => r.automatic_stop !== undefined || (r.automatic?.unresolved?.length ?? 0) > 0)) return null;
+  const submitted = await submitPlanReview(deps, adaptationId, review);
+  if (!submitted.ok || !submitted.executable || submitted.reviewFingerprint !== reviewFp) return null;
+  return enqueueAutomatically(deps, adaptationId, reviewFp);
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Generation stage (+ deterministic and AI review)
 // ---------------------------------------------------------------------------------------------------------------------
+
+/** «Hacer magia» still decided by the server: automatic mode and a plan review the server made (not a teacher who took over). */
+const serverDriven = (row: PipelineSnapshot["adaptation"], review: Record<string, unknown>) => row.creation_mode === "automatic" && (review as { reviewer?: { kind?: string } }).reviewer?.kind === "auto";
+
+/**
+ * The document of a generation and its deterministic checks. With `restore` («Hacer magia»), a rewrite that lost original content
+ * (a preservation FAIL) is replaced by the original, its supports kept (`withOriginals`), and the restored sheet is checked again
+ * from scratch: it is kept only if it removes failures without adding any (deterministic or of the audit). Deterministic, so the
+ * automatic correction rebuilds exactly the same document to read its review.
+ */
+function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, generation: NormalizedGeneration, restore: boolean) {
+  const check = (g: NormalizedGeneration) => {
+    const document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: g.segments, newBlockId: sequentialIds() });
+    const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
+    const deterministic = assembleReview(input, deterministicChecks(input));
+    const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document, review: deterministic });
+    return { generation: g, document, input, deterministic, audit, restored: [] as string[] };
+  };
+  let first;
+  try {
+    first = check(generation);
+  } catch (error) {
+    throw new AdaptationError("generator_validation", "El documento no se pudo ensamblar", { cause: error });
+  }
+  if (!restore) return first;
+  const refs = preservationRefs(first.deterministic, loaded.analysis, first.document);
+  const restoration = refs.size > 0 ? withOriginals(generation, refs) : null;
+  if (!restoration) return first;
+  let second;
+  try {
+    second = check(restoration.generation);
+  } catch {
+    return first;
+  }
+  const fails = (r: PedagogicalReview) => new Set(r.checks.filter((c) => c.status === "FAIL").map((c) => c.check));
+  const before = fails(first.deterministic);
+  const after = fails(second.deterministic);
+  const auditBefore = new Set(first.audit.checks.filter((c) => !c.ok).map((c) => c.name));
+  const better = after.size < before.size && [...after].every((c) => before.has(c)) && second.audit.checks.every((c) => c.ok || auditBefore.has(c.name));
+  return better ? { ...second, restored: restoration.restored } : first;
+}
 
 export interface GenerationResult extends StageOutcome {
   delivered?: boolean;
@@ -784,7 +909,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 
     // 3-5. Generate (or reuse), normalise. Only `ai_generation` decisions can be in the request; with none, there is no call.
     const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: inputFp });
-    let generation;
+    let generation: NormalizedGeneration;
     if (generationArtifact) {
       generation = (generationArtifact.payload as { generation: ReturnType<typeof normalizeGeneration> }).generation;
     } else {
@@ -819,20 +944,15 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       }
     }
 
-    // 6. Assemble the document deterministically.
-    let document;
-    try {
-      document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: generation.segments, newBlockId: sequentialIds() });
-    } catch (error) {
-      throw new AdaptationError("generator_validation", "El documento no se pudo ensamblar", { cause: error });
-    }
-    const documentFp = fingerprint(document);
-
-    // 7. Deterministic review. A document that fails the generation audit without a deterministic FAIL is an invalid generation.
+    // 6-7. Assemble the document deterministically and review it (in «Hacer magia», a rewrite that lost original content is
+    // replaced by the original before anything else). A document that fails the generation audit without a deterministic FAIL is an
+    // invalid generation.
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
-    const deterministic = assembleReview(input, deterministicChecks(input));
-    const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation, document, review: deterministic });
+    const assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload));
+    const { document, input, deterministic, audit, restored } = assembled;
+    generation = assembled.generation;
+    const documentFp = fingerprint(document);
+    if (restored.length > 0) deps.log?.warn("automatic_original_restored", { adaptationId, refs: restored.join(",") });
     const hardFail = deterministic.checks.some((c) => c.status === "FAIL");
     if (!audit.ok && !hardFail) {
       const failing = audit.checks.filter((c) => !c.ok);
@@ -843,7 +963,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       throw new AdaptationError("generator_validation", `La generación no supera la auditoría: ${failing.map((c) => c.name).join("; ").slice(0, 200)}`);
     }
     current = await advance(store, adaptationId, current, "reviewing_deterministic");
-    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp });
+    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}) });
 
     // 8. The version exists from here on (history), whatever the review says.
     const version = await store.persistVersion(adaptationId, run.lease, document, { plan: raw.fingerprint, review: reviewFp, generation: inputFp });
@@ -942,7 +1062,11 @@ async function repairGenerationAutomatically(
   if (!(await deps.store.completeStage(run.job.id, run.job.attempts))) throw new LeaseLostError();
   await deps.store.transition(adaptationId, "generating", "awaiting_plan_review");
   const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { repair_of: reviewArtifact.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.name) } });
-  if (!submitted.ok || !submitted.executable) return null;
+  if (!submitted.ok || !submitted.executable) {
+    // Already back at the gate: the honest stop, recorded (never a plan waiting for a teacher's approval).
+    await recordQualityStop(deps, adaptationId);
+    return { outcome: "completed", status: "awaiting_plan_review", jobId: run.job.id, delivered: false, code: "generator_validation", detail: "repair_not_queued" };
+  }
   deps.log?.warn("automatic_generation_repair_queued", { adaptationId, restricted: repair.restricted.join(","), dropped: repair.dropped.join(",") });
   const queued = await enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
   const status = ((await deps.store.getPipeline(adaptationId))?.adaptation.status ?? "generation_queued") as AdaptationStatus;

@@ -100,10 +100,15 @@ describe("B/C/H · the status the screen reads", () => {
     expect(screenFor(dto, { editing: true })).toBe("review");
   });
 
-  it("once a person takes over (their review, or reopening after a block) the manual rules apply, in both modes", () => {
-    expect(buildStatusDto(snapshot(), { hasPlanReview: true, latestReviewKind: "teacher" })).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan", automaticStop: null });
-    const reopened = buildStatusDto(snapshot({}, [{ id: "11111111-1111-4111-8111-111111111112", stage: "generation", status: "completed", attempts: 1, max_attempts: 3, step: null, progress: 100, locked_until: null, input_fingerprint: "a".repeat(64), error: null, ambiguous: false }]), { hasPlanReview: true, latestReviewKind: "auto" });
-    expect(reopened).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan" });
+  it("magic never asks for the plan gate: after a teacher chose to edit, or back at the gate after a generation, it is working or an honest stop", () => {
+    // A teacher who chose «Revisar y editar» and left: the stop, with editing still offered, not «Esperando tu revisión».
+    expect(buildStatusDto(snapshot(), { hasPlanReview: true, latestReviewKind: "teacher" })).toMatchObject({ phase: "automatic_incomplete", nextAction: "review_plan" });
+    const generated = [{ id: "11111111-1111-4111-8111-111111111112", stage: "generation" as const, status: "completed" as const, attempts: 1, max_attempts: 3, step: null, progress: 100, locked_until: null, input_fingerprint: "a".repeat(64), error: null, ambiguous: false }];
+    // Back at the gate after a generation with the server still deciding: the correction is resumed by the run request.
+    expect(buildStatusDto(snapshot({}, generated), { hasPlanReview: true, latestReviewKind: "auto" })).toMatchObject({ phase: "working", nextAction: "none" });
+    // Once the server recorded that nothing safe is left: the honest stop.
+    expect(buildStatusDto(snapshot({}, generated), { hasPlanReview: true, latestReviewKind: "auto", automaticStop: "quality" })).toMatchObject({ phase: "automatic_incomplete", automaticStop: { reason: "quality" }, nextAction: "review_plan" });
+    // «Revisar antes de crear» keeps its mandatory gate.
     expect(buildStatusDto(snapshot({ creation_mode: "review" }), { hasPlanReview: false })).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan", creationMode: "review" });
   });
 

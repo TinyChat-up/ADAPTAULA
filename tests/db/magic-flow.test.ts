@@ -186,13 +186,14 @@ describe("«Hacer magia» when the reviewer blocks with no safe correction: neve
     expect([t.spy.planner, t.spy.generator, t.spy.reviewer]).toEqual([1, 1, 1]);
   });
 
-  it("«Revisar adaptación» reopens the human review: the automatic path never submits for the teacher again", async () => {
+  it("«Revisar y editar» (the teacher's choice) reopens the plan: still the honest stop, never a mandatory review, and the automatic path never submits for the teacher", async () => {
     const t = await teacher({ reviewer: async (_i, _c, input) => ({ draft: blockingReview(input), runs: [] }) });
     const created = await t.start("automatic");
     const id = created.ok ? created.data.adaptationId : "";
     await t.runAll(id);
     expect(await reopenReview(t.deps, t.actor, id)).toMatchObject({ ok: true, data: { status: "awaiting_plan_review" } });
-    expect(await t.status(id)).toMatchObject({ phase: "awaiting_review", nextAction: "review_plan", creationMode: "automatic", generationsUsed: 1 });
+    // Editing is offered (`review_plan` → «Revisar y editar», `?editar=1`), the screen is not the plan gate.
+    expect(await t.status(id)).toMatchObject({ phase: "automatic_incomplete", automaticStop: { reason: "quality" }, nextAction: "review_plan", creationMode: "automatic", generationsUsed: 1 });
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect(await planReviews(id)).toHaveLength(1);
     expect(t.spy.generator).toBe(1);
