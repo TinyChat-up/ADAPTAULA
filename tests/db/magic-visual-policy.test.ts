@@ -15,7 +15,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { allBlocks } from "@/lib/schemas/material-document";
 import { fractionsCaseAnalysis, fractionsPdf, type FractionsPdfOptions } from "../support/fractions-case";
 import { createTestDb, createUser } from "./harness";
-import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
+import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions, type Scripted } from "./orchestration-harness";
 import { resourceHarness } from "./resource-harness";
 import { attachSource, autoHarness, visualHarness } from "./visual-harness";
 
@@ -49,7 +49,7 @@ function dataSourceAnalysis(): MaterialAnalysis {
   return analysis;
 }
 
-async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null } = {}) {
+async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null; reviewer?: Scripted["reviewer"] } = {}) {
   const user = await createUser(db, `magic-visual-${++n}-${Math.random().toString(36).slice(2, 6)}@example.com`);
   const analysis = options.analysis ?? fractionsCaseAnalysis();
   const materialId = await seedMaterial(db, user, analysis);
@@ -79,7 +79,7 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
     },
   };
   const spy = newSpy();
-  const orchestrator = makeDeps(db, scriptedServices(spy, { planner }), { visuals: visualPolicy });
+  const orchestrator = makeDeps(db, scriptedServices(spy, { planner, ...(options.reviewer ? { reviewer: options.reviewer } : {}) }), { visuals: visualPolicy });
   orchestrator.entitlements = dbEntitlements(orchestrator.store);
   const deps: ServiceDeps = { orchestrator, reader: readerFor(db, user), resolveVersions: versions };
   const actor: Actor = { userId: user.id, workspaceId: user.workspaceId, canWrite: true };
@@ -211,6 +211,25 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect((await t.status(id)).automaticStop).toMatchObject({ reason: "visual" });
     expect(t.resolveCalls).toHaveLength(1);
+  });
+});
+
+describe("a sheet the visual policy changed is still repaired by itself (regression)", () => {
+  it("the line is drawn anew AND the first review fails on a support: the correction finds that review, regenerates and delivers", async () => {
+    // The first AI review finds the plan's support infantilising (a finding pinned on the support's own block); the second passes.
+    const reviewer: Scripted["reviewer"] = async (inner, call, input) => {
+      const out = await inner.review(input);
+      if (call > 1) return out;
+      const support = allBlocks(input.document).find((b) => b.trace.decision_ids.length > 0 && b.type !== "activity");
+      const draft = out.draft as { checks: Array<{ check: string; status: string; targets: string[]; detail: string }> };
+      return { ...out, draft: { checks: [...draft.checks.filter((c) => c.check !== "age_appropriate"), { check: "age_appropriate", status: "FAIL", targets: support ? [support.id] : [], detail: "Tono infantil" }] } } as never;
+    };
+    const t = await teacher({ pdf: { withoutNumberLine: true }, reviewer });
+    const id = await t.magic();
+    // Before the fix: the correction rebuilt the sheet WITHOUT the drawn line, found no review for it and stopped («quality»).
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null, generationsUsed: 2 });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "generatable_support_visual" });
+    expect(await t.entitlement(id)).toBe("consumed");
   });
 });
 

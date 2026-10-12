@@ -797,12 +797,17 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
 
   // The blocked version, rebuilt exactly (same generation, same deterministic ids, same restoration) to read what each failing
   // block traces to.
-  const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: generationFingerprint(raw.fingerprint, last.fingerprint, loaded.versions) });
+  const inputFp = generationFingerprint(raw.fingerprint, last.fingerprint, loaded.versions);
+  const generationArtifact = await store.findArtifact(adaptationId, "generation", { inputFingerprint: inputFp });
   if (!generationArtifact) return status === "awaiting_plan_review" ? requeueSavedReview(deps, adaptationId, last.fingerprint, previous) : null;
   const generation = (generationArtifact.payload as { generation: NormalizedGeneration }).generation;
+  // The reviews judged the sheet AFTER the visual policy (a figure drawn, an activity rewritten or substituted): the same plan,
+  // reused from its artifact, rebuilds that sheet; without it no review matches and nothing could ever be repaired.
+  const visualArtifact = await store.findArtifact(adaptationId, "visual_resolution", { inputFingerprint: inputFp });
+  const visualPlan = visualArtifact ? (visualArtifact.payload as { plan: VisualResolutionPlan }).plan : null;
   let document;
   try {
-    document = assembleAndCheck(loaded, reviewed, generation, true).document;
+    document = assembleAndCheck(loaded, reviewed, generation, true, visualPlan).document;
   } catch (error) {
     if (error instanceof AdaptationError) return null;
     throw error;

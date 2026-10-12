@@ -235,6 +235,24 @@ describe("applied to the sheet: complete, with each figure in its activity, and 
   });
 });
 
+describe("a support for the whole sheet (no activity linked)", () => {
+  it("is built from the sheet itself (title, objectives, instructions) instead of being skipped into a stop (regression)", async () => {
+    const s = sheet();
+    const doc = structuredClone(s.document) as MaterialDocument;
+    doc.pages[0]!.blocks.unshift({ id: "blk_sheet1", type: "image", source: { kind: "requested", decision_id: "dec_9", purpose: "Secuencia para organizar la ficha", style: "diagram", essential: true }, alt_text: "Recurso visual de la ficha", trace: { origin: "adapted", source_refs: [], decision_ids: ["dec_9"] } });
+    const prompts: string[] = [];
+    const assistants: VisualAssistants = {
+      support: async (input) => (prompts.push(input.activity), { draft: { useful: true, kind: "steps", title: "Cómo trabajar la ficha", steps: ["Lee cada actividad entera antes de empezar.", "Haz una actividad cada vez.", "Repasa al terminar."], cards: null }, run }),
+      rewrite: async () => ({ draft: null, run }),
+      substitute: async () => ({ draft: null, run }),
+    };
+    const plan = await resolveMagicVisuals({ readyOriginals: async () => new Set(["vis_1", "vis_2"]), assistants }, { analysis: s.analysis, document: doc, requiredVisuals: ["vis_1", "vis_2"], stage: "primaria" });
+    expect(outcome(plan, "dec_9")).toMatchObject({ activityIds: [], category: "generatable_support_visual", resolution: { action: "figure", spec: { kind: "steps" } } });
+    expect(prompts[0]).toContain("Fracciones en situaciones cotidianas");
+    expect(prompts[0]).toContain("Marca 3/4 en la recta numérica.");
+  });
+});
+
 describe("what the teacher sees in «Hacer magia»: never a step to complete an image", () => {
   const need = { key: "vis_2", origin: "original" as const, essential: true, status: "to_select" as const, label: "Imagen del documento original", activity: "Actividad 4", message: "x", omittable: false };
   const html = (manual: boolean) => renderToStaticMarkup(createElement(VisualNeedsPanel, { needs: [need, { ...need, key: "dec_1", origin: "requested", status: "to_provide", essential: false, omittable: true }], adaptationId: "a", canWrite: true, locateHref: () => "/x", manual, editHref: "/vista?editar=1" }));

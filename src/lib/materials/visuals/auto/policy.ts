@@ -48,6 +48,13 @@ const activityText = (analysis: MaterialAnalysis, id: string) => {
   return a ? (a.context ? `${a.instruction}\n${a.context}` : a.instruction) : "";
 };
 
+/** The sheet as a whole, for a support that belongs to no single activity: title, objectives and instructions (material only). */
+const sheetContext = (analysis: MaterialAnalysis) =>
+  [analysis.identification.title, ...analysis.pedagogical_intent.objectives.map((o) => o.text), ...analysis.activities.map((a) => (a.label ? `${a.label}. ${a.instruction}` : a.instruction))]
+    .filter((x): x is string => Boolean(x))
+    .join("\n")
+    .slice(0, 2000);
+
 const signaturesFor = (analysis: MaterialAnalysis, activityIds: readonly string[]) => {
   const numbers = materialNumbers(analysis);
   return analysis.activities.filter((a) => activityIds.includes(a.id) && a.expected_answer.value).flatMap((a) => answerSignatures(a.expected_answer.value!, numbers));
@@ -230,12 +237,15 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     }
 
     attempts.push("generate");
-    const activity = need.activityIds.map((id) => activityText(input.analysis, id)).join("\n");
+    // A support for the whole sheet (no activity linked) is built from the sheet itself; it must give away no answer of any activity.
+    const sheetWide = need.activityIds.length === 0;
+    const activity = sheetWide ? sheetContext(input.analysis) : need.activityIds.map((id) => activityText(input.analysis, id)).join("\n");
+    const supportSignatures = sheetWide ? signaturesFor(input.analysis, input.analysis.activities.map((a) => a.id)) : signatures;
     let spec: VisualSpec | null = null;
     if (deps.assistants && activity) {
       const { draft, run } = await deps.assistants.support({ stage: input.stage, purpose: need.purpose ?? "Apoyo visual para la actividad", activity });
       await record(run);
-      spec = validateSupport(draft, activity, signatures);
+      spec = validateSupport(draft, activity, supportSignatures);
     }
     spec ??= supportFromSheet(input.document, need.activityIds);
     if (spec) {

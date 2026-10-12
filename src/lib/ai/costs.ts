@@ -1,4 +1,4 @@
-import type { AIUsage, ProviderName } from "./types";
+import type { AIUsage, ImageUsage, ProviderName } from "./types";
 
 /**
  * The one place with prices (USD per million tokens). Update `PRICES_AS_OF` with any change.
@@ -48,4 +48,34 @@ export function sumCosts(costs: readonly (number | null)[]): number | null {
     total += cost;
   }
   return Math.round(total * 1_000_000) / 1_000_000;
+}
+
+/**
+ * Image models (USD per million tokens), from the provider's pricing page on 2026-10-12. An image is billed by its tokens: text
+ * prompt in, image in (edits), image out; the response carries the counts, so the cost is exact for what was produced.
+ */
+export const IMAGE_PRICES_AS_OF = "2026-10-12";
+
+interface ImagePrice {
+  match: RegExp;
+  textInput: number;
+  imageInput: number;
+  imageOutput: number;
+}
+
+export const IMAGE_MODEL_PRICES: readonly ImagePrice[] = [
+  { match: /^gpt-image-2\.5-(sunburst|flare)/, textInput: 5, imageInput: 8, imageOutput: 30 },
+  { match: /^gpt-image-2(-\d{4}-\d{2}-\d{2})?$/, textInput: 5, imageInput: 8, imageOutput: 30 },
+  { match: /^gpt-image-1\.5/, textInput: 5, imageInput: 8, imageOutput: 32 },
+  { match: /^gpt-image-1-mini/, textInput: 2, imageInput: 2.5, imageOutput: 8 },
+  { match: /^gpt-image-1$/, textInput: 5, imageInput: 10, imageOutput: 40 },
+];
+
+export function estimateImageCostUsd(provider: ProviderName, model: string, usage: ImageUsage): number | null {
+  if (provider === "mock") return 0;
+  if (provider !== "openai") return null;
+  const price = IMAGE_MODEL_PRICES.find((p) => p.match.test(model));
+  if (!price) return null;
+  const cost = (usage.textInputTokens * price.textInput + usage.imageInputTokens * price.imageInput + usage.outputTokens * price.imageOutput) / 1_000_000;
+  return Math.round(cost * 1_000_000) / 1_000_000;
 }
