@@ -51,7 +51,10 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
   const needs = visualNeedsOf(loaded);
   const readiness = readinessOf(loaded);
   const here = `/app/adaptaciones/${id}/vista`;
-  const locateHref = (visualId: string) => `/app/materiales/${loaded.materialId}/visuales/${visualId}?volver=${encodeURIComponent(here)}`;
+  // «Hacer magia» resolves its images by itself: manual controls only in «Revisar antes de crear» or when the teacher edits.
+  const manual = loaded.status.creationMode !== "automatic" || query.editar === "1";
+  const back_to = manual && loaded.status.creationMode === "automatic" ? `${here}?editar=1` : here;
+  const locateHref = (visualId: string) => `/app/materiales/${loaded.materialId}/visuales/${visualId}?volver=${encodeURIComponent(back_to)}`;
 
   return (
     <div className="space-y-6">
@@ -70,7 +73,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
         {readiness.printable ? <PdfDownload adaptationId={id} /> : null}
       </div>
 
-      {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} />}
+      {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} manual={manual} editHref={`${here}?editar=1`} />}
 
       {student && validation.status === "not_renderable" ? (
         <Alert tone="warning" title="Esta ficha todavía no se puede mostrar completa.">

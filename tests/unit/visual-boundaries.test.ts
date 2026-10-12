@@ -26,14 +26,14 @@ describe("visual locator boundaries", () => {
     }
   });
 
-  it("8.2B.1 · the automatic locator reaches a vision model ONLY through `src/lib/ai`, in two files; the rest of it is pure", () => {
+  it("8.2B.1 · the automatic visuals reach a model ONLY through `src/lib/ai`, in three files; the rest of it is pure", () => {
     const imports = (f: string) => [...read(f).matchAll(/^import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/gm)].map((m) => ({ type: Boolean(m[1]), from: m[2]! }));
     for (const f of filesIn(AUTO)) {
       expect(read(f), f).not.toMatch(/tesseract|opencv|\bocr\b/i);
       expect(imports(f).map((i) => i.from).join(" "), f).not.toMatch(/@anthropic-ai|openai/);
       // A model is chosen by alias in `src/lib/ai`, never named here.
       expect(read(f), f).not.toMatch(/claude-|gpt-[0-9]/);
-      if (["vision.ts", "server.ts"].includes(path.basename(f))) continue;
+      if (["vision.ts", "assistants.ts", "server.ts"].includes(path.basename(f))) continue;
       const runtimeAi = imports(f).filter((i) => !i.type && /^@\/lib\/ai\b/.test(i.from));
       expect(runtimeAi, f).toEqual([]);
       expect(read(f), f).not.toMatch(/generateStructured|createProvider/);

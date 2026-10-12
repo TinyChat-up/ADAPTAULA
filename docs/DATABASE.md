@@ -282,6 +282,9 @@ Ver `docs/VISUAL_RESOURCES.md`.
 
 Ver `docs/VISUAL_RESOURCES.md` § Visuales automáticos.
 
+**Migración 023.** `adaptation_artifacts.kind` admite `visual_resolution`: la decisión de la política visual de «Hacer magia»,
+única por entrada de generación. `ai_runs.purpose` admite `visual_support` y `visual_rewrite`.
+
 ## Funciones SQL de negocio
 
 - `workspace_plan(ws) returns plans` — plan efectivo (sin suscripción vigente = `free`). Solo `service_role`.

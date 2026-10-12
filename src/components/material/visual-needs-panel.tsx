@@ -41,9 +41,30 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
   );
 }
 
-export function VisualNeedsPanel({ needs, adaptationId, canWrite, locateHref }: { needs: VisualNeed[]; adaptationId: string; canWrite: boolean; locateHref: (visualId: string) => string }) {
+/**
+ * `manual`: «Revisar antes de crear», or a teacher who chose to edit. In «Hacer magia» the server resolves every image: the panel
+ * offers no step to complete (no «Localizar», no «Añadir imagen», no «Continuar sin esta imagen»); a sheet that still lacks one
+ * (made before the visual policy) says so honestly and offers editing.
+ */
+export function VisualNeedsPanel({ needs, adaptationId, canWrite, locateHref, manual = true, editHref }: { needs: VisualNeed[]; adaptationId: string; canWrite: boolean; locateHref: (visualId: string) => string; manual?: boolean; editHref?: string }) {
   if (needs.length === 0) return null;
   const blocking = blockingNeeds(needs);
+  if (!manual) {
+    if (blocking.length === 0) return null;
+    return (
+      <section className="ms-chrome space-y-3" aria-labelledby="recursos-visuales">
+        <Alert tone="warning" title="No hemos podido completar automáticamente esta ficha porque necesita un recurso visual">
+          No la presentamos como lista y no hay PDF.
+          {canWrite && editHref ? (
+            <>
+              {" "}
+              Si quieres, puedes <a className="font-medium underline" href={editHref}>editarla tú</a>.
+            </>
+          ) : null}
+        </Alert>
+      </section>
+    );
+  }
   const open = needs.filter((n) => n.status === "to_select" || n.status === "to_provide");
   return (
     <section className="ms-chrome space-y-3" aria-labelledby="recursos-visuales">

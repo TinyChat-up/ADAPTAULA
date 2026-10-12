@@ -347,6 +347,15 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
         if (resource && "omitted" in resource) return { ...base, state: "omitted" };
         return resource ? { ...base, state: "available", src: resource.src } : { ...base, state: "pending" };
       }
+      if (block.source.kind === "figure") {
+        const located = block.source.visual_ref ? (ctx.options.figures?.[block.source.visual_ref] ?? ctx.options.assets?.[block.source.visual_ref]) : undefined;
+        const essential = block.source.visual_ref ? (ctx.options.requiredVisuals?.includes(block.source.visual_ref) ?? false) : false;
+        const origin = block.source.visual_ref ? ("original" as const) : ("requested" as const);
+        // A figure a person (or the locator) found later in the original wins over the one rebuilt from the analysis's words.
+        if (located && "src" in located) return { key, kind: "image", state: "available", src: located.src, ...(located.widthMm ? { widthMm: located.widthMm } : {}), alt: block.caption ?? block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential, origin };
+        const spec = located && !("src" in located) ? located : block.source.spec;
+        return { key, kind: "image", state: "available", spec, alt: block.caption ?? describeSpec(spec), ...(block.caption ? { caption: block.caption } : {}), essential, origin };
+      }
       const ref = block.source.visual_ref;
       const spec = ctx.options.figures?.[ref];
       const asset = ctx.options.assets?.[ref];

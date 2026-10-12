@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { PresentationSchema } from "./adaptation-context";
 import { ADMIN_FIELD_TYPES, CHART_TYPES } from "./material-analysis";
-import { ComparisonSpecSchema } from "@/lib/visuals/spec";
+import { ComparisonSpecSchema, VisualSpecSchema } from "@/lib/visuals/spec";
 
 /**
  * MaterialDocument v1: the adapted sheet as semantic blocks, rendered by our own components with any template and printed
@@ -67,7 +67,7 @@ const ResponseSchema = z.discriminatedUnion("kind", RESPONSE_VARIANTS);
 const StoredResponseSchema = z.discriminatedUnion("kind", [...RESPONSE_VARIANTS, z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema })]);
 export type ResponseSpec = z.infer<typeof StoredResponseSchema>;
 
-const ImageSourceSchema = z.discriminatedUnion("kind", [
+const IMAGE_SOURCE_VARIANTS = [
   /** A visual of the original material, reused as it is. */
   z.object({ kind: z.literal("original"), visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/) }),
   /**
@@ -82,11 +82,28 @@ const ImageSourceSchema = z.discriminatedUnion("kind", [
     style: z.enum(["diagram", "chart", "icon", "photo_like", "illustration"]),
     essential: z.boolean().optional(),
   }),
+] as const;
+const ImageSourceSchema = z.discriminatedUnion("kind", IMAGE_SOURCE_VARIANTS);
+/**
+ * Only the server writes this one («Hacer magia», docs/VISUAL_RESOURCES.md § Política visual): a figure drawn by our own renderer
+ * from verified data — the reconstruction of an original visual (`visual_ref`) or a new support for a decision (`decision_id`).
+ */
+const StoredImageSourceSchema = z.discriminatedUnion("kind", [
+  ...IMAGE_SOURCE_VARIANTS,
+  z.object({
+    kind: z.literal("figure"),
+    spec: VisualSpecSchema,
+    provenance: z.enum(["reconstruction", "generated"]),
+    visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/).optional(),
+    decision_id: z.string().regex(/^dec_[0-9]{1,4}$/).optional(),
+  }),
 ]);
 
-type AnyResponseSchema = typeof ResponseSchema | typeof StoredResponseSchema;
+type Variant = { response: typeof ResponseSchema | typeof StoredResponseSchema; image: typeof ImageSourceSchema | typeof StoredImageSourceSchema };
+const STORED: Variant = { response: StoredResponseSchema, image: StoredImageSourceSchema };
+const DRAFT: Variant = { response: ResponseSchema, image: ImageSourceSchema };
 
-function buildBlockSchema(idSchema: z.ZodString, responseSchema: AnyResponseSchema) {
+function buildBlockSchema(idSchema: z.ZodString, variant: Variant) {
   const block = <T extends string, S extends z.ZodRawShape>(type: T, shape: S) =>
     z.object({ id: idSchema, type: z.literal(type), trace: TraceSchema, ...shape });
 
@@ -108,7 +125,7 @@ function buildBlockSchema(idSchema: z.ZodString, responseSchema: AnyResponseSche
       /** Requirements the student must see (extension, number of data, conditions). Never the answer. */
       requirements: z.array(ShortText).max(8).optional(),
       resource_block_ids: z.array(idSchema).max(8).optional(),
-      response: responseSchema,
+      response: variant.response,
     }),
     block("list", { style: z.enum(["bullet", "numbered"]), items: z.array(ShortText).min(1).max(20) }),
     block("table", {
@@ -127,7 +144,7 @@ function buildBlockSchema(idSchema: z.ZodString, responseSchema: AnyResponseSche
       x_label: Text(80).optional(),
       y_label: Text(80).optional(),
     }),
-    block("image", { source: ImageSourceSchema, alt_text: ShortText, caption: ShortText.optional() }),
+    block("image", { source: variant.image, alt_text: ShortText, caption: ShortText.optional() }),
     block("help_box", { variant: z.enum(["key_idea", "reminder", "tip", "strategy"]), title: ShortText.optional(), text: RichText }),
     block("checklist", { title: ShortText.optional(), items: z.array(ShortText).min(1).max(12) }),
     block("vocabulary", { title: ShortText.optional(), items: z.array(z.object({ term: Text(80), definition: ShortText })).min(1).max(20) }),
@@ -144,8 +161,8 @@ function buildBlockSchema(idSchema: z.ZodString, responseSchema: AnyResponseSche
   ]);
 }
 
-export const BlockSchema = buildBlockSchema(BlockIdSchema, StoredResponseSchema);
-export const DraftBlockSchema = buildBlockSchema(DraftBlockIdSchema, ResponseSchema);
+export const BlockSchema = buildBlockSchema(BlockIdSchema, STORED);
+export const DraftBlockSchema = buildBlockSchema(DraftBlockIdSchema, DRAFT);
 export type Block = z.infer<typeof BlockSchema>;
 export type DraftBlock = z.infer<typeof DraftBlockSchema>;
 export type BlockType = Block["type"];
@@ -160,8 +177,8 @@ const AnswerKeyEntrySchema = (idSchema: z.ZodString) =>
     blanks: z.array(z.object({ key: ItemId, answer: ShortText })).max(20).optional(),
   });
 
-function buildDocumentSchema(idSchema: z.ZodString, responseSchema: AnyResponseSchema) {
-  const blockSchema = buildBlockSchema(idSchema, responseSchema);
+function buildDocumentSchema(idSchema: z.ZodString, variant: Variant) {
+  const blockSchema = buildBlockSchema(idSchema, variant);
   return z
     .object({
       schema_version: z.literal(MATERIAL_DOCUMENT_SCHEMA_VERSION),
@@ -203,8 +220,8 @@ function buildDocumentSchema(idSchema: z.ZodString, responseSchema: AnyResponseS
 }
 
 /** Stored, renderable document: the single source of truth for screen, editor and print. */
-export const MaterialDocumentSchema = buildDocumentSchema(BlockIdSchema, StoredResponseSchema);
-export const DraftMaterialDocumentSchema = buildDocumentSchema(DraftBlockIdSchema, ResponseSchema);
+export const MaterialDocumentSchema = buildDocumentSchema(BlockIdSchema, STORED);
+export const DraftMaterialDocumentSchema = buildDocumentSchema(DraftBlockIdSchema, DRAFT);
 export type MaterialDocument = z.infer<typeof MaterialDocumentSchema>;
 export type DraftMaterialDocument = z.infer<typeof DraftMaterialDocumentSchema>;
 

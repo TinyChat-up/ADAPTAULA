@@ -192,8 +192,14 @@ export const AUTOMATIC_STOP_COPY = {
   },
   /** No generation left to try or nothing to reopen: what is true, without offering a review that cannot happen. */
   qualityFinal: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes cancelarla o crear una nueva desde el material.",
+  visual: {
+    body: "La ficha necesita una imagen del material original que no hemos podido localizar, reconstruir ni sustituir sin que la actividad pierda su sentido.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Si quieres, revisa y edita la adaptación.",
+  },
   edit: "Revisar y editar",
-  visual: "No hemos podido completar automáticamente esta ficha porque necesita un recurso visual",
+  /** A «Hacer magia» sheet delivered before the visual policy that still waits for an image (never shown as ready). */
+  visualPending: "No hemos podido completar automáticamente esta ficha porque necesita un recurso visual",
+  visualEdit: "Editar la ficha",
 } as const;
 
 export const QUOTA_COPY = {

@@ -51,12 +51,13 @@ function requestedMessage(essential: boolean, status: VisualNeedStatus) {
 export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages?: readonly string[] }): VisualNeed[] {
   const blocks = allBlocks(input.document);
   const original: VisualNeed[] = input.visuals.map((v) => {
-    const block = blocks.find((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === v.visualId);
+    const block = blocks.find((b) => b.type === "image" && (b.source.kind === "original" || b.source.kind === "figure") && b.source.visual_ref === v.visualId);
+    const redrawn = block?.type === "image" && block.source.kind === "figure";
     const essential = input.requiredVisuals.includes(v.visualId);
     const teacher = v.status !== "ready" && (input.teacherImages ?? []).includes(v.visualId);
-    const status: VisualNeedStatus = v.status === "ready" ? "ready" : teacher ? "provided" : "to_select";
-    const message = teacher ? "Imagen añadida por ti: no se encontró en el documento original." : originalMessage(essential, status, v);
-    const locatedBy = status === "ready" ? (v.provenance?.method === "auto" ? ("automatic" as const) : ("teacher" as const)) : undefined;
+    const status: VisualNeedStatus = v.status === "ready" || redrawn ? "ready" : teacher ? "provided" : "to_select";
+    const message = teacher ? "Imagen añadida por ti: no se encontró en el documento original." : redrawn && v.status !== "ready" ? "Figura del documento original redibujada automáticamente con los datos del análisis." : originalMessage(essential, status, v);
+    const locatedBy = status === "ready" ? (v.provenance?.method === "human" && v.status === "ready" ? ("teacher" as const) : ("automatic" as const)) : undefined;
     return { key: v.visualId, origin: "original", essential, status, label: (block?.type === "image" ? block.caption : undefined) ?? "Imagen del documento original", activity: activityOf(input.document, block?.id), message, omittable: false, ...(locatedBy ? { locatedBy } : {}) };
   });
   const requested: VisualNeed[] = input.requested.map((r) => {

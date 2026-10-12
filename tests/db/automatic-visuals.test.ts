@@ -214,7 +214,14 @@ describe("where it runs: «Hacer magia» before the delivery; «Revisar antes de
     const material = await seedMaterial(db, user, fractionsCaseAnalysis());
     const learner = await seedLearner(db, user);
     const spy = newSpy();
-    const orchestrator = makeDeps(db, scriptedServices(spy, { planner: plannerOf() }), { visuals: { prepare } });
+    const orchestrator = makeDeps(db, scriptedServices(spy, { planner: plannerOf() }), {
+      visuals: {
+        resolve: async (input) => {
+          await prepare(input);
+          return { policy_version: 1, needs: [] };
+        },
+      },
+    });
     orchestrator.entitlements = dbEntitlements(orchestrator.store);
     const deps: ServiceDeps = { orchestrator, reader: readerFor(db, user), resolveVersions: versions };
     const actor: Actor = { userId: user.id, workspaceId: user.workspaceId, canWrite: true };
@@ -233,11 +240,12 @@ describe("where it runs: «Hacer magia» before the delivery; «Revisar antes de
     for (let i = 0; i < 8 && (await processAdaptationStage(p.orchestrator, created.data.adaptationId)); i++);
     const status = await getAdaptationStatus(p.deps, p.actor, created.data.adaptationId);
     expect(status.ok && status.data).toMatchObject({ status: "ready", delivered: true });
-    expect(calls).toEqual([{ materialId: p.material, status: "reviewing_ai" }]);
+    // Decided on the assembled sheet, before any review (so the reviews judge the sheet that will be delivered).
+    expect(calls).toEqual([{ materialId: p.material, status: "generating" }]);
     expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [created.data.adaptationId]))[0]!.state).toBe("consumed");
   });
 
-  it("magic: a failure while preparing never fails the generation (the sheet then waits for what it lacks)", async () => {
+  it("magic: a failure while deciding is retried by the job and never delivers a sheet with an unresolved gap", async () => {
     const p = await pipeline(async () => {
       throw new Error("rasteriser down");
     });
@@ -245,7 +253,7 @@ describe("where it runs: «Hacer magia» before the delivery; «Revisar antes de
     if (!created.ok) throw new Error(created.code);
     for (let i = 0; i < 8 && (await processAdaptationStage(p.orchestrator, created.data.adaptationId)); i++);
     const status = await getAdaptationStatus(p.deps, p.actor, created.data.adaptationId);
-    expect(status.ok && status.data).toMatchObject({ status: "ready", delivered: true });
+    expect(status.ok && status.data.delivered).toBe(false);
   });
 
   it("review mode: the teacher approves the plan and the sheet is delivered, and nothing is located for them", async () => {

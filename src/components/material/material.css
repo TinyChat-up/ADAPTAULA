@@ -181,6 +181,14 @@ ul.ms-list { list-style: disc; }
 .ms-activity-figures .ms-cue { display: none; }
 .ms-activity[data-numbered] > .ms-activity-figures { margin-left: calc(var(--ms-num-w) + var(--ms-num-gap)); }
 .ms-comparison .ms-spec { margin: .25em 0; }
+/* New supports «Hacer magia» adds (8.2B.1+): a row of numbered steps or term cards, sober, with the sheet's accent. */
+.ms-vsupport { break-inside: avoid; }
+.ms-vsupport-title { margin: 0 0 .35em; font-size: .78em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ms-accent); }
+.ms-vsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5em; }
+.ms-vsteps > li { flex: 1 1 9em; display: flex; gap: .45em; align-items: flex-start; border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .45em .6em; }
+.ms-vstep-n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; border-radius: 50%; border: 1.5px solid var(--ms-accent); color: var(--ms-accent); font-weight: 700; font-size: .85em; }
+.ms-vcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(10em, 1fr)); gap: .5em; }
+.ms-vcards > li { display: flex; flex-direction: column; gap: .15em; border: 1px solid var(--ms-rule-soft); border-left: 3px solid var(--ms-accent); padding: .4em .6em; }
 .ms-missing { border: 2px dashed var(--ms-ink); padding: .6em .8em; font-size: .85em; font-weight: 600; }
 
 /* Menos estímulos: menos superficies. `reduced` quita fondos y redondeos; `none` deja solo una raya de separación. */

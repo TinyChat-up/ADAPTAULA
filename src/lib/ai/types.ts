@@ -9,7 +9,7 @@ export const TEXT_MODEL_ALIASES = ["ECONOMY", "STANDARD", "PREMIUM"] as const sa
 export type ProviderName = "anthropic" | "openai" | "mock";
 export type ReasoningEffort = "low" | "medium" | "high";
 
-export type AIPurpose = "analyze" | "plan" | "generate" | "review" | "revise_block" | "image_brief" | "image" | "locate_visual";
+export type AIPurpose = "analyze" | "plan" | "generate" | "review" | "revise_block" | "image_brief" | "image" | "locate_visual" | "visual_support" | "visual_rewrite";
 
 /** Resolved by `registry.ts` from env/config. Business code handles aliases; only this layer sees model ids. */
 export interface ModelSelection {

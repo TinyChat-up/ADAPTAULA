@@ -367,3 +367,36 @@ desactivada y solo actúa la geometría.
   puntos dados y las comparaciones que no son de fracciones mantienen el recorte.
 - `src/lib/visuals/contracts.ts` reserva las procedencias `catalog` (8.2B.3) y `generated` (8.2B.2) y el contrato de petición de
   generación. Una figura que un VisualSpec puede dibujar nunca se genera. Nada de esto está conectado.
+
+## Política visual de «Hacer magia» (migración 023)
+
+**Regla de producto.** En «Hacer magia» el docente no localiza imágenes, no sube recursos y no decide omisiones: ve el progreso,
+la ficha terminada y «Descargar PDF». La ficha solo es «lista» cuando no le falta ningún visual imprescindible. Si nada sirve, la
+adaptación se detiene honestamente. La intervención manual queda para «Revisar antes de crear» y para quien elige «Editar».
+
+**Escalera** (`src/lib/adaptation/visual-policy.ts` y `src/lib/materials/visuals/auto/policy.ts`). Se aplica a cada necesidad
+visual de la ficha ensamblada, antes de las revisiones (así se revisa la ficha que se entrega):
+
+| # | Categoría | Qué se hace | Se valida con |
+| --- | --- | --- | --- |
+| 1 | `exact_original_visual` | Localizar el visual en el original: el recorte del docente o el automático de 8.2B.1 (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75 de la geometría o de la visión; el recorte de una persona nunca se sustituye |
+| 2 | `reconstructable_structured_visual` | Reconstruirlo: barra, recta numérica, parte-todo, cuadrícula y comparación; tablas y gráficos ya se rehacían con sus datos | VisualSpec verificado, a partir de sus píxeles o, si no se encontró, de una descripción completa del análisis (todos los números; sin puntos marcados) |
+| 3 | `generatable_support_visual` | Generar un apoyo nuevo que pidió una decisión: secuencia de pasos o tarjetas de vocabulario, dibujados por nuestros componentes en CLARO (`visual_support@v1`) | Longitudes, sin marcas, sin copiar la consigna, sin la respuesta |
+| 4 | `rewritable_without_visual` | Un original que una actividad usa: reescribirla sin él (`visual_rewriter@v1`). Un visual que nada usa, o un apoyo opcional que no se pudo generar: se deja fuera | Mantiene todos los datos de la tarea y los números del visual; no menciona ninguna imagen; sin la respuesta |
+| 5 | `unresolved_visual` | Parada honesta: estado `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | — |
+
+- La decisión de cada ficha se guarda en el artefacto `visual_resolution`, una vez por entrada de generación: un trabajo reanudado
+  la reutiliza y no repite el coste. Registra la categoría, la acción y los peldaños probados.
+- Una actividad reescrita por la política lleva la traza del visual al que sustituye (`traceability_complete` lo admite).
+- La auditoría del generador sigue juzgando lo que escribió el generador, es decir, la ficha antes de la política.
+
+**No implementado (y por qué no bloquea):**
+- **Limpieza de píxeles de un recorte sucio.** Un recorte que no supera la confianza pasa al peldaño siguiente.
+- **Pictogramas e imágenes generadas por difusión.** No hay catálogo con licencia ni modelo de imagen; los contratos están
+  reservados (`src/lib/visuals/contracts.ts`).
+
+**Interfaz:**
+- **En «Hacer magia»** no aparecen «Localizar en el original», «No está en el original · Añadir imagen», «Continuar sin esta imagen»
+  ni «Buscar en el original».
+- **Fichas entregadas antes de esta política** a las que aún les falta un visual: se dice que no se pudo completar
+  automáticamente, sin PDF, y se ofrece «Editar la ficha» (`/vista?editar=1`), que muestra los controles manuales.
