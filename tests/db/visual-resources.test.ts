@@ -385,7 +385,9 @@ describe("8.2A.1 · one state everywhere: adaptation screen, sheet, lists and PD
     const out = panel(m, { visualsPending: r.pendingResources, printable: r.printable });
     // «Hacer magia»: said as what it is, it could not be completed automatically because it needs a visual resource.
     expect(out).toContain("No hemos podido completar automáticamente esta ficha porque necesita un recurso visual");
-    expect(out).toContain("Completar ficha");
+    // No step to complete it in magic: editing is offered (manual controls appear only there).
+    expect(out).not.toContain("Completar ficha");
+    expect(out).toContain("Editar la ficha");
     expect(out).not.toMatch(/La ficha está lista|Descargar PDF/);
     expect(listState("ready", false, false, !r.printable)).toEqual({ label: "Casi lista · falta un recurso", group: "attention", cta: "Completar ficha" });
     expect(await exportPdf(m)).toEqual({ ok: false, code: "resource_pending" });
