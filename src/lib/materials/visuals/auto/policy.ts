@@ -3,9 +3,9 @@ import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeT
 import { materialNumbers } from "@/lib/adaptation/facts";
 import { VISUAL_POLICY_VERSION, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { AIRunRecord } from "@/lib/ai/types";
+import { rewriteEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
-import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
-import { specFromAnalysis } from "@/lib/visuals/from-analysis";
+import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, type VisualSpec } from "@/lib/visuals/spec";
 import type { RewriteDraft, SupportDraft, VisualAssistants } from "./assistants";
 
@@ -15,8 +15,16 @@ import type { RewriteDraft, SupportDraft, VisualAssistants } from "./assistants"
  */
 
 export interface MagicVisualDeps {
-  /** Which originals have a usable crop now (after the automatic locator ran): a person's, or the locator's. */
+  /**
+   * Which originals have a usable crop now: a person's, or one the CURRENT automatic engine accepted in this material version
+   * (an earlier engine's locator that was not found again does not count).
+   */
   readyOriginals(visualIds: readonly string[]): Promise<ReadonlySet<string>>;
+  /**
+   * The figure rebuilt from the original's own pixels, corroborated by a complete description (`corroborateSpec`). Absent →
+   * nothing is rebuilt: a description alone is never drawn.
+   */
+  corroborate?(visual: AnalysisVisual, activityTexts: readonly string[]): Promise<VisualSpec | null>;
   /** Absent → no model rung (the deterministic ones still run). */
   assistants?: VisualAssistants | null;
   recordAiRun?(run: AIRunRecord): Promise<void>;
@@ -27,6 +35,8 @@ export interface MagicVisualInput {
   document: MaterialDocument;
   requiredVisuals: readonly string[];
   stage: string | null;
+  /** The functional dimensions the sheet attends (no student data): they decide how many steps a rewrite may add. */
+  functionalNeeds?: readonly string[];
 }
 
 /** Words that point at an image the student will not see. */
@@ -58,19 +68,38 @@ export function validateSupport(draft: SupportDraft | null, activity: string, si
   return parsed.data;
 }
 
-/** A rewrite: every datum of the task kept (and every number the figure gave), no image mentioned, no answer. */
-export function validateRewrite(draft: RewriteDraft | null, activity: string, visualText: string, signatures: readonly string[]): Omit<ActivityRewrite, "activityId"> | null {
-  if (!draft || !draft.feasible || !draft.prompt) return null;
+export interface RewriteContext {
+  analysis: MaterialAnalysis;
+  activity: AnalysisActivity;
+  visual: AnalysisVisual | undefined;
+  signatures: readonly string[];
+  functionalNeeds: readonly string[];
+}
+
+const visualTextOf = (visual: AnalysisVisual | undefined) => (visual ? [visual.title, visual.description, visual.text].filter(Boolean).join(". ") : "");
+
+/**
+ * A rewrite: pedagogically equivalent first (`rewriteEquivalence`: same objective, operation, representation, demand, response
+ * type and needs — keeping the numbers is not enough), then every datum of the task kept (and every number the figure gave),
+ * no image mentioned, no answer. The model's own «feasible» is only a precondition, never the proof.
+ */
+export function validateRewrite(draft: RewriteDraft | null, ctx: RewriteContext): { ok: true; rewrite: Omit<ActivityRewrite, "activityId"> } | { ok: false; violations: string[] } {
+  if (!draft || !draft.feasible || !draft.prompt) return { ok: false, violations: ["not_feasible"] };
+  const activity = activityText(ctx.analysis, ctx.activity.id);
+  const visualText = visualTextOf(ctx.visual);
   const prompt = draft.prompt.trim();
   const steps = (draft.steps ?? []).map((s) => s.trim()).filter(Boolean);
+  const lines = draft.lines ?? 2;
+  const equivalence = rewriteEquivalence({ analysis: ctx.analysis, activity: ctx.activity, visual: ctx.visual, rewrite: { prompt, steps, lines }, needs: ctx.functionalNeeds });
+  const violations = [...equivalence.violations];
   const full = [prompt, ...steps].join("\n");
   const norm = normalizeText(full);
-  if (prompt.length < 15 || norm === normalizeText(activity)) return null;
-  if (IMAGE_WORDS.test(norm)) return null;
+  if (prompt.length < 15 || norm === normalizeText(activity)) violations.push("not_rewritten");
+  if (IMAGE_WORDS.test(norm)) violations.push("mentions_image");
   const required = [...criticalTokens(activity), ...criticalTokens(visualText).filter((t) => t.kind === "number")];
-  if (required.some((t) => !hasToken(norm, t))) return null;
-  if (leakedSignature(full, signatures)) return null;
-  return { prompt, steps, lines: draft.lines ?? 2 };
+  if (required.some((t) => !hasToken(norm, t))) violations.push("data_lost");
+  if (leakedSignature(full, ctx.signatures)) violations.push("answer_leaked");
+  return violations.length === 0 ? { ok: true, rewrite: { prompt, steps, lines } } : { ok: false, violations };
 }
 
 /** Without a model, a support can still be drawn from the activity's own steps in the sheet (never invented). */
@@ -101,7 +130,7 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         continue;
       }
       attempts.push("reconstruct");
-      const spec = visual ? specFromAnalysis(visual) : null;
+      const spec = visual && deps.corroborate ? await deps.corroborate(visual, need.activityIds.map((id) => activityText(input.analysis, id))).catch(() => null) : null;
       if (spec) {
         done("reconstructable_structured_visual", { action: "figure", spec, provenance: "reconstruction" });
         continue;
@@ -111,21 +140,28 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         done("rewritable_without_visual", { action: "omit", reason: "optional_original" });
         continue;
       }
+      // An activity that acts on or interprets the representation (or whose objective is the representation) cannot be rewritten
+      // into another one: deterministic, before any model is asked.
+      const activities = need.activityIds.map((id) => input.analysis.activities.find((a) => a.id === id)).filter((a): a is AnalysisActivity => a !== undefined);
+      const required = activities.map((a) => taskProfile(input.analysis, a, visual)).filter((p) => p.representation === "required");
+      if (activities.length === 0 || required.length > 0) {
+        done("unresolved_visual", { action: "unresolved", reason: required.length > 0 ? "representation_required" : "exact_visual_unavailable" });
+        continue;
+      }
       attempts.push("rewrite");
-      const visualText = visual ? [visual.title, visual.description, visual.text].filter(Boolean).join(". ") : "";
+      const visualText = visualTextOf(visual);
       const rewrites: ActivityRewrite[] = [];
-      if (deps.assistants && visualText && need.activityIds.length > 0) {
-        for (const activityId of need.activityIds) {
-          const activity = activityText(input.analysis, activityId);
-          const { draft, run } = await deps.assistants.rewrite({ stage: input.stage, activity, visual: visualText });
+      if (deps.assistants && visualText) {
+        for (const activity of activities) {
+          const { draft, run } = await deps.assistants.rewrite({ stage: input.stage, activity: activityText(input.analysis, activity.id), visual: visualText });
           await record(run);
-          const valid = validateRewrite(draft, activity, visualText, signatures);
-          if (!valid) break;
-          rewrites.push({ activityId, ...valid });
+          const valid = validateRewrite(draft, { analysis: input.analysis, activity, visual, signatures, functionalNeeds: input.functionalNeeds ?? [] });
+          if (!valid.ok) break;
+          rewrites.push({ activityId: activity.id, ...valid.rewrite });
         }
       }
-      if (rewrites.length > 0 && rewrites.length === need.activityIds.length) done("rewritable_without_visual", { action: "rewrite", activities: rewrites });
-      else done("unresolved_visual", { action: "unresolved", reason: "exact_visual_unavailable" });
+      if (rewrites.length > 0 && rewrites.length === activities.length) done("rewritable_without_visual", { action: "rewrite", activities: rewrites });
+      else done("unresolved_visual", { action: "unresolved", reason: "not_equivalent_or_unavailable" });
       continue;
     }
 

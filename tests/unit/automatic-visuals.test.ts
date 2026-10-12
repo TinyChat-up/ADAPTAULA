@@ -121,6 +121,16 @@ describe("a model's rectangle is a hypothesis, never a fact", () => {
     }
   });
 
+  it("a generic figure is not located because a region has ink and lines: without a vision agreement it stays at 0.60; with one, it is", () => {
+    const generic: VisualTarget = { id: "vis_1", shape: "figure", activityIds: ["act_1"] };
+    const [alone] = locateVisuals(page, [generic], activities);
+    expect(alone).toMatchObject({ accepted: false, bounds: null, evidence: { reason: "low_confidence" } });
+    expect(alone!.confidence).toBeLessThan(ACCEPT);
+    const hypothesis = { bounds: { x: BAR_BOUNDS.x - 0.01, y: BAR_BOUNDS.y - 0.005, w: BAR_BOUNDS.w + 0.02, h: BAR_BOUNDS.h + 0.01 }, confidence: 0.9 };
+    const [agreed] = locateVisuals(page, [generic], activities, new Map([["vis_1", hypothesis]]));
+    expect(agreed).toMatchObject({ accepted: true, evidence: { vision: { agrees: true } } });
+  });
+
   it("an essential figure that is not on the page is not invented: no region, reason recorded", async () => {
     const read = await readPage(await fractionsPdf({ withoutNumberLine: true }), PDF, 1, 100);
     const [, line] = locateVisuals(read.model, targets, activities);

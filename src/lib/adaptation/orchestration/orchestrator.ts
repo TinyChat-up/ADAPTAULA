@@ -81,7 +81,7 @@ export interface OrchestratorDeps {
    * resolved by the server (located, rebuilt, generated, rewritten around or left out when optional) before it is reviewed; what
    * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
-  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null }): Promise<VisualResolutionPlan> };
+  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; functionalNeeds: readonly string[] }): Promise<VisualResolutionPlan> };
 }
 
 const DEFAULTS = { leaseSeconds: 300, retryBackoffSeconds: 30, maxAttempts: 3 } as const;
@@ -1052,7 +1052,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const cached = await store.findArtifact(adaptationId, "visual_resolution", { inputFingerprint: inputFp });
       if (cached) visualPlan = (cached.payload as { plan: VisualResolutionPlan }).plan;
       else {
-        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage });
+        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, functionalNeeds: loaded.context.needs.map((n) => n.dimension) });
         await store.putArtifact(adaptationId, run.lease, "visual_resolution", inputFp, fingerprint({ input: inputFp, plan: visualPlan }), { plan: visualPlan });
       }
       if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan);

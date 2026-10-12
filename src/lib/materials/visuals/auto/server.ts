@@ -12,7 +12,7 @@ import type { MaterialDocument } from "@/lib/schemas/material-document";
 import { createVisualAssistants, type VisualAssistants } from "./assistants";
 import { resolveMagicVisuals } from "./policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
-import { prepareVisuals, type AutoRunDeps, type AutoRunSummary } from "./service";
+import { corroborateSpec, prepareVisuals, type AutoRunDeps, type AutoRunSummary } from "./service";
 import { createVisionLocator, type VisionLocator } from "./vision";
 
 /**
@@ -71,25 +71,30 @@ export async function prepareAdaptationVisuals(input: { workspaceId: string; mat
  * The visual policy of «Hacer magia» for one assembled sheet: the automatic locator first (cached per material version), then the
  * rungs of `policy.ts`. Server job only (service role), after the adaptation authorised its material.
  */
-export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null }): Promise<VisualResolutionPlan> {
-  await prepareAdaptationVisuals(input);
+export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; functionalNeeds: readonly string[] }): Promise<VisualResolutionPlan> {
+  const summary = await prepareAdaptationVisuals(input);
   const admin = createAdminClient();
   const { data: material } = await admin.from("materials").select("workspace_id, content_hash").eq("id", input.materialId).maybeSingle();
+  const owned = material !== null && material.workspace_id === input.workspaceId;
   const deps = visualDeps(admin);
+  // An automatic crop counts only if THIS engine accepted it in this material version (a busy or failed run trusts none).
+  const accepted = "result" in summary && summary.result ? summary.result.visuals : {};
   const plan = await resolveMagicVisuals(
     {
       readyOriginals: async (ids) => {
-        if (!material || material.workspace_id !== input.workspaceId || ids.length === 0) return new Set();
+        if (!owned || ids.length === 0) return new Set();
         const resolved = await resolveVisuals(deps, { materialId: input.materialId, analysisFingerprint: input.analysisFingerprint, sourceSha256: material.content_hash, visualIds: ids });
-        return new Set(ids.filter((id) => resolved.states[id]?.status === "ready"));
+        const trusted = (id: string) => resolved.states[id]?.provenance?.method === "human" || ["B", "C"].includes(accepted[id]?.choice ?? "");
+        return new Set(ids.filter((id) => resolved.states[id]?.status === "ready" && trusted(id)));
       },
+      corroborate: async (visual, activityTexts) => (owned ? corroborateSpec({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual, activityTexts }) : null),
       assistants: productionAssistants(),
       recordAiRun: async (run) => {
         const { error } = await admin.from("ai_runs").insert({ ...toAiRunRow(run, { workspaceId: input.workspaceId, jobId: null, materialId: input.materialId }), adaptation_id: input.adaptationId });
         if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
       },
     },
-    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage },
+    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, functionalNeeds: input.functionalNeeds },
   );
   const count = (category: string) => plan.needs.filter((n) => n.category === category).length;
   logger.info("magic_visual_policy", { adaptationId: input.adaptationId, needs: plan.needs.length, located: count("exact_original_visual"), reconstructed: count("reconstructable_structured_visual"), generated: count("generatable_support_visual"), rewritten: count("rewritable_without_visual"), unresolved: count("unresolved_visual") });

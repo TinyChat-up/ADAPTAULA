@@ -9,7 +9,8 @@ import { resolveMagicVisuals, validateRewrite, validateSupport, type MagicVisual
 import type { VisualAssistants } from "@/lib/materials/visuals/auto/assistants";
 import { buildRenderModel, flatNodes } from "@/lib/render/model";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
-import { specFromAnalysis } from "@/lib/visuals/from-analysis";
+import { consistentWithActivities, contradicts, sameStructure, specFromAnalysis } from "@/lib/visuals/from-analysis";
+import type { VisualSpec } from "@/lib/visuals/spec";
 import { fractionsCaseDocument } from "../support/fractions-case";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }));
@@ -28,7 +29,19 @@ const scripted = (over: Partial<{ support: Awaited<ReturnType<VisualAssistants["
     rewrite: async () => (calls.push("rewrite"), { draft: over.rewrite ?? null, run }),
   };
 };
-const deps = (ready: string[], assistants: VisualAssistants | null = null): MagicVisualDeps => ({ readyOriginals: async () => new Set(ready), assistants });
+const deps = (ready: string[], assistants: VisualAssistants | null = null, pixels: Record<string, VisualSpec> = {}): MagicVisualDeps => ({ readyOriginals: async () => new Set(ready), assistants, corroborate: async (v) => pixels[v.id] ?? null });
+/** What the ORIGINAL's pixels read (the shaded parts are wherever the original has them, not «from the left»). */
+const PIXELS: Record<string, VisualSpec> = {
+  vis_1: { spec_version: 1, kind: "fraction_bar", parts: 8, shaded: [0, 3, 5] },
+  vis_2: { spec_version: 1, kind: "number_line", start: { n: 0, d: 1 }, end: { n: 1, d: 1 }, divisions: 4, labels: [{ tick: 0, text: "0" }, { tick: 1, text: "1/4" }, { tick: 2, text: "1/2" }, { tick: 3, text: "3/4" }, { tick: 4, text: "1" }] },
+};
+/** The second visual turned into a mere data source (a label that carries a datum), used by a calculation. */
+const dataSource = (a: ReturnType<typeof fractionsCaseDocument>["analysis"]) => {
+  a.visuals[1] = { ...a.visuals[1]!, kind: "image", title: null, description: "Etiqueta de una botella de agua: 3/4 de litro.", text: null };
+  Object.assign(a.activities.find((x) => x.id === "act_4")!, { instruction: "Calcula cuántos cuartos de litro le faltan a la botella para llegar a 1 litro.", response_format: "calculate", answer_area: { type: "lines", lines: 2 }, objective_ids: ["obj_3"] });
+  a.protected_elements = a.protected_elements.filter((p) => !p.resource_ids.includes("vis_2"));
+};
+const DATA_REWRITE = { feasible: true, prompt: "La botella tiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro.", steps: [], lines: 2 };
 
 /** The fractions sheet with its two required originals; `describe` replaces the analysis's words of a visual. */
 function sheet(edit?: (a: ReturnType<typeof fractionsCaseDocument>["analysis"]) => void) {
@@ -48,41 +61,58 @@ describe("classification and order of the rungs", () => {
     ]);
   });
 
-  it("2 · not found in the pixels: rebuilt from the analysis's complete description (bar 3/8, line 0–1 in quarters), verified", async () => {
-    const plan = await resolve(sheet(), deps([]));
-    expect(outcome(plan, "vis_1")).toMatchObject({ category: "reconstructable_structured_visual", resolution: { action: "figure", provenance: "reconstruction", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] } }, attempts: ["locate", "reconstruct"] });
+  it("2 · not cropped, but the original's pixels read the figure the analysis describes: rebuilt FROM THE PIXELS (bar 3/8, line 0–1 in quarters)", async () => {
+    const plan = await resolve(sheet(), deps([], null, PIXELS));
+    expect(outcome(plan, "vis_1")).toMatchObject({ category: "reconstructable_structured_visual", resolution: { action: "figure", provenance: "reconstruction", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 3, 5] } }, attempts: ["locate", "reconstruct"] });
     expect(outcome(plan, "vis_2")).toMatchObject({ resolution: { action: "figure", spec: { kind: "number_line", divisions: 4, labels: [{ text: "0" }, { text: "1/4" }, { text: "1/2" }, { text: "3/4" }, { text: "1" }] } } });
   });
 
-  it("4 · neither located nor rebuildable, but the activity can live without it: rewritten (validated), never a request to the teacher", async () => {
-    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra de agua de un litro con cuatro marcas iguales." }));
-    const assistants = scripted({ rewrite: { feasible: true, prompt: "Una jarra de un litro tiene cuatro marcas iguales. Escribe qué fracción del litro indica la tercera marca: 3/4 en la recta.", steps: [], lines: 2 } });
-    // The draft names «3/4» — the task's own datum («Marca 3/4…»), which must be kept — and no image: valid.
-    const plan = await resolve(s, deps(["vis_1"], assistants));
+  it("2b · a complete description WITHOUT pixel evidence is never drawn: honest stop, and no model is asked to rewrite a representation", async () => {
+    const assistants = scripted({ rewrite: { feasible: true, prompt: "Escribe con números la fracción tres octavos.", steps: [], lines: 2 } });
+    const plan = await resolve(sheet(), deps([], assistants));
+    for (const key of ["vis_1", "vis_2"]) expect(outcome(plan, key)).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" }, attempts: ["locate", "reconstruct"] });
+    expect(assistants.calls).toEqual([]);
+  });
+
+  it("4 · neither located nor rebuildable, the figure only carried a datum: rewritten (validated as equivalent), never a request to the teacher", async () => {
+    const assistants = scripted({ rewrite: DATA_REWRITE });
+    const plan = await resolve(sheet(dataSource), deps(["vis_1"], assistants));
     expect(outcome(plan, "vis_2")).toMatchObject({ category: "rewritable_without_visual", resolution: { action: "rewrite", activities: [{ activityId: "act_4" }] }, attempts: ["locate", "reconstruct", "rewrite"] });
   });
 
-  it("5 · nothing reliable: unresolved (the honest stop), with every rung recorded", async () => {
-    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra." }));
-    const plan = await resolve(s, deps(["vis_1"], scripted({ rewrite: { feasible: false, prompt: null, steps: null, lines: null } })));
+  it("4b · act 4 «Marca 3/4 en la recta» is never rewritten, whatever the model offers: honest stop", async () => {
+    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra de agua de un litro con cuatro marcas iguales." }));
+    const assistants = scripted({ rewrite: { feasible: true, prompt: "Una jarra de un litro tiene cuatro marcas iguales. Escribe qué fracción del litro indica la tercera marca: 3/4.", steps: [], lines: 2 } });
+    const plan = await resolve(s, deps(["vis_1"], assistants));
+    expect(outcome(plan, "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" } });
+    expect(assistants.calls).toEqual([]);
+  });
+
+  it("5 · a data-source figure whose rewrite is not valid: unresolved (the honest stop), with every rung recorded", async () => {
+    const plan = await resolve(sheet(dataSource), deps(["vis_1"], scripted({ rewrite: { feasible: false, prompt: null, steps: null, lines: null } })));
     expect(outcome(plan, "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved" }, attempts: ["locate", "reconstruct", "rewrite"] });
   });
 
   it("a located figure is never replaced by a rebuilt one (a person's or the locator's crop wins)", async () => {
-    const plan = await resolve(sheet(), deps(["vis_1"]));
+    const plan = await resolve(sheet(), deps(["vis_1"], null, PIXELS));
     expect(outcome(plan, "vis_1").resolution).toEqual({ action: "located" });
     expect(outcome(plan, "vis_2").resolution.action).toBe("figure");
   });
 });
 
 describe("the model's drafts are hypotheses: validated before they reach a sheet", () => {
-  const activity = "Marca 3/4 en la recta numérica.";
-  it("a rewrite that drops a datum, mentions an image, copies the task or gives the answer is refused", () => {
-    expect(validateRewrite({ feasible: true, prompt: "Marca la fracción en la recta dibujada.", steps: null, lines: 2 }, activity, "", [])).toBeNull();
-    expect(validateRewrite({ feasible: true, prompt: "Observa la imagen y marca 3/4 donde corresponde.", steps: null, lines: 2 }, activity, "", [])).toBeNull();
-    expect(validateRewrite({ feasible: true, prompt: activity, steps: null, lines: 2 }, activity, "", [])).toBeNull();
-    expect(validateRewrite({ feasible: true, prompt: "Ana bebe 3/4 y 1/4 de litro. Bebe 1 litro en total.", steps: null, lines: 2 }, "Ana bebe 3/4 de litro y 1/4 de litro. ¿Cuánto bebe?", "", ["1 litro"])).toBeNull();
-    expect(validateRewrite({ feasible: true, prompt: "Divide el segmento de 0 a 1 en cuatro partes iguales y escribe dónde iría 3/4.", steps: ["Divide.", "Escribe."], lines: 2 }, activity, "", [])).toMatchObject({ lines: 2 });
+  it("a rewrite of a data-source figure that drops a datum, mentions an image, copies the task or gives the answer is refused", () => {
+    const s = sheet(dataSource);
+    const ctx = (signatures: string[] = []) => ({ analysis: s.analysis, activity: s.analysis.activities.find((a) => a.id === "act_4")!, visual: s.analysis.visuals[1], signatures, functionalNeeds: [] });
+    const reasons = (prompt: string, signatures: string[] = []) => {
+      const r = validateRewrite({ feasible: true, prompt, steps: null, lines: 2 }, ctx(signatures));
+      return r.ok ? [] : r.violations;
+    };
+    expect(reasons("Calcula cuántos cuartos de litro le faltan a la botella para llegar al total.")).toContain("data_lost");
+    expect(reasons("Observa la imagen: 3/4 de litro. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro.")).toContain("mentions_image");
+    expect(reasons(s.analysis.activities.find((a) => a.id === "act_4")!.instruction)).toContain("not_rewritten");
+    expect(reasons("La botella tiene 3/4 de litro. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro: 1/4 de litro.", ["1/4"])).toContain("answer_leaked");
+    expect(validateRewrite(DATA_REWRITE, ctx())).toMatchObject({ ok: true, rewrite: { lines: 2 } });
   });
 
   it("a new support must be short, not a copy of the task and without its answer", () => {
@@ -93,17 +123,29 @@ describe("the model's drafts are hypotheses: validated before they reach a sheet
     expect(validateSupport({ useful: true, kind: "cards", title: null, steps: null, cards: [{ term: "<b>x</b>", hint: "y" }, { term: "a", hint: "b" }] }, task, [])).toBeNull();
   });
 
-  it("the analysis's description is used only when complete and without marked points", () => {
+  it("the analysis's description is only a claim: complete or nothing, and checked against the pixels and the activity", () => {
     expect(specFromAnalysis({ kind: "number_line", title: null, description: "Recta numérica de 0 a 1 con un punto marcado en 3/4.", text: null })).toBeNull();
+    // Incomplete: how many parts are shaded is not said → no claim, nothing invented.
     expect(specFromAnalysis({ kind: "geometric_figure", title: null, description: "Rectángulo dividido en 4 partes iguales.", text: null })).toBeNull();
-    expect(specFromAnalysis({ kind: "diagram", title: null, description: "Cuadrícula de 3 filas y 4 columnas con 5 casillas sombreadas.", text: null })).toMatchObject({ kind: "grid", rows: 3, cols: 4 });
+    expect(specFromAnalysis({ kind: "geometric_figure", title: null, description: "Barra con algunas partes coloreadas.", text: null })).toBeNull();
+    expect(specFromAnalysis({ kind: "number_line", title: null, description: "Recta numérica dividida en partes.", text: null })).toBeNull();
+    const bar = { kind: "geometric_figure" as const, title: null, description: "Barra dividida en 8 partes iguales con 3 partes coloreadas.", text: null };
+    const claim = specFromAnalysis(bar)!;
+    expect(sameStructure(claim, PIXELS.vis_1!)).toBe(true);
+    // A crop whose pixels read another bar (6 parts, 2 shaded) is the wrong crop.
+    expect(contradicts(bar, { spec_version: 1, kind: "fraction_bar", parts: 6, shaded: [0, 1] })).toBe(true);
+    expect(contradicts(bar, PIXELS.vis_1!)).toBe(false);
+    // A line in fifths cannot carry «Marca 3/4».
+    const fifths: VisualSpec = { spec_version: 1, kind: "number_line", start: { n: 0, d: 1 }, end: { n: 1, d: 1 }, divisions: 5, labels: [] };
+    expect(consistentWithActivities(fifths, ["Marca 3/4 en la recta numérica."])).toBe(false);
+    expect(consistentWithActivities(PIXELS.vis_2!, ["Marca 3/4 en la recta numérica."])).toBe(true);
   });
 });
 
 describe("applied to the sheet: complete, with each figure in its activity, and a review that passes", () => {
   it("rebuilt figures take the image's place (same activity, same links); the deterministic review finds nothing to FAIL", async () => {
     const s = sheet();
-    const plan = await resolve(s, deps([]));
+    const plan = await resolve(s, deps([], null, PIXELS));
     const doc = applyVisualResolution(s.document, plan);
     const figures = allBlocks(doc).filter((b) => b.type === "image" && b.source.kind === "figure");
     expect(figures).toHaveLength(2);
@@ -116,12 +158,12 @@ describe("applied to the sheet: complete, with each figure in its activity, and 
   });
 
   it("a rewrite removes the image and its link, answers on lines, and keeps the activity's label and trace to the visual", async () => {
-    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra." }));
-    const plan = await resolve(s, deps(["vis_1"], scripted({ rewrite: { feasible: true, prompt: "Divide el segmento de 0 a 1 en cuatro partes iguales y escribe dónde iría 3/4.", steps: [], lines: 2 } })));
+    const s = sheet(dataSource);
+    const plan = await resolve(s, deps(["vis_1"], scripted({ rewrite: DATA_REWRITE })));
     const doc = applyVisualResolution(s.document, plan);
     expect(allBlocks(doc).some((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === "vis_2")).toBe(false);
     const act4 = allBlocks(doc).find((b) => b.type === "activity" && b.label === "4");
-    expect(act4).toMatchObject({ prompt: expect.stringContaining("cuatro partes"), response: { kind: "lines", lines: 2 }, trace: { origin: "adapted", source_refs: ["act_4", "vis_2"] } });
+    expect(act4).toMatchObject({ prompt: expect.stringContaining("3/4 de litro"), response: { kind: "lines", lines: 2 }, trace: { origin: "adapted", source_refs: ["act_4", "vis_2"] } });
     expect(deterministicChecks({ analysis: s.analysis, plan: s.plan, context: s.context, document: doc } as never).filter((c) => c.status === "FAIL")).toEqual([]);
   });
 

@@ -7,7 +7,7 @@ import { processAdaptationJobs, processAdaptationStage } from "@/lib/adaptation/
 import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
 import type { VisualAssistants } from "@/lib/materials/visuals/auto/assistants";
 import { resolveMagicVisuals } from "@/lib/materials/visuals/auto/policy";
-import { prepareVisuals } from "@/lib/materials/visuals/auto/service";
+import { corroborateSpec, prepareVisuals } from "@/lib/materials/visuals/auto/service";
 import { resolveVisuals } from "@/lib/materials/visuals/service";
 import { loadRenderInputWith } from "@/lib/render/load";
 import { readinessOf } from "@/lib/render/readiness";
@@ -40,6 +40,15 @@ const planner = async (_inner: unknown, _call: number, input: { context: { needs
 const aiRun = { purpose: "visual_rewrite" as const, attempt: 1, alias: "STANDARD" as const, provider: "anthropic" as const, model: "modelo-de-prueba", effort: "low" as const, promptKey: "visual_rewriter", promptVersion: 1, inputTokens: 900, outputTokens: 120, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: 0.003, latencyMs: 500, status: "success" as const, errorCode: null };
 
 let n = 0;
+/** Visual 2 turned into a mere data source (a label that carries «3/4 de litro»), used by a calculation. */
+function dataSourceAnalysis(): MaterialAnalysis {
+  const analysis = fractionsCaseAnalysis();
+  analysis.visuals = analysis.visuals.map((v) => (v.id === "vis_2" ? { ...v, kind: "image", title: null, description: "Etiqueta de una botella de agua: 3/4 de litro.", text: null } : v));
+  analysis.activities = analysis.activities.map((a) => (a.id === "act_4" ? { ...a, instruction: "Calcula cuántos cuartos de litro le faltan a la botella para llegar a 1 litro.", response_format: "calculate", answer_area: { type: "lines", lines: 2 }, objective_ids: ["obj_3"] } : a));
+  analysis.protected_elements = analysis.protected_elements.filter((p) => !p.resource_ids.includes("vis_2"));
+  return analysis;
+}
+
 async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null } = {}) {
   const user = await createUser(db, `magic-visual-${++n}-${Math.random().toString(36).slice(2, 6)}@example.com`);
   const analysis = options.analysis ?? fractionsCaseAnalysis();
@@ -52,17 +61,20 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
   const visualPolicy: NonNullable<OrchestratorDeps["visuals"]> = {
     resolve: async (input) => {
       resolveCalls.push(input.adaptationId);
-      await prepareVisuals(auto.deps, { workspaceId: input.workspaceId, materialId: input.materialId, analysis: input.analysis, analysisFingerprint: input.analysisFingerprint, sourceSha256, adaptationId: input.adaptationId });
+      // The same wiring as production (`auto/server.ts`): only crops THIS engine accepted, and pixel-corroborated rebuilds.
+      const summary = await prepareVisuals(auto.deps, { workspaceId: input.workspaceId, materialId: input.materialId, analysis: input.analysis, analysisFingerprint: input.analysisFingerprint, sourceSha256, adaptationId: input.adaptationId });
+      const accepted = "result" in summary && summary.result ? summary.result.visuals : {};
       return resolveMagicVisuals(
         {
           readyOriginals: async (ids) => {
             const r = await resolveVisuals(visuals.deps, { materialId: input.materialId, analysisFingerprint: input.analysisFingerprint, sourceSha256, visualIds: ids });
-            return new Set(ids.filter((id) => r.states[id]?.status === "ready"));
+            return new Set(ids.filter((id) => r.states[id]?.status === "ready" && (r.states[id]?.provenance?.method === "human" || ["B", "C"].includes(accepted[id]?.choice ?? ""))));
           },
+          corroborate: (visual, activityTexts) => corroborateSpec(auto.deps, { materialId: input.materialId, sourceSha256, visual, activityTexts }),
           assistants: options.assistants ?? null,
           recordAiRun: (run) => auto.deps.recordAiRun!(run, { workspaceId: input.workspaceId, materialId: input.materialId, adaptationId: input.adaptationId }),
         },
-        { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage },
+        { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, functionalNeeds: input.functionalNeeds },
       );
     },
   };
@@ -90,7 +102,7 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
   };
   const entitlement = async (id: string) => (await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [id]))[0]?.state;
   const plan = async (id: string) => (await q<{ payload: { plan: { needs: Array<{ key: string; category: string; resolution: { action: string } }> } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'visual_resolution'", [id]))[0]?.payload.plan;
-  return { user, materialId, learner, deps, actor, spy, orchestrator, status, magic, sheet, entitlement, plan, resolveCalls };
+  return { user, materialId, learner, deps, actor, spy, orchestrator, status, magic, sheet, entitlement, plan, resolveCalls, visuals, auto, sourceSha256 };
 }
 
 describe("«Hacer magia» delivers the fractions sheet complete, with nothing for the teacher to do", () => {
@@ -105,39 +117,72 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await t.entitlement(id)).toBe("consumed");
   });
 
-  it("a figure that is not in the PDF is rebuilt from the analysis and drawn in its activity: ready and printable", async () => {
-    const t = await teacher({ pdf: { withoutNumberLine: true } });
+  it("no number line in the PDF: its complete description is NOT drawn (no pixel evidence) → honest stop, no PDF, no unit, no model asked", async () => {
+    const calls: string[] = [];
+    const assistants: VisualAssistants = { support: async () => (calls.push("support"), { draft: null, run: aiRun }), rewrite: async () => (calls.push("rewrite"), { draft: { feasible: true, prompt: "Escribe cuánto le falta a 3/4 para llegar a 1.", steps: [], lines: 2 }, run: aiRun }) };
+    const t = await teacher({ pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
-    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
+    expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, phase: "automatic_incomplete", automaticStop: { reason: "visual" } });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" } });
     const s = await t.sheet(id);
-    expect(s.readiness).toMatchObject({ printable: true });
-    if (s.loaded.kind !== "ok") throw new Error("no sheet");
-    const figure = allBlocks(s.loaded.document).find((b) => b.type === "image" && b.source.kind === "figure");
-    expect(figure).toMatchObject({ source: { kind: "figure", provenance: "reconstruction", visual_ref: "vis_2", spec: { kind: "number_line", divisions: 4 } } });
-    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "reconstructable_structured_visual" });
+    expect(s.readiness?.printable ?? false).toBe(false);
+    expect(await t.entitlement(id)).toBe("reserved");
+    expect(t.spy.reviewer).toBe(0);
+    expect(calls).toEqual([]);
+    expect(await q("select 1 from public.ai_runs where adaptation_id = $1 and purpose like 'visual_%'", [id])).toEqual([]);
   });
 
-  it("neither found nor rebuildable: the activity is rewritten without it (validated), and the sheet is ready", async () => {
+  it("a wrong crop is rejected: the bar on the page is 8/3, the analysis says 6/2 → not trusted, not rebuilt, honest stop", async () => {
     const analysis = fractionsCaseAnalysis();
-    analysis.visuals = analysis.visuals.map((v) => (v.id === "vis_2" ? { ...v, kind: "image", description: "Dibujo de una jarra." } : v));
+    analysis.visuals = analysis.visuals.map((v) => (v.id === "vis_1" ? { ...v, description: "Barra dividida en 6 partes iguales con 2 partes coloreadas." } : v));
+    const t = await teacher({ analysis });
+    const id = await t.magic();
+    expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual" } });
+    const result = (await q<{ result: { visuals: Record<string, { choice: string; reason: string }> } }>("select result from public.material_visual_autolocations where material_id = $1", [t.materialId]))[0]!.result;
+    expect(result.visuals.vis_1).toMatchObject({ choice: "D", reason: "contradicts_analysis" });
+    expect(result.visuals.vis_2).toMatchObject({ choice: "C" });
+    expect(await q("select 1 from public.material_visual_locators where material_id = $1 and visual_id = 'vis_1'", [t.materialId])).toEqual([]);
+    expect(await t.entitlement(id)).toBe("reserved");
+  });
+
+  it("an automatic crop of an earlier engine that this one does not find again is never used: the bar is rebuilt from its real pixels", async () => {
+    const analysis = fractionsCaseAnalysis();
+    const t = await teacher({ analysis });
+    const { fingerprint } = await import("@/lib/adaptation/fingerprint");
+    const { readPage } = await import("@/lib/materials/visuals/auto/read");
+    const { loadSource, produceVisualAsset } = await import("@/lib/materials/visuals/service");
+    const { box } = await readPage(await fractionsPdf(), "application/pdf", 1, 100);
+    // A v1 false positive: a «figure» crop over another exercise, accepted at exactly 0.75 without vision, with its crop produced.
+    const stale = await t.visuals.deps.admin.createLocator({ workspaceId: t.user.workspaceId, materialId: t.materialId, analysisFingerprint: fingerprint(analysis), visualId: "vis_1", sourceSha256: t.sourceSha256, page: 1, bounds: { x: 0.12, y: 0.36, w: 0.5, h: 0.05 }, pageBox: box, userId: null, method: "auto", confidence: 0.75, evidence: { engine: "auto_visuals@v1" } });
+    expect(await produceVisualAsset(t.visuals.deps, stale.id, (await loadSource(t.visuals.deps, t.materialId, t.sourceSha256))!)).toMatchObject({ ok: true });
+    const id = await t.magic();
+    const result = (await q<{ result: { visuals: Record<string, { choice: string; reason: string }> } }>("select result from public.material_visual_autolocations where material_id = $1", [t.materialId]))[0]!.result;
+    expect(result.visuals.vis_1).toMatchObject({ choice: "D", reason: "auto_not_revalidated" });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_1")).toMatchObject({ category: "reconstructable_structured_visual", resolution: { action: "figure", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] } } });
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
+    const s = await t.sheet(id);
+    if (s.loaded.kind !== "ok") throw new Error("no sheet");
+    expect(allBlocks(s.loaded.document).some((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === "vis_1")).toBe(false);
+  });
+
+  it("the figure only carried a datum: the activity is rewritten without it (validated as equivalent), and the sheet is ready", async () => {
     const assistants: VisualAssistants = {
       support: async () => ({ draft: null, run: aiRun }),
-      rewrite: async () => ({ draft: { feasible: true, prompt: "Divide el segmento de 0 a 1 en cuatro partes iguales y escribe dónde iría 3/4.", steps: [], lines: 2 }, run: aiRun }),
+      rewrite: async () => ({ draft: { feasible: true, prompt: "La botella tiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro.", steps: [], lines: 2 }, run: aiRun }),
     };
-    const t = await teacher({ analysis, pdf: { withoutNumberLine: true }, assistants });
+    const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
     expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
     const s = await t.sheet(id);
     expect(s.readiness).toMatchObject({ printable: true });
     expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "rewritable_without_visual", resolution: { action: "rewrite" } });
     expect(await q("select purpose, prompt_key from public.ai_runs where adaptation_id = $1 and purpose like 'visual_%'", [id])).toEqual([{ purpose: "visual_rewrite", prompt_key: "visual_rewriter" }]);
+    expect(await t.entitlement(id)).toBe("consumed");
   });
 
   it("nothing reliable: an honest stop — not ready, no PDF, no unit, no AI review, no request to locate; and no loop", async () => {
-    const analysis = fractionsCaseAnalysis();
-    analysis.visuals = analysis.visuals.map((v) => (v.id === "vis_2" ? { ...v, kind: "image", description: "Dibujo de una jarra." } : v));
     const assistants: VisualAssistants = { support: async () => ({ draft: null, run: aiRun }), rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }) };
-    const t = await teacher({ analysis, pdf: { withoutNumberLine: true }, assistants });
+    const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
     const stopped = await t.status(id);
     expect(stopped).toMatchObject({ status: "blocked", delivered: false, phase: "automatic_incomplete", automaticStop: { reason: "visual" } });
@@ -146,6 +191,36 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect((await t.status(id)).automaticStop).toMatchObject({ reason: "visual" });
     expect(t.resolveCalls).toHaveLength(1);
+  });
+});
+
+describe("rebuilt only with evidence from the original's pixels", () => {
+  const corroborate = async (t: Awaited<ReturnType<typeof teacher>>, analysis: MaterialAnalysis, visualId: string) => {
+    const visual = analysis.visuals.find((v) => v.id === visualId)!;
+    const texts = analysis.activities.filter((a) => visual.activity_ids.includes(a.id)).map((a) => a.instruction);
+    return corroborateSpec(t.auto.deps, { materialId: t.materialId, sourceSha256: t.sourceSha256, visual, activityTexts: texts });
+  };
+
+  it("bar 8 / 3 and line 0–1 in quarters: the description selects the drawing, the drawing is what is drawn", async () => {
+    const analysis = fractionsCaseAnalysis();
+    const t = await teacher({ analysis });
+    expect(await corroborate(t, analysis, "vis_1")).toEqual({ spec_version: 1, kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] });
+    expect(await corroborate(t, analysis, "vis_2")).toMatchObject({ kind: "number_line", start: { n: 0, d: 1 }, end: { n: 1, d: 1 }, divisions: 4, labels: [{ text: "0" }, { text: "1/4" }, { text: "1/2" }, { text: "3/4" }, { text: "1" }] });
+  });
+
+  it("no evidence, no figure: absent drawing, a different drawing, a mark on the line, unequal parts, an incomplete description", async () => {
+    const base = fractionsCaseAnalysis();
+    expect(await corroborate(await teacher({ analysis: base, pdf: { withoutNumberLine: true } }), base, "vis_2")).toBeNull();
+    expect(await corroborate(await teacher({ analysis: base, pdf: { markOnLine: true } }), base, "vis_2")).toBeNull();
+    expect(await corroborate(await teacher({ analysis: base, pdf: { unequalBar: true } }), base, "vis_1")).toBeNull();
+    const other = fractionsCaseAnalysis();
+    other.visuals = other.visuals.map((v) => (v.id === "vis_1" ? { ...v, description: "Barra dividida en 6 partes iguales con 2 partes coloreadas." } : v.id === "vis_2" ? { ...v, description: "Recta numérica de 0 a 1 dividida en quintos." } : v));
+    const t = await teacher({ analysis: other });
+    expect(await corroborate(t, other, "vis_1")).toBeNull();
+    expect(await corroborate(t, other, "vis_2")).toBeNull();
+    const incomplete = fractionsCaseAnalysis();
+    incomplete.visuals = incomplete.visuals.map((v) => (v.id === "vis_1" ? { ...v, description: "Barra dividida en partes, algunas coloreadas." } : v));
+    expect(await corroborate(await teacher({ analysis: incomplete }), incomplete, "vis_1")).toBeNull();
   });
 });
 
