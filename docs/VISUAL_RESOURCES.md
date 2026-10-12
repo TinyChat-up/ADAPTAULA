@@ -259,14 +259,15 @@ antes de sus actividades. El orden entre tipos no está en el análisis, así qu
 
    | Señal | Peso |
    | --- | --- |
-   | Firma del tipo (figura genérica: 0,15) | 0,30 |
+   | Firma del tipo (figura genérica: **0**; desde `auto_visuals@v2`) | 0,30 |
    | En la zona de su actividad | 0,25 |
    | Única en esa zona o al menos 0,15 por delante de la siguiente | 0,20 |
    | Recorte limpio: hay tinta, no ocupa media página y no corta texto corrido ajeno. **Obligatorio** | 0,15 |
    | Acuerdo con la hipótesis de visión (IoU ≥ 0,5 y confianza del modelo ≥ 0,7) | 0,20 |
 
    Se acepta con **≥ 0,75**. Las etiquetas impresas junto a la figura entran en el recorte, incluidas las fracciones apiladas. El
-   texto corrido nunca entra.
+   texto corrido nunca entra. Una figura genérica (cualquier tinta que no es texto) no aporta firma: tener líneas o tinta no es
+   prueba de que sea ESE visual, así que sin el acuerdo de la visión se queda en 0,60 y no se acepta.
 5. **Visión solo si hace falta.** Si algo queda sin resolver y hay proveedor configurado, se hace **una** llamada por página con
    `visual_locator@v1` y el alias `STANDARD`, a través de `src/lib/ai`. Hay como máximo 3 páginas por versión del material. La
    respuesta es una **hipótesis**: solo suma si cae sobre una región que la geometría ya encontró. Un rectángulo sin figura queda
@@ -379,11 +380,47 @@ visual de la ficha ensamblada, antes de las revisiones (así se revisa la ficha 
 
 | # | Categoría | Qué se hace | Se valida con |
 | --- | --- | --- | --- |
-| 1 | `exact_original_visual` | Localizar el visual en el original: el recorte del docente o el automático de 8.2B.1 (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75 de la geometría o de la visión; el recorte de una persona nunca se sustituye |
-| 2 | `reconstructable_structured_visual` | Reconstruirlo: barra, recta numérica, parte-todo, cuadrícula y comparación; tablas y gráficos ya se rehacían con sus datos | VisualSpec verificado, a partir de sus píxeles o, si no se encontró, de una descripción completa del análisis (todos los números; sin puntos marcados) |
+| 1 | `exact_original_visual` | Localizar el visual en el original: el recorte del docente o el automático (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75 de la geometría o de la visión; el recorte de una persona nunca se sustituye; uno automático solo cuenta si lo aceptó el motor ACTUAL y sus píxeles no contradicen el análisis |
+| 2 | `reconstructable_structured_visual` | Reconstruirlo desde los píxeles del original: barra y recta numérica; tablas y gráficos ya se rehacían con sus datos | La descripción completa del análisis es una hipótesis que selecciona el dibujo; exactamente un dibujo de la página debe leerse, con sus propios píxeles, como esa misma figura; se dibuja lo que leen los píxeles; y encaja con la actividad |
 | 3 | `generatable_support_visual` | Generar un apoyo nuevo que pidió una decisión: secuencia de pasos o tarjetas de vocabulario, dibujados por nuestros componentes en CLARO (`visual_support@v1`) | Longitudes, sin marcas, sin copiar la consigna, sin la respuesta |
-| 4 | `rewritable_without_visual` | Un original que una actividad usa: reescribirla sin él (`visual_rewriter@v1`). Un visual que nada usa, o un apoyo opcional que no se pudo generar: se deja fuera | Mantiene todos los datos de la tarea y los números del visual; no menciona ninguna imagen; sin la respuesta |
+| 4 | `rewritable_without_visual` | Un original que solo aportaba un dato a una actividad: reescribirla sin él (`visual_rewriter@v1`). Un visual que nada usa, o un apoyo opcional que no se pudo generar: se deja fuera | **Equivalencia pedagógica** (abajo); además mantiene todos los datos de la tarea y los números del visual, no menciona ninguna imagen y no da la respuesta |
 | 5 | `unresolved_visual` | Parada honesta: estado `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | — |
+
+### Equivalencia pedagógica (`src/lib/adaptation/pedagogical-equivalence.ts`)
+
+Una actividad que evalúa interpretar o actuar sobre una representación no se convierte en otra actividad textual porque conserve
+los números. Que el modelo diga «se puede» (`feasible: true`) es solo una condición previa, nunca la prueba. Reglas deterministas
+por tipo de tarea, comprobadas ANTES de llamar a ningún modelo y otra vez sobre su propuesta:
+
+| Se compara | Regla |
+| --- | --- |
+| Operación cognitiva | Actuar sobre la figura (marcar, colorear, situar, dibujar, unir) o interpretarla (observa, según, qué fracción representa) → la representación es necesaria: **no se reescribe** |
+| Representación necesaria | También lo es si el visual es una recta numérica, figura geométrica, diagrama, gráfico o mapa, si el objetivo de la actividad trata de la representación (representar, situar, interpretar, medir, escala…) o si el análisis la protege como `necessary_visual` esencial de esa actividad |
+| Tipo de respuesta | Marcar, dibujar, elegir, unir, ordenar o completar huecos no pasan a líneas de escritura |
+| Objetivo y acción | Los mismos verbos de acción (calcula sigue siendo calcula; explicar no pasa a calcular ni al revés) |
+| Nivel de exigencia | Sin datos nuevos; sin pasos que resuelvan la tarea salvo que el perfil pida secuenciación (instrucciones por pasos, memoria de trabajo, planificación, pasos de las operaciones, listas), y entonces como mucho 4; no se acorta por debajo del 60 % |
+| Necesidades funcionales | La carga de lectura no crece más allá del original y lo que decía su figura |
+
+Solo una figura que es mera fuente de datos (una etiqueta con «3/4 de litro» para una tarea de calcular) se puede reescribir.
+
+Casos de la ficha de fracciones, todos rechazados: actividad 1 (barra de 8 partes con 3 sombreadas) ≠ «Escribe la fracción tres
+octavos», ni siquiera describiendo la barra en palabras; actividad 4 («Marca 3/4 en la recta») ≠ «¿Qué fracción es mayor, 3/4 o
+1/2?», «¿Cuánto le falta a 3/4 para 1?» o «Escribe dónde iría 3/4»; actividad 2: perder una de las dos comparaciones o pedir
+«calcula» en lugar de «compara y escribe el signo» deja de ser equivalente. Si la figura no se encuentra ni se reconstruye con
+evidencia, la adaptación se detiene honestamente.
+
+### Evidencia exigida para reconstruir
+
+- La descripción del análisis debe ser **completa** (partes y partes sombreadas; intervalo y divisiones), sin puntos ni marcas, o
+  no hay hipótesis. Una descripción completa **no** es evidencia de que refleje el original.
+- Exactamente **un** dibujo de la página del original debe leerse, con el extractor de píxeles, como esa figura (mismo tipo, mismos
+  números). Lo dibujado sale de los píxeles: qué partes están sombreadas y qué marcas llevan etiqueta.
+- La figura debe encajar con la actividad: una fracción que la actividad pide situar debe caer en una marca de la recta.
+- Un recorte cuyos píxeles leen otra figura que la descrita (8/3 frente a 6/2) es el recorte equivocado: se rechaza
+  (`contradicts_analysis`).
+- Un localizador automático de una versión anterior del motor se vuelve a validar: si el motor actual no encuentra la misma región,
+  no se usa (`auto_not_revalidated`). Una selección humana sigue mandando siempre.
+- Cuadrículas y círculos no tienen lector de píxeles: nunca se reconstruyen a partir de palabras.
 
 - La decisión de cada ficha se guarda en el artefacto `visual_resolution`, una vez por entrada de generación: un trabajo reanudado
   la reutiliza y no repite el coste. Registra la categoría, la acción y los peldaños probados.

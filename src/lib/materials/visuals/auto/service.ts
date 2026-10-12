@@ -6,9 +6,11 @@ import type { AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-an
 import type { VisualSpec } from "@/lib/visuals/spec";
 import { RasterError, encodePng, toPdfRect, type PageBox } from "../raster";
 import { loadSource, produceVisualAsset, type LocatorRow, type VisualDeps } from "../service";
+import { consistentWithActivities, contradicts, sameStructure, specFromAnalysis } from "@/lib/visuals/from-analysis";
+import type { NormalizedBounds } from "../geometry";
 import { SPEC_EXTRACTOR_VERSION, extractSpec } from "./extract";
-import { locateVisuals, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
-import type { PageModel } from "./page-model";
+import { candidates, locateVisuals, toBounds, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
+import { iou, type PageModel } from "./page-model";
 import { readPage } from "./read";
 import type { VisionLocator } from "./vision";
 
@@ -20,12 +22,16 @@ import type { VisionLocator } from "./vision";
  *   active one) → produce its crop with the SAME recipe as a person's → for a simple mathematical figure, extract and verify its
  *   VisualSpec → record per visual the choice (A/B/C/D), its confidence and its signals, without content.
  *
+ * An automatic locator of an earlier run (another engine version) is not trusted as such: it is re-validated with the current
+ * engine on every new run and only kept if the same region is accepted again. A located bar or number line whose pixels say a
+ * different figure than a complete description of that visual (8 parts / 3 shaded vs. 6 / 2) is the wrong crop: rejected.
+ *
  * Idempotent: a key is run once (a concurrent or repeated call does nothing and costs nothing); a later download of the PDF
  * never re-analyses anything. Never consumes an adaptation unit. A failure here never fails a generation: the sheet then waits
  * for the essential visuals it lacks, honestly, as before.
  */
 
-export const AUTO_ENGINE_VERSION = "auto_visuals@v1";
+export const AUTO_ENGINE_VERSION = "auto_visuals@v2";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -139,11 +145,16 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
 
     for (const page of [...new Set(targets.map((t) => t.page))].sort((a, b) => a - b)) {
       const pending: typeof targets = [];
+      const earlierAuto = new Map<string, LocatorRow>();
       for (const target of targets.filter((t) => t.page === page)) {
-        // A visual that already has an active locator (a person's, or an earlier automatic one) keeps it.
+        // A person's locator always stays. An earlier automatic one has to be found again by this engine (below).
         const active = await deps.admin.activeLocator(input.materialId, input.analysisFingerprint, target.id);
-        if (active && active.source_sha256 === input.sourceSha256) result.visuals[target.id] = await finish(active);
-        else pending.push(target);
+        const current = active && active.source_sha256 === input.sourceSha256 ? active : null;
+        if (current?.method === "human") result.visuals[target.id] = await finish(current);
+        else {
+          if (current) earlierAuto.set(target.id, current);
+          pending.push(target);
+        }
       }
       if (pending.length === 0) continue;
 
@@ -172,7 +183,21 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
       }
       for (const l of located) {
         if (!l.accepted || !l.bounds) {
-          result.visuals[l.visualId] = { choice: "D", reason: l.evidence.reason, confidence: l.confidence, method: null, spec: null, signals: signalsOf(l.evidence) };
+          result.visuals[l.visualId] = { choice: "D", reason: earlierAuto.has(l.visualId) ? "auto_not_revalidated" : l.evidence.reason, confidence: l.confidence, method: null, spec: null, signals: signalsOf(l.evidence) };
+          continue;
+        }
+        const target = pending.find((t) => t.id === l.visualId)!;
+        if (target.shape !== "figure") {
+          const read = extractSpec(await pageAt200(page), l.bounds, target.shape);
+          if (read.ok && contradicts(target.visual, read.spec)) {
+            result.visuals[l.visualId] = { choice: "D", reason: "contradicts_analysis", confidence: l.confidence, method: null, spec: null, signals: signalsOf(l.evidence) };
+            continue;
+          }
+        }
+        const earlier = earlierAuto.get(l.visualId);
+        if (earlier) {
+          const same = iou(boundsRect(earlier), boundsRect(l.bounds)) >= 0.8;
+          result.visuals[l.visualId] = same ? await finish(earlier) : { choice: "D", reason: "auto_not_revalidated", confidence: l.confidence, method: null, spec: null, signals: signalsOf(l.evidence) };
           continue;
         }
         const evidence = { engine: AUTO_ENGINE_VERSION, ...signalsOf(l.evidence), page_dpi: LOCATE_DPI, pdf_rect: toPdfRect(l.bounds, read.box) };
@@ -189,4 +214,36 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
     await deps.runs.complete(claim.id, "failed", { ...result, vision_pages: visionCalls, reason }, visionCalls).catch(() => undefined);
     return { status: "failed", reason };
   }
+}
+
+const boundsRect = (b: NormalizedBounds) => ({ x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h });
+
+/**
+ * A figure the locator could not crop, rebuilt ONLY if the original's pixels corroborate the analysis: a complete description gives
+ * the claim (kind and numbers), and exactly one drawing of its page must read, from its own pixels, as that same figure; the
+ * drawing is what is drawn (which parts are shaded, which ticks are labelled), never the words. Then it must fit the activities
+ * that use it. Anything else (no claim, no drawing, two candidates, a different reading, a mark on the line) → null.
+ */
+export async function corroborateSpec(deps: Pick<AutoRunDeps, "admin">, input: { materialId: string; sourceSha256: string | null; visual: AnalysisVisual; activityTexts: readonly string[] }): Promise<VisualSpec | null> {
+  const shape = shapeOf(input.visual);
+  const claim = specFromAnalysis(input.visual);
+  if (shape === "figure" || !claim) return null;
+  const source = await loadSource(deps, input.materialId, input.sourceSha256);
+  if (!source) return null;
+  let model: PageModel;
+  try {
+    model = (await readPage(source.bytes, source.mime, input.visual.page, 200)).model;
+  } catch {
+    return null;
+  }
+  const matches: Array<{ crop: { x0: number; y0: number; x1: number; y1: number }; spec: VisualSpec }> = [];
+  for (const c of candidates(model)) {
+    const read = extractSpec(model, toBounds(model, c.crop), shape);
+    if (!read.ok || !sameStructure(claim, read.spec)) continue;
+    // A single drawing and the group it belongs to are the same figure.
+    if (!matches.some((m) => iou(m.crop, c.crop) > 0.5)) matches.push({ crop: c.crop, spec: read.spec });
+  }
+  if (matches.length !== 1) return null;
+  const spec = matches[0]!.spec;
+  return consistentWithActivities(spec, input.activityTexts) ? spec : null;
 }

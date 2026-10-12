@@ -5,7 +5,8 @@ import { barShape, numberLineShape } from "./shapes";
 /**
  * Where a visual of the analysis is on its page, decided by deterministic signals and an explicit confidence:
  *
- *   signature  0.30  the region has the pixel signature of its kind (number line, divided bar); a generic figure only 0.15
+ *   signature  0.30  the region has the pixel signature of its kind (number line, divided bar); a generic figure 0 (any drawing
+ *                    has ink and lines: that is not evidence it is THE visual, so a generic figure needs a vision model's agreement)
  *   placement  0.25  it lies in the zone of the activity that uses it (from that activity's printed instruction to the next one)
  *   unique     0.20  it is the only region in that zone with that signature, or clearly the best (≥ 0.15 ahead)
  *   clean      0.15  REQUIRED: it has ink, it is not most of the page, and no running text of the sheet falls inside the crop
@@ -19,7 +20,7 @@ export const ACCEPT = 0.75;
 export const AI_ONLY_CAP = 0.6;
 export const HYPOTHESIS_IOU = 0.5;
 export const HYPOTHESIS_CONFIDENCE = 0.7;
-const W = { signature: 0.3, genericSignature: 0.15, placement: 0.25, unique: 0.2, clean: 0.15, vision: 0.2 } as const;
+const W = { signature: 0.3, genericSignature: 0, placement: 0.25, unique: 0.2, clean: 0.15, vision: 0.2 } as const;
 
 export type VisualShape = "number_line" | "bar" | "figure";
 
@@ -169,7 +170,7 @@ function isClean(model: PageModel, lines: readonly TextLine[], crop: Rect): bool
   return !lines.some((l) => !isLabelLine(l.text) && area(intersection(l, crop)) > 0.15 * area(l));
 }
 
-const toBounds = (model: PageModel, r: Rect): NormalizedBounds => {
+export const toBounds = (model: PageModel, r: Rect): NormalizedBounds => {
   const round = (n: number) => Math.round(n * 1e6) / 1e6;
   let x = r.x0 / model.width;
   let y = r.y0 / model.height;

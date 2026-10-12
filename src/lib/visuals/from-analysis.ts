@@ -2,13 +2,14 @@ import type { AnalysisVisual } from "@/lib/schemas/material-analysis";
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, less, parseLabel, reduce, sameValue, specIssues, tickValue, type Fraction, type VisualSpec } from "./spec";
 
 /**
- * A simple mathematical figure rebuilt from the analysis's own words when its pixels could not be located in the original
- * («Hacer magia», step 3 of the visual policy). Only explicit, complete and self-consistent descriptions are accepted: every
- * number the figure needs must be written (parts AND shaded parts; interval AND divisions); a figure with a marked point or any
- * word the spec cannot carry is refused (it may be the task's data). The result is verified like any other spec.
+ * What the analysis's own words CLAIM a simple mathematical figure is. Only explicit, complete and self-consistent descriptions
+ * give a claim: every number the figure needs must be written (parts AND shaded parts; interval AND divisions); a figure with a
+ * marked point or any word the spec cannot carry gives none (it may be the task's data).
  *
- * Known simplification, stated: a description gives HOW MANY parts are shaded, not which; they are drawn from the left (the
- * fraction represented is the same).
+ * A claim is never a figure by itself: a complete description is not evidence that it reflects the original. It is used to
+ * (1) reject a crop whose pixels contradict it (`contradicts`), and (2) select, among the drawings of the original page, the
+ * one whose pixels say exactly the same (`sameStructure`); only that pixel reading is drawn. Grids and circles have no pixel
+ * reader, so they are never rebuilt from words.
  */
 
 const WORD_NUMBERS: Record<string, number> = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
@@ -99,4 +100,33 @@ export function specFromAnalysis(visual: Pick<AnalysisVisual, "kind" | "title" |
   if (/\b(circulo|circunferencia|pizza|tarta|rueda)\b/.test(text)) return verified({ spec_version: VISUAL_SPEC_VERSION, kind: "part_whole", shape: "circle", parts: counts.parts, shaded: shading(counts.parts, counts.shaded) });
   if (/\b(barra|tira|rectangulo|segmento)\b/.test(text)) return verified({ spec_version: VISUAL_SPEC_VERSION, kind: "fraction_bar", parts: counts.parts, shaded: shading(counts.parts, counts.shaded) });
   return null;
+}
+
+/**
+ * Same figure, as far as the claim can say: same kind and same numbers (parts and how many shaded; interval and divisions).
+ * Which parts are shaded and which ticks are labelled come from the pixels, never from the claim.
+ */
+export function sameStructure(claim: VisualSpec, read: VisualSpec): boolean {
+  if (claim.kind === "fraction_bar" && read.kind === "fraction_bar") return claim.parts === read.parts && claim.shaded.length === read.shaded.length;
+  if (claim.kind === "number_line" && read.kind === "number_line") return sameValue(claim.start, read.start) && sameValue(claim.end, read.end) && claim.divisions === read.divisions;
+  return false;
+}
+
+/** A pixel reading that a complete description of the same visual says is a different figure: the crop is not that visual. */
+export function contradicts(visual: Pick<AnalysisVisual, "kind" | "title" | "description" | "text">, read: VisualSpec): boolean {
+  const claim = specFromAnalysis(visual);
+  return claim !== null && claim.kind === read.kind && !sameStructure(claim, read);
+}
+
+/**
+ * The figure is coherent with the activities that use it: every fraction an activity asks to place on a number line lies on one of
+ * its ticks (a line in fifths cannot carry «marca 3/4»).
+ */
+export function consistentWithActivities(spec: VisualSpec, activityTexts: readonly string[]): boolean {
+  const fractions = activityTexts.flatMap((t) => [...normalize(t).matchAll(/\b(\d{1,3})\/(\d{1,3})\b/g)].map((m) => ({ n: Number(m[1]), d: Number(m[2]) }))).filter((f) => f.d > 0);
+  if (spec.kind === "number_line") {
+    const inside = fractions.filter((f) => !less(f, spec.start) && !less(spec.end, f));
+    return inside.every((f) => Array.from({ length: spec.divisions + 1 }, (_, i) => tickValue(spec, i)).some((t) => sameValue(t, f)));
+  }
+  return true;
 }
