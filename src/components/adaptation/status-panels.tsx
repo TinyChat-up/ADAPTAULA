@@ -136,9 +136,16 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
   return (
     <Card className="space-y-4">
       {pending > 0 ? (
-        <Alert tone="warning" title={dto.creationMode === "automatic" ? AUTOMATIC_STOP_COPY.visual : "La ficha está casi lista · Falta completar un recurso"}>
-          <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
-        </Alert>
+        dto.creationMode === "automatic" ? (
+          // «Hacer magia» never asks the teacher to complete images; editing is offered, never the normal path.
+          <Alert tone="warning" title={AUTOMATIC_STOP_COPY.visualPending}>
+            <p>No la presentamos como lista y no hay PDF. Si quieres, puedes editarla tú.</p>
+          </Alert>
+        ) : (
+          <Alert tone="warning" title="La ficha está casi lista · Falta completar un recurso">
+            <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
+          </Alert>
+        )
       ) : !printable ? (
         <Alert tone="warning" title="La ficha no se puede mostrar completa todavía">
           <p>Revisa la ficha para ver qué falta.</p>
@@ -159,7 +166,13 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
         </div>
       ) : null}
       <div className="flex flex-wrap items-start gap-3 pt-1">
-        <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>{pending > 0 ? "Completar ficha" : "Ver la ficha"}</LinkButton>
+        {pending > 0 && dto.creationMode === "automatic" ? (
+          <LinkButton variant="secondary" href={`/app/adaptaciones/${dto.id}/vista?editar=1`}>
+            {AUTOMATIC_STOP_COPY.visualEdit}
+          </LinkButton>
+        ) : (
+          <LinkButton href={`/app/adaptaciones/${dto.id}/vista`}>{pending > 0 ? "Completar ficha" : "Ver la ficha"}</LinkButton>
+        )}
         {printable ? <PdfDownload adaptationId={dto.id} /> : null}
       </div>
       <BackLinks materialId={materialId} />

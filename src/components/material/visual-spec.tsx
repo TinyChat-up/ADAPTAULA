@@ -111,6 +111,54 @@ function Comparison({ spec, label }: { spec: Extract<VisualSpec, { kind: "compar
   );
 }
 
+function Grid({ spec, label }: { spec: Extract<VisualSpec, { kind: "grid" }>; label: string }) {
+  const cell = 8;
+  const shaded = new Set(spec.shaded);
+  return (
+    <Frame width={spec.cols * cell} height={spec.rows * cell} label={label} kind={spec.kind}>
+      {Array.from({ length: spec.rows * spec.cols }, (_, i) => (
+        <rect key={i} data-cell={i} data-shaded={shaded.has(i) || undefined} x={(i % spec.cols) * cell} y={Math.floor(i / spec.cols) * cell} width={cell} height={cell} fill={shaded.has(i) ? SHADE : "#ffffff"} stroke="currentColor" strokeWidth={STROKE} />
+      ))}
+    </Frame>
+  );
+}
+
+/** A new support: numbered steps in a row of boxes (text wraps; same markup on screen and in print). */
+function Steps({ spec, label }: { spec: Extract<VisualSpec, { kind: "steps" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      {spec.title ? <p className="ms-vsupport-title">{spec.title}</p> : null}
+      <ol className="ms-vsteps">
+        {spec.items.map((item, i) => (
+          <li key={i}>
+            <span className="ms-vstep-n" aria-hidden>
+              {i + 1}
+            </span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** A new support: vocabulary cards (a term and a short cue). */
+function Cards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cards" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      {spec.title ? <p className="ms-vsupport-title">{spec.title}</p> : null}
+      <ul className="ms-vcards">
+        {spec.items.map((c, i) => (
+          <li key={i}>
+            <strong>{c.term}</strong>
+            <span>{c.hint}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: string }) {
   switch (spec.kind) {
     case "fraction_bar":
@@ -121,5 +169,11 @@ export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: strin
       return <PartWhole spec={spec} label={label} />;
     case "comparison":
       return <Comparison spec={spec} label={label} />;
+    case "grid":
+      return <Grid spec={spec} label={label} />;
+    case "steps":
+      return <Steps spec={spec} label={label} />;
+    case "cards":
+      return <Cards spec={spec} label={label} />;
   }
 }

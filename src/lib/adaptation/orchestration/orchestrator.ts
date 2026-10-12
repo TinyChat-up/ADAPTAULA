@@ -5,8 +5,9 @@ import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
-import { allBlocks } from "@/lib/schemas/material-document";
+import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import { resolveAutomatically } from "../automatic-resolution";
+import { applyVisualResolution, unresolvedEssential, type VisualResolutionPlan } from "../visual-policy";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
@@ -76,11 +77,11 @@ export interface OrchestratorDeps {
   maxManualRetries?: number;
   log?: { warn: (event: string, data: Record<string, unknown>) => void };
   /**
-   * «Hacer magia» and the original's figures (docs/VISUAL_RESOURCES.md § Visuales automáticos): before a sheet is delivered, its
-   * visuals are located, cropped and (simple mathematical figures) reconstructed without a person. Cached per material version,
-   * no adaptation unit, and it never fails a generation: what it could not resolve is the sheet's honest stop, as before.
+   * The visual policy of «Hacer magia» (docs/VISUAL_RESOURCES.md § Política visual): every visual need of the assembled sheet is
+   * resolved by the server (located, rebuilt, generated, rewritten around or left out when optional) before it is reviewed; what
+   * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
-  visuals?: { prepare(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string }): Promise<void> };
+  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null }): Promise<VisualResolutionPlan> };
 }
 
 const DEFAULTS = { leaseSeconds: 300, retryBackoffSeconds: 30, maxAttempts: 3 } as const;
@@ -567,7 +568,7 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
  * execution): the cost guards refused the generation (`generation_refused`), or a sheet that failed its quality review has no safe
  * automatic correction left (`quality`). The stop before any generation (a need nothing covers) is read from the state itself.
  */
-export type AutomaticStopCode = "generation_refused" | "quality";
+export type AutomaticStopCode = "generation_refused" | "quality" | "visual";
 
 async function recordAutomaticStop(store: AdaptationStore, adaptationId: string, reviewFp: string, code: AutomaticStopCode, detail: string) {
   await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, automatic_stop: code, detail }), { review_fingerprint: reviewFp, automatic_stop: code, detail });
@@ -760,6 +761,8 @@ async function recordQualityStop(deps: OrchestratorDeps, adaptationId: string): 
   if (status !== "blocked" && !(status === "awaiting_plan_review" && generationCyclesOf(snapshot.jobs) > 0)) return;
   const last = (await deps.store.listArtifacts(adaptationId, "plan_review")).at(-1);
   if (!last || (last.payload as { reviewer?: { kind?: string } }).reviewer?.kind !== "auto") return;
+  // Already stopped for this review (e.g. a visual nothing resolves): one stop, one reason.
+  if ((await deps.store.listArtifacts(adaptationId, "execution_report")).some((a) => (a.payload as { review_fingerprint?: string; automatic_stop?: string }).review_fingerprint === last.fingerprint && (a.payload as { automatic_stop?: string }).automatic_stop)) return;
   deps.log?.warn("automatic_stop_recorded", { adaptationId, status, cycles: generationCyclesOf(snapshot.jobs) });
   await recordAutomaticStop(deps.store, adaptationId, last.fingerprint, "quality", status);
 }
@@ -788,6 +791,8 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
   if (!raw || !last) return null;
   const previous = PlanReviewSchema.parse(last.payload);
   if (previous.reviewer.kind !== "auto" || previous.plan_fingerprint !== raw.fingerprint) return null;
+  // A visual nothing could resolve is not fixed by generating the same sheet again.
+  if ((await store.listArtifacts(adaptationId, "execution_report")).some((a) => (a.payload as { review_fingerprint?: string; automatic_stop?: string }).review_fingerprint === last.fingerprint && (a.payload as { automatic_stop?: string }).automatic_stop === "visual")) return null;
   const reviewed = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context);
 
   // The blocked version, rebuilt exactly (same generation, same deterministic ids, same restoration) to read what each failing
@@ -885,12 +890,17 @@ const serverDriven = (row: PipelineSnapshot["adaptation"], review: Record<string
  * from scratch: it is kept only if it removes failures without adding any (deterministic or of the audit). Deterministic, so the
  * automatic correction rebuilds exactly the same document to read its review.
  */
-function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, generation: NormalizedGeneration, restore: boolean) {
+/**
+ * `visualPlan` («Hacer magia»): the visual policy's decisions applied to the assembled sheet. The generation audit judges what the
+ * generator produced (the sheet before them); the deterministic review judges the sheet that will be delivered (after them).
+ */
+function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, generation: NormalizedGeneration, restore: boolean, visualPlan: VisualResolutionPlan | null = null) {
   const check = (g: NormalizedGeneration) => {
-    const document = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: g.segments, newBlockId: sequentialIds() });
+    const assembled = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: g.segments, newBlockId: sequentialIds() });
+    const document = visualPlan && visualPlan.needs.length > 0 ? applyVisualResolution(assembled, visualPlan) : assembled;
     const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
     const deterministic = assembleReview(input, deterministicChecks(input));
-    const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document, review: deterministic });
+    const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document: assembled, review: visualPlan ? assembleReview({ ...input, document: assembled }, deterministicChecks({ ...input, document: assembled })) : deterministic });
     return { generation: g, document, input, deterministic, audit, restored: [] as string[] };
   };
   let first;
@@ -1035,7 +1045,18 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     // replaced by the original before anything else). A document that fails the generation audit without a deterministic FAIL is an
     // invalid generation.
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    const assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload));
+    let assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload));
+    // «Hacer magia»: the visual policy decides, once per generation input (a resumed job reuses its decisions and their cost).
+    let visualPlan: VisualResolutionPlan | null = null;
+    if (row.creation_mode === "automatic" && deps.visuals) {
+      const cached = await store.findArtifact(adaptationId, "visual_resolution", { inputFingerprint: inputFp });
+      if (cached) visualPlan = (cached.payload as { plan: VisualResolutionPlan }).plan;
+      else {
+        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage });
+        await store.putArtifact(adaptationId, run.lease, "visual_resolution", inputFp, fingerprint({ input: inputFp, plan: visualPlan }), { plan: visualPlan });
+      }
+      if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan);
+    }
     const { document, input, deterministic, audit, restored } = assembled;
     generation = assembled.generation;
     const documentFp = fingerprint(document);
@@ -1054,6 +1075,16 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 
     // 8. The version exists from here on (history), whatever the review says.
     const version = await store.persistVersion(adaptationId, run.lease, document, { plan: raw.fingerprint, review: reviewFp, generation: inputFp });
+
+    // A visual nothing could resolve: never a «ready» sheet with a gap, never a request to the teacher. An honest stop, no AI review.
+    const unresolvedVisuals = unresolvedEssential(visualPlan);
+    if (unresolvedVisuals.length > 0 && !hardFail) {
+      await store.finalize(adaptationId, run.lease, version.id, deterministic, "blocked");
+      if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
+      await recordAutomaticStop(store, adaptationId, reviewFp, "visual", unresolvedVisuals.map((n) => n.key).join(","));
+      deps.log?.warn("automatic_visual_stop", { adaptationId, visuals: unresolvedVisuals.map((n) => `${n.key}:${n.resolution.action === "unresolved" ? n.resolution.reason : ""}`).join(",") });
+      return { outcome: "completed", status: "blocked", jobId: job.id, delivered: false, version: version.version, detail: "visual_unresolved" };
+    }
 
     if (hardFail) {
       // A deterministic FAIL is final: no AI call can soften it, so none is made.
@@ -1098,13 +1129,6 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 
     // 13. Delivered only if usable: approved / approved_with_warnings. Anything else keeps the version but is not a delivery.
     const usable = finalReview.verdict === "approved" || finalReview.verdict === "approved_with_warnings";
-    // «Hacer magia»: the original's figures are prepared before the delivery, so the sheet is ready with them (or says honestly
-    // which essential one it still lacks). «Revisar antes de crear» keeps the teacher in control: nothing is located for them.
-    if (usable && row.creation_mode === "automatic" && deps.visuals) {
-      await deps.visuals
-        .prepare({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint! })
-        .catch((error: unknown) => deps.log?.warn("automatic_visuals_failed", { adaptationId, reason: error instanceof Error ? error.name : "unknown" }));
-    }
     await store.finalize(adaptationId, run.lease, version.id, finalReview, usable ? "ready" : "blocked");
     if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
     if (usable) await (deps.entitlements ?? NO_ENTITLEMENTS).consume(entitlementTarget).catch(() => deps.log?.warn("entitlement_consume_failed", { adaptationId }));

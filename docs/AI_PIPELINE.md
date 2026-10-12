@@ -153,6 +153,15 @@ La salida es una **hipótesis**: solo cuenta si coincide con una región que la 
 queda en caché por material y versión. Sin proveedor configurado (o con el `mock`), no se llama. Ver
 `docs/VISUAL_RESOURCES.md`.
 
+### Política visual de «Hacer magia» — `visual_support@v1` y `visual_rewriter@v1`
+
+Hay dos llamadas opcionales (alias `STANDARD`) y solo cuando los peldaños deterministas no bastan:
+- un apoyo nuevo que pidió una decisión (pasos o tarjetas);
+- la reescritura de una actividad cuyo visual del original no se pudo localizar ni reconstruir.
+
+El servidor valida ambas salidas: conserva los datos, no da la respuesta y no menciona imágenes ausentes. Quedan en `ai_runs` sin
+contenido y en caché por entrada de generación. Ver `docs/VISUAL_RESOURCES.md` § Política visual.
+
 ### Revisión de un bloque — `block_reviser_v1`
 Entrada: el bloque, los bloques vecinos (contexto), la petición del docente ("Haz esta pregunta más corta"), el perfil funcional y los objetivos protegidos. Salida: **un** bloque compatible con `MaterialDocument` v1, con el mismo `id` y la misma trazabilidad. Por defecto STANDARD · low (ECONOMY en Free). Consume `block_revision`, no `adaptation`.
 

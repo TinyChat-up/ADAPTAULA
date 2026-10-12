@@ -56,7 +56,10 @@ export function traceabilityComplete({ analysis, plan, document }: ReviewInput):
   for (const b of allBlocks(document)) {
     const { origin, source_refs, decision_ids } = b.trace;
     if (origin !== "structure" && source_refs.length === 0 && decision_ids.length === 0) note("FAIL", `${b.id} sin origen`, b.id);
-    if ((origin === "support" || origin === "extension" || origin === "adapted") && decision_ids.length === 0) note("FAIL", `${b.id} sin decisión`, b.id);
+    // An activity «Hacer magia» rewrote so it no longer needs a figure of the original traces to that figure instead of to a
+    // decision (docs/VISUAL_RESOURCES.md § Política visual): the visual policy, not the plan, made that change.
+    const rewrittenAroundVisual = origin === "adapted" && b.type === "activity" && source_refs.some((r) => r.startsWith("vis_"));
+    if ((origin === "support" || origin === "extension" || origin === "adapted") && decision_ids.length === 0 && !rewrittenAroundVisual) note("FAIL", `${b.id} sin decisión`, b.id);
     for (const id of decision_ids) if (!decisionIds.has(id)) note("FAIL", `${b.id} cita ${id}, que no existe`, b.id);
   }
   const removed = new Set(plan.decisions.filter((d) => d.action === "remove").map((d) => d.target));

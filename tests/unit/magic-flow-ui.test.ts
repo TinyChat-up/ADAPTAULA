@@ -231,8 +231,8 @@ describe("C · the screen runs the next stage as soon as the previous one queued
 describe("«Hacer magia» and an essential visual it cannot produce automatically", () => {
   it("says so honestly on the same adaptation: «Completar ficha», no PDF, never «La ficha está lista»", () => {
     const out = html(createElement(ReadyPanel, { dto: ready({ creationMode: "automatic" }), materialId: context.materialId, info: { version: 1, createdAt: "2026-10-10T10:00:00Z", visualsPending: 1, printable: false } }));
-    expect(out).toContain(AUTOMATIC_STOP_COPY.visual);
-    expect(AUTOMATIC_STOP_COPY.visual).toBe("No hemos podido completar automáticamente esta ficha porque necesita un recurso visual");
+    expect(out).toContain(AUTOMATIC_STOP_COPY.visualPending);
+    expect(AUTOMATIC_STOP_COPY.visualPending).toBe("No hemos podido completar automáticamente esta ficha porque necesita un recurso visual");
     expect(out).toContain("Completar ficha");
     expect(out).toContain("no hace falta crear otra adaptación");
     expect(out).not.toMatch(/Descargar PDF|La ficha está lista/);
