@@ -1,5 +1,6 @@
 import "server-only";
 import { VISUAL_REWRITER_V1 } from "@prompts/visual-rewriter/v1";
+import { VISUAL_SUBSTITUTE_V1 } from "@prompts/visual-substitute/v1";
 import { VISUAL_SUPPORT_V1 } from "@prompts/visual-support/v1";
 import type { z } from "zod";
 import { estimateCostUsd } from "@/lib/ai/costs";
@@ -8,17 +9,20 @@ import { parseStructured } from "@/lib/ai/structured";
 import type { AIProvider, AIPurpose, AIRunRecord, ModelSelection } from "@/lib/ai/types";
 
 /**
- * The two model calls of the visual policy of «Hacer magia», through `src/lib/ai` (alias only). Each answer is parsed with Zod and
+ * The model calls of the visual policy of «Hacer magia», through `src/lib/ai` (alias only). Each answer is parsed with Zod and
  * returned as an untrusted draft: `policy.ts` validates it (lengths, data kept, no answer, no reference to a missing image) before
  * anything reaches a sheet. Each call is one `ai_runs` row without content.
  */
 
 export type SupportDraft = z.infer<typeof VISUAL_SUPPORT_V1.output.schema>;
 export type RewriteDraft = z.infer<typeof VISUAL_REWRITER_V1.output.schema>;
+export type SubstituteDraft = z.infer<typeof VISUAL_SUBSTITUTE_V1.output.schema>;
 
 export interface VisualAssistants {
   support(input: { stage: string | null; purpose: string; activity: string }): Promise<{ draft: SupportDraft | null; run: AIRunRecord }>;
   rewrite(input: { stage: string | null; activity: string; visual: string }): Promise<{ draft: RewriteDraft | null; run: AIRunRecord }>;
+  /** Recorded under the `visual_rewrite` purpose (same family of call; `prompt_key` tells them apart). */
+  substitute(input: { stage: string | null; activity: string; objective: string | null; visual: string }): Promise<{ draft: SubstituteDraft | null; run: AIRunRecord }>;
 }
 
 async function call<S extends z.ZodType>(provider: AIProvider, selection: ModelSelection, purpose: AIPurpose, prompt: { key: string; version: number; system: string; output: { name: string; schema: S } }, text: string): Promise<{ draft: z.infer<S> | null; run: AIRunRecord }> {
@@ -39,5 +43,6 @@ export function createVisualAssistants(selection: ModelSelection, provider: AIPr
   return {
     support: (input) => call(provider, selection, "visual_support", VISUAL_SUPPORT_V1, VISUAL_SUPPORT_V1.buildUserText(input)),
     rewrite: (input) => call(provider, selection, "visual_rewrite", VISUAL_REWRITER_V1, VISUAL_REWRITER_V1.buildUserText(input)),
+    substitute: (input) => call(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V1, VISUAL_SUBSTITUTE_V1.buildUserText(input)),
   };
 }

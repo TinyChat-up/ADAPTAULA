@@ -24,6 +24,7 @@
 | `visual_locator` | 8.2B.1 | Hipótesis de rectángulos (`visual_locations`) | STANDARD |
 | `visual_support` | magia | Apoyo nuevo: pasos o tarjetas (`visual_support`) | STANDARD |
 | `visual_rewriter` | magia | Actividad sin el visual que falta (`visual_free_activity`) | STANDARD |
+| `visual_substitute` | magia | Actividad equivalente que sustituye a la que dependía de un visual perdido, con su figura como datos (`visual_substitute_activity`); se registra con el propósito `visual_rewrite` | STANDARD |
 
 ## Diseño de cada prompt (v1)
 

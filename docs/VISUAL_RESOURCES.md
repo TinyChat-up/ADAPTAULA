@@ -371,25 +371,33 @@ desactivada y solo actúa la geometría.
 
 ## Política visual de «Hacer magia» (migración 023)
 
-**Regla de producto.** En «Hacer magia» el docente no localiza imágenes, no sube recursos y no decide omisiones: ve el progreso,
-la ficha terminada y «Descargar PDF». La ficha solo es «lista» cuando no le falta ningún visual imprescindible. Si nada sirve, la
-adaptación se detiene honestamente. La intervención manual queda para «Revisar antes de crear» y para quien elige «Editar».
+**Regla de producto.** En «Hacer magia» el docente no localiza imágenes, no sube recursos, no decide omisiones y no revisa el
+plan: ve el progreso, la ficha terminada y «Descargar PDF». Si un recurso visual no se puede usar tal cual, el sistema busca él
+solo otra forma pedagógicamente válida de completar la ficha. Solo se detiene cuando no puede construir nada válido (por ejemplo,
+sin servicio de IA disponible y sin datos en el material para dibujar la figura): nunca entrega una ficha «lista» con un hueco.
+La intervención manual queda para «Revisar antes de crear» y para quien elige «Editar».
 
 **Escalera** (`src/lib/adaptation/visual-policy.ts` y `src/lib/materials/visuals/auto/policy.ts`). Se aplica a cada necesidad
 visual de la ficha ensamblada, antes de las revisiones (así se revisa la ficha que se entrega):
 
 | # | Categoría | Qué se hace | Se valida con |
 | --- | --- | --- | --- |
-| 1 | `exact_original_visual` | Localizar el visual en el original: el recorte del docente o el automático (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75 de la geometría o de la visión; el recorte de una persona nunca se sustituye; uno automático solo cuenta si lo aceptó el motor ACTUAL y sus píxeles no contradicen el análisis |
-| 2 | `reconstructable_structured_visual` | Reconstruirlo desde los píxeles del original: barra y recta numérica; tablas y gráficos ya se rehacían con sus datos | La descripción completa del análisis es una hipótesis que selecciona el dibujo; exactamente un dibujo de la página debe leerse, con sus propios píxeles, como esa misma figura; se dibuja lo que leen los píxeles; y encaja con la actividad |
-| 3 | `generatable_support_visual` | Generar un apoyo nuevo que pidió una decisión: secuencia de pasos o tarjetas de vocabulario, dibujados por nuestros componentes en CLARO (`visual_support@v1`) | Longitudes, sin marcas, sin copiar la consigna, sin la respuesta |
-| 4 | `rewritable_without_visual` | Un original que solo aportaba un dato a una actividad: reescribirla sin él (`visual_rewriter@v1`). Un visual que nada usa, o un apoyo opcional que no se pudo generar: se deja fuera | **Equivalencia pedagógica** (abajo); además mantiene todos los datos de la tarea y los números del visual, no menciona ninguna imagen y no da la respuesta |
-| 5 | `unresolved_visual` | Parada honesta: estado `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | — |
+| 1 | `exact_original_visual` | Usar el visual del original: el recorte del docente o el automático (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75; el recorte de una persona nunca se sustituye; uno automático solo cuenta si lo aceptó el motor ACTUAL y sus píxeles no contradicen el análisis |
+| 2 | `reconstructable_structured_visual` | Redibujarlo desde los píxeles del original (barra, recta numérica); tablas y gráficos se rehacen con sus datos | Exactamente un dibujo de la página se lee como la figura descrita; se dibuja lo que leen los píxeles |
+| 3 | `generatable_support_visual` | **Dibujar una figura NUEVA del mismo tipo** (barra, círculo, cuadrícula, recta) con los datos del propio material (`src/lib/visuals/from-task.ts`), sin IA; o un apoyo nuevo que pidió una decisión (`visual_support@v1`) | La figura sale de la descripción completa del análisis, de la respuesta esperada de la actividad (manda si no coinciden: figura y clave dicen lo mismo) o de las fracciones que nombra la actividad; una recta generada solo rotula los enteros (nunca la fracción que hay que situar) |
+| 4 | `rewritable_without_visual` | Reescribir la actividad sin el visual cuando este solo aportaba un dato (`visual_rewriter@v1`); un visual que nada usa se deja fuera | Equivalencia pedagógica (abajo); mantiene los datos; no menciona la imagen; no da la respuesta |
+| 5 | `substituted_activity` | **Sustituir la actividad por otra equivalente** (`visual_substitute@v1`, hasta 2 intentos): con su propia figura (como datos que dibujamos nosotros) si la competencia es trabajar con una representación dibujable; si no, una actividad guiada por escrito sobre el mismo contenido | `substitutionEquivalence`: misma operación (leer una barra sigue siendo leer una barra; marcar en la recta sigue siendo marcar, sin líneas de escritura), mismas acciones, sin datos inventados más allá de su figura, misma exigencia y carga de lectura, mismo contenido; sin la respuesta (tampoco la fracción sombreada de su figura) |
+| 6 | `unresolved_visual` | Parada solo si nada de lo anterior produjo algo válido: `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | Motivo registrado: `no_model_available` o `no_equivalent_activity` |
+
+En el caso de fracciones: si la recta de la actividad 4 no está en el PDF, se dibuja una recta nueva de 0 a 1 en cuartos y la
+actividad sigue siendo «marca 3/4»; si la barra de la actividad 1 no se puede usar, se dibuja una barra de 8 partes con 3
+sombreadas (la respuesta esperada es 3/8). En ningún caso se pide nada al docente.
 
 ### Equivalencia pedagógica (`src/lib/adaptation/pedagogical-equivalence.ts`)
 
 Una actividad que evalúa interpretar o actuar sobre una representación no se convierte en otra actividad textual porque conserve
-los números. Que el modelo diga «se puede» (`feasible: true`) es solo una condición previa, nunca la prueba. Reglas deterministas
+los números: se le dibuja una figura nueva del mismo tipo (peldaño 3) o se sustituye por otra actividad con su propia figura
+(peldaño 5). Que el modelo diga «se puede» (`feasible: true`) es solo una condición previa, nunca la prueba. Reglas deterministas
 por tipo de tarea, comprobadas ANTES de llamar a ningún modelo y otra vez sobre su propuesta:
 
 | Se compara | Regla |
@@ -401,13 +409,15 @@ por tipo de tarea, comprobadas ANTES de llamar a ningún modelo y otra vez sobre
 | Nivel de exigencia | Sin datos nuevos; sin pasos que resuelvan la tarea salvo que el perfil pida secuenciación (instrucciones por pasos, memoria de trabajo, planificación, pasos de las operaciones, listas), y entonces como mucho 4; no se acorta por debajo del 60 % |
 | Necesidades funcionales | La carga de lectura no crece más allá del original y lo que decía su figura |
 
-Solo una figura que es mera fuente de datos (una etiqueta con «3/4 de litro» para una tarea de calcular) se puede reescribir.
+Solo una figura que es mera fuente de datos (una etiqueta con «3/4 de litro» para una tarea de calcular) se puede reescribir en
+palabras. Una representación que no sabemos dibujar (el esquema de una célula, un mapa, una fotografía) puede pasar, en la
+sustitución, a una actividad guiada por escrito sobre el mismo contenido; no se generan imágenes libres ni pictogramas.
 
 Casos de la ficha de fracciones, todos rechazados: actividad 1 (barra de 8 partes con 3 sombreadas) ≠ «Escribe la fracción tres
 octavos», ni siquiera describiendo la barra en palabras; actividad 4 («Marca 3/4 en la recta») ≠ «¿Qué fracción es mayor, 3/4 o
 1/2?», «¿Cuánto le falta a 3/4 para 1?» o «Escribe dónde iría 3/4»; actividad 2: perder una de las dos comparaciones o pedir
 «calcula» en lugar de «compara y escribe el signo» deja de ser equivalente. Si la figura no se encuentra ni se reconstruye con
-evidencia, la adaptación se detiene honestamente.
+evidencia, se dibuja una figura nueva o se sustituye la actividad; la adaptación solo se detiene si nada de eso es válido.
 
 ### Evidencia exigida para reconstruir
 

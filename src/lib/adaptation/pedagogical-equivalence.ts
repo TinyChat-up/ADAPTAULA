@@ -1,4 +1,5 @@
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import type { VisualSpec } from "@/lib/visuals/spec";
 import { numbersIn, normalizeText, wordCount } from "./text";
 
 /**
@@ -46,12 +47,16 @@ const SEQUENCING_NEEDS = new Set(["instruction_chunking", "operation_steps", "wo
 
 const textOf = (a: AnalysisActivity) => normalizeText(a.context ? `${a.instruction} ${a.context}` : a.instruction);
 
+/** The operation a task text asks for, with its response format and whether it has nowhere to write. */
+export function operationOf(text: string, responseFormat: AnalysisActivity["response_format"], noAnswerArea: boolean): TaskOperation {
+  const norm = normalizeText(text);
+  if (responseFormat === "mark" || responseFormat === "draw" || (ACT_VERBS.test(norm) && (FIGURE_NOUNS.test(norm) || noAnswerArea))) return "act_on_representation";
+  return READ_VERBS.test(norm) || FIGURE_NOUNS.test(norm) ? "interpret_representation" : "use_data";
+}
+
 export function taskProfile(analysis: MaterialAnalysis, activity: AnalysisActivity, visual: AnalysisVisual | undefined): TaskProfile {
-  const text = textOf(activity);
   const objectives = analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id));
-  const actsOnFigure = activity.response_format === "mark" || activity.response_format === "draw" || (ACT_VERBS.test(text) && (FIGURE_NOUNS.test(text) || activity.answer_area.type === "none"));
-  const readsFigure = READ_VERBS.test(text) || FIGURE_NOUNS.test(text);
-  const operation: TaskOperation = actsOnFigure ? "act_on_representation" : readsFigure ? "interpret_representation" : "use_data";
+  const operation = operationOf(textOf(activity), activity.response_format, activity.answer_area.type === "none");
   const because: string[] = [];
   if (operation !== "use_data") because.push(`operation:${operation}`);
   if (visual && REPRESENTATION_KINDS.has(visual.kind)) because.push(`visual_kind:${visual.kind}`);
@@ -87,4 +92,63 @@ export function rewriteEquivalence(input: { analysis: MaterialAnalysis; activity
   if (wordCount(rewritten) > wordCount(original) + wordCount(visualText) + 5) violations.push("reading_load_increased");
   if (wordCount(rewritten) < Math.ceil(wordCount(original) * 0.6)) violations.push("demand_lowered(shorter)");
   return { equivalent: violations.length === 0, profile, violations };
+}
+
+export interface SubstituteCandidate extends RewriteCandidate {
+  /** The new activity's own figure (drawn by our renderer), when it brings one. */
+  figure: VisualSpec | null;
+}
+
+const CONTENT_WORD = /[a-z]{5,}/g;
+const STOP = new Set(["actividad", "escribe", "escribela", "respuesta", "fraccion", "fracciones", "cuantos", "cuantas", "despues", "tambien", "siguiente", "observa"]);
+
+/**
+ * A NEW activity in place of one whose figure is lost (`visual_substitute`). It may change the material it works on, never what it
+ * works: the operation stays (acting on or interpreting a representation keeps a figure the student acts on or reads, when that
+ * representation can be drawn; one we cannot draw becomes a guided activity in words), the response type stays (marking stays on
+ * the figure when there is one), the same actions are asked, no data are
+ * invented beyond its own figure, the demand and the reading load stay, and it is about the same content (shared content words
+ * with the original or its objective).
+ */
+export function substitutionEquivalence(input: { analysis: MaterialAnalysis; activity: AnalysisActivity; visual: AnalysisVisual | undefined; candidate: SubstituteCandidate; needs: readonly string[]; drawable: boolean }): { equivalent: boolean; profile: TaskProfile; violations: string[] } {
+  const profile = taskProfile(input.analysis, input.activity, input.visual);
+  const { candidate } = input;
+  const violations: string[] = [];
+  const original = textOf(input.activity);
+  const visualText = input.visual ? normalizeText([input.visual.title, input.visual.description, input.visual.text].filter(Boolean).join(" ")) : "";
+  const text = normalizeText([candidate.prompt, ...candidate.steps].join(" "));
+  const onFigure = input.activity.response_format === "mark" || input.activity.response_format === "draw";
+  if (profile.operation !== "use_data" && input.drawable) {
+    if (!candidate.figure) violations.push("representation_lost");
+    else if (operationOf(text, onFigure ? input.activity.response_format : "write_text", candidate.lines === 0) !== profile.operation) violations.push(`operation_changed(${profile.operation})`);
+  }
+  // Marking stays on a figure when one can be drawn; a representation we cannot draw becomes a guided activity answered in writing.
+  if (onFigure && input.drawable && (!candidate.figure || candidate.lines !== 0)) violations.push(`response_type_changed(${input.activity.response_format})`);
+  if ((!onFigure || !input.drawable) && candidate.lines === 0) violations.push("no_answer_space");
+  const verbs = (s: string) => new Set([...s.matchAll(ACTION_VERBS)].map((m) => m[1]!));
+  for (const v of verbs(original)) if (!verbs(text).has(v)) violations.push(`action_lost(${v})`);
+  const figureNumbers = candidate.figure ? specNumbers(candidate.figure) : [];
+  const known = new Set([...numbersIn(original), ...numbersIn(visualText), ...figureNumbers]);
+  const added = numbersIn(text).filter((n) => !known.has(n));
+  if (added.length > 0) violations.push(`new_data(${added.slice(0, 3).join(",")})`);
+  const sequencing = input.needs.some((n) => SEQUENCING_NEEDS.has(n));
+  if (candidate.steps.length > (sequencing ? 4 : 0)) violations.push("demand_lowered(steps)");
+  if (wordCount(text) > wordCount(original) + wordCount(visualText) + 25) violations.push("reading_load_increased");
+  if (wordCount(text) < Math.ceil(wordCount(original) * 0.5)) violations.push("demand_lowered(shorter)");
+  const objectives = input.analysis.pedagogical_intent.objectives.filter((o) => input.activity.objective_ids.includes(o.id)).map((o) => normalizeText(o.text));
+  const words = (s: string) => new Set([...s.matchAll(CONTENT_WORD)].map((m) => m[0]).filter((w) => !STOP.has(w)));
+  const reference = words([original, visualText, ...objectives].join(" "));
+  if (![...words(text)].some((w) => reference.has(w))) violations.push("objective_unrelated");
+  return { equivalent: violations.length === 0, profile, violations };
+}
+
+/** The numbers a figure shows (or implies by its structure): a substitute may name them, they are not invented data. */
+function specNumbers(spec: VisualSpec): string[] {
+  if (spec.kind === "fraction_bar" || spec.kind === "part_whole") return [String(spec.parts), String(spec.shaded.length), `${spec.shaded.length}/${spec.parts}`];
+  if (spec.kind === "grid") return [String(spec.rows), String(spec.cols), String(spec.rows * spec.cols), String(spec.shaded.length)];
+  if (spec.kind === "number_line") {
+    const unit = spec.divisions / Math.max(1, spec.end.n / spec.end.d - spec.start.n / spec.start.d);
+    return [String(spec.start.n), String(spec.end.n), String(spec.divisions), ...Array.from({ length: spec.divisions + 1 }, (_, i) => `${i}/${unit}`)];
+  }
+  return [];
 }
