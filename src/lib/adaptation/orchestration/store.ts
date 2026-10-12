@@ -52,7 +52,7 @@ export class NotFoundError extends Error {
   }
 }
 
-export const ARTIFACT_KINDS = ["planner_draft", "plan", "plan_validation", "plan_review", "execution_report", "generation", "deterministic_review", "reviewer_findings", "pedagogical_review"] as const;
+export const ARTIFACT_KINDS = ["planner_draft", "plan", "plan_validation", "plan_review", "execution_report", "generation", "deterministic_review", "reviewer_findings", "pedagogical_review", "visual_resolution"] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 export type StageName = "planning" | "generation";
 

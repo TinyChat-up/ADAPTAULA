@@ -9,7 +9,7 @@ import { createModelGenerator } from "../generator";
 import { createModelPlanner } from "../planner";
 import { createModelReviewer } from "../reviewer";
 import { AIError } from "@/lib/ai/errors";
-import { prepareAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
+import { resolveAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
 import { dbEntitlements } from "./entitlements-db";
 import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
@@ -46,7 +46,7 @@ export const orchestratorDeps = (): OrchestratorDeps => {
   // The orchestrator's warnings (automatic stops, corrections, a failed generation audit) reach the server log: scalar fields
   // only (ids, codes, check names), never content.
   const log = { warn: (event: string, data: Record<string, unknown>) => logger.warn(event, Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === null || ["string", "number", "boolean"].includes(typeof v) ? (v as string | number | boolean | null) : JSON.stringify(v)]))) };
-  return { store, services: productionServices, entitlements: dbEntitlements(store), log, visuals: { prepare: async (input) => void (await prepareAdaptationVisuals(input)) } };
+  return { store, services: productionServices, entitlements: dbEntitlements(store), log, visuals: { resolve: resolveAdaptationVisuals } };
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */

@@ -75,7 +75,8 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   const snapshot = await deps.orchestrator.store.getPipeline(id);
   const context = AdaptationContextSchema.safeParse(snapshot?.adaptation.context_snapshot);
   const materialId = snapshot?.adaptation.material_id ?? "";
-  const visualIds = [...new Set(parsed.data.pages.flatMap((p) => p.blocks).flatMap((b) => (b.type === "image" && b.source.kind === "original" ? [b.source.visual_ref] : [])))];
+  // Also the originals «Hacer magia» redrew from the analysis: a figure located later (by a person) is preferred to that drawing.
+  const visualIds = [...new Set(parsed.data.pages.flatMap((p) => p.blocks).flatMap((b) => (b.type === "image" && (b.source.kind === "original" || (b.source.kind === "figure" && b.source.visual_ref)) ? [b.source.kind === "original" ? b.source.visual_ref : b.source.visual_ref!] : [])))];
   // The visuals of THIS adaptation's analysis (its pinned fingerprint) and of the material's original file: a locator made for
   // another analysis or file is never used. The current preview follows the active locator (a later correction shows here).
   const material = visuals && materialId ? await visuals.reader.material(materialId) : null;

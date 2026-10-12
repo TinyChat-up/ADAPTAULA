@@ -22,6 +22,8 @@
 | `block_reviser` | edición | `Block` | STANDARD · low |
 | `image_brief` | imágenes | `ImageBrief` | STANDARD · low |
 | `visual_locator` | 8.2B.1 | Hipótesis de rectángulos (`visual_locations`) | STANDARD |
+| `visual_support` | magia | Apoyo nuevo: pasos o tarjetas (`visual_support`) | STANDARD |
+| `visual_rewriter` | magia | Actividad sin el visual que falta (`visual_free_activity`) | STANDARD |
 
 ## Diseño de cada prompt (v1)
 

@@ -11,7 +11,7 @@ import { z } from "zod";
  */
 
 export const VISUAL_SPEC_VERSION = 1 as const;
-export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison"] as const;
+export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards"] as const;
 export type VisualSpecKind = (typeof VISUAL_SPEC_KINDS)[number];
 
 const Count = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -38,8 +38,17 @@ export const NumberLineSpecSchema = z.object({
 export const PartWholeSpecSchema = z.object({ ...base, kind: z.literal("part_whole"), shape: z.enum(["circle", "rectangle"]), parts: Count(2, 12), shaded: PartIndexes });
 export const ComparisonSpecSchema = z.object({ ...base, kind: z.literal("comparison"), items: z.array(z.object({ left: FractionSchema, right: FractionSchema })).min(1).max(8) });
 
+export const GridSpecSchema = z.object({ ...base, kind: z.literal("grid"), rows: Count(1, 12), cols: Count(1, 12), shaded: z.array(Count(0, 143)).max(144) });
+/**
+ * New supports «Hacer magia» may add for a decision (never a stand-in for an original's exact content): a visual sequence of steps
+ * or vocabulary cards. Plain short text only (no markup), drawn by our own components in the CLARO style.
+ */
+const SupportText = (max: number) => z.string().trim().min(1).max(max).refine((t) => !/[<>{}\[\]`]/.test(t), { message: "texto sin marcas" });
+export const StepsSpecSchema = z.object({ ...base, kind: z.literal("steps"), title: SupportText(60).optional(), items: z.array(SupportText(90)).min(2).max(6) });
+export const CardsSpecSchema = z.object({ ...base, kind: z.literal("cards"), title: SupportText(60).optional(), items: z.array(z.object({ term: SupportText(30), hint: SupportText(90) })).min(2).max(6) });
+
 export const VisualSpecSchema = z
-  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema])
+  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema])
   .superRefine((spec, ctx) => {
     for (const message of specIssues(spec)) ctx.addIssue({ code: "custom", message });
   });
@@ -48,6 +57,9 @@ export type FractionBarSpec = z.infer<typeof FractionBarSpecSchema>;
 export type NumberLineSpec = z.infer<typeof NumberLineSpecSchema>;
 export type PartWholeSpec = z.infer<typeof PartWholeSpecSchema>;
 export type ComparisonSpec = z.infer<typeof ComparisonSpecSchema>;
+export type GridSpec = z.infer<typeof GridSpecSchema>;
+/** Kinds that redraw an original's exact content (verified), as opposed to new supports (`steps`, `cards`). */
+export const EXACT_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid"] as const;
 
 const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
 export const sameValue = (a: Fraction, b: Fraction) => a.n * b.d === b.n * a.d;
@@ -78,6 +90,10 @@ export function specIssues(spec: { kind: string } & Record<string, unknown>): st
     if (new Set(s.shaded).size !== s.shaded.length) issues.push("partes sombreadas repetidas");
     if (s.shaded.some((i) => i >= s.parts)) issues.push("una parte sombreada no existe");
   }
+  if (s.kind === "grid") {
+    if (new Set(s.shaded).size !== s.shaded.length) issues.push("celdas sombreadas repetidas");
+    if (s.shaded.some((i) => i >= s.rows * s.cols)) issues.push("una celda sombreada no existe");
+  }
   if (s.kind === "number_line") {
     if (!less(s.start, s.end)) issues.push("el intervalo de la recta no es creciente");
     const ticks = new Set<number>();
@@ -106,6 +122,12 @@ export function describeSpec(spec: VisualSpec): string {
     }
     case "comparison":
       return spec.items.map((i) => `${fractionText(i.left)}, casilla vacía, ${fractionText(i.right)}`).join(". ") + ".";
+    case "grid":
+      return `Cuadrícula de ${spec.rows} filas y ${spec.cols} columnas; ${spec.shaded.length} ${spec.shaded.length === 1 ? "casilla sombreada" : "casillas sombreadas"}.`;
+    case "steps":
+      return `${spec.title ? `${spec.title}. ` : ""}Pasos: ${spec.items.map((s, i) => `${i + 1}, ${s}`).join("; ")}.`;
+    case "cards":
+      return `${spec.title ? `${spec.title}. ` : ""}${spec.items.map((c) => `${c.term}: ${c.hint}`).join("; ")}.`;
   }
 }
 
