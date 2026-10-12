@@ -17,18 +17,28 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {}, push:
 
 /**
  * The visual policy of «Hacer magia»: every visual need resolved by the server, in order (locate → reconstruct → generate →
- * rewrite / leave out → honest stop), never by asking the teacher. 0 real model calls: the assistants are scripted.
+ * rewrite / leave out → substitute → stop only when nothing valid can be built), never by asking the teacher. 0 real model
+ * calls: the assistants are scripted.
  */
 
 const run = { purpose: "visual_rewrite" as const, attempt: 1, alias: "STANDARD" as const, provider: "mock" as const, model: "m", effort: "low" as const, promptKey: "k", promptVersion: 1, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: 0, latencyMs: 0, status: "success" as const, errorCode: null };
-const scripted = (over: Partial<{ support: Awaited<ReturnType<VisualAssistants["support"]>>["draft"]; rewrite: Awaited<ReturnType<VisualAssistants["rewrite"]>>["draft"] }> = {}): VisualAssistants & { calls: string[] } => {
+type Drafts = { support: Awaited<ReturnType<VisualAssistants["support"]>>["draft"]; rewrite: Awaited<ReturnType<VisualAssistants["rewrite"]>>["draft"]; substitute: Awaited<ReturnType<VisualAssistants["substitute"]>>["draft"] };
+const scripted = (over: Partial<Drafts> = {}): VisualAssistants & { calls: string[] } => {
   const calls: string[] = [];
   return {
     calls,
     support: async () => (calls.push("support"), { draft: over.support ?? null, run }),
     rewrite: async () => (calls.push("rewrite"), { draft: over.rewrite ?? null, run }),
+    substitute: async () => (calls.push("substitute"), { draft: over.substitute ?? null, run }),
   };
 };
+const noFigure = null;
+/** The bar of activity 1 described incompletely, and its answer not inferable: no figure can be derived from the material. */
+const undeterminedBar = (a: ReturnType<typeof fractionsCaseDocument>["analysis"]) => {
+  a.visuals[0] = { ...a.visuals[0]!, description: "Barra con algunas partes coloreadas." };
+  Object.assign(a.activities.find((x) => x.id === "act_1")!, { expected_answer: { basis: "not_inferable", value: null } });
+};
+const BAR_SUBSTITUTE = { feasible: true, prompt: "Observa la barra. ¿Qué fracción de la barra está coloreada? Escríbela.", steps: [], lines: 1, figure: { kind: "fraction_bar" as const, parts: 6, shaded: 2, rows: null, cols: null, line_end: null, divisions: null } };
 const deps = (ready: string[], assistants: VisualAssistants | null = null, pixels: Record<string, VisualSpec> = {}): MagicVisualDeps => ({ readyOriginals: async () => new Set(ready), assistants, corroborate: async (v) => pixels[v.id] ?? null });
 /** What the ORIGINAL's pixels read (the shaded parts are wherever the original has them, not «from the left»). */
 const PIXELS: Record<string, VisualSpec> = {
@@ -67,30 +77,51 @@ describe("classification and order of the rungs", () => {
     expect(outcome(plan, "vis_2")).toMatchObject({ resolution: { action: "figure", spec: { kind: "number_line", divisions: 4, labels: [{ text: "0" }, { text: "1/4" }, { text: "1/2" }, { text: "3/4" }, { text: "1" }] } } });
   });
 
-  it("2b · a complete description WITHOUT pixel evidence is never drawn: honest stop, and no model is asked to rewrite a representation", async () => {
-    const assistants = scripted({ rewrite: { feasible: true, prompt: "Escribe con números la fracción tres octavos.", steps: [], lines: 2 } });
+  it("3 · not in the PDF and not readable from pixels: a NEW figure of the same kind, from the material's own data, with no model", async () => {
+    const assistants = scripted();
     const plan = await resolve(sheet(), deps([], assistants));
-    for (const key of ["vis_1", "vis_2"]) expect(outcome(plan, key)).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" }, attempts: ["locate", "reconstruct"] });
+    expect(outcome(plan, "vis_1")).toMatchObject({ category: "generatable_support_visual", resolution: { action: "figure", provenance: "generated", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] } }, attempts: ["locate", "reconstruct", "generate"] });
+    expect(outcome(plan, "vis_2")).toMatchObject({ category: "generatable_support_visual", resolution: { action: "figure", provenance: "generated", spec: { kind: "number_line", divisions: 4 } } });
     expect(assistants.calls).toEqual([]);
+  });
+
+  it("3b · act 4 «Marca 3/4 en la recta» keeps its competence: a new line 0–1 in quarters (labels 0 and 1 only, never 3/4), never a text question", async () => {
+    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra de agua de un litro con cuatro marcas iguales." }));
+    const assistants = scripted({ rewrite: { feasible: true, prompt: "Escribe qué fracción del litro indica la tercera marca: 3/4.", steps: [], lines: 2 } });
+    const plan = await resolve(s, deps(["vis_1"], assistants));
+    expect(outcome(plan, "vis_2")).toMatchObject({ category: "generatable_support_visual", resolution: { action: "figure", spec: { kind: "number_line", start: { n: 0, d: 1 }, end: { n: 1, d: 1 }, divisions: 4, labels: [{ tick: 0, text: "0" }, { tick: 4, text: "1" }] } } });
+    expect(assistants.calls).toEqual([]);
+  });
+
+  it("3c · a description that contradicts the activity's answer: the figure follows the answer (figure and key say the same)", async () => {
+    const plan = await resolve(sheet((a) => (a.visuals[0] = { ...a.visuals[0]!, description: "Barra dividida en 6 partes iguales con 2 partes coloreadas." })), deps(["vis_2"]));
+    expect(outcome(plan, "vis_1").resolution).toMatchObject({ action: "figure", provenance: "generated", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] } });
   });
 
   it("4 · neither located nor rebuildable, the figure only carried a datum: rewritten (validated as equivalent), never a request to the teacher", async () => {
     const assistants = scripted({ rewrite: DATA_REWRITE });
     const plan = await resolve(sheet(dataSource), deps(["vis_1"], assistants));
-    expect(outcome(plan, "vis_2")).toMatchObject({ category: "rewritable_without_visual", resolution: { action: "rewrite", activities: [{ activityId: "act_4" }] }, attempts: ["locate", "reconstruct", "rewrite"] });
+    expect(outcome(plan, "vis_2")).toMatchObject({ category: "rewritable_without_visual", resolution: { action: "rewrite", activities: [{ activityId: "act_4" }] }, attempts: ["locate", "reconstruct", "generate", "rewrite"] });
   });
 
-  it("4b · act 4 «Marca 3/4 en la recta» is never rewritten, whatever the model offers: honest stop", async () => {
-    const s = sheet((a) => (a.visuals[1] = { ...a.visuals[1]!, kind: "image", description: "Dibujo de una jarra de agua de un litro con cuatro marcas iguales." }));
-    const assistants = scripted({ rewrite: { feasible: true, prompt: "Una jarra de un litro tiene cuatro marcas iguales. Escribe qué fracción del litro indica la tercera marca: 3/4.", steps: [], lines: 2 } });
-    const plan = await resolve(s, deps(["vis_1"], assistants));
-    expect(outcome(plan, "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" } });
-    expect(assistants.calls).toEqual([]);
+  it("5 · nothing in the material determines the bar: a NEW equivalent activity with its own bar (still reading a bar), not a text task", async () => {
+    const assistants = scripted({ substitute: BAR_SUBSTITUTE });
+    const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"], assistants));
+    expect(outcome(plan, "vis_1")).toMatchObject({ category: "substituted_activity", resolution: { action: "substitute", spec: { kind: "fraction_bar", parts: 6, shaded: [0, 1] }, activities: [{ activityId: "act_1", lines: 1 }] }, attempts: ["locate", "reconstruct", "generate", "substitute"] });
+    // A representation that must be read is never rewritten into words: the rewriter is not even asked.
+    expect(assistants.calls).toEqual(["substitute"]);
   });
 
-  it("5 · a data-source figure whose rewrite is not valid: unresolved (the honest stop), with every rung recorded", async () => {
-    const plan = await resolve(sheet(dataSource), deps(["vis_1"], scripted({ rewrite: { feasible: false, prompt: null, steps: null, lines: null } })));
-    expect(outcome(plan, "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved" }, attempts: ["locate", "reconstruct", "rewrite"] });
+  it("5b · a substitute that turns reading a bar into a text task is rejected, asked once more, and then the only remaining stop", async () => {
+    const assistants = scripted({ substitute: { ...BAR_SUBSTITUTE, prompt: "Escribe con números la fracción tres octavos.", figure: noFigure } });
+    const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"], assistants));
+    expect(outcome(plan, "vis_1")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "no_equivalent_activity" } });
+    expect(assistants.calls).toEqual(["substitute", "substitute"]);
+  });
+
+  it("6 · no model available and nothing derivable: the stop says why (a technical limit, not a pedagogical request)", async () => {
+    const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"]));
+    expect(outcome(plan, "vis_1")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "no_model_available" } });
   });
 
   it("a located figure is never replaced by a rebuilt one (a person's or the locator's crop wins)", async () => {
@@ -164,6 +195,16 @@ describe("applied to the sheet: complete, with each figure in its activity, and 
     expect(allBlocks(doc).some((b) => b.type === "image" && b.source.kind === "original" && b.source.visual_ref === "vis_2")).toBe(false);
     const act4 = allBlocks(doc).find((b) => b.type === "activity" && b.label === "4");
     expect(act4).toMatchObject({ prompt: expect.stringContaining("3/4 de litro"), response: { kind: "lines", lines: 2 }, trace: { origin: "adapted", source_refs: ["act_4", "vis_2"] } });
+    expect(deterministicChecks({ analysis: s.analysis, plan: s.plan, context: s.context, document: doc } as never).filter((c) => c.status === "FAIL")).toEqual([]);
+  });
+
+  it("a substitute replaces the activity's task and its figure in place (label, links and trace kept); the review finds nothing to FAIL", async () => {
+    const s = sheet(undeterminedBar);
+    const plan = await resolve(s, deps(["vis_2"], scripted({ substitute: BAR_SUBSTITUTE })));
+    const doc = applyVisualResolution(s.document, plan);
+    const act1 = allBlocks(doc).find((b) => b.type === "activity" && b.label === "1");
+    expect(act1).toMatchObject({ prompt: BAR_SUBSTITUTE.prompt, response: { kind: "lines", lines: 1 }, trace: { origin: "adapted", source_refs: expect.arrayContaining(["act_1", "vis_1"]) } });
+    expect(allBlocks(doc).find((b) => b.type === "image" && b.source.kind === "figure" && b.source.visual_ref === "vis_1")).toMatchObject({ source: { provenance: "generated", spec: { kind: "fraction_bar", parts: 6 } } });
     expect(deterministicChecks({ analysis: s.analysis, plan: s.plan, context: s.context, document: doc } as never).filter((c) => c.status === "FAIL")).toEqual([]);
   });
 

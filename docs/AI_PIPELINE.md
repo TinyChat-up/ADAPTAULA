@@ -153,13 +153,17 @@ La salida es una **hipótesis**: solo cuenta si coincide con una región que la 
 queda en caché por material y versión. Sin proveedor configurado (o con el `mock`), no se llama. Ver
 `docs/VISUAL_RESOURCES.md`.
 
-### Política visual de «Hacer magia» — `visual_support@v1` y `visual_rewriter@v1`
+### Política visual de «Hacer magia» — `visual_support@v1`, `visual_rewriter@v1` y `visual_substitute@v1`
 
-Hay dos llamadas opcionales (alias `STANDARD`) y solo cuando los peldaños deterministas no bastan:
+Hay tres llamadas opcionales (alias `STANDARD`) y solo cuando los peldaños deterministas no bastan (localizar, redibujar desde
+los píxeles o dibujar una figura nueva con los datos del material, sin IA):
 - un apoyo nuevo que pidió una decisión (pasos o tarjetas);
-- la reescritura de una actividad cuyo visual del original no se pudo localizar ni reconstruir.
+- la reescritura de una actividad cuyo visual solo aportaba un dato;
+- la sustitución de una actividad por otra equivalente (hasta 2 intentos), con su figura como datos que dibuja nuestro renderer.
+  Se registra con el propósito `visual_rewrite` (sin migración nueva); `prompt_key` la distingue.
 
-El servidor valida ambas salidas: conserva los datos, no da la respuesta y no menciona imágenes ausentes. Quedan en `ai_runs` sin
+El servidor valida todas las salidas con reglas deterministas de equivalencia pedagógica: conservan la operación, los datos y la
+exigencia, no dan la respuesta y no mencionan imágenes ausentes. Quedan en `ai_runs` sin
 contenido y en caché por entrada de generación. Ver `docs/VISUAL_RESOURCES.md` § Política visual.
 
 ### Revisión de un bloque — `block_reviser_v1`

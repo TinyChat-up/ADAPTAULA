@@ -3,11 +3,12 @@ import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeT
 import { materialNumbers } from "@/lib/adaptation/facts";
 import { VISUAL_POLICY_VERSION, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { AIRunRecord } from "@/lib/ai/types";
-import { rewriteEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
+import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
-import { VISUAL_SPEC_VERSION, VisualSpecSchema, type VisualSpec } from "@/lib/visuals/spec";
-import type { RewriteDraft, SupportDraft, VisualAssistants } from "./assistants";
+import { drawableFamily, generateEquivalentFigure } from "@/lib/visuals/from-task";
+import { VISUAL_SPEC_VERSION, VisualSpecSchema, specIssues, type VisualSpec } from "@/lib/visuals/spec";
+import type { RewriteDraft, SubstituteDraft, SupportDraft, VisualAssistants } from "./assistants";
 
 /**
  * The visual policy of «Hacer magia», decided for one assembled sheet (rungs and categories: `src/lib/adaptation/visual-policy.ts`).
@@ -102,6 +103,49 @@ export function validateRewrite(draft: RewriteDraft | null, ctx: RewriteContext)
   return violations.length === 0 ? { ok: true, rewrite: { prompt, steps, lines } } : { ok: false, violations };
 }
 
+/** Words for an image the student will not see; with the substitute's own figure on the sheet, «observa la barra» is fine. */
+const MISSING_IMAGE_WORDS = /\b(imagen|imagenes|dibujo|dibujos|ilustracion|foto|fotografia)\b/;
+
+/** The substitute's figure, as DATA from the model, built and verified by us (labels: whole numbers only; nothing to answer). */
+export function figureFromDraft(figure: SubstituteDraft["figure"]): VisualSpec | null {
+  if (!figure) return null;
+  const shaded = (k: number | null, of: number) => (k !== null && k <= of ? Array.from({ length: k }, (_, i) => i) : null);
+  let candidate: unknown = null;
+  if (figure.kind === "fraction_bar" && figure.parts) candidate = { spec_version: VISUAL_SPEC_VERSION, kind: "fraction_bar", parts: figure.parts, shaded: shaded(figure.shaded, figure.parts) };
+  if (figure.kind === "circle" && figure.parts) candidate = { spec_version: VISUAL_SPEC_VERSION, kind: "part_whole", shape: "circle", parts: figure.parts, shaded: shaded(figure.shaded, figure.parts) };
+  if (figure.kind === "grid" && figure.rows && figure.cols) candidate = { spec_version: VISUAL_SPEC_VERSION, kind: "grid", rows: figure.rows, cols: figure.cols, shaded: shaded(figure.shaded, figure.rows * figure.cols) };
+  if (figure.kind === "number_line" && figure.line_end && figure.divisions && figure.divisions % figure.line_end === 0) {
+    const unit = figure.divisions / figure.line_end;
+    candidate = { spec_version: VISUAL_SPEC_VERSION, kind: "number_line", start: { n: 0, d: 1 }, end: { n: figure.line_end, d: 1 }, divisions: figure.divisions, labels: Array.from({ length: figure.line_end + 1 }, (_, k) => ({ tick: k * unit, text: String(k) })) };
+  }
+  const parsed = VisualSpecSchema.safeParse(candidate);
+  return parsed.success && specIssues(parsed.data).length === 0 ? parsed.data : null;
+}
+
+/**
+ * A substitute activity: pedagogically equivalent (`substitutionEquivalence`), its figure valid when it brings one, no reference
+ * to a missing image, and no answer (neither the original's nor the shaded fraction of its own figure).
+ */
+export function validateSubstitute(draft: SubstituteDraft | null, ctx: RewriteContext & { drawable: boolean }): { ok: true; rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | { ok: false; violations: string[] } {
+  if (!draft || !draft.feasible || !draft.prompt) return { ok: false, violations: ["not_feasible"] };
+  const spec = figureFromDraft(draft.figure);
+  if (draft.figure && !spec) return { ok: false, violations: ["figure_invalid"] };
+  const prompt = draft.prompt.trim();
+  const steps = (draft.steps ?? []).map((x) => x.trim()).filter(Boolean);
+  const lines = draft.lines ?? 2;
+  const equivalence = substitutionEquivalence({ analysis: ctx.analysis, activity: ctx.activity, visual: ctx.visual, candidate: { prompt, steps, lines, figure: spec }, needs: ctx.functionalNeeds, drawable: ctx.drawable });
+  const violations = [...equivalence.violations];
+  const full = [prompt, ...steps].join("\n");
+  const norm = normalizeText(full);
+  // The same question over its own new figure is a valid substitute; without one, an unchanged prompt still needs the lost image.
+  if (prompt.length < 15 || (!spec && norm === normalizeText(activityText(ctx.analysis, ctx.activity.id)))) violations.push("not_rewritten");
+  if ((spec ? MISSING_IMAGE_WORDS : IMAGE_WORDS).test(norm)) violations.push("mentions_image");
+  if (leakedSignature(full, ctx.signatures)) violations.push("answer_leaked");
+  const shown = spec?.kind === "fraction_bar" || spec?.kind === "part_whole" ? `${spec.shaded.length}/${spec.parts}` : null;
+  if (shown && norm.includes(shown) && ctx.activity.response_format !== "mark") violations.push("answer_leaked(figure)");
+  return violations.length === 0 ? { ok: true, rewrite: { prompt, steps, lines }, spec } : { ok: false, violations };
+}
+
 /** Without a model, a support can still be drawn from the activity's own steps in the sheet (never invented). */
 function supportFromSheet(document: MaterialDocument, activityIds: readonly string[]): VisualSpec | null {
   const block = allBlocks(document).find((b) => b.type === "activity" && b.trace.source_refs.some((r) => activityIds.includes(r)));
@@ -140,28 +184,48 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         done("rewritable_without_visual", { action: "omit", reason: "optional_original" });
         continue;
       }
-      // An activity that acts on or interprets the representation (or whose objective is the representation) cannot be rewritten
-      // into another one: deterministic, before any model is asked.
       const activities = need.activityIds.map((id) => input.analysis.activities.find((a) => a.id === id)).filter((a): a is AnalysisActivity => a !== undefined);
-      const required = activities.map((a) => taskProfile(input.analysis, a, visual)).filter((p) => p.representation === "required");
-      if (activities.length === 0 || required.length > 0) {
-        done("unresolved_visual", { action: "unresolved", reason: required.length > 0 ? "representation_required" : "exact_visual_unavailable" });
+      if (!visual || activities.length === 0) {
+        done("unresolved_visual", { action: "unresolved", reason: "exact_visual_unavailable" });
         continue;
       }
-      attempts.push("rewrite");
+      // 3 · A NEW figure of the same kind, from the activity's own data: the competence is kept without a model.
+      attempts.push("generate");
+      const generated = generateEquivalentFigure(visual, activities);
+      if (generated) {
+        done("generatable_support_visual", { action: "figure", spec: generated.spec, provenance: "generated" });
+        continue;
+      }
+      const ctx = { analysis: input.analysis, visual, signatures, functionalNeeds: input.functionalNeeds ?? [] };
       const visualText = visualTextOf(visual);
-      const rewrites: ActivityRewrite[] = [];
-      if (deps.assistants && visualText) {
+      // 4 · Rewritten without it, only when the figure was a mere data source (decided before any model is asked).
+      const required = activities.some((a) => taskProfile(input.analysis, a, visual).representation === "required");
+      if (!required && deps.assistants && visualText) {
+        attempts.push("rewrite");
+        const rewrites: ActivityRewrite[] = [];
         for (const activity of activities) {
           const { draft, run } = await deps.assistants.rewrite({ stage: input.stage, activity: activityText(input.analysis, activity.id), visual: visualText });
           await record(run);
-          const valid = validateRewrite(draft, { analysis: input.analysis, activity, visual, signatures, functionalNeeds: input.functionalNeeds ?? [] });
+          const valid = validateRewrite(draft, { ...ctx, activity });
           if (!valid.ok) break;
           rewrites.push({ activityId: activity.id, ...valid.rewrite });
         }
+        if (rewrites.length === activities.length) {
+          done("rewritable_without_visual", { action: "rewrite", activities: rewrites });
+          continue;
+        }
       }
-      if (rewrites.length > 0 && rewrites.length === activities.length) done("rewritable_without_visual", { action: "rewrite", activities: rewrites });
-      else done("unresolved_visual", { action: "unresolved", reason: "not_equivalent_or_unavailable" });
+      // 5 · A new equivalent activity (with its own figure when the representation can be drawn); a rejected proposal is asked again once.
+      if (deps.assistants) {
+        attempts.push("substitute");
+        const drawable = drawableFamily(visual, activities) !== null;
+        const substituted = await substituteAll(deps.assistants, record, input, activities, visualText, { ...ctx, drawable });
+        if (substituted) {
+          done("substituted_activity", { action: "substitute", activities: substituted.activities, spec: substituted.spec });
+          continue;
+        }
+      }
+      done("unresolved_visual", { action: "unresolved", reason: deps.assistants ? "no_equivalent_activity" : "no_model_available" });
       continue;
     }
 
@@ -186,4 +250,26 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     done("unresolved_visual", { action: "unresolved", reason: "support_unavailable" });
   }
   return { policy_version: VISUAL_POLICY_VERSION, needs: outcomes };
+}
+
+const SUBSTITUTE_ATTEMPTS = 2;
+
+async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRecord) => Promise<void>, input: MagicVisualInput, activities: readonly AnalysisActivity[], visualText: string, ctx: Omit<RewriteContext, "activity"> & { drawable: boolean }): Promise<{ activities: ActivityRewrite[]; spec: VisualSpec | null } | null> {
+  const out: ActivityRewrite[] = [];
+  let spec: VisualSpec | null = null;
+  for (const activity of activities) {
+    const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id)).map((o) => o.text).join(". ") || null;
+    let accepted: { rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | null = null;
+    for (let attempt = 0; attempt < SUBSTITUTE_ATTEMPTS && !accepted; attempt++) {
+      const { draft, run } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)" });
+      await record({ ...run, attempt: attempt + 1 });
+      const valid = validateSubstitute(draft, { ...ctx, activity });
+      // Several activities share the figure: they must agree on it (one figure on the sheet).
+      if (valid.ok && (!spec || !valid.spec || JSON.stringify(spec) === JSON.stringify(valid.spec))) accepted = valid;
+    }
+    if (!accepted) return null;
+    spec ??= accepted.spec;
+    out.push({ activityId: activity.id, ...accepted.rewrite });
+  }
+  return { activities: out, spec };
 }

@@ -193,8 +193,8 @@ export const AUTOMATIC_STOP_COPY = {
   /** No generation left to try or nothing to reopen: what is true, without offering a review that cannot happen. */
   qualityFinal: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes cancelarla o crear una nueva desde el material.",
   visual: {
-    body: "La ficha necesita una imagen del material original que no hemos podido localizar, reconstruir ni sustituir sin que la actividad pierda su sentido.",
-    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Si quieres, revisa y edita la adaptación.",
+    body: "Una actividad depende de una imagen del material original y ahora mismo no hemos podido crear automáticamente una alternativa válida.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes intentarlo de nuevo más tarde o, si quieres, revisar y editar la adaptación.",
   },
   edit: "Revisar y editar",
   /** A «Hacer magia» sheet delivered before the visual policy that still waits for an image (never shown as ready). */

@@ -2,30 +2,34 @@ import { allBlocks, MaterialDocumentSchema, type Block, type MaterialDocument } 
 import { describeSpec, type VisualSpec } from "@/lib/visuals/spec";
 
 /**
- * «Hacer magia» never asks the teacher to locate, upload or omit an image (docs/VISUAL_RESOURCES.md § Política visual). Every
- * visual need of the sheet is resolved by the server, in this order, and the first rung that works is the one recorded:
+ * «Hacer magia» never asks the teacher to locate, upload or omit an image, and never stops because one is missing when the sheet
+ * can be completed in a pedagogically valid way (docs/VISUAL_RESOURCES.md § Política visual). Every visual need of the sheet is
+ * resolved by the server, in this order, and the first rung that works is the one recorded:
  *
  *   1. exact_original_visual             the original's figure, located automatically (or by a person earlier) and cropped;
- *   2. reconstructable_structured_visual a simple mathematical figure redrawn from verified data (its pixels, else the analysis's
- *                                        complete description);
- *   3. generatable_support_visual        a NEW support the plan asked for (a sequence of steps, vocabulary cards), drawn by our
- *                                        own renderer from validated short text — never a stand-in for an original's content;
- *   4. rewritable_without_visual         the activity rewritten so it keeps its objective without the visual (an essential
- *                                        original), or the visual left out because the sheet does not need it (an optional one);
- *   5. unresolved_visual                 nothing reliable: the adaptation stops honestly, never «ready» with a gap.
+ *   2. reconstructable_structured_visual a simple mathematical figure redrawn from the original's own pixels;
+ *   3. generatable_support_visual        a NEW figure drawn by our renderer: an equivalent one of the same kind for an original
+ *                                        that could not be used (from the activity's data), or a support the plan asked for;
+ *   4. rewritable_without_visual         the activity rewritten without the visual when it only carried a datum, or the visual
+ *                                        left out because the sheet does not need it (an optional one);
+ *   5. substituted_activity              a NEW activity with the same objective, level, operation and response type (with its own
+ *                                        figure when the competence is working with a representation);
+ *   6. unresolved_visual                 nothing valid could be built (no model available, every proposal rejected): the only
+ *                                        visual reason left to stop, never «ready» with a gap.
  *
  * This module is pure: what each need IS (from the document and the pinned context) and how a decided plan is applied to the
  * document. The decisions that need the original, the locator or a model are taken in `src/lib/materials/visuals/auto/policy.ts`.
  */
 
 export const VISUAL_POLICY_VERSION = 1;
-export const VISUAL_NEED_CATEGORIES = ["exact_original_visual", "reconstructable_structured_visual", "generatable_support_visual", "rewritable_without_visual", "unresolved_visual"] as const;
+export const VISUAL_NEED_CATEGORIES = ["exact_original_visual", "reconstructable_structured_visual", "generatable_support_visual", "rewritable_without_visual", "substituted_activity", "unresolved_visual"] as const;
 export type VisualNeedCategory = (typeof VISUAL_NEED_CATEGORIES)[number];
 
 export interface ActivityRewrite {
   activityId: string;
   prompt: string;
   steps: string[];
+  /** 0: answered on the figure (no writing space). */
   lines: number;
 }
 
@@ -33,6 +37,7 @@ export type VisualAction =
   | { action: "located" }
   | { action: "figure"; spec: VisualSpec; provenance: "reconstruction" | "generated" }
   | { action: "rewrite"; activities: ActivityRewrite[] }
+  | { action: "substitute"; activities: ActivityRewrite[]; spec: VisualSpec | null }
   | { action: "omit"; reason: string }
   | { action: "unresolved"; reason: string };
 
@@ -98,7 +103,7 @@ const keyOf = (b: Block) => (b.type !== "image" ? null : b.source.kind === "orig
 export function applyVisualResolution(document: MaterialDocument, plan: VisualResolutionPlan): MaterialDocument {
   const byKey = new Map(plan.needs.map((n) => [n.key, n]));
   const removed = new Set<string>();
-  const rewrites = new Map(plan.needs.flatMap((n) => (n.resolution.action === "rewrite" ? n.resolution.activities.map((a) => [a.activityId, a] as const) : [])));
+  const rewrites = new Map(plan.needs.flatMap((n) => (n.resolution.action === "rewrite" || n.resolution.action === "substitute" ? n.resolution.activities.map((a) => [a.activityId, a] as const) : [])));
   const rewritten = new Set<string>();
   const pages = document.pages.map((page) => ({
     blocks: page.blocks.flatMap((b): Block[] => {
@@ -106,13 +111,14 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
       const need = key ? byKey.get(key) : undefined;
       if (b.type === "image" && need) {
         const r = need.resolution;
-        if (r.action === "omit" || r.action === "rewrite") {
+        if (r.action === "omit" || r.action === "rewrite" || (r.action === "substitute" && !r.spec)) {
           removed.add(b.id);
           return [];
         }
-        if (r.action === "figure") {
-          const source = { kind: "figure" as const, spec: r.spec, provenance: r.provenance, ...(need.origin === "original" ? { visual_ref: need.key } : { decision_id: need.key }) };
-          return [{ ...b, source, alt_text: describeSpec(r.spec).slice(0, 300) }];
+        if (r.action === "figure" || r.action === "substitute") {
+          const spec = r.spec!;
+          const source = { kind: "figure" as const, spec, provenance: r.action === "figure" ? r.provenance : ("generated" as const), ...(need.origin === "original" ? { visual_ref: need.key } : { decision_id: need.key }) };
+          return [{ ...b, source, alt_text: describeSpec(spec).slice(0, 300) }];
         }
       }
       if (b.type === "activity") {
@@ -120,8 +126,11 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
         if (act && !rewritten.has(act)) {
           rewritten.add(act);
           const w = rewrites.get(act)!;
-          const decisions = plan.needs.filter((n) => n.resolution.action === "rewrite" && n.activityIds.includes(act));
-          return [{ ...b, prompt: w.prompt, ...(w.steps.length > 0 ? { steps: w.steps } : {}), response: b.response.kind === "none" ? { kind: "lines", lines: w.lines } : b.response, trace: { ...b.trace, origin: "adapted", source_refs: [...new Set([...b.trace.source_refs, ...decisions.map((d) => d.key).filter((k) => k.startsWith("vis_"))])] } }];
+          const decisions = plan.needs.filter((n) => (n.resolution.action === "rewrite" || n.resolution.action === "substitute") && n.activityIds.includes(act));
+          // A substitute brings a new task: its own answer space (none when it is answered on its figure), never the old one's.
+          const substitute = decisions.some((d) => d.resolution.action === "substitute");
+          const response = w.lines === 0 ? ({ kind: "none" } as const) : substitute || b.response.kind === "none" ? ({ kind: "lines", lines: w.lines } as const) : b.response;
+          return [{ ...b, prompt: w.prompt, ...(w.steps.length > 0 ? { steps: w.steps } : substitute ? { steps: undefined } : {}), response, trace: { ...b.trace, origin: "adapted", source_refs: [...new Set([...b.trace.source_refs, ...decisions.map((d) => d.key).filter((k) => k.startsWith("vis_"))])] } }];
         }
       }
       return [b];
