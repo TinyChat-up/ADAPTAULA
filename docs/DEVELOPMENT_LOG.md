@@ -2,7 +2,31 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-13 — Fase 8.2B.5: selección única basada en tablas
+
+- **Base verificada:** `git fetch origin main`, merge `bb38cd0` de **PR #27** y ascendencia de `4007e19`/`26904dc`. Rama nueva desde main actualizado: `phase8/seleccion-unica-tablas`. #27 ya está integrada; se corrige su estado en los documentos de continuidad. La consulta de PR abiertas por API sigue bloqueada (`Forbidden`), sin inferir su estado.
+- **Fallo reproducido antes de producción:** fixture de animales/alimentación con tabla representada como imagen perdida terminaba sin sustitución; una tabla nativa no generaba necesidad visual y evitaba la corroboración. Dos pruebas fallaron antes del cambio (`/tmp/adaptaula-table-before.log`).
+- **Implementación:** `adaptation/table-choice.ts` separa la relación entre celdas de la comprobación de fracciones, compartiendo controles literales en `single-choice.ts`. `materials/visuals/auto/table.ts` corrobora hash, página, cuadrícula, segmentos de bordes y texto de todas las celdas contra el PDF. La política exige evidencia también para tablas nativas y recortes listos; añade resultado tabular/evidencia al contrato visual, conserva tabla/opciones/consigna/ids/enlaces/clave y se detiene si falla. Prompt nuevo inmutable `visual-substitute/v4.ts`, salida estricta y códigos seguros; hasta dos intentos por actividad/ejecución, sin recibir clave ni aprobación intermedia. Las fracciones conservan v3; otros formatos v2.
+- **Decisión/alcance (ADR-023):** solo consulta literal reconocida `Según la tabla, ¿qué {columna} corresponde a «{fila}»? Elige una opción.`, primera columna identifica filas, 2–6 columnas, 1–12 filas, sin vacíos/duplicados/unidad separada, opciones textuales del vocabulario de la columna y una sola coincidente con clave `source`. Se rechazan inferencias, alternativas numéricas o ajenas a la columna, sinónimos/equivalencias, claves inferidas y modificaciones incompatibles. La tabla permanece necesaria para resolver la actividad.
+- **Pruebas:** fixtures sintéticos y mocks en `tests/support/table-choice-case.ts`, unitarias/contrato de proveedor en `table-choice.test.ts` y `table-choice-prompt.test.ts`, orquestador real con PGlite local y fuente PDF en `tests/db/magic-visual-policy.test.ts`. Cubren dato correcto y otra fila/columna, celdas alteradas/ausentes/combinadas, encabezados ambiguos, dos o cero respuestas, clave contradictoria, filtración de solución, fuente inventada/no corroborada/hash cambiado, corrección válida en segundo intento y dos fallos con parada honesta. La integración verifica `ready` e imprimible o `blocked` sin entrega/consumo; registra versión 4 e intentos. Sin Supabase remoto.
+- **Resultados:** **133 pruebas focalizadas en 10 archivos PASS** (132 juntas y revalidación del área al añadir un caso y endurecer bordes; no suite completa); **3 PDF Chromium PASS** (tabla, selección de fracciones y regresión de ficha de fracciones); `pnpm typecheck` PASS; `pnpm lint` sin errores, un aviso previo en `tests/unit/analysis-run-auth.test.ts`; `git diff --check` PASS. Comandos reproducibles:
+
+  ```bash
+  pnpm exec vitest run tests/unit/table-choice.test.ts tests/unit/table-choice-prompt.test.ts tests/unit/single-choice-substitution.test.ts tests/unit/single-choice-prompt.test.ts tests/unit/visual-substitution.test.ts tests/unit/pedagogical-equivalence.test.ts tests/unit/magic-visual-policy.test.ts tests/db/magic-visual-policy.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts
+  pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/table-choice-substitution.test.ts tests/pdf/single-choice-substitution.test.ts tests/pdf/automatic-visuals.test.ts
+  pnpm typecheck
+  pnpm lint
+  ```
+
+- **PDF inspeccionado:** `.pdf-smoke/table-choice-substitution/sheet.pdf`, una página con encabezados contrastados, filas alineadas, tabla/pregunta/opciones juntas, tres círculos vacíos, clave y notas docentes ausentes. No se modifica CLARO ni la tipografía. Se reutiliza la normalización del glifo de paréntesis de Inter únicamente en la extracción del test, no en producto.
+- **Markdown actualizados:** PROJECT_STATUS, DEVELOPMENT_LOG, ROADMAP, ARCHITECTURE (ADR-023), VISUAL_RESOURCES y PROMPTS. AGENTS/CLAUDE siguen coherentes con sus enlaces al contexto compartido, sin duplicar el estado.
+- **Riesgos y pendiente real:** la evidencia compara estructura y capa de texto del PDF con posición/tinta, **no OCR independiente de los glifos**; no certifica capas de texto falsas ni corrobora aquí la transcripción de pregunta/clave. Escaneos, tablas sin cuadrícula, celdas multilínea, tablas duplicadas y paráfrasis desconocidas se detienen. Cobertura conservadora, aún pendiente IA real y runtime Vercel. Sin migraciones, SQL remoto, llamadas de pago, cambios de Stripe/Max/planes/precios/cuotas ni auditoría económica. La compilación bloqueada por Google Fonts no se repite ni se cambia el producto para sortearla.
+- **Publicación:** pendiente de completar al final de esta entrada; API de GitHub devuelve `Forbidden`. Sin merge.
+- **Siguiente acción:** revisar esta rama/PR y el PDF; después ampliar solo una variante verificable de consulta con sus fixtures/evidencia. Validar IA real/Vercel en una tarea posterior autorizada, sin presentar mocks como validación remota.
+
 ## 2026-10-13 — Fase 8.2B.4: selección única en la sustitución visual
+
+**Estado actualizado en 8.2B.5:** PR #27 integrada en `bb38cd0`, verificado por Git. Los detalles de publicación siguientes reflejan el bloqueo original de esa sesión.
 
 - **Precondición verificada:** PR #26 integrada en `main` / `d665d5b`, comprobada con `git fetch origin main`, mensaje de merge y ascendencia de `65515a8`. La consulta por API sigue devolviendo `Forbidden`; no se infiere el estado de otras PR. Rama nueva: `phase8/seleccion-unica-automatica`.
 - **Problema reproducido antes de modificar producción:** dos pruebas fallaban. Una imagen perdida con opciones A/B/C y clave `B` no permite al generador existente deducir su fracción; la sustitución rechazaba `select_option` con `no_equivalent_activity`. No era la parada `needs_decision` del planificador.

@@ -15,6 +15,7 @@ import { illustrationAvailability } from "../illustrate/server";
 import { resolveMagicVisuals, type MagicVisualDeps } from "./policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { corroborateSpec, prepareVisuals, type AutoRunDeps, type AutoRunSummary } from "./service";
+import { corroborateTable } from "./table";
 import { createVisionLocator, type VisionLocator } from "./vision";
 
 /**
@@ -90,6 +91,7 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
         return new Set(ids.filter((id) => resolved.states[id]?.status === "ready" && trusted(id)));
       },
       corroborate: async (visual, activityTexts) => (owned ? corroborateSpec({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual, activityTexts }) : null),
+      corroborateTable: async (visual) => owned ? corroborateTable({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual }) : null,
       assistants: productionAssistants(),
       ...(await productionIllustrate(input)),
       recordAiRun: async (run) => {

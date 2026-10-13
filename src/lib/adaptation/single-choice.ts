@@ -31,6 +31,15 @@ const fractionOption = (text: string): Fraction | null => {
 /** Exact stems bound what can be proved: reading the shaded fraction, not its complement, a sum, or an equivalent fraction. */
 const SHADED_QUESTION = /^(?:observa (?:la barra|el circulo)\. )?¿que fraccion (?:de la barra|del circulo) esta (?:coloreada|sombreada)\? (?:elige|selecciona) (?:una|solo una) (?:opcion|respuesta)\.$/;
 
+export function singleChoiceStructureViolations(source: NonNullable<ReturnType<typeof sourceSingleChoice>>, candidate: { prompt: string; steps: string[]; lines: number; choice: unknown }): string[] {
+  const violations: string[] = [];
+  const parsed = SubstituteChoiceSchema.safeParse(candidate.choice);
+  if (!parsed.success || parsed.data.multiple || candidate.lines !== 0) violations.push("response_type_changed");
+  if (parsed.success && JSON.stringify(parsed.data.options) !== JSON.stringify(source.response.options)) violations.push("choice_options_changed");
+  if (candidate.prompt !== source.prompt || candidate.steps.length !== 0) violations.push("choice_task_changed");
+  return violations;
+}
+
 /** A previous transformation must not leave a stale key, additional instructions, or a second activity sharing this source. */
 export function singleChoiceDocumentCompatible(activity: AnalysisActivity, document: MaterialDocument): boolean {
   const source = sourceSingleChoice(activity);
@@ -53,12 +62,7 @@ export function singleChoiceViolations(activity: AnalysisActivity, candidate: { 
   if (!source || !SHADED_QUESTION.test(normalizeText(source.prompt))) return ["choice_source_unverifiable"];
   const circle = normalizeText(source.prompt).includes("circulo");
   if (circle && normalizeText(source.prompt).includes("barra")) return ["choice_source_unverifiable"];
-  const violations: string[] = [];
-  const parsed = SubstituteChoiceSchema.safeParse(candidate.choice);
-  if (!parsed.success || parsed.data.multiple || candidate.lines !== 0) violations.push("response_type_changed");
-  if (parsed.success && JSON.stringify(parsed.data.options) !== JSON.stringify(source.response.options)) violations.push("choice_options_changed");
-  // Exact source words and no new teaching steps: options are moved, never rewritten, explained, reordered or highlighted.
-  if (candidate.prompt !== source.prompt || candidate.steps.length !== 0) violations.push("choice_task_changed");
+  const violations = singleChoiceStructureViolations(source, candidate);
   const values = source.response.options.map((o) => fractionOption(o.text));
   if (values.some((v) => !v || v.n <= 0 || v.n >= v.d)) return [...violations, "choice_source_unverifiable"];
   const fractions = values as Fraction[];

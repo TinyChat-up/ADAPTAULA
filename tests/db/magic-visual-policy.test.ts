@@ -7,6 +7,8 @@ import { processAdaptationJobs, processAdaptationStage } from "@/lib/adaptation/
 import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
 import type { VisualAssistants } from "@/lib/materials/visuals/auto/assistants";
 import { resolveMagicVisuals } from "@/lib/materials/visuals/auto/policy";
+import { corroborateTable } from "@/lib/materials/visuals/auto/table";
+import { TABLE_CHOICE_DRAFT, TABLE_RUN, tableChoiceCase, tableChoicePdf } from "../support/table-choice-case";
 import { corroborateSpec, prepareVisuals } from "@/lib/materials/visuals/auto/service";
 import { resolveVisuals } from "@/lib/materials/visuals/service";
 import { loadRenderInputWith } from "@/lib/render/load";
@@ -72,6 +74,7 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
             return new Set(ids.filter((id) => r.states[id]?.status === "ready" && (r.states[id]?.provenance?.method === "human" || ["B", "C"].includes(accepted[id]?.choice ?? ""))));
           },
           corroborate: (visual, activityTexts) => corroborateSpec(auto.deps, { materialId: input.materialId, sourceSha256, visual, activityTexts }),
+          corroborateTable: (visual) => corroborateTable(auto.deps, { materialId: input.materialId, sourceSha256, visual }),
           assistants: options.assistants ?? null,
           recordAiRun: (run) => auto.deps.recordAiRun!(run, { workspaceId: input.workspaceId, materialId: input.materialId, adaptationId: input.adaptationId }),
         },
@@ -105,6 +108,44 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
   const plan = async (id: string) => (await q<{ payload: { plan: { needs: Array<{ key: string; category: string; resolution: { action: string } }> } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'visual_resolution'", [id]))[0]?.payload.plan;
   return { user, materialId, learner, deps, actor, spy, orchestrator, status, magic, sheet, entitlement, plan, resolveCalls, visuals, auto, sourceSha256 };
 }
+
+describe("selección única de tabla en Hacer magia", () => {
+  it.each(["corrected", "invalid", "unverified"] as const)("corrobora el PDF y finaliza sin aprobación intermedia: %s", async (mode) => {
+    const inputs: Parameters<VisualAssistants["substitute"]>[0][] = [];
+    const invalid = structuredClone(TABLE_CHOICE_DRAFT);
+    invalid.table.rows[0]![1] = "Carne";
+    const assistants: VisualAssistants = {
+      support: async () => ({ draft: null, run: TABLE_RUN }), rewrite: async () => ({ draft: null, run: TABLE_RUN }),
+      substitute: async (input) => {
+        inputs.push(input);
+        return { draft: mode === "corrected" && inputs.length === 2 ? TABLE_CHOICE_DRAFT : invalid, run: TABLE_RUN };
+      },
+    };
+    const t = await teacher({ analysis: tableChoiceCase().analysis, sourcePdf: await tableChoicePdf(undefined, mode === "unverified"), assistants });
+    const id = await t.magic();
+    expect(inputs).toHaveLength(mode === "unverified" ? 0 : 2);
+    if (mode !== "unverified") expect(inputs[1]!.rejectionCodes).toEqual(["table_data_changed"]);
+    expect(await q("select attempt, prompt_version from public.ai_runs where adaptation_id = $1 and prompt_key = 'visual_substitute' order by attempt", [id])).toEqual(mode === "unverified" ? [] : [{ attempt: 1, prompt_version: 4 }, { attempt: 2, prompt_version: 4 }]);
+    if (mode === "corrected") {
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null });
+      const s = await t.sheet(id);
+      expect(s.readiness).toMatchObject({ printable: true, pendingResources: 0 });
+      if (s.loaded.kind !== "ok") throw new Error("no sheet");
+      expect(allBlocks(s.loaded.document).find((b) => b.type === "table")).toMatchObject({ headers: TABLE_CHOICE_DRAFT.table.headers, rows: TABLE_CHOICE_DRAFT.table.rows });
+      const activity = allBlocks(s.loaded.document).find((b) => b.type === "activity")!;
+      expect(activity).toMatchObject({ response: TABLE_CHOICE_DRAFT.choice });
+      expect(s.loaded.document.answer_key).toEqual([{ block_id: activity.id, basis: "source", value: "B" }]);
+      expect(await t.entitlement(id)).toBe("consumed");
+    } else {
+      expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual" } });
+      expect(await t.entitlement(id)).toBe("reserved");
+      expect(t.spy.reviewer).toBe(0);
+    }
+    expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
+    // Source identity is checked against the stored material and bytes before any corroboration.
+    expect(await corroborateTable(t.auto.deps, { materialId: t.materialId, sourceSha256: "0".repeat(64), visual: tableChoiceCase().analysis.visuals[0]! })).toBeNull();
+  });
+});
 
 describe("«Hacer magia» delivers the fractions sheet complete, with nothing for the teacher to do", () => {
   it.each([true, false])("selección única con imagen perdida: corrección válida=%s, sin decisión intermedia", async (correct) => {

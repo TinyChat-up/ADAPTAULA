@@ -404,7 +404,7 @@ Una negativa del proveedor, error permanente o `feasible=false` termina la susti
 
 ### Selección única verificable — Fase 8.2B.4
 
-El peldaño de sustitución admite ahora `select_option` mediante `visual_substitute@v3` (excepción a la versión v2 de la tabla anterior); los demás formatos conservan v2. No se altera el orden de recuperación, reconstrucción, figura determinista, ilustración y sustitución. El caso reproducido tiene una imagen perdida, opciones `A) 1/4`, `B) 3/8`, `C) 1/2` y clave original `B`: el generador previo de figuras no deduce una fracción de una letra, y antes la sustitución rechazaba el formato cerrado.
+El peldaño de sustitución admite `select_option` de fracciones mediante `visual_substitute@v3` (excepción a la versión v2 de la tabla anterior); los demás formatos conservan v2. No se altera el orden de recuperación, reconstrucción, figura determinista, ilustración y sustitución. El caso reproducido tiene una imagen perdida, opciones `A) 1/4`, `B) 3/8`, `C) 1/2` y clave original `B`: el generador previo de figuras no deduce una fracción de una letra, y antes la sustitución rechazaba el formato cerrado.
 
 `src/lib/adaptation/single-choice.ts` extrae listas consecutivas completas A)…H) al final de `instruction`/`context`. Solo admite preguntas reconocidas sobre la fracción coloreada de una barra/círculo y alternativas fraccionarias. La consigna, etiquetas, orden y alternativas son literales. El servidor calcula qué opciones corresponden al sombreado del `VisualSpec`, exige exactamente una y comprueba que sea la indicada por la fuente; mantiene el número de partes para no alterar la dificultad. No se aceptan complementos, tareas distintas, cambio de opciones o claves ambiguas. No se usa una declaración de corrección del modelo.
 
@@ -655,3 +655,11 @@ y sin consumir unidad.
 - **Localizar figuras genéricas en escaneos sin texto.** Sin anclas de texto, el localizador no las encuentra. Hoy se ilustran, si
   la adaptación puede, o la ficha se detiene.
 - **Pictogramas de comunicación aumentativa.** Hace falta un catálogo con licencia comercial.
+
+### Selección única de tablas — Fase 8.2B.5
+
+Antes de los peldaños genéricos se comprueban las tablas de las que depende una selección única, incluso cuando el ensamblado ya las representó como `table` y no como imagen. El caso reproducido de imagen perdida paraba sin sustitución; el caso nativo podía evitar toda corroboración. Ahora ambos exigen la fuente: cuadrícula y texto de cada celda del PDF en su posición, identidad por hash y una sola tabla coincidente en la página. Sin evidencia, `table_uncorroborated` → parada visual; no hay solicitud al docente ni ilustración sustitutiva de datos exactos.
+
+La vía usa `visual_substitute@v4`, el contrato tabular existente y un verificador de consulta literal separado del de fracciones. Toda la tabla y las opciones quedan intactas. Se calcula la celda de la fila/columna explícitas, se exige una sola opción coincidente y se contrasta la clave original `source`. No se envía la clave al asistente. Hasta dos propuestas por actividad, con códigos seguros de rechazo. Se mantienen ids, enlaces y `answer_key`; la resolución registra tabla y evidencia `pdf_grid_text_v1`, con validación `source_table_verified`, sin activo de imagen.
+
+Alcance exacto en ADR-023: tablas rectangulares pequeñas con capa de texto, valores literales del vocabulario de la columna, sin alternativas numéricas, celdas vacías/ambiguas, unidades separadas ni inferencias. No cubre escaneos ni certifica los glifos por OCR. La comparación contra el texto extraíble del PDF no equivale a verificar la transcripción del enunciado o clave. Pruebas en `table-choice.test.ts`, `table-choice-prompt.test.ts`, integración PGlite y `tests/pdf/table-choice-substitution.test.ts`. El PDF usa CLARO sin cambios globales: tabla/pregunta/opciones juntas, encabezados distinguidos y círculos vacíos. IA real y Vercel pendientes.

@@ -7,6 +7,7 @@ import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { substitutionFeedback, type SubstitutionRejectionCode } from "@/lib/adaptation/substitution-feedback";
 import { sourceSingleChoice, singleChoiceViolations, singleChoiceDocumentCompatible } from "@/lib/adaptation/single-choice";
+import { tableChoiceViolations, tableEvidenceMatches, type TableEvidence } from "@/lib/adaptation/table-choice";
 import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
@@ -31,6 +32,7 @@ export interface MagicVisualDeps {
    * nothing is rebuilt: a description alone is never drawn.
    */
   corroborate?(visual: AnalysisVisual, activityTexts: readonly string[]): Promise<VisualSpec | null>;
+  corroborateTable?(visual: AnalysisVisual): Promise<TableEvidence | null>;
   /** Absent → no model rung (the deterministic ones still run). */
   assistants?: VisualAssistants | null;
   /**
@@ -155,7 +157,7 @@ export function figureFromDraft(figure: SubstituteDraft["figure"]): VisualSpec |
  * A substitute activity: pedagogically equivalent (`substitutionEquivalence`), its figure valid when it brings one, no reference
  * to a missing image, and no answer (neither the original's nor the shaded fraction of its own figure).
  */
-export function validateSubstitute(draft: SubstituteDraft | null, ctx: RewriteContext & { drawable: boolean }): { ok: true; rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | { ok: false; violations: string[] } {
+export function validateSubstitute(draft: SubstituteDraft | null, ctx: RewriteContext & { drawable: boolean; tableEvidence?: TableEvidence }): { ok: true; rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | { ok: false; violations: string[] } {
   if (!draft || !draft.feasible || !draft.prompt) return { ok: false, violations: ["not_feasible"] };
   const spec = figureFromDraft(draft.figure);
   if (draft.figure && !spec) return { ok: false, violations: ["figure_invalid"] };
@@ -163,6 +165,11 @@ export function validateSubstitute(draft: SubstituteDraft | null, ctx: RewriteCo
   const steps = (draft.steps ?? []).map((x) => x.trim()).filter(Boolean);
   const lines = draft.lines ?? 2;
   if (ctx.activity.response_format === "select_option") {
+    if (ctx.visual?.table) {
+      const violations = tableChoiceViolations(ctx.activity, ctx.visual, { prompt, steps, lines, choice: draft.choice, table: draft.table, figure: draft.figure }, ctx.tableEvidence);
+      const source = sourceSingleChoice(ctx.activity);
+      return violations.length === 0 && source ? { ok: true, rewrite: { prompt, steps, lines, response: source.response }, spec: null } : { ok: false, violations };
+    }
     const violations = singleChoiceViolations(ctx.activity, { prompt, steps, lines, choice: draft.choice, figure: spec });
     const source = sourceSingleChoice(ctx.activity);
     if (!source) return { ok: false, violations };
@@ -195,6 +202,14 @@ function supportFromSheet(document: MaterialDocument, activityIds: readonly stri
 
 export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVisualInput): Promise<VisualResolutionPlan> {
   const needs = visualNeedsOfDocument(input.document, input.requiredVisuals);
+  // Native table blocks also need source verification; they must not bypass the image policy.
+  for (const visual of input.analysis.visuals) {
+    const activities = input.analysis.activities.filter((a) => a.resource_ids.includes(visual.id));
+    if (!(visual.table || visual.kind === "table") || !activities.some((a) => a.response_format === "select_option")) continue;
+    const need = { key: visual.id, origin: "original" as const, essential: true, activityIds: activities.map((a) => a.id) };
+    const at = needs.findIndex((n) => n.key === visual.id);
+    if (at >= 0) needs[at] = need; else needs.push(need);
+  }
   const ready = await deps.readyOriginals(needs.filter((n) => n.origin === "original").map((n) => n.key));
   const outcomes: VisualNeedOutcome[] = [];
   // Transient provider trouble is never an answer: going down the ladder on it would end in a stop that blames the material. The
@@ -245,6 +260,33 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       done("generated_illustration", { action: "illustration", asset: { id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, alt: outcome.asset.alt });
       return true;
     };
+
+    if (visual && (visual.table || visual.kind === "table") && activities.some((a) => a.response_format === "select_option")) {
+      attempts.push("corroborate_table");
+      const evidence = await deps.corroborateTable?.(visual).catch(() => null);
+      if (!tableEvidenceMatches(visual, evidence)) {
+        done("unresolved_visual", { action: "unresolved", reason: "table_uncorroborated" });
+        continue;
+      }
+      const blocks = allBlocks(input.document);
+      const resources = blocks.filter((b) => b.trace.source_refs.includes(visual.id) && (b.type === "table" || b.type === "image"));
+      const resource = resources[0];
+      const compatible = resources.length === 1 && resource && !resource.trace.teacher_edited
+        && resource.trace.source_refs.filter((r) => r.startsWith("vis_")).length === 1
+        && (resource.type !== "image" || resource.source.kind === "original" && resource.source.visual_ref === visual.id)
+        && (resource.type !== "table" || JSON.stringify({ headers: resource.headers, rows: resource.rows, unit: resource.unit ?? null }) === JSON.stringify(visual.table))
+        && activities.every((a) => a.response_format === "select_option" && a.resource_ids.length === 1 && singleChoiceDocumentCompatible(a, input.document)
+          && blocks.some((b) => b.type === "activity" && b.trace.source_refs.includes(a.id) && b.resource_block_ids?.length === 1 && b.resource_block_ids[0] === resource.id));
+      if (!compatible || !deps.assistants) {
+        done("unresolved_visual", { action: "unresolved", reason: compatible ? "no_model_available" : "table_source_unverifiable" });
+        continue;
+      }
+      attempts.push("substitute");
+      const substituted = await substituteAll(deps.assistants, record, input, activities, "", { analysis: input.analysis, visual, signatures, functionalNeeds, drawable: false, tableEvidence: evidence });
+      if (substituted) done("substituted_activity", { action: "substitute", ...substituted, table: visual.table!, tableEvidence: evidence });
+      else done("unresolved_visual", { action: "unresolved", reason: "no_equivalent_activity" });
+      continue;
+    }
 
     if (need.origin === "referenced") {
       // The activity's words point at a picture the sheet does not have: drawn from its own data, or illustrated; never delivered as is.
@@ -361,7 +403,7 @@ function requestedStyle(document: MaterialDocument, decisionId: string): string 
 
 const SUBSTITUTE_ATTEMPTS = 2;
 
-async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRecord, transient?: boolean) => Promise<void>, input: MagicVisualInput, activities: readonly AnalysisActivity[], visualText: string, ctx: Omit<RewriteContext, "activity"> & { drawable: boolean }): Promise<{ activities: ActivityRewrite[]; spec: VisualSpec | null } | null> {
+async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRecord, transient?: boolean) => Promise<void>, input: MagicVisualInput, activities: readonly AnalysisActivity[], visualText: string, ctx: Omit<RewriteContext, "activity"> & { drawable: boolean; tableEvidence?: TableEvidence }): Promise<{ activities: ActivityRewrite[]; spec: VisualSpec | null } | null> {
   const out: ActivityRewrite[] = [];
   let spec: VisualSpec | null = null;
   for (const activity of activities) {
@@ -371,7 +413,7 @@ async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRe
     let rejectionCodes: SubstitutionRejectionCode[] = [];
     for (let attempt = 0; attempt < SUBSTITUTE_ATTEMPTS && !accepted; attempt++) {
       const choice = sourceSingleChoice(activity);
-      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: choice?.prompt ?? activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)", responseFormat: activity.response_format, rejectionCodes, ...(choice ? { options: choice.response.options, functionalNeeds: ctx.functionalNeeds } : {}) });
+      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: choice?.prompt ?? activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)", responseFormat: activity.response_format, rejectionCodes, ...(ctx.tableEvidence && ctx.visual?.table ? { table: ctx.visual.table } : {}), ...(choice ? { options: choice.response.options, functionalNeeds: ctx.functionalNeeds } : {}) });
       await record({ ...run, attempt: attempt + 1 }, transient);
       // Corrections are for invalid proposals, not refusals, unavailable credentials or an explicit inability to substitute.
       if (run.status === "refused" || run.status === "error" || draft?.feasible === false) break;
