@@ -37,6 +37,6 @@ Rama: `phase8/seleccion-unica-automatica`, creada desde `main` actualizado en `d
 
 **Verificado:** 103 pruebas focalizadas, 2 PDF reales con Chromium (selección única y regresión de fracciones), typecheck y lint. Revisión visual del PDF de selección: una página, figura junto a pregunta/opciones y círculos sin marcar. Asistentes simulados, sin llamadas pagadas. Sin migraciones ni cambios de renderer, precios o cuotas.
 
-Publicación y PR: consultar la última entrada de [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). No hay merge automático.
+Rama publicada (`26904dc`). La creación de la PR por API volvió a fallar con `Forbidden`; [abrir la PR en GitHub](https://github.com/TinyChat-up/ADAPTAULA/pull/new/phase8/seleccion-unica-automatica). Detalle en [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). No se ha hecho merge.
 
 Siguiente bloque recomendado: ampliar selección única a una segunda clase verificable (lectura de un dato de tabla), con un verificador determinista propio antes de aceptar reformulaciones. No habilitar formatos cerrados genéricos ni convertir tareas abiertas en selección.
