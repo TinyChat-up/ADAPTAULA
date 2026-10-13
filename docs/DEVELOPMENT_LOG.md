@@ -53,9 +53,9 @@ Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: b
   - La revisión manual con teclado y lector de pantalla sigue pendiente (Fase 7). axe solo cubre lo automatizable.
   - Las redirecciones son temporales (307) y se retiran cuando cada pantalla tenga contenido.
   - Cualquier `loading.tsx` nuevo debe respetar ADR-024 para no convertir 404 en 200.
-- **Publicación:** la implementación (`5bb9cc1`) y este registro están en `claude/variables-expuestas-repo-f2o2et`, subidos por Git como *fast-forward* desde `1e94a8d`, que ya estaba en `main` a través de #25. Sin PR nueva, porque no se ha pedido, y sin merge.
+- **Publicación:** la implementación (`5bb9cc1`) y este registro están en `claude/variables-expuestas-repo-f2o2et`, subidos por Git como *fast-forward* desde `1e94a8d`, que ya estaba en `main` a través de #25. A petición del usuario se abrió la [PR #29](https://github.com/TinyChat-up/ADAPTAULA/pull/29) hacia `main`. Sin merge.
 - **Siguiente acción:**
-  1. Revisar el rediseño y, si se aprueba, abrir la PR de esta rama.
+  1. Revisar la PR #29 y, si se aprueba, integrarla. La integración la hace una persona.
   2. En un bloque propio, poner al día los E2E anteriores: la copy y el recorrido actuales de Hacer magia; un *seed* imprimible; esperar el estado «analizando» antes de leer la cuota; el nombre de descarga, comprobado en `Content-Disposition` o con el navegador fijado; localizar un visual concreto; aceptar «Revisar» en `free-plan`; y la espera tras el onboarding en `signUpAndOnboard`.
   3. Después, retomar la prioridad de Hacer magia del ROADMAP.
 

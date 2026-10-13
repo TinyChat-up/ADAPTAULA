@@ -58,9 +58,9 @@ Rama: `claude/variables-expuestas-repo-f2o2et`. Se reinició desde `main` en `70
   - `free-plan:9`;
   - la carrera del helper `signUpAndOnboard` (`adaptation:60` y `materials:145`).
 
-**Publicación:** implementación `5bb9cc1` en `claude/variables-expuestas-repo-f2o2et`, subida por Git como *fast-forward* desde `1e94a8d`. Sin PR nueva, porque no se ha pedido, y sin merge.
+**Publicación:** implementación `5bb9cc1` en `claude/variables-expuestas-repo-f2o2et`, subida por Git como *fast-forward* desde `1e94a8d`. **[PR #29](https://github.com/TinyChat-up/ADAPTAULA/pull/29)** abierta hacia `main`, sin merge.
 
 **Siguiente acción:**
-1. Revisar el rediseño y, si se aprueba, abrir la PR de esta rama.
+1. Revisar la PR #29 y, si se aprueba, integrarla. La integración la hace una persona.
 2. En un bloque aparte, poner al día esos E2E, empezando por la espera de una línea tras el onboarding en `signUpAndOnboard`.
 3. La prioridad de producto no cambia: en Hacer magia, ampliar una sola variante verificable de consulta literal en tablas, con fixtures y evidencia de fuente (ROADMAP).
