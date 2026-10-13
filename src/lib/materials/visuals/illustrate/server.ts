@@ -14,13 +14,14 @@ import { getFlags } from "@/lib/config/flags";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callStructured } from "../auto/assistants";
-import type { IllustrationDeps, StoredIllustration } from "./service";
+import { ILLUSTRATION_BUDGET, type IllustrationDeps, type StoredIllustration } from "./service";
 
 /**
  * Production `IllustrationDeps` for one adaptation, or null when illustrations are not available to it. Available only when ALL
  * hold (docs/BILLING.md, `image.generate`): the `FLAG_AI_IMAGES_ENABLED` flag, the workspace's plan has `image_generation` and a
  * `monthly_images` allowance (each approved illustration consumes one unit through `consume_quota('image')`, given back if none is
- * approved), an image model and its credentials, and a text/vision model for the brief and the review.
+ * approved), an image model and its credentials, and a text/vision model for the brief and the review. Spending is capped per
+ * adaptation (`ILLUSTRATION_BUDGET`, or the plan's `features.illustration_budget_usd`), counted from `ai_runs` before each call.
  * Service role only: a server job after the adaptation authorised its material. Logs carry ids and codes only.
  */
 const BUCKET = "generated-assets";
@@ -29,7 +30,24 @@ const COLUMNS = "id, sha256, width, height, alt_text";
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const toStored = (row: { id: string; sha256: string; width: number; height: number; alt_text: string | null }): StoredIllustration => ({ id: row.id, sha256: row.sha256, width: row.width, height: row.height, alt: row.alt_text ?? "Ilustración de la actividad" });
 
-export async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationDeps | null> {
+/** Why an adaptation cannot have illustrations: its plan does not include them, or the service is not set up (flag, models, keys). */
+export type IllustrationAvailability = { available: true; deps: IllustrationDeps; perAdaptation: number | null } | { available: false; reason: "plan" | "service" };
+
+const ILLUSTRATION_PURPOSES = ["image_brief", "image", "image_review"] as const;
+
+export async function illustrationAvailability(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
+  const admin = createAdminClient();
+  // The plan first: «your plan does not include illustrations» is true whatever the service's state.
+  const { data: plan } = await admin.rpc("workspace_plan", { ws: ids.workspaceId });
+  const effective = (plan as { features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
+  if (effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: "plan" };
+  const planBudget = Number(effective.features?.illustration_budget_usd);
+  const deps = await illustrationDeps(ids, Number.isFinite(planBudget) && planBudget > 0 ? planBudget : ILLUSTRATION_BUDGET.perAdaptationUsd);
+  const perAdaptation = Number(effective.features?.illustrations_per_adaptation);
+  return deps ? { available: true, deps, perAdaptation: Number.isInteger(perAdaptation) && perAdaptation >= 0 ? perAdaptation : null } : { available: false, reason: "service" };
+}
+
+async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number): Promise<IllustrationDeps | null> {
   if (!getFlags().aiImagesEnabled) return null;
   const env = serverEnv() as ModelEnv;
   let imageSelection: ModelSelection;
@@ -44,9 +62,6 @@ export async function illustrationDeps(ids: { workspaceId: string; adaptationId:
     return null;
   }
   const admin = createAdminClient();
-  const { data: plan } = await admin.rpc("workspace_plan", { ws: ids.workspaceId });
-  const features = (plan as { features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
-  if (features?.features?.image_generation !== true || !(Number(features.monthly_images) > 0)) return null;
   const textProvider = providerFor(textSelection);
 
   return {
@@ -98,5 +113,14 @@ export async function illustrationDeps(ids: { workspaceId: string; adaptationId:
       if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
     },
     sha256,
+    budget: {
+      limitUsd: budgetUsd,
+      // Everything this adaptation's illustrations have cost so far (resumed jobs and correction cycles included); a run with no
+      // price counts at its worst case, a failed call without usage at nothing.
+      async spentUsd() {
+        const { data } = await admin.from("ai_runs").select("purpose, status, estimated_cost_usd").eq("adaptation_id", ids.adaptationId).in("purpose", [...ILLUSTRATION_PURPOSES]);
+        return ((data ?? []) as Array<{ purpose: string; status: string; estimated_cost_usd: number | string | null }>).reduce((sum, r) => sum + (r.estimated_cost_usd !== null ? Number(r.estimated_cost_usd) : r.status === "success" ? (r.purpose === "image" ? ILLUSTRATION_BUDGET.imageUsd : ILLUSTRATION_BUDGET.textUsd) : 0), 0);
+      },
+    },
   };
 }

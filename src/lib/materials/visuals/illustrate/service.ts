@@ -28,6 +28,20 @@ export const ILLUSTRATION_LIMITS = {
 } as const;
 
 /**
+ * Hard spending ceiling, enforced on the server BEFORE each call (a provider's budget alert is not a limit). What has been spent on
+ * an adaptation's illustrations comes from its `ai_runs`; a call is made only if its worst case still fits. Worst cases are
+ * conservative estimates from the price table (`src/lib/ai/costs.ts`, 2026-10-12); a run without a price counts at its worst case.
+ */
+export const ILLUSTRATION_BUDGET = {
+  /** Default per adaptation when the plan sets none (`plans.features.illustration_budget_usd`). */
+  perAdaptationUsd: 0.5,
+  /** Worst case of one image call (medium quality, 1536×1024, prompt included). */
+  imageUsd: 0.08,
+  /** Worst case of one brief or one review call. */
+  textUsd: 0.03,
+} as const;
+
+/**
  * Time an illustration needs. A run has a fixed time (its stage's lease): an illustration is not started, nor a second attempt
  * made, when it could not finish in it, and no call outlives it (each gets what is left, its provider's retries included). So a run
  * cut off by the platform never leaves a unit reserved and unreturned, nor an image paid for and lost.
@@ -82,6 +96,12 @@ export interface IllustrationRequest {
   deadline?: number | null;
 }
 
+/** The adaptation's illustration spending so far and its ceiling (USD). Absent: no money ceiling (tests that do not test it). */
+export interface IllustrationBudget {
+  limitUsd: number;
+  spentUsd(): Promise<number>;
+}
+
 export interface StoredIllustration {
   id: string;
   sha256: string;
@@ -105,11 +125,12 @@ export interface IllustrationDeps {
   sha256(bytes: Uint8Array): string;
   /** The clock (epoch ms) the deadline is measured with. */
   now?(): number;
+  budget?: IllustrationBudget | null;
 }
 
 export type IllustrationOutcome =
   | { ok: true; asset: StoredIllustration; cached: boolean; attempts: number }
-  | { ok: false; reason: "brief_rejected" | "quota_exhausted" | "image_failed" | "review_rejected"; detail: string[] };
+  | { ok: false; reason: "brief_rejected" | "quota_exhausted" | "budget_exhausted" | "image_failed" | "review_rejected"; detail: string[] };
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -127,7 +148,14 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } | 
 const sizeFor = (kind: IllustrationBrief["kind"]): ImageSize => (kind === "vocabulary_support" ? "1024x1024" : "1536x1024");
 
 export async function illustrate(deps: IllustrationDeps, request: IllustrationRequest): Promise<IllustrationOutcome> {
-  const record = (run: AIRunRecord) => deps.recordAiRun(run).catch(() => undefined);
+  // Money: what the adaptation already spent on illustrations, plus what this one spends, against the ceiling (worst case for unpriced runs).
+  let spent = 0;
+  const worstOf = (run: AIRunRecord) => (run.purpose === "image" ? ILLUSTRATION_BUDGET.imageUsd : ILLUSTRATION_BUDGET.textUsd);
+  const record = (run: AIRunRecord) => {
+    spent += run.estimatedCostUsd ?? (run.status === "success" ? worstOf(run) : 0);
+    return deps.recordAiRun(run).catch(() => undefined);
+  };
+  const fits = (usd: number) => !deps.budget || spent + usd <= deps.budget.limitUsd + 1e-9;
   const left = () => (request.deadline ?? Number.POSITIVE_INFINITY) - (deps.now ? deps.now() : Date.now());
   /** What a call may take: what is left minus what must follow it, never more than its own maximum. */
   const budget = (max: number, reserve: number) => Math.max(1_000, Math.min(max, left() - reserve));
@@ -135,6 +163,9 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
   const cached = await deps.store.find(request.adaptationId, request.needKey);
   if (cached) return { ok: true, asset: cached, cached: true, attempts: 0 };
   if (left() < ILLUSTRATION_TIMING.startMs) throw new IllustrationDeferred();
+  if (deps.budget) spent = await deps.budget.spentUsd();
+  // The whole first attempt must fit before anything is paid: brief, one image, one review.
+  if (!fits(2 * ILLUSTRATION_BUDGET.textUsd + ILLUSTRATION_BUDGET.imageUsd)) return { ok: false, reason: "budget_exhausted", detail: [] };
   const { draft, run: briefRun } = await deps.brief({ stage: request.stage, grade: request.grade, subject: request.subject, activity: request.activity, objective: request.objective, missing: request.missing, purpose: request.purpose, supports: request.supports, timeoutMs: budget(ILLUSTRATION_TIMING.maxTextMs, ILLUSTRATION_TIMING.attemptMs) });
   await record(briefRun);
   if (!draft && isTransientAIError(briefRun.errorCode)) throw new IllustrationDeferred();
@@ -156,6 +187,10 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
   let reviewed = false;
   for (let attempt = 1; attempt <= ILLUSTRATION_LIMITS.attemptsPerImage; attempt++) {
     if (attempt > 1 && left() < ILLUSTRATION_TIMING.attemptMs) throw await defer();
+    if (attempt > 1 && !fits(ILLUSTRATION_BUDGET.imageUsd + ILLUSTRATION_BUDGET.textUsd)) {
+      await deps.quota.refund(quotaKey);
+      return { ok: false, reason: "budget_exhausted", detail: [...new Set(detail)].slice(0, 12) };
+    }
     const prompt = IMAGE_RENDER_V1.build(brief, { stage: request.stage, corrections });
     const { image, run } = await deps.image({ prompt, size: sizeFor(brief.kind), timeoutMs: budget(ILLUSTRATION_TIMING.maxImageMs, ILLUSTRATION_TIMING.afterImageMs) });
     await record({ ...run, attempt });

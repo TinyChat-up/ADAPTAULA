@@ -12,7 +12,7 @@ import { OpenAIImageProvider, mapOpenAIError, type OpenAIImagesClientLike } from
 import { resolveModel } from "@/lib/ai/registry";
 import { createImageProvider } from "@/lib/ai/router";
 import type { AIRunRecord, GeneratedImage } from "@/lib/ai/types";
-import { ILLUSTRATION_LIMITS, ILLUSTRATION_TIMING, IllustrationDeferred, illustrate, pngSize, type IllustrationDeps, type IllustrationRequest } from "@/lib/materials/visuals/illustrate/service";
+import { ILLUSTRATION_BUDGET, ILLUSTRATION_LIMITS, ILLUSTRATION_TIMING, IllustrationDeferred, illustrate, pngSize, type IllustrationDeps, type IllustrationRequest } from "@/lib/materials/visuals/illustrate/service";
 import { acceptReview, correctionsFrom, markerNumbersIn, validateBrief, type BriefDraft, type ReviewDraft } from "@/lib/visuals/illustration";
 import { CELL_ACTIVITY_1, CELL_BRIEF, CELL_REVIEW_APPROVED } from "../support/cell-case";
 
@@ -111,7 +111,7 @@ async function png(): Promise<GeneratedImage> {
 }
 
 /** `clock`: the run's clock in ms, advanced by `perCall` on each model call. */
-function scriptedDeps(script: { briefs?: Array<BriefDraft | null>; images?: Array<GeneratedImage | null | "refused" | "rate_limited">; reviews?: Array<ReviewDraft | null>; quota?: boolean; cached?: boolean; briefError?: string; reviewError?: string; perCall?: number } = {}) {
+function scriptedDeps(script: { briefs?: Array<BriefDraft | null>; images?: Array<GeneratedImage | null | "refused" | "rate_limited">; reviews?: Array<ReviewDraft | null>; quota?: boolean; cached?: boolean; briefError?: string; reviewError?: string; perCall?: number; budget?: { limitUsd: number; spentUsd: number }; imageCost?: number | null } = {}) {
   const calls: string[] = [];
   const prompts: string[] = [];
   const timeouts: Record<string, number[]> = { brief: [], image: [], review: [] };
@@ -140,7 +140,7 @@ function scriptedDeps(script: { briefs?: Array<BriefDraft | null>; images?: Arra
       const next = script.images?.[i++];
       if (next === "refused") return { image: null, run: run("image", { status: "refused", errorCode: "refusal" }) };
       if (next === "rate_limited") return { image: null, run: run("image", { status: "error", errorCode: "rate_limited" }) };
-      return { image: next === undefined ? await png() : next, run: run("image") };
+      return { image: next === undefined ? await png() : next, run: run("image", script.imageCost !== undefined ? { estimatedCostUsd: script.imageCost } : {}) };
     },
     review: async ({ timeoutMs }) => {
       calls.push("review");
@@ -160,6 +160,7 @@ function scriptedDeps(script: { briefs?: Array<BriefDraft | null>; images?: Arra
     recordAiRun: async (x) => void runs.push(x),
     sha256: () => "b".repeat(64),
     now: () => clock.now,
+    budget: script.budget ? { limitUsd: script.budget.limitUsd, spentUsd: async () => script.budget!.spentUsd } : null,
   };
   return { deps, calls, prompts, timeouts, reserved, refunded, runs, stored };
 }
@@ -273,6 +274,34 @@ describe("an illustration fits in its run: nothing is started that could not fin
     expect(s.calls).toEqual(["brief", "image", "review"]);
     expect(s.refunded).toEqual(s.reserved);
     expect(s.stored).toEqual([]);
+  });
+});
+
+describe("a hard spending ceiling per adaptation, checked on the server before each call (never only a provider alert)", () => {
+  const B = ILLUSTRATION_BUDGET;
+  const firstAttempt = 2 * B.textUsd + B.imageUsd;
+
+  it("what the adaptation already spent leaves no room for a whole first attempt: nothing is called, no unit is reserved", async () => {
+    const s = scriptedDeps({ budget: { limitUsd: 0.5, spentUsd: 0.5 - firstAttempt + 0.001 } });
+    expect(await illustrate(s.deps, request)).toEqual({ ok: false, reason: "budget_exhausted", detail: [] });
+    expect(s.calls).toEqual([]);
+    expect(s.reserved).toEqual([]);
+  });
+
+  it("room for one attempt but not for the corrected one: the unit is given back and no second image is paid", async () => {
+    const rejected = { ...structuredClone(CELL_REVIEW_APPROVED), extra_text: true, verdict: "rejected" as const };
+    const s = scriptedDeps({ reviews: [rejected], budget: { limitUsd: firstAttempt + 0.03, spentUsd: 0 }, imageCost: 0.06 });
+    expect(await illustrate(s.deps, request)).toMatchObject({ ok: false, reason: "budget_exhausted" });
+    expect(s.calls).toEqual(["brief", "image", "review"]);
+    expect(s.refunded).toEqual(s.reserved);
+  });
+
+  it("an image with no known price counts at its worst case", async () => {
+    const rejected = { ...structuredClone(CELL_REVIEW_APPROVED), extra_text: true, verdict: "rejected" as const };
+    const priced = scriptedDeps({ reviews: [rejected], budget: { limitUsd: 0.2, spentUsd: 0 }, imageCost: 0.01 });
+    expect(await illustrate(priced.deps, request)).toMatchObject({ ok: true, attempts: 2 });
+    const unpriced = scriptedDeps({ reviews: [rejected], budget: { limitUsd: 0.2, spentUsd: 0 }, imageCost: null });
+    expect(await illustrate(unpriced.deps, request)).toMatchObject({ ok: false, reason: "budget_exhausted" });
   });
 });
 

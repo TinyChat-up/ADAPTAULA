@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
@@ -116,13 +117,17 @@ async function teacher(options: { plan?: "max" | "free"; review?: ReviewDraft } 
     resolve: async (input) => {
       await prepareVisuals(auto.deps, { workspaceId: input.workspaceId, materialId: input.materialId, analysis: input.analysis, analysisFingerprint: input.analysisFingerprint, sourceSha256, adaptationId: input.adaptationId });
       const deps = pgIllustrationDeps(user, visuals.objects, { adaptationId: input.adaptationId, materialId: input.materialId }, { review: options.review });
+      // As in production (`illustrationAvailability`): the plan decides first whether there are illustrations at all.
+      const plan = (await q<{ monthly_images: number; features: { image_generation?: boolean } }>("select monthly_images, features from public.workspace_plan($1)", [input.workspaceId]))[0]!;
+      const included = plan.features.image_generation === true && plan.monthly_images > 0;
       return resolveMagicVisuals(
         {
           readyOriginals: async (ids) => {
             const r = await resolveVisuals(visuals.deps, { materialId: input.materialId, analysisFingerprint: input.analysisFingerprint, sourceSha256, visualIds: ids });
             return new Set(ids.filter((id) => r.states[id]?.status === "ready"));
           },
-          illustrate: (request) => illustrate(deps, { ...request, workspaceId: input.workspaceId, adaptationId: input.adaptationId }),
+          illustrate: included ? (request) => illustrate(deps, { ...request, workspaceId: input.workspaceId, adaptationId: input.adaptationId }) : null,
+          illustrationsWithheld: included ? null : "plan",
         },
         { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, grade: input.grade, subject: input.subject, functionalNeeds: input.functionalNeeds },
       );
@@ -191,12 +196,30 @@ describe("case B · «La célula animal»: the scheme is not in the PDF, an appr
     expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [id]))[0]!.state).toBe("reserved");
   });
 
-  it("a plan without images (Free: monthly_images 0): no image is requested, no unit used — the honest stop, never a text task", async () => {
+  it("a plan without images (Free: monthly_images 0): no image is requested, no unit used — the honest stop that names the plan, never a text task", async () => {
     const t = await teacher({ plan: "free" });
     const id = await t.magic();
-    expect(await t.status(id)).toMatchObject({ status: "blocked", automaticStop: { reason: "visual" } });
+    expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual_plan" } });
+    expect((await q<{ state: string }>("select state from public.adaptation_entitlements where adaptation_id = $1", [id]))[0]!.state).toBe("reserved");
     expect(await t.imageUnits()).toBe(0);
     expect(await q("select purpose from public.ai_runs where adaptation_id = $1 and purpose = 'image'", [id])).toEqual([]);
+  });
+});
+
+describe("the read-only cost SQL (docs/qa/costes/coste-por-adaptacion.sql) runs on the real schema", () => {
+  it("only SELECTs; for case B it shows each step, the illustration's cost and its one image", async () => {
+    const t = await teacher();
+    const id = await t.magic();
+    const sql = readFileSync("docs/qa/costes/coste-por-adaptacion.sql", "utf8").replaceAll("00000000-0000-4000-8000-00000000c057", id);
+    const statements = sql.replace(/^\s*--.*$/gm, "").split(";").map((x) => x.trim()).filter(Boolean);
+    expect(statements).toHaveLength(6);
+    expect(statements.every((x) => /^select\b/i.test(x))).toBe(true);
+    const results: Array<Array<Record<string, unknown>>> = [];
+    for (const statement of statements) results.push((await db.query<Record<string, unknown>>(statement)).rows);
+    expect(results[0]!.map((r) => r.purpose)).toEqual(expect.arrayContaining(["image_brief", "image", "image_review"]));
+    expect(results[1]![0]).toMatchObject({ images: 1 });
+    expect(results[4]!.some((r) => Number(r.images) === 1)).toBe(true);
+    expect(results[5]!.some((r) => r.workspace_id === t.user.workspaceId)).toBe(true);
   });
 });
 

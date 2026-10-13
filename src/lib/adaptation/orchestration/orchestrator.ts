@@ -7,7 +7,7 @@ import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import { resolveAutomatically } from "../automatic-resolution";
-import { applyVisualResolution, unresolvedEssential, type VisualResolutionPlan } from "../visual-policy";
+import { applyVisualResolution, stoppedByPlan, unresolvedEssential, type VisualResolutionPlan } from "../visual-policy";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
@@ -570,7 +570,7 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
  * execution): the cost guards refused the generation (`generation_refused`), or a sheet that failed its quality review has no safe
  * automatic correction left (`quality`). The stop before any generation (a need nothing covers) is read from the state itself.
  */
-export type AutomaticStopCode = "generation_refused" | "quality" | "visual";
+export type AutomaticStopCode = "generation_refused" | "quality" | "visual" | "visual_plan";
 
 async function recordAutomaticStop(store: AdaptationStore, adaptationId: string, reviewFp: string, code: AutomaticStopCode, detail: string) {
   await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, automatic_stop: code, detail }), { review_fingerprint: reviewFp, automatic_stop: code, detail });
@@ -794,7 +794,7 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
   const previous = PlanReviewSchema.parse(last.payload);
   if (previous.reviewer.kind !== "auto" || previous.plan_fingerprint !== raw.fingerprint) return null;
   // A visual nothing could resolve is not fixed by generating the same sheet again.
-  if ((await store.listArtifacts(adaptationId, "execution_report")).some((a) => (a.payload as { review_fingerprint?: string; automatic_stop?: string }).review_fingerprint === last.fingerprint && (a.payload as { automatic_stop?: string }).automatic_stop === "visual")) return null;
+  if ((await store.listArtifacts(adaptationId, "execution_report")).some((a) => (a.payload as { review_fingerprint?: string; automatic_stop?: string }).review_fingerprint === last.fingerprint && ["visual", "visual_plan"].includes((a.payload as { automatic_stop?: string }).automatic_stop ?? ""))) return null;
   const reviewed = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context);
 
   // The blocked version, rebuilt exactly (same generation, same deterministic ids, same restoration) to read what each failing
@@ -1090,7 +1090,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     if (unresolvedVisuals.length > 0 && !hardFail) {
       await store.finalize(adaptationId, run.lease, version.id, deterministic, "blocked");
       if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
-      await recordAutomaticStop(store, adaptationId, reviewFp, "visual", unresolvedVisuals.map((n) => n.key).join(","));
+      await recordAutomaticStop(store, adaptationId, reviewFp, stoppedByPlan(unresolvedVisuals) ? "visual_plan" : "visual", unresolvedVisuals.map((n) => n.key).join(","));
       deps.log?.warn("automatic_visual_stop", { adaptationId, visuals: unresolvedVisuals.map((n) => `${n.key}:${n.resolution.action === "unresolved" ? n.resolution.reason : ""}`).join(",") });
       return { outcome: "completed", status: "blocked", jobId: job.id, delivered: false, version: version.version, detail: "visual_unresolved" };
     }

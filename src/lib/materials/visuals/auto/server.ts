@@ -11,8 +11,8 @@ import type { VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
 import { createVisualAssistants, type VisualAssistants } from "./assistants";
 import { illustrate, type IllustrationRequest } from "../illustrate/service";
-import { illustrationDeps } from "../illustrate/server";
-import { resolveMagicVisuals } from "./policy";
+import { illustrationAvailability } from "../illustrate/server";
+import { resolveMagicVisuals, type MagicVisualDeps } from "./policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { corroborateSpec, prepareVisuals, type AutoRunDeps, type AutoRunSummary } from "./service";
 import { createVisionLocator, type VisionLocator } from "./vision";
@@ -91,7 +91,7 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
       },
       corroborate: async (visual, activityTexts) => (owned ? corroborateSpec({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual, activityTexts }) : null),
       assistants: productionAssistants(),
-      illustrate: await productionIllustrate(input),
+      ...(await productionIllustrate(input)),
       recordAiRun: async (run) => {
         const { error } = await admin.from("ai_runs").insert({ ...toAiRunRow(run, { workspaceId: input.workspaceId, jobId: null, materialId: input.materialId }), adaptation_id: input.adaptationId });
         if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
@@ -105,17 +105,19 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
 }
 
 /**
- * Illustrations for this adaptation, when its workspace may have them (flag, plan, quota, credentials); null otherwise. Each one
- * must finish within the run (`deadline`): past it, `IllustrationDeferred` retries the stage later, which keeps what was approved.
+ * Illustrations for this adaptation, when its workspace may have them (plan, quota, flag, credentials); otherwise why not, so an
+ * honest stop can say «your plan does not include them». Each one must finish within the run (`deadline`): past it,
+ * `IllustrationDeferred` retries the stage later, which keeps what was approved.
  */
-async function productionIllustrate(input: { workspaceId: string; adaptationId: string; materialId: string; deadline?: number | null }) {
-  const deps = await illustrationDeps({ workspaceId: input.workspaceId, adaptationId: input.adaptationId, materialId: input.materialId }).catch(() => null);
-  if (!deps) return null;
-  return async (request: Omit<IllustrationRequest, "workspaceId" | "adaptationId" | "deadline">) => {
+async function productionIllustrate(input: { workspaceId: string; adaptationId: string; materialId: string; deadline?: number | null }): Promise<Pick<MagicVisualDeps, "illustrate" | "illustrationsWithheld" | "maxIllustrations">> {
+  const availability = await illustrationAvailability({ workspaceId: input.workspaceId, adaptationId: input.adaptationId, materialId: input.materialId }).catch(() => ({ available: false as const, reason: "service" as const }));
+  if (!availability.available) return { illustrate: null, illustrationsWithheld: availability.reason };
+  const deps = availability.deps;
+  return { ...(availability.perAdaptation !== null ? { maxIllustrations: availability.perAdaptation } : {}), illustrate: async (request: Omit<IllustrationRequest, "workspaceId" | "adaptationId" | "deadline">) => {
     const outcome = await illustrate(deps, { ...request, workspaceId: input.workspaceId, adaptationId: input.adaptationId, deadline: input.deadline ?? null });
     logger.info("illustration", { adaptationId: input.adaptationId, need: request.needKey, ok: outcome.ok, cached: outcome.ok ? outcome.cached : null, attempts: outcome.ok ? outcome.attempts : null, reason: outcome.ok ? null : outcome.reason });
     return outcome;
-  };
+  } };
 }
 
 function productionAssistants(): VisualAssistants | null {

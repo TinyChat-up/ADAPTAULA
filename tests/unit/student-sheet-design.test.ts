@@ -9,6 +9,7 @@ import { MaterialDocumentSchema, type MaterialDocument } from "@/lib/schemas/mat
 import { FIXTURES, bachillerato, eso, primary, primaryStructured, visualCrop } from "../visual-qa/fixtures";
 import { composeMath } from "@/lib/render/math";
 import { pilotBachillerato, pilotPrimary } from "../visual-qa/pilots";
+import { cellCaseDocument } from "../support/cell-case";
 
 /**
  * Phase 8 · the student sheet's design rules (material_renderer@v3), checked on the markup the PDF prints. They are system rules:
@@ -164,6 +165,23 @@ describe("Sistema CLARO on the five complete sheets · reusable rules", () => {
     expect(out.indexOf('class="ms-answer"', at)).toBeGreaterThan(at);
     const c = activities(claroModel(eso())).find((a) => a.kind === "activity" && a.label === "4")!;
     expect(c.kind === "activity" && c.supports.map((s) => s.kind)).toEqual(["sentence_starters"]);
+  });
+
+  it("a help or vocabulary written FOR an activity is shown inside it, before the answer space; another activity's help and a checklist stay apart", () => {
+    const doc = structuredClone(cellCaseDocument().document);
+    const blocks = doc.pages[0]!.blocks;
+    const at = blocks.findIndex((b) => b.type === "activity" && b.trace.source_refs.includes("act_1"));
+    const help = (id: string, ref: string) => ({ id, type: "help_box" as const, variant: "reminder" as const, text: "Recuerda: la membrana rodea la célula.", trace: { origin: "support" as const, source_refs: [ref], decision_ids: [] } });
+    blocks.splice(at + 1, 0, help("blk_helpown00001", "act_1"), help("blk_helpother001", "act_2"));
+    const model = claroModel(MaterialDocumentSchema.parse(doc));
+    const first = activities(model).find((a) => a.kind === "activity" && a.label === "1")!;
+    expect(first.kind === "activity" && first.supports.map((s) => s.kind)).toEqual(["help_box"]);
+    const top = model.pages.flatMap((p) => p.nodes);
+    expect(top.filter((n) => n.kind === "help_box")).toHaveLength(1);
+    const out = html(model);
+    const supports = out.indexOf('class="ms-activity-supports"');
+    expect(supports).toBeGreaterThan(-1);
+    expect(out.indexOf('class="ms-answer"', supports)).toBeGreaterThan(supports);
   });
 
   it("a help after a non-writing activity, or a checklist after an essay, stays a block of its own", () => {

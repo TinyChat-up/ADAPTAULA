@@ -18,7 +18,7 @@ export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | 
  * covers; `quality`: the quality review found a problem with no safe automatic correction (or the generations ran out);
  * `generation_refused`: the cost guards refused another generation.
  */
-export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | "visual";
+export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | "visual" | "visual_plan";
 
 export interface StatusArtifacts {
   planValidation?: { counts: { valid: number; review: number; blocked: number } } | null;
@@ -206,7 +206,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       }
       if (automatic) {
         // A visual nothing could resolve is its own honest stop (no automatic correction is attempted for it).
-        ({ phase, progress, nextAction, automaticStop } = stopped(artifacts.automaticStop === "visual" ? "visual" : "quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
+        ({ phase, progress, nextAction, automaticStop } = stopped(artifacts.automaticStop === "visual" || artifacts.automaticStop === "visual_plan" ? artifacts.automaticStop : "quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
         break;
       }
       phase = "blocked";

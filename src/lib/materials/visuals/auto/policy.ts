@@ -36,6 +36,10 @@ export interface MagicVisualDeps {
    * available to it (flag, plan, quota or credentials): its rung is skipped.
    */
   illustrate?: ((request: Omit<IllustrationRequest, "workspaceId" | "adaptationId" | "deadline">) => Promise<IllustrationOutcome>) | null;
+  /** Illustrations this adaptation may get (the plan's `features.illustrations_per_adaptation`); never above the hard limit. */
+  maxIllustrations?: number;
+  /** Why `illustrate` is absent: the workspace's plan does not include illustrations, or the service is not set up. */
+  illustrationsWithheld?: "plan" | "service" | null;
   recordAiRun?(run: AIRunRecord): Promise<void>;
 }
 
@@ -191,9 +195,16 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   const functionalNeeds = input.functionalNeeds ?? [];
   const supports = functionalNeeds.flatMap((d) => (d in DIMENSIONS ? [DIMENSIONS[d as DimensionKey].label] : []));
   let illustrations = 0;
+  /**
+   * Needs an illustration would have resolved but the plan stopped: its plan has none, or this month's are used up. If nothing else
+   * resolves them, the stop says so («your plan»), never a sheet with a gap.
+   */
+  const planLimited = new Map<string, "illustration_not_in_plan" | "illustration_quota_exhausted">();
   /** One illustration for a need: within the adaptation's limit, with the activities' own words and answers. */
   const illustrate = async (needKey: string, activities: readonly AnalysisActivity[], missing: string | null, purpose: string): Promise<IllustrationOutcome | null> => {
-    if (!deps.illustrate || illustrations >= ILLUSTRATION_LIMITS.perAdaptation || activities.length === 0) return null;
+    if (!deps.illustrate && deps.illustrationsWithheld === "plan" && activities.length > 0) planLimited.set(needKey, "illustration_not_in_plan");
+    const limit = Math.min(ILLUSTRATION_LIMITS.perAdaptation, deps.maxIllustrations ?? ILLUSTRATION_LIMITS.perAdaptation);
+    if (!deps.illustrate || illustrations >= limit || activities.length === 0) return null;
     illustrations += 1;
     const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activities.some((a) => a.objective_ids.includes(o.id))).map((o) => o.text).join(". ") || null;
     const answers = activities.map((a) => a.expected_answer.value).filter((v): v is string => Boolean(v));
@@ -203,7 +214,9 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   for (const need of needs) {
     const attempts: string[] = [];
     const visual = need.origin === "original" ? input.analysis.visuals.find((v) => v.id === need.key) : undefined;
-    const done = (category: VisualNeedCategory, resolution: VisualAction) => {
+    const done = (category: VisualNeedCategory, given: VisualAction) => {
+      const limited = planLimited.get(need.key);
+      const resolution: VisualAction = given.action === "unresolved" && limited ? { action: "unresolved", reason: limited } : given;
       const outcome = { ...need, category, resolution, attempts };
       outcomes.push({ ...outcome, contract: contractOf(outcome, visual?.kind ?? null) });
     };
@@ -214,6 +227,7 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       if (!outcome) return false;
       if (!outcome.ok) {
         attempts.push(`illustrate:${outcome.reason}`);
+        if (outcome.reason === "quota_exhausted") planLimited.set(need.key, "illustration_quota_exhausted");
         return false;
       }
       attempts.push("illustrate");

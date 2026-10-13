@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
 import { deterministicChecks } from "@/lib/adaptation/review";
 import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
-import { applyVisualResolution, danglingPictureReferences, refersToPicture, visualNeedsOfDocument, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
+import { applyVisualResolution, danglingPictureReferences, refersToPicture, stoppedByPlan, unresolvedEssential, visualNeedsOfDocument, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import { resolveMagicVisuals, type MagicVisualDeps } from "@/lib/materials/visuals/auto/policy";
 import type { VisualAssistants } from "@/lib/materials/visuals/auto/assistants";
 import type { IllustrationOutcome, IllustrationRequest } from "@/lib/materials/visuals/illustrate/service";
@@ -95,6 +95,22 @@ describe("case B · the scheme of the cell, not in the PDF and not an exact figu
     expect(c.calls).not.toContain("substitute");
   });
 
+  it("a plan without illustrations, or with none left this month: the same stop, saying it is the plan (not the material)", async () => {
+    const free = cell(false);
+    free.deps.illustrationsWithheld = "plan";
+    const noPlan = await free.resolve();
+    expect(outcome(noPlan, "vis_1")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "illustration_not_in_plan" } });
+    expect(stoppedByPlan(unresolvedEssential(noPlan))).toBe(true);
+    const spent = await cell(true, { ok: false, reason: "quota_exhausted", detail: [] }).resolve();
+    expect(outcome(spent, "vis_1").resolution).toEqual({ action: "unresolved", reason: "illustration_quota_exhausted" });
+    // The service not set up (flag, keys) is not the teacher's plan: the generic stop.
+    const service = cell(false);
+    service.deps.illustrationsWithheld = "service";
+    expect(stoppedByPlan(unresolvedEssential(await service.resolve()))).toBe(false);
+    // Over the adaptation's spending ceiling: not the plan either.
+    expect(stoppedByPlan(unresolvedEssential(await cell(true, { ok: false, reason: "budget_exhausted", detail: [] }).resolve()))).toBe(false);
+  });
+
   it("an illustration that is never approved leads to the same honest stop (its unit was given back by the pipeline)", async () => {
     const c = cell(true, { ok: false, reason: "review_rejected", detail: ["concept:pared celular"] });
     const plan = await c.resolve();
@@ -131,6 +147,13 @@ describe("exact representations never go to an image model", () => {
     const plan = await resolveMagicVisuals(c.deps, { analysis: c.s.analysis, document: doc, requiredVisuals: ["vis_1", "vis_2", "vis_3", "vis_4", "vis_5"], stage: "eso" });
     expect(c.requests).toHaveLength(3);
     expect(plan.needs.filter((n) => n.category === "generated_illustration")).toHaveLength(3);
+    // A plan may set fewer (features.illustrations_per_adaptation), never more than the hard limit.
+    for (const [max, expected] of [[1, 1], [9, 3]] as const) {
+      const d = cell(true);
+      d.deps.maxIllustrations = max;
+      await resolveMagicVisuals(d.deps, { analysis: c.s.analysis, document: doc, requiredVisuals: ["vis_1", "vis_2", "vis_3", "vis_4", "vis_5"], stage: "eso" });
+      expect(d.requests).toHaveLength(expected);
+    }
   });
 });
 

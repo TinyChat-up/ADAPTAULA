@@ -535,6 +535,15 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
         if (node.kind === "planner") previous.keepTogether = false;
         continue;
       }
+      // A help or the vocabulary written FOR the activity right before it is used while doing it: it goes inside, after what to do and
+      // before where to answer (after the answer lines it is read too late). A checklist stays after (it is for checking the work);
+      // a support of another activity or of the whole sheet stays where it is.
+      const own = (previous?.kind === "activity" && block.trace.origin !== "original" && block.trace.source_refs.length > 0 && block.trace.source_refs.every((r) => (sources.at(-1) ?? []).includes(r))) || false;
+      if ((node.kind === "help_box" || node.kind === "vocabulary") && previous?.kind === "activity" && own) {
+        previous.supports.push(node);
+        if (previous.keepTogether && activityRows(previous.prompt, previous.steps, previous.requirements, previous.response) + previous.figures.reduce((n, f) => n + figureRows(f), 0) + previous.supports.reduce((n, x) => n + leadRows(x), 0) > COMPACT_ROWS + FIGURE_ALLOWANCE) previous.keepTogether = false;
+        continue;
+      }
       current.push(node);
       sources.push(block.trace.source_refs);
       blockIds.push(block.id);

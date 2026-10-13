@@ -197,6 +197,11 @@ export const AUTOMATIC_STOP_COPY = {
     body: "Una actividad depende de una imagen del material original y ahora mismo no hemos podido crear automáticamente una alternativa válida.",
     hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes intentarlo de nuevo más tarde o, si quieres, revisar y editar la adaptación.",
   },
+  /** The sheet needs a new illustration and the plan has none (or none left this month): said as it is, never a sheet with a gap. */
+  visual_plan: {
+    body: "Esta ficha necesita una ilustración nueva para una actividad y tu plan no incluye ilustraciones (o ya has usado las de este mes). No entregamos una ficha a la que le falte una imagen imprescindible.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes revisar y editar la adaptación, o volver a intentarlo cuando tu plan incluya ilustraciones.",
+  },
   edit: "Revisar y editar",
   /** A «Hacer magia» sheet delivered before the visual policy that still waits for an image (never shown as ready). */
   visualPending: "No hemos podido completar automáticamente esta ficha porque necesita un recurso visual",

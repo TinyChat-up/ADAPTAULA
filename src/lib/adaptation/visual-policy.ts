@@ -167,6 +167,10 @@ export function visualNeedsOfDocument(document: MaterialDocument, requiredVisual
 
 export const unresolvedEssential = (plan: VisualResolutionPlan | null) => (plan ? plan.needs.filter((n) => n.resolution.action === "unresolved") : []);
 
+/** Unresolved only because the plan has no illustrations (or this month's are used up): a fact about the plan, not the material. */
+export const PLAN_LIMITED_REASONS: ReadonlySet<string> = new Set(["illustration_not_in_plan", "illustration_quota_exhausted"]);
+export const stoppedByPlan = (unresolved: readonly VisualNeedOutcome[]) => unresolved.length > 0 && unresolved.every((n) => n.resolution.action === "unresolved" && PLAN_LIMITED_REASONS.has(n.resolution.reason));
+
 const STRUCTURED = /\b(barra|recta|tabla|grafico|grafica|cuadricula)\b/;
 
 /** The contract of one decided need (pure: from its origin, its outcome and the analysis's kind of visual). */
