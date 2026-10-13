@@ -120,7 +120,7 @@ describe("classification and order of the rungs", () => {
   });
 
   it("5c · the model unavailable for a moment (timeout, overload, rate limit) is not a «no»: the stage is retried, never stopped", async () => {
-    const transient = { ...scripted(), substitute: async () => ({ draft: null, run: { ...run, status: "error" as const, errorCode: "provider_unavailable" } }) };
+    const transient = { ...scripted(), substitute: async () => ({ draft: null, run: { ...run, status: "error" as const, errorCode: "provider_unavailable" }, transient: true }) };
     await expect(resolve(sheet(undeterminedBar), deps(["vis_2"], transient))).rejects.toMatchObject({ code: "provider_transient", kind: "retryable" });
   });
 

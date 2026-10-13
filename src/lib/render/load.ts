@@ -137,16 +137,17 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   }
   // Approved illustrations: the row of THIS adaptation and the exact bytes the document pins, or the image stays missing.
   const generatedSources = generatedSourcesOf(parsed.data);
-  const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Set<string>(), bytes: {} as Record<string, Uint8Array> };
+  const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Map<string, { width: number; height: number }>(), bytes: {} as Record<string, Uint8Array> };
   const generated: Record<string, { src: string; widthMm: number }> = {};
   for (const g of generatedSources) {
-    if (!resolvedGenerated.ready.has(g.assetId)) continue;
+    const size = resolvedGenerated.ready.get(g.assetId);
+    if (!size) continue;
     if (options.pin) {
       const bytes = resolvedGenerated.bytes[g.assetId];
       if (!bytes) continue;
       pinned[`gen:${g.assetId}`] = { assetId: g.assetId, sha256: g.sha256, mime: "image/png", bytes };
     }
-    generated[g.assetId] = { src: options.pin ? assetRef({ assetId: g.assetId, sha256: g.sha256 }) : generatedSrc(id, g.assetId), widthMm: generatedWidthMm(g.width, g.height) };
+    generated[g.assetId] = { src: options.pin ? assetRef({ assetId: g.assetId, sha256: g.sha256 }) : generatedSrc(id, g.assetId), widthMm: generatedWidthMm(size.width, size.height) };
   }
   const subjectSlug = parsed.data.meta.subject;
   const subjectName = subjectSlug && deps.reader.getSubjectName ? await deps.reader.getSubjectName(subjectSlug) : null;

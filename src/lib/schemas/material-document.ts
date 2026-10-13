@@ -102,13 +102,12 @@ const StoredImageSourceSchema = z.discriminatedUnion("kind", [
    * (docs/VISUAL_RESOURCES.md § Ilustraciones generadas): a private PNG of the workspace (`generated_assets`), pinned by its
    * sha-256. Never an exact representation (those are `figure`). It stands for an original visual (`visual_ref`), a support a
    * decision asked for (`decision_id`), or the picture an activity refers to that the analysis could not find (`activity_ref`).
+   * The document stays semantic: the picture's size is read from its row when it is shown, never stored here.
    */
   z.object({
     kind: z.literal("generated"),
     asset_id: z.string().uuid(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
-    width: z.number().int().min(256).max(4096),
-    height: z.number().int().min(256).max(4096),
     visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/).optional(),
     decision_id: z.string().regex(/^dec_[0-9]{1,4}$/).optional(),
     activity_ref: z.string().regex(/^act_[0-9]{1,4}$/).optional(),

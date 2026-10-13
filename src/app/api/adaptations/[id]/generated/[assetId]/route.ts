@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
   const deps = generatedDeps(supabase);
   const row = await deps.row(assetId);
   if (!row) return notFound();
-  const resolved = await resolveGenerated(deps, id, [{ assetId, sha256: row.sha256, width: 256, height: 256 }], { withBytes: true });
+  const resolved = await resolveGenerated(deps, id, [{ assetId, sha256: row.sha256 }], { withBytes: true });
   const bytes = resolved.bytes[assetId];
   if (!bytes) return notFound();
   return new Response(Buffer.from(bytes), {

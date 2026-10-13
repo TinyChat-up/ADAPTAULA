@@ -607,6 +607,9 @@ y sin consumir unidad.
   | Peor caso por adaptación (3 ilustraciones) | 0,40 USD |
   | Figura exacta (VisualSpec) | 0 USD |
 
+- **Aplazamientos y coste.** Las ilustraciones aprobadas se reutilizan en los reintentos; las no aprobadas de una ejecución
+  aplazada se pierden. El número de ejecuciones lo acotan los intentos del trabajo (3), así que el gasto máximo de imágenes de una
+  adaptación también está acotado, aunque un aplazamiento lo pueda repetir.
 - **Prueba con modelos reales.** `pnpm eval:illustrations -- --yes` (opt-in; tope `--budget`, por defecto 0,50 USD) ejecuta el caso
   B con los modelos configurados y deja la imagen, el brief, la revisión y el coste en `evals/results/illustrations/`. Una persona
   debe mirar la imagen: la revisión automática es una evidencia, no la última palabra. `pnpm eval:illustrations:mock` prueba el

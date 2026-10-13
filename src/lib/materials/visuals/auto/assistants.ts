@@ -4,7 +4,7 @@ import { VISUAL_SUBSTITUTE_V1 } from "@prompts/visual-substitute/v1";
 import { VISUAL_SUPPORT_V1 } from "@prompts/visual-support/v1";
 import type { z } from "zod";
 import { estimateCostUsd } from "@/lib/ai/costs";
-import { toAIError } from "@/lib/ai/errors";
+import { isTransientAIError, toAIError } from "@/lib/ai/errors";
 import { parseStructured } from "@/lib/ai/structured";
 import type { AIProvider, AIPurpose, AIRunRecord, ContentPart, ModelSelection } from "@/lib/ai/types";
 
@@ -18,18 +18,25 @@ export type SupportDraft = z.infer<typeof VISUAL_SUPPORT_V1.output.schema>;
 export type RewriteDraft = z.infer<typeof VISUAL_REWRITER_V1.output.schema>;
 export type SubstituteDraft = z.infer<typeof VISUAL_SUBSTITUTE_V1.output.schema>;
 
+/** `transient`: no answer because of transient provider trouble (network, timeout, overload, rate limit), not a «no». */
+export interface AssistantAnswer<D> {
+  draft: D | null;
+  run: AIRunRecord;
+  transient?: boolean;
+}
+
 export interface VisualAssistants {
-  support(input: { stage: string | null; purpose: string; activity: string }): Promise<{ draft: SupportDraft | null; run: AIRunRecord }>;
-  rewrite(input: { stage: string | null; activity: string; visual: string }): Promise<{ draft: RewriteDraft | null; run: AIRunRecord }>;
+  support(input: { stage: string | null; purpose: string; activity: string }): Promise<AssistantAnswer<SupportDraft>>;
+  rewrite(input: { stage: string | null; activity: string; visual: string }): Promise<AssistantAnswer<RewriteDraft>>;
   /** Recorded under the `visual_rewrite` purpose (same family of call; `prompt_key` tells them apart). */
-  substitute(input: { stage: string | null; activity: string; objective: string | null; visual: string }): Promise<{ draft: SubstituteDraft | null; run: AIRunRecord }>;
+  substitute(input: { stage: string | null; activity: string; objective: string | null; visual: string }): Promise<AssistantAnswer<SubstituteDraft>>;
 }
 
 /**
  * One structured call of a visual assistant: the answer parsed with Zod and returned as an untrusted draft, with its `ai_runs`
  * record (no content). Shared by the assistants here and the illustration pipeline (`../illustrate`).
  */
-export async function callStructured<S extends z.ZodType>(provider: AIProvider, selection: ModelSelection, purpose: AIPurpose, prompt: { key: string; version: number; system: string; output: { name: string; schema: S } }, content: string | ContentPart[], maxOutputTokens = 900, signal?: AbortSignal): Promise<{ draft: z.infer<S> | null; run: AIRunRecord }> {
+export async function callStructured<S extends z.ZodType>(provider: AIProvider, selection: ModelSelection, purpose: AIPurpose, prompt: { key: string; version: number; system: string; output: { name: string; schema: S } }, content: string | ContentPart[], maxOutputTokens = 900, signal?: AbortSignal): Promise<AssistantAnswer<z.infer<S>>> {
   const base = { purpose, attempt: 1, alias: selection.alias, provider: selection.provider, model: selection.model, effort: selection.effort, promptKey: prompt.key, promptVersion: prompt.version };
   try {
     const parts: ContentPart[] = typeof content === "string" ? [{ type: "text", text: content }] : content;
@@ -40,7 +47,8 @@ export async function callStructured<S extends z.ZodType>(provider: AIProvider, 
     const parsed = parseStructured(response.text, prompt.output.schema);
     return parsed.ok ? { draft: parsed.data as z.infer<S>, run } : { draft: null, run: { ...run, status: "invalid_output", errorCode: parsed.kind, issues: parsed.issues } };
   } catch (error) {
-    return { draft: null, run: { ...base, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: null, latencyMs: 0, status: "error", errorCode: toAIError(error).code } };
+    const code = toAIError(error).code;
+    return { draft: null, run: { ...base, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: null, latencyMs: 0, status: "error", errorCode: code }, transient: isTransientAIError(code) };
   }
 }
 

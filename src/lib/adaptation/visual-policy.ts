@@ -212,7 +212,7 @@ function sourceFor(need: VisualNeedOutcome): { source: Extract<Block, { type: "i
     const figureRef = need.origin === "referenced" ? {} : ref;
     return { source: { kind: "figure", spec, provenance: r.action === "figure" ? r.provenance : "generated", ...figureRef }, alt: describeSpec(spec).slice(0, 300) };
   }
-  if (r.action === "illustration") return { source: { kind: "generated", asset_id: r.asset.id, sha256: r.asset.sha256, width: r.asset.width, height: r.asset.height, ...ref }, alt: r.alt.slice(0, 300) };
+  if (r.action === "illustration") return { source: { kind: "generated", asset_id: r.asset.id, sha256: r.asset.sha256, ...ref }, alt: r.alt.slice(0, 300) };
   return null;
 }
 

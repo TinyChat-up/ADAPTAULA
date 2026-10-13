@@ -93,7 +93,7 @@ function pgIllustrationDeps(user: User, objects: Map<string, Uint8Array>, ids: {
 function userGeneratedDeps(user: User, objects: Map<string, Uint8Array>): GeneratedDeps {
   const asUser = <T>(fn: () => Promise<T>) => as(db, "authenticated", user.id, fn);
   return {
-    row: async (assetId) => (await asUser(() => q<{ id: string; adaptation_id: string; storage_path: string; sha256: string }>("select id, adaptation_id, storage_path, sha256 from public.generated_assets where id = $1 and sha256 is not null", [assetId])))[0] ?? null,
+    row: async (assetId) => (await asUser(() => q<{ id: string; adaptation_id: string; storage_path: string; sha256: string; width: number; height: number }>("select id, adaptation_id, storage_path, sha256, width, height from public.generated_assets where id = $1 and sha256 is not null", [assetId])))[0] ?? null,
     readObject: async (path) => ((await asUser(() => q("select 1 from storage.objects where bucket_id = $1 and name = $2", [BUCKET, path]))).length > 0 ? (objects.get(path) ?? null) : null),
   };
 }

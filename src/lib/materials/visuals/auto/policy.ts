@@ -3,7 +3,6 @@ import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeT
 import { materialNumbers } from "@/lib/adaptation/facts";
 import { AdaptationError } from "@/lib/adaptation/orchestration/errors";
 import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
-import { isTransientAIError } from "@/lib/ai/errors";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
@@ -185,9 +184,9 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   const outcomes: VisualNeedOutcome[] = [];
   // Transient provider trouble is never an answer: going down the ladder on it would end in a stop that blames the material. The
   // stage is retried later instead, within the job's attempts.
-  const record = async (run: AIRunRecord) => {
+  const record = async (run: AIRunRecord, transient = false) => {
     await deps.recordAiRun?.(run).catch(() => undefined);
-    if (run.status === "error" && isTransientAIError(run.errorCode)) throw new AdaptationError("provider_transient", "visual_assistant_unavailable");
+    if (transient) throw new AdaptationError("provider_transient", "visual_assistant_unavailable");
   };
   const functionalNeeds = input.functionalNeeds ?? [];
   const supports = functionalNeeds.flatMap((d) => (d in DIMENSIONS ? [DIMENSIONS[d as DimensionKey].label] : []));
@@ -274,8 +273,8 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         attempts.push("rewrite");
         const rewrites: ActivityRewrite[] = [];
         for (const activity of activities) {
-          const { draft, run } = await deps.assistants.rewrite({ stage: input.stage, activity: activityText(input.analysis, activity.id), visual: visualText });
-          await record(run);
+          const { draft, run, transient } = await deps.assistants.rewrite({ stage: input.stage, activity: activityText(input.analysis, activity.id), visual: visualText });
+          await record(run, transient);
           const valid = validateRewrite(draft, { ...ctx, activity });
           if (!valid.ok) break;
           rewrites.push({ activityId: activity.id, ...valid.rewrite });
@@ -309,8 +308,8 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     const supportSignatures = sheetWide ? signaturesFor(input.analysis, input.analysis.activities.map((a) => a.id)) : signatures;
     let spec: VisualSpec | null = null;
     if (deps.assistants && activity) {
-      const { draft, run } = await deps.assistants.support({ stage: input.stage, purpose: need.purpose ?? "Apoyo visual para la actividad", activity });
-      await record(run);
+      const { draft, run, transient } = await deps.assistants.support({ stage: input.stage, purpose: need.purpose ?? "Apoyo visual para la actividad", activity });
+      await record(run, transient);
       spec = validateSupport(draft, activity, supportSignatures);
     }
     spec ??= supportFromSheet(input.document, need.activityIds);
@@ -337,15 +336,15 @@ function requestedStyle(document: MaterialDocument, decisionId: string): string 
 
 const SUBSTITUTE_ATTEMPTS = 2;
 
-async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRecord) => Promise<void>, input: MagicVisualInput, activities: readonly AnalysisActivity[], visualText: string, ctx: Omit<RewriteContext, "activity"> & { drawable: boolean }): Promise<{ activities: ActivityRewrite[]; spec: VisualSpec | null } | null> {
+async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRecord, transient?: boolean) => Promise<void>, input: MagicVisualInput, activities: readonly AnalysisActivity[], visualText: string, ctx: Omit<RewriteContext, "activity"> & { drawable: boolean }): Promise<{ activities: ActivityRewrite[]; spec: VisualSpec | null } | null> {
   const out: ActivityRewrite[] = [];
   let spec: VisualSpec | null = null;
   for (const activity of activities) {
     const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id)).map((o) => o.text).join(". ") || null;
     let accepted: { rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | null = null;
     for (let attempt = 0; attempt < SUBSTITUTE_ATTEMPTS && !accepted; attempt++) {
-      const { draft, run } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)" });
-      await record({ ...run, attempt: attempt + 1 });
+      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)" });
+      await record({ ...run, attempt: attempt + 1 }, transient);
       const valid = validateSubstitute(draft, { ...ctx, activity });
       // Several activities share the figure: they must agree on it (one figure on the sheet).
       if (valid.ok && (!spec || !valid.spec || JSON.stringify(spec) === JSON.stringify(valid.spec))) accepted = valid;
