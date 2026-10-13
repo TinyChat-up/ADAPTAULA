@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-13. Base revisada: `main` en `6c91552` (PR #25 integrada; PR #24 integrada en `2a6da53`).
+Actualizado: 2026-10-13. Base revisada: `main` en `d665d5b` (PR #26 integrada; contiene `8ad483e` y `65515a8`). Las PR #24 y #25 también están integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -19,7 +19,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Hacer magia | Plan automático, ensamblado, revisión y autocorrección, entrega o parada explicada | Algunos formatos cerrados, simplificación y reorganización aún carecen de ejecutores automáticos; no añadir aprobación intermedia como solución |
 | Visuales originales | Recortes, localización automática acotada y reconstrucción determinista de figuras compatibles | No hay edición general de imágenes originales ni un localizador universal para escaneos |
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
-| Sustitución pedagógica | PR #24: equivalencia antes de aceptar; esta rama añade preservación de respuesta, acciones y restricciones, y corrección informada acotada | Validación semántica heurística; no admite sustituir formatos cerrados por líneas; eficacia de `visual_substitute@v2` con modelos reales pendiente |
+| Sustitución pedagógica | PR #26: equivalencia y corrección informada acotada. Fase 8.2B.4 en esta rama: selección única verificable de fracciones coloreadas, con opciones originales y figura determinista | No es un ejecutor universal de selección única. Solo barras/círculos, consignas reconocidas y alternativas fraccionarias explícitas; los demás casos paran honestamente. Calidad de prompts v2/v3 con modelos reales pendiente |
 | Presentación y PDF | CLARO, apoyos junto a actividades, render compartido, validación y descarga PDF | Calidad de cada imagen real y runtime PDF en Vercel pendientes de comprobación; no se promete soporte universal |
 | Planes y consumo | Plan efectivo y cuotas en servidor; gate de imágenes y registro de costes | Integración Stripe completa es trabajo propuesto, no completado por existir tablas; pricing y propuesta de beta no son decisiones aprobadas |
 
@@ -28,13 +28,15 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 - El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que esté desplegada en todos los entornos. Esta fase no añade migraciones.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
 - El bloqueo conocido de compilación es la descarga de Google Fonts por la red del entorno. No se modifica el producto para sortearlo ni se repite la compilación en esta fase.
-- La API de GitHub responde `Forbidden` desde este entorno; Git HTTPS permite leer el repositorio. El estado de PR abiertas requiere comprobarse cuando se recupere el acceso a la API.
+- La API de GitHub responde `Forbidden` desde este entorno; Git HTTPS permite leer y publicar ramas. El merge de #26 está verificado por historial y ascendencia Git; no se infiere el estado de otras PR abiertas.
 - **Aparcado por el usuario:** Max temporal, SQL de siete días, Stripe de prueba y llamadas pagadas. No son requisitos para continuar el producto.
 
 ## Trabajo actual y continuidad
 
-Rama: `phase8/sustitucion-pedagogica-acotada`, creada desde `main`. Bloque: completar los controles y la corrección automática de sustituciones, con hasta dos intentos por actividad en cada ejecución de la política. Sin cambios de interfaz, renderer, suscripciones ni cuotas comerciales.
+Rama: `phase8/seleccion-unica-automatica`, creada desde `main` actualizado en `d665d5b`. Bloque: sustitución de una actividad `select_option` cuyo visual no se ha podido recuperar por los peldaños previos. Las opciones se extraen de listas consecutivas A)…H), se conservan literalmente y el servidor exige exactamente una fracción correcta contra la figura y la clave original. Conserva consigna, orden, partición, clave y procedencia; no transforma preguntas abiertas en selección.
 
-Implementación publicada en la rama (`8ad483e`); PR aún no creada porque `gh pr create` recibe `Forbidden` de la API. [Formulario para abrir la PR](https://github.com/TinyChat-up/ADAPTAULA/pull/new/phase8/sustitucion-pedagogica-acotada). Primero revisar este cambio; no hay merge automático.
+**Verificado:** 103 pruebas focalizadas, 2 PDF reales con Chromium (selección única y regresión de fracciones), typecheck y lint. Revisión visual del PDF de selección: una página, figura junto a pregunta/opciones y círculos sin marcar. Asistentes simulados, sin llamadas pagadas. Sin migraciones ni cambios de renderer, precios o cuotas.
 
-Siguiente bloque recomendado: un ejecutor acotado para selección única que preserve opciones, respuesta correcta y trazabilidad, empezando por reproducir la parada actual. Alcance y aceptación en el roadmap; no iniciar varias familias de ejercicio a la vez.
+Publicación y PR: consultar la última entrada de [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). No hay merge automático.
+
+Siguiente bloque recomendado: ampliar selección única a una segunda clase verificable (lectura de un dato de tabla), con un verificador determinista propio antes de aceptar reformulaciones. No habilitar formatos cerrados genéricos ni convertir tareas abiertas en selección.

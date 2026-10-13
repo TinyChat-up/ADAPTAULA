@@ -2,6 +2,27 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-13 — Fase 8.2B.4: selección única en la sustitución visual
+
+- **Precondición verificada:** PR #26 integrada en `main` / `d665d5b`, comprobada con `git fetch origin main`, mensaje de merge y ascendencia de `65515a8`. La consulta por API sigue devolviendo `Forbidden`; no se infiere el estado de otras PR. Rama nueva: `phase8/seleccion-unica-automatica`.
+- **Problema reproducido antes de modificar producción:** dos pruebas fallaban. Una imagen perdida con opciones A/B/C y clave `B` no permite al generador existente deducir su fracción; la sustitución rechazaba `select_option` con `no_equivalent_activity`. No era la parada `needs_decision` del planificador.
+- **Contrato descubierto:** análisis sin campo estructurado de opciones, alternativas en texto y clave en `expected_answer`; documento con `choice`, `multiple`, ids y `answer_key`; renderer CLARO ya compatible. No hay migración ni versión nueva de esos contratos.
+- **Implementación:** `src/lib/adaptation/single-choice.ts` extrae listas explícitas y valida coherencia matemática; `prompts/visual-substitute/v3.ts` propone geometría y conserva opciones, sin recibir clave. Integrado en `auto/assistants.ts`, `auto/policy.ts`, `pedagogical-equivalence.ts`, `substitution-feedback.ts` y `visual-policy.ts`. Se mantiene v2 para otros formatos y el máximo de dos intentos. La aplicación conserva claves, ids, enlaces y procedencia, con opciones en el contrato existente de respuesta.
+- **Alcance deliberado (ADR-022):** lectura de fracción coloreada en barras/círculos, consigna reconocida, 2–8 alternativas fraccionarias en listas consecutivas A)…H), clave inequívoca. Se mantienen etiquetas/textos/orden, número de partes y una sola respuesta correcta. Se rechazan cambios de opciones/solución, pistas, complementos, claves ambiguas y transformaciones previas incompatibles. No implementa conversiones de preguntas abiertas, selección múltiple ni otros formatos.
+- **Pruebas nuevas:** fixture y PDF sintéticos en `tests/support/single-choice-case.ts`; unitarias en `single-choice-substitution.test.ts` y `single-choice-prompt.test.ts`; integración con orquestador y migraciones reales sobre **PGlite local del entorno cloud**, sin Supabase remoto; PDF con Chromium en `tests/pdf/single-choice-substitution.test.ts`. Asistentes simulados en todos los casos.
+- **Resultados:** `pnpm typecheck` PASS; ESLint focalizado en los 12 archivos TypeScript afectados PASS; 103 pruebas/8 archivos PASS; 2 PDF/2 archivos PASS; `git diff --check` PASS. Regresión existente de fracciones incluida. Comandos reproducibles:
+
+  ```bash
+  pnpm exec vitest run tests/unit/single-choice-substitution.test.ts tests/unit/single-choice-prompt.test.ts tests/unit/pedagogical-equivalence.test.ts tests/unit/magic-visual-policy.test.ts tests/unit/visual-substitution.test.ts tests/db/magic-visual-policy.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts
+  pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/single-choice-substitution.test.ts tests/pdf/automatic-visuals.test.ts
+  ```
+
+- **PDF inspeccionado:** una página, pregunta/barra/opciones juntas, círculos sin marcar, sin clave ni notas docentes. El extractor pdf.js representa el paréntesis alternativo de Inter como U+E082; el test normaliza ese glifo solo al comprobar texto extraído y verifica además el HTML literal. El paréntesis se ve correctamente en la página renderizada. No se cambia la tipografía del producto.
+- **Documentación compartida actualizada:** PROJECT_STATUS, ROADMAP, ARCHITECTURE (ADR-022), VISUAL_RESOURCES, PROMPTS y este registro. AGENTS/CLAUDE ya enlazan estos documentos y conservan el protocolo común, sin duplicarlo.
+- **Pendiente real:** eficacia del prompt con proveedores reales, calidad del análisis de nuevas fuentes y runtime en Vercel. La comprobación matemática prueba coherencia con análisis/clave, no que un original ilegible se haya transcrito correctamente. No se ejecutaron llamadas pagadas, SQL remoto, migraciones, Stripe ni cambios comerciales. No se repitió toda la suite ni la compilación bloqueada por Google Fonts.
+- **Publicación:** pendiente de intentar crear la PR al cerrar esta entrada. Sin merge automático.
+- **Siguiente acción:** revisar esta rama/PR; después diseñar un fixture y verificador para una segunda clase de selección única (lectura de un dato de tabla), preservando opciones, clave y trazabilidad. No habilitar selección genérica solo por la declaración de un modelo.
+
 ## 2026-10-13 — Sustitución pedagógica con corrección acotada
 
 - **Base:** `main` / `6c91552`; inspeccionadas las integraciones #24 (equivalencia) y #25 (ilustraciones, contratos y costes). `origin/main` actualizado antes de crear la rama `phase8/sustitucion-pedagogica-acotada`.

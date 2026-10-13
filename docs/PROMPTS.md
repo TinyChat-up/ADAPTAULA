@@ -30,11 +30,19 @@
 
 ## Diseño de cada prompt (v1)
 
-### visual_substitute_v2 (activo en el asistente visual; validado con mocks)
+### visual_substitute_v2 (activo salvo para selección única; validado con mocks)
 
 `prompts/visual-substitute/v2.ts` conserva la salida Zod de v1 y añade formato de respuesta original y códigos de rechazo del servidor. Lo activa la importación en `src/lib/materials/visuals/auto/assistants.ts`; este asistente no usa `ACTIVE_PROMPT_VERSIONS`. `ai_runs` registra `visual_substitute`, versión 2, con propósito `visual_rewrite`.
 
 El material, objetivo, descripción y etapa se serializan como JSON dentro de `<untrusted_material>`, escapando los delimitadores. `<validation_feedback>` solo contiene códigos permitidos y deduplicados: nunca la propuesta rechazada ni valores de respuestas. La política permite hasta dos intentos por actividad/ejecución, con feedback solo tras una propuesta inválida; mantiene los reintentos técnicos del job. El contrato no representa opciones, parejas, ordenación o huecos: no debe convertirlos en escritura libre. Pruebas de límites, transporte y orquestación offline; calidad con IA real pendiente.
+
+### visual_substitute_v3 (selección única; Fase 8.2B.4, validado con mocks)
+
+`prompts/visual-substitute/v3.ts` se activa solo cuando `responseFormat=select_option`. Mantiene el propósito `visual_rewrite`, clave `visual_substitute`, versión 3 en `ai_runs`. v1/v2 permanecen inmutables. Añade `choice` con opciones, ids y `multiple=false`; `lines=0`, `steps=[]`. El objeto de figura es estricto: no admite rótulos, soluciones ni otros campos que el renderer no represente.
+
+Recibe la consigna sin duplicar alternativas, objetivo, descripción visual, opciones originales, etapa y dimensiones funcionales; **no** `expected_answer`, clave ni datos identificativos. Todo campo variable se serializa en JSON escapado dentro de `<untrusted_material>`. El segundo intento recibe solo códigos permitidos (p. ej. `choice_options_changed`, `choice_correct_count`, `choice_answer_changed`, `choice_demand_changed`) sin revelar letras/valores de la solución.
+
+La salida no constituye evidencia de corrección: el servidor comprueba literalidad, tipo, geometría, dificultad y una única respuesta numérica coincidente con la clave original. Alcance actual: lectura de fracciones coloreadas en barras/círculos, con listas A)…H) y consignas reconocidas; `feasible=false` si no puede proponer una figura equivalente. Los otros formatos siguen usando v2. Pendiente validar eficacia con IA real; no se han hecho llamadas pagadas.
 
 ### material_analyzer_v1 (implementado, `prompts/material-analyzer/v1.ts`)
 Rol: especialista en análisis de materiales educativos. Debe **comprender el material sin modificarlo**: no lo adapta, simplifica, reescribe ni mejora.

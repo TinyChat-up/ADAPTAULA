@@ -402,6 +402,16 @@ El segundo intento recibe el formato de respuesta original y códigos de validac
 
 Una negativa del proveedor, error permanente o `feasible=false` termina la sustitución; un error transitorio conserva el reintento técnico del job. Dos propuestas inválidas llevan a la parada explicada existente, sin aprobación manual. Los controles son heurísticos: pueden rechazar paráfrasis válidas y no garantizan equivalencia semántica universal. La revisión posterior sigue obligatoria. Ver ADR-021 y las pruebas en `tests/unit/visual-substitution.test.ts`, `tests/unit/pedagogical-equivalence.test.ts` y `tests/db/magic-visual-policy.test.ts`.
 
+### Selección única verificable — Fase 8.2B.4
+
+El peldaño de sustitución admite ahora `select_option` mediante `visual_substitute@v3` (excepción a la versión v2 de la tabla anterior); los demás formatos conservan v2. No se altera el orden de recuperación, reconstrucción, figura determinista, ilustración y sustitución. El caso reproducido tiene una imagen perdida, opciones `A) 1/4`, `B) 3/8`, `C) 1/2` y clave original `B`: el generador previo de figuras no deduce una fracción de una letra, y antes la sustitución rechazaba el formato cerrado.
+
+`src/lib/adaptation/single-choice.ts` extrae listas consecutivas completas A)…H) al final de `instruction`/`context`. Solo admite preguntas reconocidas sobre la fracción coloreada de una barra/círculo y alternativas fraccionarias. La consigna, etiquetas, orden y alternativas son literales. El servidor calcula qué opciones corresponden al sombreado del `VisualSpec`, exige exactamente una y comprueba que sea la indicada por la fuente; mantiene el número de partes para no alterar la dificultad. No se aceptan complementos, tareas distintas, cambio de opciones o claves ambiguas. No se usa una declaración de corrección del modelo.
+
+La clave original permanece en `answer_key`; una inferida se usa solo para comprobar y no se escribe en la ficha. `ActivityRewrite.response` transporta opciones verificadas y `multiple=false`; la aplicación del plan conserva los ids de bloque y añade la referencia visual a la traza. La figura determinista sigue junto a la pregunta. CLARO ya imprime círculos vacíos, alternativas separadas y agrupación de actividad: no se modifica el renderer. Dos intentos por actividad/ejecución, feedback seguro y parada honesta igual que #26.
+
+Pruebas: `tests/unit/single-choice-substitution.test.ts`, `tests/unit/single-choice-prompt.test.ts`, integración PGlite en `tests/db/magic-visual-policy.test.ts` y PDF real en `tests/pdf/single-choice-substitution.test.ts`. Sin IA real. Límite: coherencia verificable con el análisis disponible, no certificación de lectura del original; no es soporte universal de selección única ni habilita conversiones de formato del planificador. Ver ADR-022.
+
 ### Equivalencia pedagógica (`src/lib/adaptation/pedagogical-equivalence.ts`)
 
 Una actividad que evalúa interpretar o actuar sobre una representación no se convierte en otra actividad textual porque conserve

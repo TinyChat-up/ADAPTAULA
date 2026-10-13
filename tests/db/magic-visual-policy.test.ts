@@ -18,6 +18,7 @@ import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions, type Scripted } from "./orchestration-harness";
 import { resourceHarness } from "./resource-harness";
 import { attachSource, autoHarness, visualHarness } from "./visual-harness";
+import { SINGLE_CHOICE_DRAFT, singleChoiceCase, singleChoicePdf } from "../support/single-choice-case";
 
 /**
  * «Hacer magia» end to end with the visual policy (real migrations, real orchestrator, the real automatic locator on the
@@ -49,13 +50,13 @@ function dataSourceAnalysis(): MaterialAnalysis {
   return analysis;
 }
 
-async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null; reviewer?: Scripted["reviewer"] } = {}) {
+async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; sourcePdf?: Uint8Array; assistants?: VisualAssistants | null; reviewer?: Scripted["reviewer"] } = {}) {
   const user = await createUser(db, `magic-visual-${++n}-${Math.random().toString(36).slice(2, 6)}@example.com`);
   const analysis = options.analysis ?? fractionsCaseAnalysis();
   const materialId = await seedMaterial(db, user, analysis);
   const learner = await seedLearner(db, user);
   const visuals = visualHarness(db, user);
-  const sourceSha256 = await attachSource(db, visuals, materialId, "application/pdf", await fractionsPdf(options.pdf));
+  const sourceSha256 = await attachSource(db, visuals, materialId, "application/pdf", options.sourcePdf ?? await fractionsPdf(options.pdf));
   const auto = autoHarness(db, visuals);
   const resolveCalls: string[] = [];
   const visualPolicy: NonNullable<OrchestratorDeps["visuals"]> = {
@@ -106,6 +107,39 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
 }
 
 describe("«Hacer magia» delivers the fractions sheet complete, with nothing for the teacher to do", () => {
+  it.each([true, false])("selección única con imagen perdida: corrección válida=%s, sin decisión intermedia", async (correct) => {
+    const inputs: Parameters<VisualAssistants["substitute"]>[0][] = [];
+    const invalid = structuredClone(SINGLE_CHOICE_DRAFT);
+    invalid.choice.options.pop();
+    const assistants: VisualAssistants = {
+      support: async () => ({ draft: null, run: aiRun }), rewrite: async () => ({ draft: null, run: aiRun }),
+      substitute: async (input) => {
+        inputs.push(input);
+        return { draft: correct && inputs.length === 2 ? SINGLE_CHOICE_DRAFT : invalid, run: { ...aiRun, promptKey: "visual_substitute", promptVersion: 3 } };
+      },
+    };
+    const t = await teacher({ analysis: singleChoiceCase().analysis, sourcePdf: await singleChoicePdf(), assistants });
+    const id = await t.magic();
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1]!.rejectionCodes).toEqual(["choice_options_changed"]);
+    expect(await q("select attempt, prompt_version from public.ai_runs where adaptation_id = $1 and prompt_key = 'visual_substitute' order by attempt", [id])).toEqual([{ attempt: 1, prompt_version: 3 }, { attempt: 2, prompt_version: 3 }]);
+    if (correct) {
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null });
+      const s = await t.sheet(id);
+      expect(s.readiness).toMatchObject({ printable: true, pendingResources: 0 });
+      if (s.loaded.kind !== "ok") throw new Error("no sheet");
+      const activity = allBlocks(s.loaded.document).find((b) => b.type === "activity")!;
+      expect(activity).toMatchObject({ response: SINGLE_CHOICE_DRAFT.choice, trace: { source_refs: ["act_1", "vis_1"] } });
+      expect(s.loaded.document.answer_key).toEqual([{ block_id: activity.id, basis: "source", value: "B" }]);
+      expect(await t.entitlement(id)).toBe("consumed");
+    } else {
+      expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual" } });
+      expect(await t.entitlement(id)).toBe("reserved");
+      expect(t.spy.reviewer).toBe(0);
+    }
+    expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
+  });
+
   it("figures found in the original: ready, printable, no visual need left, one unit consumed", async () => {
     const t = await teacher();
     const id = await t.magic();
