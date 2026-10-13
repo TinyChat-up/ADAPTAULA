@@ -36,8 +36,11 @@ export function generatedSourcesOf(document: MaterialDocument): GeneratedSource[
   return [...seen.values()];
 }
 
-/** Printed size: wide enough to read every part, never more than the column; a portrait picture stays narrower. */
-export const generatedWidthMm = (width: number, height: number) => (width >= height * 1.2 ? 140 : height >= width * 1.2 ? 90 : 110);
+/**
+ * Printed size: large enough to read every part and marker (12 cm for a landscape scheme, about 8 cm tall), without taking the
+ * page from the activities around it (a sheet should not get a half-empty page because one picture is oversized).
+ */
+export const generatedWidthMm = (width: number, height: number) => (width >= height * 1.2 ? 120 : height >= width * 1.2 ? 80 : 100);
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 

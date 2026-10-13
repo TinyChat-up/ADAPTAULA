@@ -119,6 +119,11 @@ describe("classification and order of the rungs", () => {
     expect(assistants.calls).toEqual(["substitute", "substitute"]);
   });
 
+  it("5c · the model unavailable for a moment (timeout, overload, rate limit) is not a «no»: the stage is retried, never stopped", async () => {
+    const transient = { ...scripted(), substitute: async () => ({ draft: null, run: { ...run, status: "error" as const, errorCode: "provider_unavailable" } }) };
+    await expect(resolve(sheet(undeterminedBar), deps(["vis_2"], transient))).rejects.toMatchObject({ code: "provider_transient", kind: "retryable" });
+  });
+
   it("6 · no model available and nothing derivable: the stop says why (a technical limit, not a pedagogical request)", async () => {
     const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"]));
     expect(outcome(plan, "vis_1")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "no_model_available" } });

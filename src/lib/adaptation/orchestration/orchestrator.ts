@@ -81,10 +81,12 @@ export interface OrchestratorDeps {
    * resolved by the server (located, rebuilt, generated, rewritten around or left out when optional) before it is reviewed; what
    * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
-  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[] }): Promise<VisualResolutionPlan> };
+  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 
 const DEFAULTS = { leaseSeconds: 300, retryBackoffSeconds: 30, maxAttempts: 3 } as const;
+/** Kept, at the end of a generation stage's lease, for what follows the visual policy (the review, persisting the sheet). */
+const AFTER_VISUALS_MS = 60_000;
 
 export type StageOutcomeKind = "completed" | "enqueued" | "reused" | "skipped" | "retry" | "failed" | "human_action_required" | "rejected";
 export interface StageOutcome {
@@ -996,6 +998,8 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
   if (options.enqueueOnly) return { outcome: "enqueued", status: ((await store.getPipeline(adaptationId))?.adaptation.status as AdaptationStatus | undefined) ?? status, jobId: enqueued.jobId, reusedJob: enqueued.reused };
   const job = await claim(deps, enqueued.jobId, options.acknowledgeAmbiguous === true);
   if (!job) return { outcome: "skipped", status, jobId: enqueued.jobId };
+  // The visual policy never starts what it could not finish within this lease (a paid image cut off by the platform is lost).
+  const visualsDeadline = Date.now() + settings(deps).leaseSeconds * 1000 - AFTER_VISUALS_MS;
   const run: StageRun = { job, lease: { jobId: job.id, attempt: job.attempts }, ids: { workspaceId: job.workspace_id, adaptationId: job.adaptation_id, materialId: job.material_id, jobId: job.id, jobAttempt: job.attempts } };
 
   let failing: Stage = "generation";
@@ -1057,7 +1061,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const cached = await store.findArtifact(adaptationId, "visual_resolution", { inputFingerprint: inputFp });
       if (cached) visualPlan = (cached.payload as { plan: VisualResolutionPlan }).plan;
       else {
-        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, grade: loaded.context.education.grade, subject: loaded.context.education.subject, functionalNeeds: loaded.context.needs.map((n) => n.dimension) });
+        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, grade: loaded.context.education.grade, subject: loaded.context.education.subject, functionalNeeds: loaded.context.needs.map((n) => n.dimension), deadline: visualsDeadline });
         await store.putArtifact(adaptationId, run.lease, "visual_resolution", inputFp, fingerprint({ input: inputFp, plan: visualPlan }), { plan: visualPlan });
       }
       if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan);

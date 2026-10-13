@@ -2,6 +2,8 @@ import "server-only";
 import type { IMAGE_BRIEF_V1 } from "@prompts/image-brief/v1";
 import { IMAGE_RENDER_V1 } from "@prompts/image-render/v1";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
+import { AdaptationError } from "@/lib/adaptation/orchestration/errors";
+import { isTransientAIError } from "@/lib/ai/errors";
 import type { AIRunRecord, GeneratedImage, ImageSize } from "@/lib/ai/types";
 import { acceptReview, correctionsFrom, validateBrief, type BriefDraft, type IllustrationBrief, type ReviewDraft } from "@/lib/visuals/illustration";
 
@@ -26,12 +28,34 @@ export const ILLUSTRATION_LIMITS = {
 } as const;
 
 /**
- * The stage's time is up before a new image could be made: the job is retried later (a transient error), and what was already
- * approved is reused then. Never a reason to stop the adaptation.
+ * Time an illustration needs. A run has a fixed time (its stage's lease): an illustration is not started, nor a second attempt
+ * made, when it could not finish in it, and no call outlives it (each gets what is left, its provider's retries included). So a run
+ * cut off by the platform never leaves a unit reserved and unreturned, nor an image paid for and lost.
  */
-export class IllustrationDeferred extends Error {
+export const ILLUSTRATION_TIMING = {
+  /** Before the brief: the brief, one image and its review at their usual speed. */
+  startMs: 120_000,
+  /** Before an image: the image at its usual speed, its review and storing it. */
+  attemptMs: 90_000,
+  /** Kept after the image for its review and storing it. */
+  afterImageMs: 45_000,
+  /** Kept after the review for storing the illustration. */
+  storeMs: 10_000,
+  /** The longest an image may take. */
+  maxImageMs: 150_000,
+  /** The longest a brief or a review may take. */
+  maxTextMs: 60_000,
+} as const;
+
+/**
+ * The illustration could not be made now for a reason that is not an answer: the stage's time is up, or the provider had transient
+ * trouble (network, timeout, overload, rate limit). The job is retried later (a transient error) with any unit already given back,
+ * and what was approved is reused then. Never a reason to stop the adaptation: that is for a real «no» (a brief that cannot be
+ * made, a refusal, an image the review rejects).
+ */
+export class IllustrationDeferred extends AdaptationError {
   constructor() {
-    super("illustration_deferred");
+    super("provider_transient", "illustration_deferred");
     this.name = "IllustrationDeferred";
   }
 }
@@ -54,6 +78,8 @@ export interface IllustrationRequest {
   expectedAnswer: string | null;
   signatures: readonly string[];
   lowDetail: boolean;
+  /** When the illustration must be finished by (epoch ms: the stage's lease minus what follows it). None: no limit (tests, evals). */
+  deadline?: number | null;
 }
 
 export interface StoredIllustration {
@@ -64,10 +90,11 @@ export interface StoredIllustration {
   alt: string;
 }
 
+/** Each call gets `timeoutMs`: the most it may take, its provider's own retries included. */
 export interface IllustrationDeps {
-  brief(input: Parameters<typeof IMAGE_BRIEF_V1.buildUserText>[0]): Promise<{ draft: BriefDraft | null; run: AIRunRecord }>;
-  image(input: { prompt: string; size: ImageSize }): Promise<{ image: GeneratedImage | null; run: AIRunRecord }>;
-  review(input: { png: Uint8Array; stage: string | null; activity: string; brief: IllustrationBrief }): Promise<{ draft: ReviewDraft | null; run: AIRunRecord }>;
+  brief(input: Parameters<typeof IMAGE_BRIEF_V1.buildUserText>[0] & { timeoutMs: number }): Promise<{ draft: BriefDraft | null; run: AIRunRecord }>;
+  image(input: { prompt: string; size: ImageSize; timeoutMs: number }): Promise<{ image: GeneratedImage | null; run: AIRunRecord }>;
+  review(input: { png: Uint8Array; stage: string | null; activity: string; brief: IllustrationBrief; timeoutMs: number }): Promise<{ draft: ReviewDraft | null; run: AIRunRecord }>;
   store: {
     /** The illustration already approved for this need of the adaptation (whatever brief produced it). */
     find(adaptationId: string, needKey: string): Promise<StoredIllustration | null>;
@@ -76,6 +103,8 @@ export interface IllustrationDeps {
   quota: { reserve(key: string): Promise<boolean>; refund(key: string): Promise<void> };
   recordAiRun(run: AIRunRecord): Promise<void>;
   sha256(bytes: Uint8Array): string;
+  /** The clock (epoch ms) the deadline is measured with. */
+  now?(): number;
 }
 
 export type IllustrationOutcome =
@@ -99,27 +128,40 @@ const sizeFor = (kind: IllustrationBrief["kind"]): ImageSize => (kind === "vocab
 
 export async function illustrate(deps: IllustrationDeps, request: IllustrationRequest): Promise<IllustrationOutcome> {
   const record = (run: AIRunRecord) => deps.recordAiRun(run).catch(() => undefined);
+  const left = () => (request.deadline ?? Number.POSITIVE_INFINITY) - (deps.now ? deps.now() : Date.now());
+  /** What a call may take: what is left minus what must follow it, never more than its own maximum. */
+  const budget = (max: number, reserve: number) => Math.max(1_000, Math.min(max, left() - reserve));
   // A resumed job or a correction cycle reuses what was approved: no new brief, no new image, no new unit.
   const cached = await deps.store.find(request.adaptationId, request.needKey);
   if (cached) return { ok: true, asset: cached, cached: true, attempts: 0 };
-  const { draft, run: briefRun } = await deps.brief({ stage: request.stage, grade: request.grade, subject: request.subject, activity: request.activity, objective: request.objective, missing: request.missing, purpose: request.purpose, supports: request.supports });
+  if (left() < ILLUSTRATION_TIMING.startMs) throw new IllustrationDeferred();
+  const { draft, run: briefRun } = await deps.brief({ stage: request.stage, grade: request.grade, subject: request.subject, activity: request.activity, objective: request.objective, missing: request.missing, purpose: request.purpose, supports: request.supports, timeoutMs: budget(ILLUSTRATION_TIMING.maxTextMs, ILLUSTRATION_TIMING.attemptMs) });
   await record(briefRun);
+  if (!draft && isTransientAIError(briefRun.errorCode)) throw new IllustrationDeferred();
   const validated = validateBrief(draft, { activity: request.activity, expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail });
   if (!validated.ok) return { ok: false, reason: "brief_rejected", detail: validated.violations };
   const brief = validated.brief;
   const briefFingerprint = fingerprint({ brief, render: `${IMAGE_RENDER_V1.key}@v${IMAGE_RENDER_V1.version}`, stage: request.stage });
 
   const quotaKey = `image:${request.adaptationId}:${request.needKey}:${briefFingerprint.slice(0, 16)}`;
+  if (left() < ILLUSTRATION_TIMING.attemptMs) throw new IllustrationDeferred();
   if (!(await deps.quota.reserve(quotaKey))) return { ok: false, reason: "quota_exhausted", detail: [] };
+  const defer = async () => {
+    await deps.quota.refund(quotaKey);
+    return new IllustrationDeferred();
+  };
 
   let corrections: string[] = [];
   const detail: string[] = [];
   let reviewed = false;
   for (let attempt = 1; attempt <= ILLUSTRATION_LIMITS.attemptsPerImage; attempt++) {
+    if (attempt > 1 && left() < ILLUSTRATION_TIMING.attemptMs) throw await defer();
     const prompt = IMAGE_RENDER_V1.build(brief, { stage: request.stage, corrections });
-    const { image, run } = await deps.image({ prompt, size: sizeFor(brief.kind) });
+    const { image, run } = await deps.image({ prompt, size: sizeFor(brief.kind), timeoutMs: budget(ILLUSTRATION_TIMING.maxImageMs, ILLUSTRATION_TIMING.afterImageMs) });
     await record({ ...run, attempt });
-    // A refusal by the provider's content policy is final; a transient failure gets the second attempt.
+    // Transient trouble (or the run's time) is tried again in a later run, never taken as an answer. A refusal by the provider's
+    // content policy is final.
+    if (!image && isTransientAIError(run.errorCode)) throw await defer();
     if (!image) {
       detail.push(`image:${run.errorCode ?? run.status}`);
       if (run.status === "refused") break;
@@ -130,8 +172,9 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
       detail.push("image:invalid_png");
       continue;
     }
-    const { draft: review, run: reviewRun } = await deps.review({ png: image.data, stage: request.stage, activity: request.activity, brief });
+    const { draft: review, run: reviewRun } = await deps.review({ png: image.data, stage: request.stage, activity: request.activity, brief, timeoutMs: budget(ILLUSTRATION_TIMING.maxTextMs, ILLUSTRATION_TIMING.storeMs) });
     await record({ ...reviewRun, attempt });
+    if (!review && isTransientAIError(reviewRun.errorCode)) throw await defer();
     reviewed = true;
     const verdict = acceptReview(review, brief);
     if (verdict.ok) {

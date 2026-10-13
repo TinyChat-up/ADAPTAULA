@@ -1,7 +1,9 @@
 import "server-only";
 import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeText } from "@/lib/adaptation/text";
 import { materialNumbers } from "@/lib/adaptation/facts";
+import { AdaptationError } from "@/lib/adaptation/orchestration/errors";
 import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
+import { isTransientAIError } from "@/lib/ai/errors";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
@@ -34,7 +36,7 @@ export interface MagicVisualDeps {
    * A new educational illustration (image model + vision review, `../illustrate`), bound to this adaptation. Absent → not
    * available to it (flag, plan, quota or credentials): its rung is skipped.
    */
-  illustrate?: ((request: Omit<IllustrationRequest, "workspaceId" | "adaptationId">) => Promise<IllustrationOutcome>) | null;
+  illustrate?: ((request: Omit<IllustrationRequest, "workspaceId" | "adaptationId" | "deadline">) => Promise<IllustrationOutcome>) | null;
   recordAiRun?(run: AIRunRecord): Promise<void>;
 }
 
@@ -181,7 +183,12 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   const needs = visualNeedsOfDocument(input.document, input.requiredVisuals);
   const ready = await deps.readyOriginals(needs.filter((n) => n.origin === "original").map((n) => n.key));
   const outcomes: VisualNeedOutcome[] = [];
-  const record = async (run: AIRunRecord) => deps.recordAiRun?.(run).catch(() => undefined);
+  // Transient provider trouble is never an answer: going down the ladder on it would end in a stop that blames the material. The
+  // stage is retried later instead, within the job's attempts.
+  const record = async (run: AIRunRecord) => {
+    await deps.recordAiRun?.(run).catch(() => undefined);
+    if (run.status === "error" && isTransientAIError(run.errorCode)) throw new AdaptationError("provider_transient", "visual_assistant_unavailable");
+  };
   const functionalNeeds = input.functionalNeeds ?? [];
   const supports = functionalNeeds.flatMap((d) => (d in DIMENSIONS ? [DIMENSIONS[d as DimensionKey].label] : []));
   let illustrations = 0;

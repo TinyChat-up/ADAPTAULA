@@ -25,7 +25,6 @@ import type { IllustrationDeps, StoredIllustration } from "./service";
  */
 const BUCKET = "generated-assets";
 const COLUMNS = "id, sha256, width, height, alt_text";
-const IMAGE_TIMEOUT_MS = 150_000;
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const toStored = (row: { id: string; sha256: string; width: number; height: number; alt_text: string | null }): StoredIllustration => ({ id: row.id, sha256: row.sha256, width: row.width, height: row.height, alt: row.alt_text ?? "Ilustración de la actividad" });
@@ -51,11 +50,11 @@ export async function illustrationDeps(ids: { workspaceId: string; adaptationId:
   const textProvider = providerFor(textSelection);
 
   return {
-    brief: (input) => callStructured(textProvider, textSelection, "image_brief", IMAGE_BRIEF_V1, IMAGE_BRIEF_V1.buildUserText(input), 1500),
-    async image({ prompt, size }) {
+    brief: (input) => callStructured(textProvider, textSelection, "image_brief", IMAGE_BRIEF_V1, IMAGE_BRIEF_V1.buildUserText(input), 1500, AbortSignal.timeout(input.timeoutMs)),
+    async image({ prompt, size, timeoutMs }) {
       const base = { purpose: "image" as const, attempt: 1, alias: imageSelection.alias, provider: imageSelection.provider, model: imageSelection.model, effort: imageSelection.effort, promptKey: IMAGE_RENDER_V1.key, promptVersion: IMAGE_RENDER_V1.version };
       try {
-        const r = await imageProvider.generateImage({ selection: imageSelection, prompt, size, quality: "medium", timeoutMs: IMAGE_TIMEOUT_MS });
+        const r = await imageProvider.generateImage({ selection: imageSelection, prompt, size, quality: "medium", timeoutMs });
         const run: AIRunRecord = { ...base, inputTokens: r.usage.textInputTokens + r.usage.imageInputTokens, outputTokens: r.usage.outputTokens, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: estimateImageCostUsd(r.provider, r.model, r.usage), latencyMs: r.latencyMs, status: "success", errorCode: null };
         return { image: r.image, run };
       } catch (error) {
@@ -63,8 +62,8 @@ export async function illustrationDeps(ids: { workspaceId: string; adaptationId:
         return { image: null, run: { ...base, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, estimatedCostUsd: null, latencyMs: 0, status: code === "refusal" ? "refused" : "error", errorCode: code } };
       }
     },
-    review: ({ png, stage, activity, brief }) =>
-      callStructured(textProvider, textSelection, "image_review", IMAGE_REVIEW_V1, [{ type: "image", mediaType: "image/png", data: png }, { type: "text", text: IMAGE_REVIEW_V1.buildUserText({ stage, activity, brief }) }], 1500),
+    review: ({ png, stage, activity, brief, timeoutMs }) =>
+      callStructured(textProvider, textSelection, "image_review", IMAGE_REVIEW_V1, [{ type: "image", mediaType: "image/png", data: png }, { type: "text", text: IMAGE_REVIEW_V1.buildUserText({ stage, activity, brief }) }], 1500, AbortSignal.timeout(timeoutMs)),
     store: {
       async find(adaptationId, needKey) {
         // The illustration already approved for this need (a resumed job, a correction cycle): reused, never paid twice.

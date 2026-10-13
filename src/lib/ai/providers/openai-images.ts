@@ -1,6 +1,5 @@
 import OpenAI, { toFile } from "openai";
 import type { ImageGenerateParamsNonStreaming, ImageEditParamsNonStreaming, ImagesResponse } from "openai/resources/images";
-import { ANALYSIS_RETRY } from "../config";
 import { AIError } from "../errors";
 import type { ImageProvider, ImageRequest, ImageResponse } from "../types";
 
@@ -34,8 +33,12 @@ export class OpenAIImageProvider implements ImageProvider {
 
   constructor(private readonly client: OpenAIImagesClientLike) {}
 
+  /**
+   * No SDK retries: an image is expensive and a request that timed out may still be billed, so it is never repeated behind the
+   * pipeline's back (its own second attempt is explicit, counted and within the run's time).
+   */
   static fromApiKey(apiKey: string): OpenAIImageProvider {
-    return new OpenAIImageProvider(new OpenAI({ apiKey, maxRetries: ANALYSIS_RETRY.sdkRetriesPerCall }));
+    return new OpenAIImageProvider(new OpenAI({ apiKey, maxRetries: 0 }));
   }
 
   async generateImage(request: ImageRequest): Promise<ImageResponse> {
