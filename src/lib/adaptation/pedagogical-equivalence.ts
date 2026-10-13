@@ -1,6 +1,7 @@
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { VisualSpec } from "@/lib/visuals/spec";
 import { CONSTRAINT_TYPES } from "./facts";
+import type { SingleChoiceResponse } from "./single-choice";
 import { criticalTokens, hasToken, numbersIn, normalizeText, sharedTokens, wordCount } from "./text";
 
 /**
@@ -96,6 +97,8 @@ export function rewriteEquivalence(input: { analysis: MaterialAnalysis; activity
 }
 
 export interface SubstituteCandidate extends RewriteCandidate {
+  /** Structural preservation only; the selection executor must also verify the source options and unique answer. */
+  response?: SingleChoiceResponse;
   /** The new activity's own figure (drawn by our renderer), when it brings one. */
   figure: VisualSpec | null;
 }
@@ -118,13 +121,14 @@ export function substitutionEquivalence(input: { analysis: MaterialAnalysis; act
   const visualText = input.visual ? normalizeText([input.visual.title, input.visual.description, input.visual.text].filter(Boolean).join(" ")) : "";
   const text = normalizeText([candidate.prompt, ...candidate.steps].join(" "));
   const onFigure = input.activity.response_format === "mark" || input.activity.response_format === "draw";
+  const selection = profile.responseType === "select_option" && candidate.response?.kind === "choice" && !candidate.response.multiple;
   if (profile.representation === "required" && !candidate.figure) violations.push(input.drawable ? "representation_lost" : "representation_not_drawable");
   if (profile.operation !== "use_data" && candidate.figure && operationOf(text, onFigure ? input.activity.response_format : "write_text", candidate.lines === 0) !== profile.operation) violations.push(`operation_changed(${profile.operation})`);
   // Marking stays on the figure: no writing lines instead of it.
   if (onFigure && (!candidate.figure || candidate.lines !== 0)) violations.push(`response_type_changed(${input.activity.response_format})`);
-  // The substitute contract only produces writing lines or a figure to act on, never options, matching pairs or blanks.
-  if (!onFigure && (NON_WRITTEN.has(profile.responseType) || profile.responseType === "none")) violations.push(`response_type_changed(${profile.responseType})`);
-  if (!onFigure && candidate.lines === 0) violations.push("no_answer_space");
+  // Only the verified selection executor may supply options; other closed formats still cannot become writing lines.
+  if (!onFigure && !selection && (NON_WRITTEN.has(profile.responseType) || profile.responseType === "none")) violations.push(`response_type_changed(${profile.responseType})`);
+  if (!onFigure && !selection && candidate.lines === 0) violations.push("no_answer_space");
   const verbs = (s: string) => new Set([...s.matchAll(ACTION_VERBS)].map((m) => m[1]!));
   for (const v of verbs(original)) if (!verbs(text).has(v)) violations.push(`action_lost(${v})`);
   for (const v of verbs(text)) if (!verbs(original).has(v)) violations.push(`action_added(${v})`);

@@ -2,6 +2,7 @@ import { allBlocks, MaterialDocumentSchema, type Block, type MaterialDocument } 
 import { describeSpec, type VisualSpec } from "@/lib/visuals/spec";
 import { fingerprint } from "./fingerprint";
 import { normalizeText } from "./text";
+import type { SingleChoiceResponse } from "./single-choice";
 
 /**
  * «Hacer magia» never asks the teacher to locate, upload or omit an image, and never stops because one is missing when the sheet
@@ -54,8 +55,10 @@ export interface ActivityRewrite {
   activityId: string;
   prompt: string;
   steps: string[];
-  /** 0: answered on the figure (no writing space). */
+  /** 0: no writing lines (answered on the figure, or on the supplied choice response). */
   lines: number;
+  /** Only a server-validated selection executor can supply options; legacy rewrites keep their existing semantics. */
+  response?: SingleChoiceResponse;
 }
 
 export interface IllustrationAsset {
@@ -266,7 +269,7 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
         const decisions = plan.needs.filter((n) => (n.resolution.action === "rewrite" || n.resolution.action === "substitute") && n.activityIds.includes(act));
         // A substitute brings a new task: its own answer space (none when it is answered on its figure), never the old one's.
         const substitute = decisions.some((d) => d.resolution.action === "substitute");
-        const response = w.lines === 0 ? ({ kind: "none" } as const) : substitute || activity.response.kind === "none" ? ({ kind: "lines", lines: w.lines } as const) : activity.response;
+        const response = w.response ?? (w.lines === 0 ? ({ kind: "none" } as const) : substitute || activity.response.kind === "none" ? ({ kind: "lines", lines: w.lines } as const) : activity.response);
         activity = { ...activity, prompt: w.prompt, ...(w.steps.length > 0 ? { steps: w.steps } : substitute ? { steps: undefined } : {}), response, trace: { ...activity.trace, origin: "adapted", source_refs: [...new Set([...activity.trace.source_refs, ...decisions.map((d) => d.key).filter((k) => k.startsWith("vis_"))])] } };
       }
       out.push(activity);

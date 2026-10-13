@@ -6,6 +6,7 @@ import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type Activity
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { substitutionFeedback, type SubstitutionRejectionCode } from "@/lib/adaptation/substitution-feedback";
+import { sourceSingleChoice, singleChoiceViolations, singleChoiceDocumentCompatible } from "@/lib/adaptation/single-choice";
 import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
@@ -161,6 +162,15 @@ export function validateSubstitute(draft: SubstituteDraft | null, ctx: RewriteCo
   const prompt = draft.prompt.trim();
   const steps = (draft.steps ?? []).map((x) => x.trim()).filter(Boolean);
   const lines = draft.lines ?? 2;
+  if (ctx.activity.response_format === "select_option") {
+    const violations = singleChoiceViolations(ctx.activity, { prompt, steps, lines, choice: draft.choice, figure: spec });
+    const source = sourceSingleChoice(ctx.activity);
+    if (!source) return { ok: false, violations };
+    const activity = { ...ctx.activity, instruction: source.prompt, context: null };
+    violations.push(...substitutionEquivalence({ analysis: ctx.analysis, activity, visual: ctx.visual, candidate: { prompt, steps, lines, figure: spec, response: source.response }, needs: ctx.functionalNeeds, drawable: ctx.drawable }).violations);
+    if (leakedSignature([prompt, ...steps].join("\n"), ctx.signatures)) violations.push("answer_leaked");
+    return violations.length === 0 ? { ok: true, rewrite: { prompt, steps, lines, response: source.response }, spec } : { ok: false, violations };
+  }
   const equivalence = substitutionEquivalence({ analysis: ctx.analysis, activity: ctx.activity, visual: ctx.visual, candidate: { prompt, steps, lines, figure: spec }, needs: ctx.functionalNeeds, drawable: ctx.drawable });
   const violations = [...equivalence.violations];
   const full = [prompt, ...steps].join("\n");
@@ -355,11 +365,13 @@ async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRe
   const out: ActivityRewrite[] = [];
   let spec: VisualSpec | null = null;
   for (const activity of activities) {
+    if (activity.response_format === "select_option" && !singleChoiceDocumentCompatible(activity, input.document)) return null;
     const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id)).map((o) => o.text).join(". ") || null;
     let accepted: { rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | null = null;
     let rejectionCodes: SubstitutionRejectionCode[] = [];
     for (let attempt = 0; attempt < SUBSTITUTE_ATTEMPTS && !accepted; attempt++) {
-      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)", responseFormat: activity.response_format, rejectionCodes });
+      const choice = sourceSingleChoice(activity);
+      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: choice?.prompt ?? activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)", responseFormat: activity.response_format, rejectionCodes, ...(choice ? { options: choice.response.options, functionalNeeds: ctx.functionalNeeds } : {}) });
       await record({ ...run, attempt: attempt + 1 }, transient);
       // Corrections are for invalid proposals, not refusals, unavailable credentials or an explicit inability to substitute.
       if (run.status === "refused" || run.status === "error" || draft?.feasible === false) break;

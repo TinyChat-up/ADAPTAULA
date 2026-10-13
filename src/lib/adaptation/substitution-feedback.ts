@@ -4,6 +4,8 @@ export const SUBSTITUTION_REJECTION_CODES = [
   "operation_changed", "response_type_changed", "no_answer_space", "action_lost", "action_added", "constraint_lost",
   "new_data", "demand_lowered", "reading_load_increased", "objective_unrelated", "not_rewritten", "mentions_image",
   "answer_leaked", "shared_figure_conflict",
+  "choice_source_unverifiable", "choice_options_changed", "choice_task_changed", "choice_key_unverifiable",
+  "choice_figure_unverifiable", "choice_correct_count", "choice_answer_changed", "choice_demand_changed",
 ] as const;
 
 export type SubstitutionRejectionCode = (typeof SUBSTITUTION_REJECTION_CODES)[number];
