@@ -2,6 +2,63 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-13 — UI/UX: navegación sin pantallas vacías, «Plan y cuenta», «Adaptaciones» con filtros y movimiento
+
+- **Base verificada:** `git fetch origin main` → `70fb9ea` (merge de PR #28; #25–#27 también integradas). La PR #25, de la rama `claude/variables-expuestas-repo-f2o2et`, ya estaba integrada (`6c91552`; en esta sesión la API de GitHub sí responde). Por eso la rama se reinicia desde `main` y este bloque va como cambio nuevo, sin apilarlo sobre historia ya integrada.
+- **Petición:** mejorar la UI/UX sin romper nada, eliminar pantallas innecesarias y dar más dinamismo. Es solo presentación: sin migraciones ni cambios en datos, permisos, RLS, planes, cuotas, precios, IA, pipeline, renderer o PDF.
+- **Pantallas retiradas:**
+  - `/app/plantillas`, `/app/ayuda`, `/app/clases` y `/app/configuracion` eran pantallas «Próximamente» sin contenido; se elimina también `coming-soon.tsx`.
+  - Redirigen (307, `next.config.ts`) a `/app`, `/como-funciona`, `/app/alumnos` y `/app/uso`. Comprobado con `curl`, también `/app/configuracion/facturacion` y `/app/clases/<id>`.
+  - Configuración se funde en **«Plan y cuenta»** (`/app/uso`): uso del periodo, datos de la cuenta y ayuda.
+  - Historial pasa a ser **«Adaptaciones»**, en la misma ruta y con filtros por estado (`?estado=`, recuento por filtro y `aria-current`).
+- **Navegación:**
+  - Escritorio: 5 entradas principales más «Plan y cuenta» (antes 8 + 2, tres de ellas vacías). La entrada activa lleva barra, fondo y `aria-current`.
+  - Móvil: cabecera fija con el plan (enlaza a Plan y cuenta) y barra inferior con botón central y hoja «Más» animada.
+- **Inicio:**
+  - Cabecera con saludo y una línea que cambia según el estado.
+  - Tarjetas con icono y barra, listas con icono y flecha, y la tarjeta entera de cada material como enlace.
+  - Estado vacío con los tres pasos.
+  - En el móvil, «Ver todas las adaptaciones» se lee «Ver todas» y conserva el nombre completo para lectores de pantalla.
+- **Movimiento (`globals.css`, sin dependencias):**
+  - Entrada de página (`app/app/(shell)/template.tsx`), `stagger`, `pop-in` y `meter-fill`.
+  - `lift` al pasar el ratón y con el foco del teclado; botones con pulsación.
+  - Esqueletos con brillo y `loading.tsx` en Inicio, Materiales, Perfiles, Adaptaciones y Plan y cuenta.
+  - `reveal` en la web pública.
+  - Regla: el texto solo se desplaza (`transform`), nunca cambia de opacidad. `prefers-reduced-motion` lo para todo. Ningún `loading.tsx` envuelve las rutas que deben responder 404 (ADR-024).
+- **Web pública y acceso:** hero con vista previa del producto, cabecera fija, pasos con icono, tarjetas con icono, privacidad, CTA final, y login/registro/bienvenida a dos columnas. Copy, precios y promesas sin cambios (`pricing-truth` PASS).
+- **Archivos:** `src/app/globals.css`, `src/components/ui/{button,feedback,layout}.tsx`, `src/components/app/*` (shell, navegación, barra móvil, pie, `page-skeleton.tsx`), `src/app/app/(shell)/{(inicio),materiales/(lista),historial,uso,alumnos,adaptar}/*`, `template.tsx`, `src/components/adaptation/adaptation-list.tsx`, `src/components/materials/uploader.tsx`, `src/components/marketing/*`, `src/app/(auth)/layout.tsx`, `src/app/app/bienvenida/page.tsx`, `next.config.ts`; documentación en `docs/UX.md`, `BILLING.md`, `ROADMAP.md`, `ARCHITECTURE.md` (ADR-024), `PROJECT_STATUS.md` y este registro.
+- **Pruebas (locales, con PGlite y proveedores simulados; sin servicios remotos ni llamadas de pago):**
+  - `pnpm typecheck` PASS.
+  - `pnpm lint`: 0 errores y 1 aviso previo en `tests/unit/analysis-run-auth.test.ts`.
+  - Unitarias de los 8 archivos afectados: 62/62 PASS (`boundaries`, `adaptation-web-boundaries`, `visual-boundaries`, `immediate-dispatch`, `next-tracing`, `pdf-single-renderer`, `pricing-truth`, `print-html`). No se ejecutó la suite completa.
+  - **E2E Playwright** (escritorio 1280 y móvil 390, con axe y desbordamiento), servidor `next dev` con PGlite y Chromium 141 de `/opt/pw-browsers`:
+    1. Primera pasada, sobre `1e94a8d` + UI: 46 PASS, 10 fallos (las mismas 5 pruebas en los dos tamaños) y 20 sin ejecutar, saltadas en serie tras esos fallos.
+    2. Las 5 sobre `main` limpio (`70fb9ea`, sin la UI y con el servidor reiniciado desde cero): fallan igual, con el mismo error y en la misma línea.
+    3. Pasada final sobre `main` + UI, excluyendo solo esas 5: 51 PASS y 5 fallos, también ajenos a la UI (explicados abajo). Las 10 pruebas saltadas en serie se ejecutaron aparte: 8 PASS, entre ellas `adaptation:77` (404 de otra cuenta) y `materials:267` (axe y desbordamiento) en móvil, más `magic-flow:140` con su fallo previo en los dos tamaños.
+    4. Repeticiones: `adaptation:60` y `materials:145` en móvil, 3/3 PASS cada una; `free-plan:9` en escritorio, 1/2 PASS con la UI y 1/3 en `main` limpio.
+  - `pnpm build` PASS: compila en 62 s y la lista de rutas ya no incluye `/app/plantillas`, `/app/ayuda`, `/app/clases` ni `/app/configuracion`.
+  - Capturas antes/después de 13 pantallas, en escritorio y móvil.
+- **Fallos E2E previos, ajenos a este bloque.** Todos se reproducen en `main` limpio, con el servidor reiniciado desde cero. Los tests son del 8-oct y la lógica cambió después.
+  - Deterministas:
+    - `adaptation-states:15`: el *seed* «lista con observaciones» ya no es imprimible con `render/readiness` (Hotfix 8.2A.1). La pantalla dice «La ficha no se puede mostrar completa todavía».
+    - `magic-flow:50`, `:98` y `:140`: esperan la copy y el recorrido antiguos. Las fases eran «Revisando el resultado… Lista» y ahora (`bd83d80`) son «Organizando las actividades… Comprobando el resultado… Ficha lista». El aviso esperado era «La ficha necesita una revisión antes de estar lista» y ahora es «No hemos podido completar automáticamente esta ficha». Además, tras «Hacer magia» la prueba ya no llega a `/vista` con el doble simulado.
+    - `render:39`: la app nombra bien el PDF («Descarga iniciada: Población y movilidad en Valdeloma.pdf»). Es el Chromium 141 *headless* del entorno el que da `download` como nombre sugerido de una descarga desde un `blob:`.
+    - `visual-locator:47`: aparecen 3 enlaces «Localizar en el original» (vis_1–vis_3) donde el test espera uno, en modo estricto.
+  - Intermitentes:
+    - `materials:109`: carrera del test. Tras «Volver a analizar», `waitForAnalysis` encuentra el encabezado del análisis anterior y lee la cuota antes de que la acción reserve la unidad (9 en lugar de 10).
+    - `free-plan:9`: a veces una adaptación de «Hacer magia» termina `blocked` (CTA «Revisar»), y el test solo acepta «Ver ficha|Ver progreso|Revisar adaptación».
+    - `adaptation:60` y `materials:145`: carrera del helper `signUpAndOnboard`, que no espera a que termine el onboarding. La traza muestra el `goto` 22 ms después del POST: `/app/adaptar` → 307 `/app/bienvenida` → 307 `/app`. Arreglo de una línea: esperar `not.toHaveURL(/\/app\/bienvenida/)` tras «Entrar en Adaptaula».
+  - Este bloque no modifica ningún test: todos los selectores de la E2E siguen valiendo.
+- **Riesgos:**
+  - La revisión manual con teclado y lector de pantalla sigue pendiente (Fase 7). axe solo cubre lo automatizable.
+  - Las redirecciones son temporales (307) y se retiran cuando cada pantalla tenga contenido.
+  - Cualquier `loading.tsx` nuevo debe respetar ADR-024 para no convertir 404 en 200.
+- **Publicación:** la implementación (`5bb9cc1`) y este registro están en `claude/variables-expuestas-repo-f2o2et`, subidos por Git como *fast-forward* desde `1e94a8d`, que ya estaba en `main` a través de #25. Sin PR nueva, porque no se ha pedido, y sin merge.
+- **Siguiente acción:**
+  1. Revisar el rediseño y, si se aprueba, abrir la PR de esta rama.
+  2. En un bloque propio, poner al día los E2E anteriores: la copy y el recorrido actuales de Hacer magia; un *seed* imprimible; esperar el estado «analizando» antes de leer la cuota; el nombre de descarga, comprobado en `Content-Disposition` o con el navegador fijado; localizar un visual concreto; aceptar «Revisar» en `free-plan`; y la espera tras el onboarding en `signUpAndOnboard`.
+  3. Después, retomar la prioridad de Hacer magia del ROADMAP.
+
 ## 2026-10-13 — Fase 8.2B.5: selección única basada en tablas
 
 - **Base verificada:** `git fetch origin main`, merge `bb38cd0` de **PR #27** y ascendencia de `4007e19`/`26904dc`. Rama nueva desde main actualizado: `phase8/seleccion-unica-tablas`. #27 ya está integrada; se corrige su estado en los documentos de continuidad. La consulta de PR abiertas por API sigue bloqueada (`Forbidden`), sin inferir su estado.
