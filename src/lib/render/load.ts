@@ -11,6 +11,7 @@ import { resolveVisuals, type ResolvedVisuals, type VisualDeps } from "@/lib/mat
 import { visualDeps } from "@/lib/materials/visuals/server";
 import { requestedVisuals, resolveResources, type RequestedVisual, type ResourceDeps, type ResourceState } from "@/lib/adaptation/resources/service";
 import { resourceDeps } from "@/lib/adaptation/resources/server";
+import { generatedDeps, generatedSourcesOf, generatedWidthMm, resolveGenerated, type GeneratedDeps } from "./generated";
 import type { DeferredInput } from "./deferred";
 import { buildRenderModel, type RenderMode, type RenderModel, type RenderValidation } from "./model";
 import { assetRef, type PinnedAsset } from "./print/pinned-assets";
@@ -21,7 +22,7 @@ export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[] };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[]; generated: Record<string, { src: string; widthMm: number }> };
 
 export interface RenderLoadOptions {
   /**
@@ -31,6 +32,8 @@ export interface RenderLoadOptions {
   pin?: boolean;
   /** The teacher's resources for the visuals a decision asked for (docs/VISUAL_RESOURCES.md). Absent → all still pending. */
   resources?: ResourceDeps;
+  /** The approved illustrations «Hacer magia» generated for this sheet. Absent → none can be shown (they stay missing). */
+  generated?: GeneratedDeps;
   /**
    * `false` only for lists (many rows at once): crops and resources count from their rows, without downloading and hashing every
    * object. The sheet, the image routes and the PDF always verify (the default).
@@ -42,6 +45,8 @@ export interface RenderLoadOptions {
 export const visualSrc = (adaptationId: string, visualId: string) => `/api/adaptations/${adaptationId}/visuals/${visualId}`;
 /** The authorised route that streams a verified image the teacher provided for a decision's visual. */
 export const resourceSrc = (adaptationId: string, decisionId: string) => `/api/adaptations/${adaptationId}/resources/${decisionId}`;
+/** The authorised route that streams an approved illustration generated for this sheet. */
+export const generatedSrc = (adaptationId: string, assetId: string) => `/api/adaptations/${adaptationId}/generated/${assetId}`;
 
 /**
  * What the sheet viewer needs, from the USER's client (RLS): another workspace's adaptation and a missing one are both
@@ -51,7 +56,7 @@ export const resourceSrc = (adaptationId: string, decisionId: string) => `/api/a
 export async function loadRenderInput(ctx: WorkspaceContext, id: string): Promise<RenderLoad> {
   const supabase = await getSupabase();
   const actor: Actor = { userId: ctx.user.id, workspaceId: ctx.workspace.id, canWrite: hasRole(ctx.role, WRITE_ROLES) };
-  return loadRenderInputWith(serviceDeps(supabase), actor, id, visualDeps(supabase), { resources: resourceDeps(supabase) });
+  return loadRenderInputWith(serviceDeps(supabase), actor, id, visualDeps(supabase), { resources: resourceDeps(supabase), generated: generatedDeps(supabase) });
 }
 
 /** The same, over explicit dependencies (what the tests drive against a real database with the user's RLS reader). */
@@ -130,6 +135,20 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     pinned[`dec:${r.decisionId}`] = { assetId: state.resourceId, sha256: state.sha256, mime: "image/png", bytes };
     resources[r.decisionId] = { src: assetRef({ assetId: state.resourceId, sha256: state.sha256 }) };
   }
+  // Approved illustrations: the row of THIS adaptation and the exact bytes the document pins, or the image stays missing.
+  const generatedSources = generatedSourcesOf(parsed.data);
+  const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Map<string, { width: number; height: number }>(), bytes: {} as Record<string, Uint8Array> };
+  const generated: Record<string, { src: string; widthMm: number }> = {};
+  for (const g of generatedSources) {
+    const size = resolvedGenerated.ready.get(g.assetId);
+    if (!size) continue;
+    if (options.pin) {
+      const bytes = resolvedGenerated.bytes[g.assetId];
+      if (!bytes) continue;
+      pinned[`gen:${g.assetId}`] = { assetId: g.assetId, sha256: g.sha256, mime: "image/png", bytes };
+    }
+    generated[g.assetId] = { src: options.pin ? assetRef({ assetId: g.assetId, sha256: g.sha256 }) : generatedSrc(id, g.assetId), widthMm: generatedWidthMm(size.width, size.height) };
+  }
   const subjectSlug = parsed.data.meta.subject;
   const subjectName = subjectSlug && deps.reader.getSubjectName ? await deps.reader.getSubjectName(subjectSlug) : null;
   const sourceOf = (visualId: string) => (options.pin ? assetRef(pinned[visualId]!) : visualSrc(id, visualId));
@@ -161,6 +180,7 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     resources,
     requested: requested.map((r) => ({ ...r, state: stateOf(r.decisionId) })),
     teacherImages,
+    generated,
   };
 }
 
@@ -169,5 +189,5 @@ export const PRODUCT_DESIGN = "claro" as const;
 
 /** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
 export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
-  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, figures: loaded.figures, assetFailures: loaded.assetFailures, resources: loaded.resources, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
+  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, figures: loaded.figures, assetFailures: loaded.assetFailures, resources: loaded.resources, generated: loaded.generated, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
 }

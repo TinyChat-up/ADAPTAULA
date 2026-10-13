@@ -174,6 +174,8 @@ export interface BuildRenderOptions {
   design?: RenderDesign;
   /** Verified reconstructions of original visuals by `vis_N` (choice C): drawn instead of their crop. */
   figures?: Readonly<Record<string, VisualSpec>>;
+  /** Approved generated illustrations by asset id (their bytes verified against the sha-256 the document pins). */
+  generated?: Readonly<Record<string, AssetSource>>;
 }
 
 export const NEUTRAL_VISUAL_LABEL = "Recurso visual de la actividad";
@@ -356,6 +358,14 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
         const spec = located && !("src" in located) ? located : block.source.spec;
         return { key, kind: "image", state: "available", spec, alt: block.caption ?? describeSpec(spec), ...(block.caption ? { caption: block.caption } : {}), essential, origin };
       }
+      if (block.source.kind === "generated") {
+        const asset = ctx.options.generated?.[block.source.asset_id];
+        // It stands for something the sheet needs: a required original, or the picture an activity refers to; a support counts too.
+        const essential = block.source.visual_ref ? (ctx.options.requiredVisuals?.includes(block.source.visual_ref) ?? true) : true;
+        const origin = block.source.decision_id ? ("requested" as const) : ("original" as const);
+        // Its text alternative is the illustration's own description, written and reviewed with it (never the answer).
+        return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src, ...(asset.widthMm ? { widthMm: asset.widthMm } : {}) } : {}), alt: block.caption ?? block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential, origin };
+      }
       const ref = block.source.visual_ref;
       const spec = ctx.options.figures?.[ref];
       const asset = ctx.options.assets?.[ref];
@@ -523,6 +533,15 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
         // An organised essay is long: its writing space may continue on the next page (the prompt and the organiser never leave
         // its first lines: CSS), rather than pushing the whole activity on and leaving half a page empty.
         if (node.kind === "planner") previous.keepTogether = false;
+        continue;
+      }
+      // A help or the vocabulary written FOR the activity right before it is used while doing it: it goes inside, after what to do and
+      // before where to answer (after the answer lines it is read too late). A checklist stays after (it is for checking the work);
+      // a support of another activity or of the whole sheet stays where it is.
+      const own = (previous?.kind === "activity" && block.trace.origin !== "original" && block.trace.source_refs.length > 0 && block.trace.source_refs.every((r) => (sources.at(-1) ?? []).includes(r))) || false;
+      if ((node.kind === "help_box" || node.kind === "vocabulary") && previous?.kind === "activity" && own) {
+        previous.supports.push(node);
+        if (previous.keepTogether && activityRows(previous.prompt, previous.steps, previous.requirements, previous.response) + previous.figures.reduce((n, f) => n + figureRows(f), 0) + previous.supports.reduce((n, x) => n + leadRows(x), 0) > COMPACT_ROWS + FIGURE_ALLOWANCE) previous.keepTogether = false;
         continue;
       }
       current.push(node);

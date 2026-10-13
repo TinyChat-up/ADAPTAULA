@@ -88,6 +88,27 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
 - Límite de 3 generaciones de producto por adaptación y presupuesto de 40 fallos de pago cada 24 h por workspace, comprobado al admitir jobs nuevos.
 - **Pendiente:** pricing definitivo con telemetría real; alertas de coste; la sección «Tipos de adaptación» de la landing anuncia tipos que la app no deja elegir (hoy solo «accesibilidad»).
 
+## «Hacer magia» de verdad: ilustraciones revisadas y contrato visual (migración 024)
+- **Hecho:**
+  - **Política visual v2:** una ilustración generada y revisada para imágenes sin datos exactos, entre la figura exacta (VisualSpec)
+    y la reescritura o sustitución.
+  - **Referencias colgantes:** «Observa el esquema» sin esquema es una necesidad visual en magia y un FAIL en la revisión
+    determinista.
+  - **Contrato por recurso visual:** clase, procedencia, razón, validación y activo privado.
+  - **Gate `image.generate` real:** flag, plan y cuota `image`, con idempotencia y devolución.
+  - **Tiempo:** nada se empieza si no puede terminar dentro del lease.
+  - **Fallos transitorios:** retry de la etapa, nunca una parada.
+  - **Correcciones:** la autocorrección respeta el plan visual, y los apoyos de ficha completa ya no paran la ficha.
+  - **Validación:** casos B (célula, 1.º ESO) y C (parada honesta) probados sin IA real, en PGlite y en PDF real.
+  - **Eval opt-in con modelos reales:** `pnpm eval:illustrations`.
+- **Pendiente:**
+  - primera ejecución real del eval de ilustraciones, con credenciales de OpenAI y la organización verificada;
+  - aplicar la migración 024 en staging y después en producción;
+  - edición de imágenes del original (legibilidad, escaneos);
+  - localizador para figuras genéricas en escaneos sin texto;
+  - ejecutores para formatos cerrados, simplificación y reorganización en magia (hoy `needs_decision`);
+  - pictogramas con licencia comercial.
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso`, `/app/configuracion/facturacion` y `/precios` conectada.
@@ -116,7 +137,7 @@ Centros: multiusuario, roles, panel de centro, biblioteca compartida, facturaci�
 | Tema | Cuándo | Notas |
 |---|---|---|
 | Validación del PDF con Chromium en Vercel | Fase 5 (spike) | **DEFERRED:** empaquetado PASS; runtime pendiente de la configuración definitiva del proyecto. Alternativa: `@react-pdf/renderer` |
-| Modelos OpenAI concretos (texto alternativo, imagen) | Fase 3 / Fase 2 del producto | Verificar IDs y precios en la documentación oficial |
+| Modelos OpenAI concretos (texto alternativo) | Fase 3 / Fase 2 del producto | Verificar IDs y precios en la documentación oficial. Los de imagen ya están verificados (12-10-2026, `docs/AI_PIPELINE.md`) |
 | Margen Pro/Max con costes reales | Fase 4 | Ajustar cuotas, routing o precios con datos de `ai_runs` |
 | Email transaccional (proveedor SMTP) | Fase 1 | Preferiblemente UE |
 | Monitorización de errores | Fase 7 | |

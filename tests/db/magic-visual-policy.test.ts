@@ -15,7 +15,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { allBlocks } from "@/lib/schemas/material-document";
 import { fractionsCaseAnalysis, fractionsPdf, type FractionsPdfOptions } from "../support/fractions-case";
 import { createTestDb, createUser } from "./harness";
-import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
+import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions, type Scripted } from "./orchestration-harness";
 import { resourceHarness } from "./resource-harness";
 import { attachSource, autoHarness, visualHarness } from "./visual-harness";
 
@@ -49,7 +49,7 @@ function dataSourceAnalysis(): MaterialAnalysis {
   return analysis;
 }
 
-async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null } = {}) {
+async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPdfOptions; assistants?: VisualAssistants | null; reviewer?: Scripted["reviewer"] } = {}) {
   const user = await createUser(db, `magic-visual-${++n}-${Math.random().toString(36).slice(2, 6)}@example.com`);
   const analysis = options.analysis ?? fractionsCaseAnalysis();
   const materialId = await seedMaterial(db, user, analysis);
@@ -79,7 +79,7 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
     },
   };
   const spy = newSpy();
-  const orchestrator = makeDeps(db, scriptedServices(spy, { planner }), { visuals: visualPolicy });
+  const orchestrator = makeDeps(db, scriptedServices(spy, { planner, ...(options.reviewer ? { reviewer: options.reviewer } : {}) }), { visuals: visualPolicy });
   orchestrator.entitlements = dbEntitlements(orchestrator.store);
   const deps: ServiceDeps = { orchestrator, reader: readerFor(db, user), resolveVersions: versions };
   const actor: Actor = { userId: user.id, workspaceId: user.workspaceId, canWrite: true };
@@ -117,32 +117,35 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await t.entitlement(id)).toBe("consumed");
   });
 
-  it("no number line in the PDF: its complete description is NOT drawn (no pixel evidence) → honest stop, no PDF, no unit, no model asked", async () => {
+  it("no number line in the PDF: a NEW line 0–1 in quarters is drawn with activity 4 → ready, printable, one unit, no model, no teacher step", async () => {
     const calls: string[] = [];
-    const assistants: VisualAssistants = { support: async () => (calls.push("support"), { draft: null, run: aiRun }), rewrite: async () => (calls.push("rewrite"), { draft: { feasible: true, prompt: "Escribe cuánto le falta a 3/4 para llegar a 1.", steps: [], lines: 2 }, run: aiRun }) };
+    const assistants: VisualAssistants = { support: async () => (calls.push("support"), { draft: null, run: aiRun }), rewrite: async () => (calls.push("rewrite"), { draft: null, run: aiRun }), substitute: async () => (calls.push("substitute"), { draft: null, run: aiRun }) };
     const t = await teacher({ pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
-    expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, phase: "automatic_incomplete", automaticStop: { reason: "visual" } });
-    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "representation_required" } });
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "generatable_support_visual", resolution: { action: "figure", provenance: "generated", spec: { kind: "number_line", divisions: 4 } } });
     const s = await t.sheet(id);
-    expect(s.readiness?.printable ?? false).toBe(false);
-    expect(await t.entitlement(id)).toBe("reserved");
-    expect(t.spy.reviewer).toBe(0);
+    expect(s.readiness).toMatchObject({ printable: true, pendingResources: 0 });
+    expect(s.needs.filter((x) => x.status !== "ready")).toEqual([]);
+    if (s.loaded.kind !== "ok") throw new Error("no sheet");
+    const act4 = allBlocks(s.loaded.document).find((b) => b.type === "activity" && b.label === "4");
+    expect(act4).toMatchObject({ response: { kind: "none" } });
+    expect(await t.entitlement(id)).toBe("consumed");
     expect(calls).toEqual([]);
-    expect(await q("select 1 from public.ai_runs where adaptation_id = $1 and purpose like 'visual_%'", [id])).toEqual([]);
   });
 
-  it("a wrong crop is rejected: the bar on the page is 8/3, the analysis says 6/2 → not trusted, not rebuilt, honest stop", async () => {
+  it("a wrong crop is never used (pixels 8/3, description 6/2): the bar is drawn from the activity's answer, and the sheet is delivered", async () => {
     const analysis = fractionsCaseAnalysis();
     analysis.visuals = analysis.visuals.map((v) => (v.id === "vis_1" ? { ...v, description: "Barra dividida en 6 partes iguales con 2 partes coloreadas." } : v));
     const t = await teacher({ analysis });
     const id = await t.magic();
-    expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual" } });
     const result = (await q<{ result: { visuals: Record<string, { choice: string; reason: string }> } }>("select result from public.material_visual_autolocations where material_id = $1", [t.materialId]))[0]!.result;
     expect(result.visuals.vis_1).toMatchObject({ choice: "D", reason: "contradicts_analysis" });
     expect(result.visuals.vis_2).toMatchObject({ choice: "C" });
     expect(await q("select 1 from public.material_visual_locators where material_id = $1 and visual_id = 'vis_1'", [t.materialId])).toEqual([]);
-    expect(await t.entitlement(id)).toBe("reserved");
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_1")).toMatchObject({ category: "generatable_support_visual", resolution: { action: "figure", spec: { kind: "fraction_bar", parts: 8, shaded: [0, 1, 2] } } });
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
+    expect(await t.entitlement(id)).toBe("consumed");
   });
 
   it("an automatic crop of an earlier engine that this one does not find again is never used: the bar is rebuilt from its real pixels", async () => {
@@ -169,6 +172,7 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     const assistants: VisualAssistants = {
       support: async () => ({ draft: null, run: aiRun }),
       rewrite: async () => ({ draft: { feasible: true, prompt: "La botella tiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro.", steps: [], lines: 2 }, run: aiRun }),
+      substitute: async () => ({ draft: null, run: aiRun }),
     };
     const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
@@ -180,17 +184,52 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await t.entitlement(id)).toBe("consumed");
   });
 
-  it("nothing reliable: an honest stop — not ready, no PDF, no unit, no AI review, no request to locate; and no loop", async () => {
-    const assistants: VisualAssistants = { support: async () => ({ draft: null, run: aiRun }), rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }) };
+  it("the rewrite is not valid: a NEW equivalent activity replaces it (validated), and the sheet is delivered", async () => {
+    const assistants: VisualAssistants = {
+      support: async () => ({ draft: null, run: aiRun }),
+      rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }),
+      substitute: async () => ({ draft: { feasible: true, prompt: "Una botella de 1 litro contiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para estar llena.", steps: [], lines: 2, figure: null }, run: { ...aiRun, promptKey: "visual_substitute" } }),
+    };
+    const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
+    const id = await t.magic();
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "substituted_activity", resolution: { action: "substitute", spec: null } });
+    expect((await t.sheet(id)).readiness).toMatchObject({ printable: true });
+    expect(await q("select prompt_key from public.ai_runs where adaptation_id = $1 and purpose like 'visual_%' order by prompt_key", [id])).toEqual([{ prompt_key: "visual_rewriter" }, { prompt_key: "visual_substitute" }]);
+    expect(await t.entitlement(id)).toBe("consumed");
+  });
+
+  it("only when nothing valid can be built (every proposal rejected): the stop — not ready, no PDF, no unit, no AI review; and no loop", async () => {
+    const assistants: VisualAssistants = { support: async () => ({ draft: null, run: aiRun }), rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }), substitute: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null, figure: null }, run: aiRun }) };
     const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
     const id = await t.magic();
     const stopped = await t.status(id);
     expect(stopped).toMatchObject({ status: "blocked", delivered: false, phase: "automatic_incomplete", automaticStop: { reason: "visual" } });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "unresolved_visual", resolution: { reason: "no_equivalent_activity" }, attempts: ["locate", "reconstruct", "generate", "rewrite", "substitute"] });
     expect(t.spy.reviewer).toBe(0);
     expect(await t.entitlement(id)).toBe("reserved");
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
     expect((await t.status(id)).automaticStop).toMatchObject({ reason: "visual" });
     expect(t.resolveCalls).toHaveLength(1);
+  });
+});
+
+describe("a sheet the visual policy changed is still repaired by itself (regression)", () => {
+  it("the line is drawn anew AND the first review fails on a support: the correction finds that review, regenerates and delivers", async () => {
+    // The first AI review finds the plan's support infantilising (a finding pinned on the support's own block); the second passes.
+    const reviewer: Scripted["reviewer"] = async (inner, call, input) => {
+      const out = await inner.review(input);
+      if (call > 1) return out;
+      const support = allBlocks(input.document).find((b) => b.trace.decision_ids.length > 0 && b.type !== "activity");
+      const draft = out.draft as { checks: Array<{ check: string; status: string; targets: string[]; detail: string }> };
+      return { ...out, draft: { checks: [...draft.checks.filter((c) => c.check !== "age_appropriate"), { check: "age_appropriate", status: "FAIL", targets: support ? [support.id] : [], detail: "Tono infantil" }] } } as never;
+    };
+    const t = await teacher({ pdf: { withoutNumberLine: true }, reviewer });
+    const id = await t.magic();
+    // Before the fix: the correction rebuilt the sheet WITHOUT the drawn line, found no review for it and stopped («quality»).
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null, generationsUsed: 2 });
+    expect((await t.plan(id))!.needs.find((x) => x.key === "vis_2")).toMatchObject({ category: "generatable_support_visual" });
+    expect(await t.entitlement(id)).toBe("consumed");
   });
 });
 

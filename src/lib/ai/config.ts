@@ -9,9 +9,11 @@ export const DEFAULT_MODEL_REFS: Record<ModelAlias, string | null> = {
   ECONOMY: "anthropic:claude-haiku-4-5",
   STANDARD: "anthropic:claude-sonnet-5-5",
   PREMIUM: "anthropic:claude-opus-5-5",
-  // Image models are chosen when image generation is built (model ids must be verified in the provider docs).
-  IMAGE_FAST: null,
-  IMAGE_QUALITY: null,
+  // Verified on 2026-10-12 in the provider's model list and SDK (openai@7.24.0 `ImageModel`): «flare» is the fast everyday
+  // generator, «sunburst» the most capable one (generation and edits). Overridable with AI_MODEL_IMAGE_*; used only when
+  // FLAG_AI_IMAGES_ENABLED is on and the provider's credentials are configured.
+  IMAGE_FAST: "openai:gpt-image-2.5-flare",
+  IMAGE_QUALITY: "openai:gpt-image-2.5-sunburst",
 };
 
 export const DEFAULT_EFFORT: Record<TextModelAlias, ReasoningEffort> = {

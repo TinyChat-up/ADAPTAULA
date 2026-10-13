@@ -3,6 +3,7 @@ import type { Actor, ServiceDeps } from "@/lib/adaptation/orchestration/service"
 import { logger } from "@/lib/logger";
 import type { VisualDeps } from "@/lib/materials/visuals/service";
 import type { ResourceDeps } from "@/lib/adaptation/resources/service";
+import type { GeneratedDeps } from "./generated";
 import { loadRenderInputWith, sheetModel } from "@/lib/render/load";
 import { readinessOf } from "@/lib/render/readiness";
 import type { PdfEngine, PdfRenderResult } from "./print/engine";
@@ -31,12 +32,13 @@ export interface PdfExportDeps {
   service: ServiceDeps;
   visuals?: VisualDeps;
   resources?: ResourceDeps;
+  generated?: GeneratedDeps;
   engine: PdfEngine;
 }
 
 export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, adaptationId: string): Promise<PdfExportResult> {
   const started = performance.now();
-  const loaded = await loadRenderInputWith(deps.service, actor, adaptationId, deps.visuals, { pin: true, ...(deps.resources ? { resources: deps.resources } : {}) });
+  const loaded = await loadRenderInputWith(deps.service, actor, adaptationId, deps.visuals, { pin: true, ...(deps.resources ? { resources: deps.resources } : {}), ...(deps.generated ? { generated: deps.generated } : {}) });
   if (loaded.kind === "not_found") return { ok: false, code: "not_found" };
   if (loaded.kind === "not_ready") return { ok: false, code: "not_ready" };
   if (loaded.kind === "invalid_document") return { ok: false, code: "not_renderable" };

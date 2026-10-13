@@ -103,6 +103,7 @@ export const CHECK_COPY: Record<ReviewCheck, string> = {
   age_appropriate: "Comprueba que el tono es adecuado para la edad del alumnado.",
   no_infantilization: "Comprueba que el material no resulta infantil.",
   traceability_complete: "Hay una ayuda repetida o que no se corresponde con ninguna decisión aprobada.",
+  visual_references_resolved: "Una actividad remite a una imagen que la ficha no tiene: añade la imagen o cambia la consigna.",
 };
 const CHECK_FALLBACK = "Hay una observación que conviene revisar antes de usar la ficha.";
 
@@ -193,8 +194,13 @@ export const AUTOMATIC_STOP_COPY = {
   /** No generation left to try or nothing to reopen: what is true, without offering a review that cannot happen. */
   qualityFinal: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes cancelarla o crear una nueva desde el material.",
   visual: {
-    body: "La ficha necesita una imagen del material original que no hemos podido localizar, reconstruir ni sustituir sin que la actividad pierda su sentido.",
-    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Si quieres, revisa y edita la adaptación.",
+    body: "Una actividad depende de una imagen del material original y ahora mismo no hemos podido crear automáticamente una alternativa válida.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes intentarlo de nuevo más tarde o, si quieres, revisar y editar la adaptación.",
+  },
+  /** The sheet needs a new illustration and the plan has none (or none left this month): said as it is, never a sheet with a gap. */
+  visual_plan: {
+    body: "Esta ficha necesita una ilustración nueva para una actividad y tu plan no incluye ilustraciones (o ya has usado las de este mes). No entregamos una ficha a la que le falte una imagen imprescindible.",
+    hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes revisar y editar la adaptación, o volver a intentarlo cuando tu plan incluya ilustraciones.",
   },
   edit: "Revisar y editar",
   /** A «Hacer magia» sheet delivered before the visual policy that still waits for an image (never shown as ready). */

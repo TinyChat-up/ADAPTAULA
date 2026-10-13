@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rewriteEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
-import { validateRewrite } from "@/lib/materials/visuals/auto/policy";
+import { validateRewrite, validateSubstitute } from "@/lib/materials/visuals/auto/policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { fractionsCaseAnalysis } from "../support/fractions-case";
 
@@ -80,5 +80,41 @@ describe("la única reescritura aceptable: la figura solo aportaba un dato", () 
     expect(profile).toMatchObject({ operation: "use_data", representation: "data_source" });
     expect(check(a, "act_4", "vis_2", "La botella tiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para llegar a 1 litro.")).toMatchObject({ ok: true });
     expect(rewriteEquivalence({ analysis: a, activity: a.activities.find((x) => x.id === "act_4")!, visual: a.visuals[1], rewrite: { prompt: "La botella tiene 3/4 de litro. Explica cuánto falta para 1 litro.", steps: [], lines: 2 }, needs: [] }).violations).toEqual(["action_lost(calcula)", "action_added(explica)"]);
+  });
+});
+
+describe("sustitución por otra actividad equivalente (cuando el recurso original no se puede salvar)", () => {
+  const line = { kind: "number_line" as const, parts: null, shaded: null, rows: null, cols: null, line_end: 1, divisions: 4 };
+  const sub = (a: MaterialAnalysis, activityId: string, visualId: string, draft: { prompt: string; lines: number; figure: typeof line | null }, drawable = true) => {
+    const activity = a.activities.find((x) => x.id === activityId)!;
+    return validateSubstitute({ feasible: true, steps: [], ...draft }, { analysis: a, activity, visual: a.visuals.find((v) => v.id === visualId), signatures: [], functionalNeeds: [], drawable });
+  };
+
+  it("act 4 · marcar en la recta sigue siendo marcar en una recta: con su recta y sin espacio de escritura", () => {
+    expect(sub(analysis, "act_4", "vis_2", { prompt: "Marca con una X la posición de 3/4 en la recta numérica.", lines: 0, figure: line })).toMatchObject({ ok: true, spec: { kind: "number_line", divisions: 4, labels: [{ tick: 0, text: "0" }, { tick: 4, text: "1" }] } });
+  });
+
+  it("act 4 · una sustitución textual o con líneas de escritura no es equivalente", () => {
+    const text = sub(analysis, "act_4", "vis_2", { prompt: "Escribe qué fracción está entre 1/2 y 1 y es mayor que 1/2.", lines: 2, figure: null });
+    expect(!text.ok && text.violations).toEqual(expect.arrayContaining(["representation_lost", "response_type_changed(mark)"]));
+    const lines = sub(analysis, "act_4", "vis_2", { prompt: "Marca 3/4 en la recta numérica.", lines: 2, figure: line });
+    expect(!lines.ok && lines.violations).toContain("response_type_changed(mark)");
+  });
+
+  it("una figura inválida de la IA no se dibuja; una sustitución que da la respuesta se rechaza", () => {
+    expect(sub(analysis, "act_4", "vis_2", { prompt: "Marca 3/4 en la recta numérica.", lines: 0, figure: { ...line, divisions: 3, line_end: 2 } })).toEqual({ ok: false, violations: ["figure_invalid"] });
+    const bar = { kind: "fraction_bar" as const, parts: 6, shaded: 2, rows: null, cols: null, line_end: null, divisions: null };
+    const leaked = validateSubstitute({ feasible: true, steps: [], lines: 1, prompt: "Observa la barra: 2/6 está coloreada. ¿Qué fracción está coloreada? Escríbela.", figure: bar as never }, { analysis, activity: act("act_1"), visual: vis("vis_1"), signatures: [], functionalNeeds: [], drawable: true });
+    expect(!leaked.ok && leaked.violations).toContain("answer_leaked(figure)");
+  });
+
+  it("un recurso que no sabemos dibujar (esquema de una célula) NO se sustituye por palabras: eso es la ilustración revisada, o la parada", () => {
+    const a = structuredClone(analysis);
+    a.visuals[1] = { ...a.visuals[1]!, kind: "diagram", title: null, description: "Esquema de una célula animal con membrana, citoplasma y núcleo señalados.", text: null };
+    Object.assign(a.activities.find((x) => x.id === "act_4")!, { instruction: "Rodea en el esquema el núcleo de la célula.", objective_ids: ["obj_4"] });
+    a.pedagogical_intent.objectives = a.pedagogical_intent.objectives.map((o) => (o.id === "obj_4" ? { ...o, text: "Identificar las partes de la célula animal" } : o));
+    const guided = sub(a, "act_4", "vis_2", { prompt: "La célula animal tiene membrana, citoplasma y núcleo. Escribe qué parte de la célula guarda la información y controla su actividad.", lines: 2, figure: null }, false);
+    expect(guided.ok).toBe(false);
+    expect(!guided.ok && guided.violations).toEqual(expect.arrayContaining(["representation_not_drawable", "response_type_changed(mark)"]));
   });
 });

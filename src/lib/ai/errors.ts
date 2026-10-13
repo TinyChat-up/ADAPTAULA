@@ -25,6 +25,9 @@ export class AIError extends Error {
   }
 }
 
+/** Transient provider trouble (network, timeout, overload, rate limit): worth trying again later, never an answer. */
+export const isTransientAIError = (code: string | null | undefined): boolean => code !== null && code !== undefined && RETRYABLE.has(code as AIErrorCode);
+
 export function toAIError(error: unknown): AIError {
   return error instanceof AIError ? error : new AIError("unknown", error instanceof Error ? error.message : "unknown error", { cause: error });
 }

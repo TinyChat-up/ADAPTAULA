@@ -10,7 +10,9 @@ import { visualAdmin, visualDeps } from "../server";
 import type { VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
 import { createVisualAssistants, type VisualAssistants } from "./assistants";
-import { resolveMagicVisuals } from "./policy";
+import { illustrate, type IllustrationRequest } from "../illustrate/service";
+import { illustrationAvailability } from "../illustrate/server";
+import { resolveMagicVisuals, type MagicVisualDeps } from "./policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { corroborateSpec, prepareVisuals, type AutoRunDeps, type AutoRunSummary } from "./service";
 import { createVisionLocator, type VisionLocator } from "./vision";
@@ -71,7 +73,7 @@ export async function prepareAdaptationVisuals(input: { workspaceId: string; mat
  * The visual policy of «Hacer magia» for one assembled sheet: the automatic locator first (cached per material version), then the
  * rungs of `policy.ts`. Server job only (service role), after the adaptation authorised its material.
  */
-export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; functionalNeeds: readonly string[] }): Promise<VisualResolutionPlan> {
+export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; deadline?: number | null }): Promise<VisualResolutionPlan> {
   const summary = await prepareAdaptationVisuals(input);
   const admin = createAdminClient();
   const { data: material } = await admin.from("materials").select("workspace_id, content_hash").eq("id", input.materialId).maybeSingle();
@@ -89,16 +91,33 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
       },
       corroborate: async (visual, activityTexts) => (owned ? corroborateSpec({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual, activityTexts }) : null),
       assistants: productionAssistants(),
+      ...(await productionIllustrate(input)),
       recordAiRun: async (run) => {
         const { error } = await admin.from("ai_runs").insert({ ...toAiRunRow(run, { workspaceId: input.workspaceId, jobId: null, materialId: input.materialId }), adaptation_id: input.adaptationId });
         if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
       },
     },
-    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, functionalNeeds: input.functionalNeeds },
+    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, grade: input.grade, subject: input.subject, functionalNeeds: input.functionalNeeds },
   );
   const count = (category: string) => plan.needs.filter((n) => n.category === category).length;
-  logger.info("magic_visual_policy", { adaptationId: input.adaptationId, needs: plan.needs.length, located: count("exact_original_visual"), reconstructed: count("reconstructable_structured_visual"), generated: count("generatable_support_visual"), rewritten: count("rewritable_without_visual"), unresolved: count("unresolved_visual") });
+  logger.info("magic_visual_policy", { adaptationId: input.adaptationId, needs: plan.needs.length, located: count("exact_original_visual"), reconstructed: count("reconstructable_structured_visual"), generated: count("generatable_support_visual"), illustrated: count("generated_illustration"), rewritten: count("rewritable_without_visual"), substituted: count("substituted_activity"), unresolved: count("unresolved_visual") });
   return plan;
+}
+
+/**
+ * Illustrations for this adaptation, when its workspace may have them (plan, quota, flag, credentials); otherwise why not, so an
+ * honest stop can say «your plan does not include them». Each one must finish within the run (`deadline`): past it,
+ * `IllustrationDeferred` retries the stage later, which keeps what was approved.
+ */
+async function productionIllustrate(input: { workspaceId: string; adaptationId: string; materialId: string; deadline?: number | null }): Promise<Pick<MagicVisualDeps, "illustrate" | "illustrationsWithheld" | "maxIllustrations">> {
+  const availability = await illustrationAvailability({ workspaceId: input.workspaceId, adaptationId: input.adaptationId, materialId: input.materialId }).catch(() => ({ available: false as const, reason: "service" as const }));
+  if (!availability.available) return { illustrate: null, illustrationsWithheld: availability.reason };
+  const deps = availability.deps;
+  return { ...(availability.perAdaptation !== null ? { maxIllustrations: availability.perAdaptation } : {}), illustrate: async (request: Omit<IllustrationRequest, "workspaceId" | "adaptationId" | "deadline">) => {
+    const outcome = await illustrate(deps, { ...request, workspaceId: input.workspaceId, adaptationId: input.adaptationId, deadline: input.deadline ?? null });
+    logger.info("illustration", { adaptationId: input.adaptationId, need: request.needKey, ok: outcome.ok, cached: outcome.ok ? outcome.cached : null, attempts: outcome.ok ? outcome.attempts : null, reason: outcome.ok ? null : outcome.reason });
+    return outcome;
+  } };
 }
 
 function productionAssistants(): VisualAssistants | null {

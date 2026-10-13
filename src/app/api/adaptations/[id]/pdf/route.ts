@@ -7,6 +7,7 @@ import { WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { visualDeps } from "@/lib/materials/visuals/server";
 import { resourceDeps } from "@/lib/adaptation/resources/server";
+import { generatedDeps } from "@/lib/render/generated";
 import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/pdf-export";
 import { pdfEngine } from "@/lib/render/print/server";
 
@@ -35,7 +36,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
 
   const supabase = await getSupabase();
   const actor: Actor = { userId: auth.ctx.user.id, workspaceId: auth.ctx.workspace.id, canWrite: hasRole(auth.ctx.role, WRITE_ROLES) };
-  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), engine: pdfEngine() }, actor, id);
+  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine() }, actor, id);
   if (!result.ok) return apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message);
 
   return new Response(Buffer.from(result.pdf), {

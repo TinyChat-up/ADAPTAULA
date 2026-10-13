@@ -19,10 +19,13 @@ src/lib/ai/
                       refusal, truncated, invalid_output, unknown) y failureMessage() para el usuario (sin proveedor ni modelo)
   config.ts           alias → modelo por defecto, esfuerzo, parámetros del análisis (única tabla de modelos del código)
   registry.ts         alias → { provider, model, effort } desde AI_MODEL_<ALIAS> (env) o los valores por defecto
-  router.ts           createProvider(selection): anthropic · mock (rechazado en producción) · openai (reservado, no disponible)
+  router.ts           createProvider(selection): anthropic · mock (rechazado en producción) · openai (texto: reservado, no disponible)
+                      createImageProvider(selection): solo alias IMAGE_* · openai (SDK oficial) · mock (rechazado en producción)
   runtime.ts          arma la configuración del análisis desde el entorno
   providers/anthropic.ts   AnthropicProvider (SDK oficial, streaming, salida estructurada, PDF/imagen en base64)
   providers/mock.ts        MockProvider (desarrollo, E2E y harness de evals; marcadores MOCK_FAIL/INVALID/TRUNCATED/REFUSAL/SLOW)
+  providers/openai-images.ts  OpenAIImageProvider: ImageProvider (generación y edición, un PNG opaco; sin reintentos del SDK)
+  providers/mock-images.ts    MockImageProvider: un dibujo local para tests y evals (nunca en producción)
   costs.ts            tabla de precios única → coste estimado (null si el modelo no tiene precio)
   structured.ts       extracción de JSON, parseo y descripción de errores de validación sin contenido
   prompts.ts          registro de prompts y versión activa
@@ -40,10 +43,14 @@ La lógica de negocio solo conoce alias. Formato en env: `proveedor:modelo` (+ e
 | `ECONOMY` | `anthropic:claude-haiku-4-5` | Free; tareas sencillas; revisiones de un solo bloque |
 | `STANDARD` | `anthropic:claude-sonnet-5-5` | Pro/Max por defecto |
 | `PREMIUM` | `anthropic:claude-opus-5-5` | Escalado excepcional (ver routing) |
-| `IMAGE_FAST` | `openai:<modelo de imagen económico>` | Max: recursos visuales |
-| `IMAGE_QUALITY` | `openai:<modelo de imagen de calidad>` | Max: solo cuando haga falta |
+| `IMAGE_FAST` | `openai:gpt-image-2.5-flare` | Reservado (rápido); hoy sin uso |
+| `IMAGE_QUALITY` | `openai:gpt-image-2.5-sunburst` | Max: ilustraciones de «Hacer magia» |
 
-Las alternativas de OpenAI para los alias de texto (la familia "GPT-6" de la especificación) y los IDs exactos de los modelos de imagen **deben verificarse en la documentación de OpenAI** antes de configurarlos; no se codifican. Ningún nombre de modelo aparece en la UI.
+Los IDs de imagen se verificaron en la documentación oficial de OpenAI y en el tipo `ImageModel` del SDK (`openai` 7.24.0) el
+12-10-2026. Sus precios por token también: texto 5 USD/M, imagen de entrada 8 USD/M e imagen de salida 30 USD/M. Se cambian con
+`AI_MODEL_IMAGE_FAST` y `AI_MODEL_IMAGE_QUALITY`. Requisitos de OpenAI: la organización debe estar verificada para usar estos
+modelos, y la moderación del proveedor (`moderation: "auto"`) se trata como un rechazo definitivo. Las alternativas de OpenAI para
+los alias de texto siguen sin configurarse. Ningún nombre de modelo aparece en la UI.
 
 Notas de los modelos Claude actuales (para la implementación de la Fase 4):
 - Sonnet 5.5 y Opus 5.5 no permiten desactivar el razonamiento; se controla con `output_config.effort` (`low`…`max`). Opus 5.5 tiene `medium` por defecto y Sonnet 5.5 `high`: **fijar siempre el esfuerzo de forma explícita**.
@@ -153,22 +160,38 @@ La salida es una **hipótesis**: solo cuenta si coincide con una región que la 
 queda en caché por material y versión. Sin proveedor configurado (o con el `mock`), no se llama. Ver
 `docs/VISUAL_RESOURCES.md`.
 
-### Política visual de «Hacer magia» — `visual_support@v1` y `visual_rewriter@v1`
+### Política visual de «Hacer magia» — `visual_support@v1`, `visual_rewriter@v1` y `visual_substitute@v1`
 
-Hay dos llamadas opcionales (alias `STANDARD`) y solo cuando los peldaños deterministas no bastan:
+Hay tres llamadas opcionales (alias `STANDARD`) y solo cuando los peldaños deterministas no bastan (localizar, redibujar desde
+los píxeles o dibujar una figura nueva con los datos del material, sin IA):
 - un apoyo nuevo que pidió una decisión (pasos o tarjetas);
-- la reescritura de una actividad cuyo visual del original no se pudo localizar ni reconstruir.
+- la reescritura de una actividad cuyo visual solo aportaba un dato;
+- la sustitución de una actividad por otra equivalente (hasta 2 intentos), con su figura como datos que dibuja nuestro renderer.
+  Se registra con el propósito `visual_rewrite` (sin migración nueva); `prompt_key` la distingue.
 
-El servidor valida ambas salidas: conserva los datos, no da la respuesta y no menciona imágenes ausentes. Quedan en `ai_runs` sin
+El servidor valida todas las salidas con reglas deterministas de equivalencia pedagógica: conservan la operación, los datos y la
+exigencia, no dan la respuesta y no mencionan imágenes ausentes. Quedan en `ai_runs` sin
 contenido y en caché por entrada de generación. Ver `docs/VISUAL_RESOURCES.md` § Política visual.
 
 ### Revisión de un bloque — `block_reviser_v1`
 Entrada: el bloque, los bloques vecinos (contexto), la petición del docente ("Haz esta pregunta más corta"), el perfil funcional y los objetivos protegidos. Salida: **un** bloque compatible con `MaterialDocument` v1, con el mismo `id` y la misma trazabilidad. Por defecto STANDARD · low (ECONOMY en Free). Consume `block_revision`, no `adaptation`.
 
-### Imágenes (Max, `AI_IMAGES_ENABLED`)
-1. `image_brief_v1` (modelo de texto) → `ImageBrief`: propósito pedagógico, edad, concepto, objetos, composición, fondo, complejidad, etiquetas, elementos prohibidos, notas de accesibilidad y texto alternativo.
-2. Modelo de imagen `IMAGE_FAST` (o `IMAGE_QUALITY` si el brief lo requiere) → asset privado en `generated-assets`.
-3. Consume `image` (límite mensual independiente). Primaria: puede ser ilustrativa. Secundaria: informativa y madura. Sin texto en la imagen salvo que sea imprescindible; diversidad natural, sin estereotipos.
+### Ilustraciones (Max, `FLAG_AI_IMAGES_ENABLED`; migración 024)
+Solo en «Hacer magia» y solo para imágenes sin datos exactos: lo exacto lo dibuja siempre nuestro renderer. El flujo completo
+está en `docs/VISUAL_RESOURCES.md` § Ilustraciones generadas y revisadas.
+
+1. `image_brief@v1` (STANDARD) devuelve la especificación pedagógica, que el servidor valida.
+2. Se reserva una unidad `image` (`consume_quota`, clave idempotente).
+3. `image_render@v1` construye el prompt y el modelo `IMAGE_QUALITY` genera un PNG, cuyos bytes se comprueban.
+4. `image_review@v1` (STANDARD, visión) revisa la imagen y acepta el servidor.
+5. Si se aprueba, va al bucket privado `generated-assets` y a `generated_assets`. Si no, hay un segundo intento con correcciones o
+   se devuelve la unidad.
+
+Tres propósitos en `ai_runs`, sin contenido: `image_brief`, `image` (coste desde el `usage` del proveedor, `null` si el modelo no
+tiene precio) e `image_review`.
+
+Primaria: claro y amable sin infantilizar. Secundaria: sobria y de libro de texto. Sin texto en la imagen salvo los marcadores o
+etiquetas que la actividad necesita, y nunca la respuesta.
 
 ## Varios perfiles a la vez
 
@@ -184,6 +207,9 @@ Un job con N perfiles: un análisis (cacheado) y luego plan → generación → 
 | Tipo de adaptación y petición del docente | Nombre o email del docente, IDs internos |
 
 Las peticiones a los proveedores usan configuraciones sin entrenamiento con datos del cliente y, cuando sea posible, retención mínima o nula (ver `docs/PRIVACY.md`).
+
+El modelo de imagen (OpenAI) recibe todavía menos: solo el prompt que construye nuestra plantilla a partir del brief validado (qué
+debe verse, el estilo, la edad de la etapa). Nunca el fichero, el texto completo del material ni nada del perfil.
 
 El campo `notes` de los perfiles ya no existe (migración 008); la fila «notes del perfil» de la tabla de arriba se conserva como recordatorio de que ninguna nota libre llega a la IA.
 

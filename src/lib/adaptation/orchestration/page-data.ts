@@ -10,6 +10,7 @@ import { getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlan
 import { serviceDeps } from "./server";
 import { listState, type ListState } from "@/lib/adaptation/presentation/list";
 import type { AdaptationStatusDto } from "./status";
+import { generatedDeps } from "@/lib/render/generated";
 import { loadRenderInput, loadRenderInputWith } from "@/lib/render/load";
 import { readinessOf } from "@/lib/render/readiness";
 import { visualDeps } from "@/lib/materials/visuals/server";
@@ -159,10 +160,11 @@ async function pendingDelivered(supabase: Awaited<ReturnType<typeof getSupabase>
   const deps = serviceDeps(supabase);
   const visuals = visualDeps(supabase);
   const resources = resourceDeps(supabase);
+  const generated = generatedDeps(supabase);
   const pending = await Promise.all(
     (rows ?? []).map(async (row) => {
       const actor: Actor = { userId: auth.user?.id ?? "", workspaceId: row.workspace_id as string, canWrite: false };
-      const loaded = await loadRenderInputWith(deps, actor, row.id as string, visuals, { resources, verify: false });
+      const loaded = await loadRenderInputWith(deps, actor, row.id as string, visuals, { resources, generated, verify: false });
       return loaded.kind === "ok" && !readinessOf(loaded).printable ? (row.id as string) : null;
     }),
   );

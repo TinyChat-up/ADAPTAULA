@@ -371,25 +371,36 @@ desactivada y solo actúa la geometría.
 
 ## Política visual de «Hacer magia» (migración 023)
 
-**Regla de producto.** En «Hacer magia» el docente no localiza imágenes, no sube recursos y no decide omisiones: ve el progreso,
-la ficha terminada y «Descargar PDF». La ficha solo es «lista» cuando no le falta ningún visual imprescindible. Si nada sirve, la
-adaptación se detiene honestamente. La intervención manual queda para «Revisar antes de crear» y para quien elige «Editar».
+**Regla de producto.** En «Hacer magia» el docente no localiza imágenes, no sube recursos, no decide omisiones y no revisa el
+plan: ve el progreso, la ficha terminada y «Descargar PDF». Si un recurso visual no se puede usar tal cual, el sistema busca él
+solo otra forma pedagógicamente válida de completar la ficha. Solo se detiene cuando no puede construir nada válido (por ejemplo,
+sin servicio de IA disponible y sin datos en el material para dibujar la figura): nunca entrega una ficha «lista» con un hueco.
+La intervención manual queda para «Revisar antes de crear» y para quien elige «Editar».
 
 **Escalera** (`src/lib/adaptation/visual-policy.ts` y `src/lib/materials/visuals/auto/policy.ts`). Se aplica a cada necesidad
 visual de la ficha ensamblada, antes de las revisiones (así se revisa la ficha que se entrega):
 
 | # | Categoría | Qué se hace | Se valida con |
 | --- | --- | --- | --- |
-| 1 | `exact_original_visual` | Localizar el visual en el original: el recorte del docente o el automático (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75 de la geometría o de la visión; el recorte de una persona nunca se sustituye; uno automático solo cuenta si lo aceptó el motor ACTUAL y sus píxeles no contradicen el análisis |
-| 2 | `reconstructable_structured_visual` | Reconstruirlo desde los píxeles del original: barra y recta numérica; tablas y gráficos ya se rehacían con sus datos | La descripción completa del análisis es una hipótesis que selecciona el dibujo; exactamente un dibujo de la página debe leerse, con sus propios píxeles, como esa misma figura; se dibuja lo que leen los píxeles; y encaja con la actividad |
-| 3 | `generatable_support_visual` | Generar un apoyo nuevo que pidió una decisión: secuencia de pasos o tarjetas de vocabulario, dibujados por nuestros componentes en CLARO (`visual_support@v1`) | Longitudes, sin marcas, sin copiar la consigna, sin la respuesta |
-| 4 | `rewritable_without_visual` | Un original que solo aportaba un dato a una actividad: reescribirla sin él (`visual_rewriter@v1`). Un visual que nada usa, o un apoyo opcional que no se pudo generar: se deja fuera | **Equivalencia pedagógica** (abajo); además mantiene todos los datos de la tarea y los números del visual, no menciona ninguna imagen y no da la respuesta |
-| 5 | `unresolved_visual` | Parada honesta: estado `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | — |
+| 1 | `exact_original_visual` | Usar el visual del original: el recorte del docente o el automático (encuadre ajustado al tamaño físico) | Confianza ≥ 0,75; el recorte de una persona nunca se sustituye; uno automático solo cuenta si lo aceptó el motor ACTUAL y sus píxeles no contradicen el análisis |
+| 2 | `reconstructable_structured_visual` | Redibujarlo desde los píxeles del original (barra, recta numérica); tablas y gráficos se rehacen con sus datos | Exactamente un dibujo de la página se lee como la figura descrita; se dibuja lo que leen los píxeles |
+| 3 | `generatable_support_visual` | **Dibujar una figura NUEVA del mismo tipo** (barra, círculo, cuadrícula, recta) con los datos del propio material (`src/lib/visuals/from-task.ts`), sin IA; o un apoyo nuevo que pidió una decisión (`visual_support@v1`) | La figura sale de la descripción completa del análisis, de la respuesta esperada de la actividad (manda si no coinciden: figura y clave dicen lo mismo) o de las fracciones que nombra la actividad; una recta generada solo rotula los enteros (nunca la fracción que hay que situar) |
+| 4 | `rewritable_without_visual` | Reescribir la actividad sin el visual cuando este solo aportaba un dato (`visual_rewriter@v1`); un visual que nada usa se deja fuera | Equivalencia pedagógica (abajo); mantiene los datos; no menciona la imagen; no da la respuesta |
+| 5 | `substituted_activity` | **Sustituir la actividad por otra equivalente** (`visual_substitute@v1`, hasta 2 intentos): con su propia figura (como datos que dibujamos nosotros) si la competencia es trabajar con una representación dibujable; si no, una actividad guiada por escrito sobre el mismo contenido | `substitutionEquivalence`: misma operación (leer una barra sigue siendo leer una barra; marcar en la recta sigue siendo marcar, sin líneas de escritura), mismas acciones, sin datos inventados más allá de su figura, misma exigencia y carga de lectura, mismo contenido; sin la respuesta (tampoco la fracción sombreada de su figura) |
+| 6 | `unresolved_visual` | Parada solo si nada de lo anterior produjo algo válido: `blocked`, motivo `visual`, sin PDF, sin unidad consumida, sin revisión por IA | Motivo registrado: `no_model_available` o `no_equivalent_activity` |
+
+**Desde la migración 024 (política v2)** hay un peldaño más entre el 3 y el 4, una ilustración generada y revisada para las imágenes
+sin datos exactos, y la parada tiene más motivos: ver § Ilustraciones generadas y revisadas.
+
+En el caso de fracciones: si la recta de la actividad 4 no está en el PDF, se dibuja una recta nueva de 0 a 1 en cuartos y la
+actividad sigue siendo «marca 3/4»; si la barra de la actividad 1 no se puede usar, se dibuja una barra de 8 partes con 3
+sombreadas (la respuesta esperada es 3/8). En ningún caso se pide nada al docente.
 
 ### Equivalencia pedagógica (`src/lib/adaptation/pedagogical-equivalence.ts`)
 
 Una actividad que evalúa interpretar o actuar sobre una representación no se convierte en otra actividad textual porque conserve
-los números. Que el modelo diga «se puede» (`feasible: true`) es solo una condición previa, nunca la prueba. Reglas deterministas
+los números: se le dibuja una figura nueva del mismo tipo (peldaño 3) o se sustituye por otra actividad con su propia figura
+(peldaño 5). Que el modelo diga «se puede» (`feasible: true`) es solo una condición previa, nunca la prueba. Reglas deterministas
 por tipo de tarea, comprobadas ANTES de llamar a ningún modelo y otra vez sobre su propuesta:
 
 | Se compara | Regla |
@@ -401,13 +412,17 @@ por tipo de tarea, comprobadas ANTES de llamar a ningún modelo y otra vez sobre
 | Nivel de exigencia | Sin datos nuevos; sin pasos que resuelvan la tarea salvo que el perfil pida secuenciación (instrucciones por pasos, memoria de trabajo, planificación, pasos de las operaciones, listas), y entonces como mucho 4; no se acorta por debajo del 60 % |
 | Necesidades funcionales | La carga de lectura no crece más allá del original y lo que decía su figura |
 
-Solo una figura que es mera fuente de datos (una etiqueta con «3/4 de litro» para una tarea de calcular) se puede reescribir.
+Solo una figura que es mera fuente de datos (una etiqueta con «3/4 de litro» para una tarea de calcular) se puede reescribir en
+palabras. Una representación **necesaria** que no sabemos dibujar (el esquema de una célula) nunca pasa a palabras
+(`representation_not_drawable`): se ilustra, si la adaptación puede y la revisión lo aprueba, o la ficha se detiene. Solo una
+imagen que la tarea no necesita puede dar paso, en la sustitución, a una actividad guiada por escrito sobre el mismo contenido.
+No se generan imágenes libres ni pictogramas.
 
 Casos de la ficha de fracciones, todos rechazados: actividad 1 (barra de 8 partes con 3 sombreadas) ≠ «Escribe la fracción tres
 octavos», ni siquiera describiendo la barra en palabras; actividad 4 («Marca 3/4 en la recta») ≠ «¿Qué fracción es mayor, 3/4 o
 1/2?», «¿Cuánto le falta a 3/4 para 1?» o «Escribe dónde iría 3/4»; actividad 2: perder una de las dos comparaciones o pedir
 «calcula» en lugar de «compara y escribe el signo» deja de ser equivalente. Si la figura no se encuentra ni se reconstruye con
-evidencia, la adaptación se detiene honestamente.
+evidencia, se dibuja una figura nueva o se sustituye la actividad; la adaptación solo se detiene si nada de eso es válido.
 
 ### Evidencia exigida para reconstruir
 
@@ -429,11 +444,198 @@ evidencia, la adaptación se detiene honestamente.
 
 **No implementado (y por qué no bloquea):**
 - **Limpieza de píxeles de un recorte sucio.** Un recorte que no supera la confianza pasa al peldaño siguiente.
-- **Pictogramas e imágenes generadas por difusión.** No hay catálogo con licencia ni modelo de imagen; los contratos están
-  reservados (`src/lib/visuals/contracts.ts`).
+- **Pictogramas.** No hay catálogo con licencia comercial compatible; los contratos están reservados
+  (`src/lib/visuals/contracts.ts`). Las imágenes generadas sí existen desde la migración 024 (§ siguiente).
 
 **Interfaz:**
 - **En «Hacer magia»** no aparecen «Localizar en el original», «No está en el original · Añadir imagen», «Continuar sin esta imagen»
   ni «Buscar en el original».
 - **Fichas entregadas antes de esta política** a las que aún les falta un visual: se dice que no se pudo completar
   automáticamente, sin PDF, y se ofrece «Editar la ficha» (`/vista?editar=1`), que muestra los controles manuales.
+
+## Ilustraciones generadas y revisadas (migración 024)
+
+**Cuándo.** Una actividad necesita una imagen que la ficha no tiene y que el original no puede dar:
+- el esquema de «Observa el esquema de la célula y escribe el nombre de las partes 1, 2 y 3» no está en el PDF, o está en un escaneo
+  sin capa de texto que el localizador no puede anclar;
+- una actividad remite a «el esquema» o «la imagen» y la ficha no tiene ninguno;
+- o el plan pide un apoyo en forma de ilustración.
+
+Si esa imagen **no** depende de datos exactos, «Hacer magia» genera una ilustración educativa nueva, la revisa y solo la usa si la
+revisión la aprueba.
+
+**Lo que nunca va a un modelo de imagen.**
+- Nada que dependa de datos exactos: barras, círculos, cuadrículas, rectas numéricas, tablas, gráficos, figuras geométricas o mapas.
+  Tampoco una imagen descrita con medidas, unidades o escala. Esas figuras las dibuja nuestro renderer (VisualSpec) a partir del
+  original o de los datos de la actividad, que es exacto, verificable y gratis.
+- Tampoco pictogramas de comunicación aumentativa, fotografías de personas o lugares reales ni decoración.
+
+**Escalera v2** (`policy_version: 2`, `src/lib/materials/visuals/auto/policy.ts`):
+
+| # | Peldaño | Para qué necesidades |
+| --- | --- | --- |
+| 1 | El visual del original, localizado y verificado | Visuales del original |
+| 2 | Reconstrucción desde los píxeles del original | Barras y rectas numéricas |
+| 3 | Figura nueva del mismo tipo con los datos de la actividad (VisualSpec, sin IA) | Representaciones dibujables; también una actividad que remite a una figura que sus datos permiten dibujar |
+| 4 | **Ilustración generada y revisada** | Imagen, esquema u «otro» no decorativo y sin datos exactos; una actividad que remite a una imagen que la ficha no tiene; un apoyo pedido como ilustración (o esencial y sin otra forma) |
+| 5 | Reescritura sin el visual | Solo si el visual era fuente de un dato |
+| 6 | Sustitución por una actividad equivalente | Con su propia figura si la representación es necesaria y dibujable; guiada por escrito solo si la tarea no necesita la imagen |
+| 7 | Parada honesta | Nada válido. Motivos en la tabla de abajo |
+
+| Motivo de parada | Cuándo |
+| --- | --- |
+| `no_model_available` | No hay IA disponible |
+| `representation_not_buildable` | La representación es necesaria, no se puede dibujar y no se pudo ilustrar |
+| `no_equivalent_activity` | Ninguna sustitución fue equivalente |
+| `exact_visual_unavailable` | Falta un visual exacto que no se puede rehacer |
+| `referenced_picture_unavailable` | La actividad remite a una imagen y las ilustraciones no están disponibles |
+| `referenced_picture_not_built` | La actividad remite a una imagen y la ilustración no se pudo hacer |
+| `support_unavailable` | No se pudo construir un apoyo esencial |
+
+Cada peldaño probado queda en `attempts`: `illustrate`, o `illustrate:<motivo>` (`brief_rejected`, `quota_exhausted`,
+`image_failed`, `review_rejected`).
+
+**Proceso** (`src/lib/materials/visuals/illustrate/service.ts`, solo servidor):
+1. **Reutilización.** Si la necesidad ya tiene una ilustración aprobada en esta adaptación (un trabajo reanudado o un ciclo de
+   corrección), se usa esa: ni brief, ni imagen, ni unidad.
+2. **Brief pedagógico** (`image_brief@v1`, alias STANDARD).
+   - Contiene: concepto, elementos imprescindibles (con un marcador numérico o una etiqueta), elementos prohibidos, restricciones
+     conceptuales, composición, nivel de detalle y texto alternativo.
+   - Recibe: la actividad, su objetivo, la descripción del visual que falta, etapa, curso y asignatura, y los **nombres** de los
+     apoyos funcionales de la ficha. Nunca datos del alumno.
+   - Se valida con reglas deterministas (`src/lib/visuals/illustration.ts`):
+     - los marcadores son exactamente los que nombra la actividad, consecutivos y sin nombre escrito;
+     - ninguna etiqueta da la respuesta y nada lleva datos exactos;
+     - hay como mucho 8 etiquetas;
+     - si la ficha atiende la reducción de distracciones visuales o de densidad visual, el detalle baja a «simple».
+3. **Cuota.** Se reserva una unidad `image`, con una clave idempotente por adaptación, necesidad y brief.
+4. **Imagen** (alias `IMAGE_QUALITY`, calidad media, PNG opaco de 1536×1024 o 1024×1024).
+   - El prompt lo construye nuestra plantilla versionada `image_render@v1` a partir del brief validado. Lleva fijos el estilo de
+     ficha impresa CLARO y la edad de la etapa; los marcadores van sin nombres, se pide «ningún texto» si no hay etiquetas y se
+     listan los elementos prohibidos.
+   - El modelo de imagen nunca recibe el material ni el PDF.
+5. **Bytes.** Debe ser un PNG real (firma e IHDR), de 256 a 4096 px por lado y como mucho 10 MiB.
+6. **Revisión por visión** (`image_review@v1`, alias STANDARD) contra el brief.
+   - Comprueba que cada elemento está, cada marcador en su sitio y cada etiqueta exacta.
+   - Comprueba también que no hay nada prohibido, ni errores conceptuales, ni texto añadido, ni la respuesta. La imagen debe ser
+     adecuada a la edad, imprimible en blanco y negro y útil para la actividad.
+   - Decide el servidor (`acceptReview`): el «aprobada» del modelo no basta si falla un solo punto.
+7. **Resultado.**
+   - Aprobada: se guarda en el bucket privado `generated-assets` (`<workspace>/<adaptación>/illustrations/<sha256>.png`), con una
+     fila en `generated_assets` que incluye la revisión.
+   - Rechazada: hay **un** segundo intento, al que se le dice qué corregir.
+   - Sin aprobación: se devuelve la unidad y la política sigue con el peldaño siguiente.
+
+**Límites** (`ILLUSTRATION_LIMITS`, `ILLUSTRATION_TIMING`):
+- 3 ilustraciones por adaptación y 2 imágenes por ilustración.
+- Cada ilustración termina dentro del tiempo de su etapa: el lease, menos lo que sigue a la política visual. No se empieza ni se
+  hace el segundo intento si no cabe, y cada llamada recibe lo que queda, contando los reintentos de su SDK.
+- Las imágenes no se reintentan en el SDK, porque una petición caducada puede facturarse.
+- Un fallo transitorio del proveedor (red, timeout, sobrecarga, rate limit) o la falta de tiempo no son una respuesta. La unidad se
+  devuelve y la etapa se reintenta más tarde (`provider_transient`, dentro de los intentos del trabajo), sin bajar de peldaño. Lo
+  mismo vale para los asistentes visuales de texto (apoyo, reescritura y sustitución). Así una avería momentánea no acaba en una
+  parada que culpe al material.
+
+**Techo de gasto por adaptación.**
+- Es `ILLUSTRATION_BUDGET.perAdaptationUsd` (0,50 USD), o `plans.features.illustration_budget_usd` si el plan lo fija.
+- Se comprueba en el servidor antes de cada llamada, con lo ya gastado por las ilustraciones de esa adaptación según `ai_runs`.
+  Una llamada sin precio cuenta como su peor caso.
+- Si no cabe un primer intento completo, no se llama a nada (`budget_exhausted`). Si no cabe el segundo intento, se devuelve la
+  unidad.
+- La alerta de presupuesto del proveedor no es un límite: el límite es este.
+
+El plan también puede fijar menos ilustraciones por adaptación (`features.illustrations_per_adaptation`), nunca más de 3.
+
+**Parada que nombra el plan.** Si la única forma de resolver una imagen imprescindible era una ilustración, y el plan no las
+incluye o ya no le quedan este mes, la ficha se detiene con el motivo `visual_plan`: «Esta ficha necesita una ilustración nueva…
+tu plan no incluye ilustraciones». Los motivos registrados son `illustration_not_in_plan` e `illustration_quota_exhausted`. Nunca se
+entrega la actividad sin su imagen. Si el problema es del servicio (flag, claves) o del techo de gasto, la parada es la genérica,
+porque no es culpa del plan del docente.
+
+**Disponibilidad** (`docs/BILLING.md`, `image.generate`). Deben cumplirse las cuatro condiciones:
+- el flag `FLAG_AI_IMAGES_ENABLED`;
+- un plan con `features.image_generation` y `monthly_images` > 0 (hoy solo Max, con 50 al mes; Free y Pro tienen 0, y los planes
+  no cambian);
+- un modelo de imagen con sus credenciales (`OPENAI_API_KEY`);
+- un modelo de texto real para el brief y la revisión.
+
+Si falta alguna, el peldaño 4 no existe para esa adaptación y la ficha del caso B se detiene con honestidad. Nunca se entrega
+«Observa el esquema» sin el esquema, ni una actividad de texto en su lugar.
+
+**En la ficha y en el PDF.**
+- El bloque `image` lleva la fuente `generated` (id del activo, sha-256, ancho y alto). Solo la crea el servidor.
+- Se muestra desde los bytes privados verificados (`/api/adaptations/[id]/generated/[assetId]`, con RLS y comprobación del
+  sha-256), y el PDF fija esa instancia exacta (`gen:<id>`).
+- Ancho impreso: 120 mm si es apaisada, 80 mm si es vertical y 100 mm si es cuadrada. Así se lee sin dejar media página vacía.
+- Va justo antes de su actividad y enlazada a ella. El texto alternativo sale del brief.
+- El docente la ve en el panel como recurso resuelto, sin acciones: «Ilustración nueva, creada y revisada automáticamente porque la
+  imagen del original no se podía usar.»
+
+**Referencias colgantes.** Una actividad que habla de «el esquema», «la imagen» o «la figura de la derecha» sin ninguna imagen
+enlazada ni en su zona:
+- en «Hacer magia» es una necesidad visual (`act_N`, origen `referenced`): se resuelve con una figura de sus datos o con una
+  ilustración, o la ficha se detiene;
+- en la revisión determinista es un FAIL nuevo (`visual_references_resolved`);
+- «Dibuja un esquema» (lo hace el alumno) no cuenta.
+
+## Contrato de recursos visuales
+
+Cada necesidad del plan visual (artefacto `visual_resolution`) lleva su contrato, calculado por `contractOf` en
+`src/lib/adaptation/visual-policy.ts`.
+
+| Campo | Valores |
+| --- | --- |
+| `class` | `original_essential` (el original, localizado) · `original_improvable` (reservado: mejorar la legibilidad de un recorte) · `structured_reconstructable` (figura exacta que dibujamos nosotros) · `new_support_illustration` (apoyo nuevo que pidió el plan) · `must_generate_or_edit` (imagen sin datos exactos que hay que generar) · `optional` (ninguna actividad la usa) · `unresolvable` (nada válido: parada) |
+| `provenance` | `original_crop` · `pixel_reconstruction` · `generated_spec` · `ai_illustration` · `rewritten_activity` · `substituted_activity` · `omitted` · `none` |
+| `reason` | `activity_uses_original_visual` · `activity_refers_to_picture` · `plan_support` · `not_used_by_any_activity` |
+| `validation` | `located_verified` · `pixels_verified` · `spec_verified` · `ai_reviewed` · `equivalence_verified` · `not_required` · `failed` |
+| `asset` | El recurso privado que usa la ficha: un recorte (por su visual), una figura (por el sha-256 de su spec) o una ilustración (por su id y sha-256) |
+
+Garantía: una ficha terminada no tiene ningún recurso esencial sin resolver. Una necesidad `unresolved` produce una parada, sin PDF
+y sin consumir unidad.
+
+### Privacidad, licencias y coste
+
+- **Qué sale hacia los proveedores.**
+  - Al modelo de texto: la actividad, su objetivo, la descripción del visual y los nombres de los apoyos. Como en el resto del
+    pipeline, el material va entre `<untrusted_material>`, como JSON con `<` y `>` escapados.
+  - Al modelo de imagen: solo el prompt construido desde el brief validado.
+  - Nunca: el PDF, el nombre del fichero, el alias del alumno ni nada del perfil salvo los nombres de las dimensiones.
+- **Dónde queda.**
+  - En el bucket privado, sin URLs públicas.
+  - Solo la leen los miembros del workspace (RLS en la fila y política del bucket), por la ruta autorizada que verifica el sha-256.
+  - La fila es inmutable (trigger) y única por adaptación, necesidad y brief.
+  - `ai_runs` registra `image_brief`, `image` e `image_review` sin contenido. Los logs llevan solo ids y códigos.
+- **Licencia.**
+  - Las imágenes las genera el proveedor por encargo del cliente. Según el Services Agreement de OpenAI revisado en octubre de 2026,
+    el cliente es titular de las salidas.
+  - No se usa ningún catálogo de terceros.
+  - Antes del lanzamiento comercial hay que revisar de nuevo los términos vigentes, con asesoría legal.
+- **Coste estimado** (precios verificados el 12-10-2026 en `src/lib/ai/costs.ts`; el real queda en `ai_runs` con el uso que
+  devuelve el proveedor):
+
+  | Concepto | Coste aproximado |
+  | --- | --- |
+  | Una imagen de calidad media de 1536×1024 (unos 1.600 tokens de salida a 30 USD/M, si este modelo usa los de la generación anterior) | 0,05 USD |
+  | Brief y revisión juntos | 0,01–0,03 USD |
+  | Ilustración aprobada al primer intento | 0,07 USD |
+  | Ilustración aprobada al segundo intento | 0,13 USD |
+  | Peor caso por adaptación (3 ilustraciones) | 0,40 USD |
+  | Figura exacta (VisualSpec) | 0 USD |
+
+- **Aplazamientos y coste.** Las ilustraciones aprobadas se reutilizan en los reintentos; las no aprobadas de una ejecución
+  aplazada se pierden. El número de ejecuciones lo acotan los intentos del trabajo (3), así que el gasto máximo de imágenes de una
+  adaptación también está acotado, aunque un aplazamiento lo pueda repetir.
+- **Prueba con modelos reales.** `pnpm eval:illustrations -- --yes` (opt-in; tope `--budget`, por defecto 0,50 USD, aplicado con
+  el mismo techo del servidor; **una sola ejecución autorizada**: después, `REAL_RUN_DONE.json` la bloquea salvo `--again`) ejecuta el caso
+  B con los modelos configurados y deja la imagen, el brief, la revisión, el coste y un `report.html` con la lista de comprobación científica en `evals/results/illustrations/`. Una persona
+  debe mirar la imagen: la revisión automática es una evidencia, no la última palabra. `pnpm eval:illustrations:mock` prueba el
+  mismo arnés gratis. Nunca forma parte de `pnpm check`.
+
+### Pendiente
+
+- **Editar una imagen del original** (mejorar la legibilidad de un recorte, limpiar un escaneo). El transporte ya admite la edición
+  (`images` en `ImageRequest`), pero no hay pipeline ni revisión para ello. La clase `original_improvable` está reservada.
+- **Localizar figuras genéricas en escaneos sin texto.** Sin anclas de texto, el localizador no las encuentra. Hoy se ilustran, si
+  la adaptación puede, o la ficha se detiene.
+- **Pictogramas de comunicación aumentativa.** Hace falta un catálogo con licencia comercial.
