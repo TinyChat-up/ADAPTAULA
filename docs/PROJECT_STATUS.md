@@ -35,4 +35,6 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 Rama: `phase8/sustitucion-pedagogica-acotada`, creada desde `main`. Bloque: completar los controles y la corrección automática de sustituciones, con hasta dos intentos por actividad en cada ejecución de la política. Sin cambios de interfaz, renderer, suscripciones ni cuotas comerciales.
 
+Implementación publicada en la rama (`8ad483e`); PR aún no creada porque `gh pr create` recibe `Forbidden` de la API. [Formulario para abrir la PR](https://github.com/TinyChat-up/ADAPTAULA/pull/new/phase8/sustitucion-pedagogica-acotada). Primero revisar este cambio; no hay merge automático.
+
 Siguiente bloque recomendado: un ejecutor acotado para selección única que preserve opciones, respuesta correcta y trazabilidad, empezando por reproducir la parada actual. Alcance y aceptación en el roadmap; no iniciar varias familias de ejercicio a la vez.
