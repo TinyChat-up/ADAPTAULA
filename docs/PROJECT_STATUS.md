@@ -37,6 +37,6 @@ Rama: `phase8/seleccion-unica-tablas`, creada desde `main` actualizado en `bb38c
 
 **Probado con mocks:** 133 pruebas focalizadas/10 archivos, tres PDF reales con Chromium (tabla, selección de fracciones y ficha de fracciones), typecheck y lint. Lint sin errores; aviso previo ajeno al cambio en `analysis-run-auth.test.ts`. PDF de tabla inspeccionado: una página, tabla y pregunta/opciones juntas, círculos vacíos, sin clave. Sin llamadas pagadas ni servicios remotos. **Pendiente:** IA real y Vercel; la corroboración usa la capa de texto del PDF, no OCR independiente de los glifos (ADR-023).
 
-**Publicación:** pendiente de cerrar en esta sesión; la consulta de PR por API devuelve `Forbidden`. Ver resultado final en [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). PR #27 ya integrada: no sigue pendiente.
+**Publicación:** rama subida, implementación `1cc8833`. `gh pr create` devuelve `Post https://api.github.com/graphql: Forbidden`; **PR no creada desde este entorno**. [Abrir la PR en GitHub](https://github.com/TinyChat-up/ADAPTAULA/pull/new/phase8/seleccion-unica-tablas). Sin merge. Detalle en [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). PR #27 ya integrada: no sigue pendiente.
 
 **Siguiente acción:** revisar esta rama/PR y su alcance; después ampliar una sola variante de consulta literal con fixtures y evidencia de fuente, sin habilitar selección genérica. Las pruebas con IA real o Vercel requieren una tarea posterior autorizada.
