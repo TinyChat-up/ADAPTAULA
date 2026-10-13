@@ -76,7 +76,12 @@ La UI usa el mismo resultado para mostrar el uso y los CTA, pero **el servidor s
   - Una ilustración ya aprobada se reutiliza sin unidad nueva.
   - Si no se aprueba ninguna imagen, o si un fallo transitorio o la falta de tiempo aplazan la ilustración, se devuelve
     (`refund_quota`).
-- **Límites:** como mucho 3 ilustraciones por adaptación y 2 imágenes por ilustración.
+- **Límites:** como mucho 3 ilustraciones por adaptación (o menos, si el plan fija `features.illustrations_per_adaptation`) y 2
+  imágenes por ilustración.
+- **Techo de gasto por adaptación:** `features.illustration_budget_usd`, o 0,50 USD por defecto. Se comprueba en el servidor antes
+  de cada llamada, con lo gastado según `ai_runs`.
+- **Propuesta de cuotas y márgenes**, sin aplicar: `docs/COSTS.md`. **Beta de 30 días**, sin implementar:
+  `docs/proposals/BETA_PROMO_30_DIAS.md`.
 - **Sin unidad disponible:** no se pide ninguna imagen, y la política visual sigue con el peldaño siguiente o se detiene con
   honestidad.
 - **Unidades de adaptación:** la unidad de adaptación es independiente. Una parada por un visual sin resolver no la consume.

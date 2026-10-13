@@ -536,6 +536,22 @@ Cada peldaño probado queda en `attempts`: `illustrate`, o `illustrate:<motivo>`
   mismo vale para los asistentes visuales de texto (apoyo, reescritura y sustitución). Así una avería momentánea no acaba en una
   parada que culpe al material.
 
+**Techo de gasto por adaptación.**
+- Es `ILLUSTRATION_BUDGET.perAdaptationUsd` (0,50 USD), o `plans.features.illustration_budget_usd` si el plan lo fija.
+- Se comprueba en el servidor antes de cada llamada, con lo ya gastado por las ilustraciones de esa adaptación según `ai_runs`.
+  Una llamada sin precio cuenta como su peor caso.
+- Si no cabe un primer intento completo, no se llama a nada (`budget_exhausted`). Si no cabe el segundo intento, se devuelve la
+  unidad.
+- La alerta de presupuesto del proveedor no es un límite: el límite es este.
+
+El plan también puede fijar menos ilustraciones por adaptación (`features.illustrations_per_adaptation`), nunca más de 3.
+
+**Parada que nombra el plan.** Si la única forma de resolver una imagen imprescindible era una ilustración, y el plan no las
+incluye o ya no le quedan este mes, la ficha se detiene con el motivo `visual_plan`: «Esta ficha necesita una ilustración nueva…
+tu plan no incluye ilustraciones». Los motivos registrados son `illustration_not_in_plan` e `illustration_quota_exhausted`. Nunca se
+entrega la actividad sin su imagen. Si el problema es del servicio (flag, claves) o del techo de gasto, la parada es la genérica,
+porque no es culpa del plan del docente.
+
 **Disponibilidad** (`docs/BILLING.md`, `image.generate`). Deben cumplirse las cuatro condiciones:
 - el flag `FLAG_AI_IMAGES_ENABLED`;
 - un plan con `features.image_generation` y `monthly_images` > 0 (hoy solo Max, con 50 al mes; Free y Pro tienen 0, y los planes
@@ -610,8 +626,9 @@ y sin consumir unidad.
 - **Aplazamientos y coste.** Las ilustraciones aprobadas se reutilizan en los reintentos; las no aprobadas de una ejecución
   aplazada se pierden. El número de ejecuciones lo acotan los intentos del trabajo (3), así que el gasto máximo de imágenes de una
   adaptación también está acotado, aunque un aplazamiento lo pueda repetir.
-- **Prueba con modelos reales.** `pnpm eval:illustrations -- --yes` (opt-in; tope `--budget`, por defecto 0,50 USD) ejecuta el caso
-  B con los modelos configurados y deja la imagen, el brief, la revisión y el coste en `evals/results/illustrations/`. Una persona
+- **Prueba con modelos reales.** `pnpm eval:illustrations -- --yes` (opt-in; tope `--budget`, por defecto 0,50 USD, aplicado con
+  el mismo techo del servidor; **una sola ejecución autorizada**: después, `REAL_RUN_DONE.json` la bloquea salvo `--again`) ejecuta el caso
+  B con los modelos configurados y deja la imagen, el brief, la revisión, el coste y un `report.html` con la lista de comprobación científica en `evals/results/illustrations/`. Una persona
   debe mirar la imagen: la revisión automática es una evidencia, no la última palabra. `pnpm eval:illustrations:mock` prueba el
   mismo arnés gratis. Nunca forma parte de `pnpm check`.
 

@@ -107,7 +107,6 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - edición de imágenes del original (legibilidad, escaneos);
   - localizador para figuras genéricas en escaneos sin texto;
   - ejecutores para formatos cerrados, simplificación y reorganización en magia (hoy `needs_decision`);
-  - colocar las ayudas de actividades no escritas antes del espacio de respuesta;
   - pictogramas con licencia comercial.
 
 ## Fase 6 — Stripe, planes y cuotas
