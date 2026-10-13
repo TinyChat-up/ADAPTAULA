@@ -2,6 +2,7 @@ import "server-only";
 import { VISUAL_REWRITER_V1 } from "@prompts/visual-rewriter/v1";
 import { VISUAL_SUBSTITUTE_V2 } from "@prompts/visual-substitute/v2";
 import { VISUAL_SUBSTITUTE_V3 } from "@prompts/visual-substitute/v3";
+import { VISUAL_SUBSTITUTE_V4 } from "@prompts/visual-substitute/v4";
 import { VISUAL_SUPPORT_V1 } from "@prompts/visual-support/v1";
 import type { z } from "zod";
 import { estimateCostUsd } from "@/lib/ai/costs";
@@ -17,7 +18,7 @@ import type { AIProvider, AIPurpose, AIRunRecord, ContentPart, ModelSelection } 
 
 export type SupportDraft = z.infer<typeof VISUAL_SUPPORT_V1.output.schema>;
 export type RewriteDraft = z.infer<typeof VISUAL_REWRITER_V1.output.schema>;
-export type SubstituteDraft = z.infer<typeof VISUAL_SUBSTITUTE_V2.output.schema> & Partial<Pick<z.infer<typeof VISUAL_SUBSTITUTE_V3.output.schema>, "choice">>;
+export type SubstituteDraft = z.infer<typeof VISUAL_SUBSTITUTE_V2.output.schema> & Partial<Pick<z.infer<typeof VISUAL_SUBSTITUTE_V4.output.schema>, "choice" | "table">>;
 
 /** `transient`: no answer because of transient provider trouble (network, timeout, overload, rate limit), not a «no». */
 export interface AssistantAnswer<D> {
@@ -30,7 +31,7 @@ export interface VisualAssistants {
   support(input: { stage: string | null; purpose: string; activity: string }): Promise<AssistantAnswer<SupportDraft>>;
   rewrite(input: { stage: string | null; activity: string; visual: string }): Promise<AssistantAnswer<RewriteDraft>>;
   /** Recorded under the `visual_rewrite` purpose (same family of call; `prompt_key` tells them apart). */
-  substitute(input: Parameters<typeof VISUAL_SUBSTITUTE_V3.buildUserText>[0]): Promise<AssistantAnswer<SubstituteDraft>>;
+  substitute(input: Parameters<typeof VISUAL_SUBSTITUTE_V4.buildUserText>[0]): Promise<AssistantAnswer<SubstituteDraft>>;
 }
 
 /**
@@ -57,7 +58,9 @@ export function createVisualAssistants(selection: ModelSelection, provider: AIPr
   return {
     support: (input) => callStructured(provider, selection, "visual_support", VISUAL_SUPPORT_V1, VISUAL_SUPPORT_V1.buildUserText(input)),
     rewrite: (input) => callStructured(provider, selection, "visual_rewrite", VISUAL_REWRITER_V1, VISUAL_REWRITER_V1.buildUserText(input)),
-    substitute: (input) => input.responseFormat === "select_option"
+    substitute: (input) => input.responseFormat === "select_option" && input.table
+      ? callStructured(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V4, VISUAL_SUBSTITUTE_V4.buildUserText(input), 2400)
+      : input.responseFormat === "select_option"
       ? callStructured(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V3, VISUAL_SUBSTITUTE_V3.buildUserText(input))
       : callStructured(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V2, VISUAL_SUBSTITUTE_V2.buildUserText(input)),
   };

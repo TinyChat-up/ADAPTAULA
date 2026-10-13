@@ -2,6 +2,7 @@ import { allBlocks, MaterialDocumentSchema, type Block, type MaterialDocument } 
 import { describeSpec, type VisualSpec } from "@/lib/visuals/spec";
 import { fingerprint } from "./fingerprint";
 import { normalizeText } from "./text";
+import type { ChoiceTable, TableEvidence } from "./table-choice";
 import type { SingleChoiceResponse } from "./single-choice";
 
 /**
@@ -46,7 +47,7 @@ export interface VisualContract {
   provenance: "original_crop" | "pixel_reconstruction" | "generated_spec" | "ai_illustration" | "rewritten_activity" | "substituted_activity" | "omitted" | "none";
   /** Why the activity needs it (a short code, for the audit). */
   reason: string;
-  validation: "located_verified" | "pixels_verified" | "spec_verified" | "ai_reviewed" | "equivalence_verified" | "not_required" | "failed";
+  validation: "located_verified" | "pixels_verified" | "spec_verified" | "ai_reviewed" | "equivalence_verified" | "source_table_verified" | "not_required" | "failed";
   /** The private asset the sheet finally uses: a crop of the original (by its visual), a drawn spec (by its hash) or an illustration. */
   asset: { kind: "crop"; visual_ref: string } | { kind: "spec"; sha256: string } | { kind: "illustration"; id: string; sha256: string } | null;
 }
@@ -73,7 +74,7 @@ export type VisualAction =
   | { action: "figure"; spec: VisualSpec; provenance: "reconstruction" | "generated" }
   | { action: "illustration"; asset: IllustrationAsset; alt: string }
   | { action: "rewrite"; activities: ActivityRewrite[] }
-  | { action: "substitute"; activities: ActivityRewrite[]; spec: VisualSpec | null }
+  | { action: "substitute"; activities: ActivityRewrite[]; spec: VisualSpec | null; table?: ChoiceTable; tableEvidence?: TableEvidence }
   | { action: "omit"; reason: string }
   | { action: "unresolved"; reason: string };
 
@@ -199,7 +200,7 @@ export function contractOf(need: Pick<VisualNeedOutcome, "key" | "origin" | "ess
     case "rewrite":
       return { class: cls, provenance: "rewritten_activity", reason, validation: "equivalence_verified", asset: null };
     case "substitute":
-      return { class: cls, provenance: "substituted_activity", reason, validation: "equivalence_verified", asset: r.spec ? { kind: "spec", sha256: fingerprint(r.spec) } : null };
+      return { class: cls, provenance: "substituted_activity", reason, validation: r.table ? "source_table_verified" : "equivalence_verified", asset: r.spec ? { kind: "spec", sha256: fingerprint(r.spec) } : null };
     case "omit":
       return { class: cls, provenance: "omitted", reason, validation: "not_required", asset: null };
     case "unresolved":
@@ -207,7 +208,7 @@ export function contractOf(need: Pick<VisualNeedOutcome, "key" | "origin" | "ess
   }
 }
 
-const keyOf = (b: Block) => (b.type !== "image" ? null : b.source.kind === "original" ? b.source.visual_ref : b.source.kind === "requested" ? b.source.decision_id : null);
+const keyOf = (b: Block) => (b.type === "table" ? b.trace.source_refs.find((r) => r.startsWith("vis_")) ?? null : b.type !== "image" ? null : b.source.kind === "original" ? b.source.visual_ref : b.source.kind === "requested" ? b.source.decision_id : null);
 
 /** The image source a decided need puts on the sheet, when it draws or shows something. */
 function sourceFor(need: VisualNeedOutcome): { source: Extract<Block, { type: "image" }>["source"]; alt: string } | null {
@@ -241,6 +242,10 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
     blocks: page.blocks.flatMap((b): Block[] => {
       const key = keyOf(b);
       const need = key ? byKey.get(key) : undefined;
+      if ((b.type === "image" || b.type === "table") && need?.resolution.action === "substitute" && need.resolution.table) {
+        const table = need.resolution.table;
+        return [{ id: b.id, type: "table", headers: table.headers, rows: table.rows, ...(table.unit ? { unit: table.unit } : {}), trace: b.trace }];
+      }
       if (b.type === "image" && need) {
         const r = need.resolution;
         if (r.action === "omit" || r.action === "rewrite" || (r.action === "substitute" && !r.spec)) {
