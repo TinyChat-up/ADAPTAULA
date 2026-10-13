@@ -5,6 +5,7 @@ import { AdaptationError } from "@/lib/adaptation/orchestration/errors";
 import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
+import { substitutionFeedback, type SubstitutionRejectionCode } from "@/lib/adaptation/substitution-feedback";
 import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
@@ -356,12 +357,16 @@ async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRe
   for (const activity of activities) {
     const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id)).map((o) => o.text).join(". ") || null;
     let accepted: { rewrite: Omit<ActivityRewrite, "activityId">; spec: VisualSpec | null } | null = null;
+    let rejectionCodes: SubstitutionRejectionCode[] = [];
     for (let attempt = 0; attempt < SUBSTITUTE_ATTEMPTS && !accepted; attempt++) {
-      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)" });
+      const { draft, run, transient } = await assistants.substitute({ stage: input.stage, activity: activityText(input.analysis, activity.id), objective, visual: visualText || "(sin descripción)", responseFormat: activity.response_format, rejectionCodes });
       await record({ ...run, attempt: attempt + 1 }, transient);
+      // Corrections are for invalid proposals, not refusals, unavailable credentials or an explicit inability to substitute.
+      if (run.status === "refused" || run.status === "error" || draft?.feasible === false) break;
       const valid = validateSubstitute(draft, { ...ctx, activity });
       // Several activities share the figure: they must agree on it (one figure on the sheet).
       if (valid.ok && (!spec || !valid.spec || JSON.stringify(spec) === JSON.stringify(valid.spec))) accepted = valid;
+      else rejectionCodes = substitutionFeedback(valid.ok ? ["shared_figure_conflict"] : draft ? valid.violations : ["invalid_candidate"]);
     }
     if (!accepted) return null;
     spec ??= accepted.spec;

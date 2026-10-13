@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rewriteEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
+import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { validateRewrite, validateSubstitute } from "@/lib/materials/visuals/auto/policy";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { fractionsCaseAnalysis } from "../support/fractions-case";
@@ -16,6 +16,40 @@ const check = (a: MaterialAnalysis, activityId: string, visualId: string | undef
   const activity = a.activities.find((x) => x.id === activityId)!;
   return validateRewrite({ feasible: true, prompt, steps, lines: 2 }, { analysis: a, activity, visual: visualId ? a.visuals.find((v) => v.id === visualId) : undefined, signatures: [], functionalNeeds: [] });
 };
+
+describe("contrato de evaluación de una sustitución automática", () => {
+  function substitute(instruction: string, prompt: string, format: MaterialAnalysis["activities"][number]["response_format"] = "write_text") {
+    const a = fractionsCaseAnalysis();
+    const activity = { ...a.activities[0]!, instruction, context: null, response_format: format, objective_ids: [], resource_ids: [] };
+    a.activities = [activity];
+    a.protected_elements = [];
+    return substitutionEquivalence({ analysis: a, activity, visual: undefined, candidate: { prompt, steps: [], lines: 2, figure: null }, needs: [], drawable: false });
+  }
+
+  it.each(["select_option", "match", "order", "fill_blanks", "none"] as const)("no convierte %s en líneas de escritura", (format) => {
+    expect(substitute("Identifica el animal que vive en el agua.", "Identifica el animal que vive en el agua de la lista anterior.", format).violations).toContain(`response_type_changed(${format})`);
+  });
+
+  it("no añade una operación evaluada a una consigna que solo pedía describir", () => {
+    expect(substitute("Describe las características del animal acuático.", "Describe las características del animal acuático y clasifica su alimentación.").violations).toContain("action_added(clasifica)");
+  });
+
+  it("conserva los cuantificadores aunque el analizador no los haya marcado como protegidos", () => {
+    expect(substitute("Describe al menos dos características del animal acuático.", "Describe dos características propias del animal acuático.").violations).toContain("constraint_lost");
+    expect(substitute("Describe al menos dos características del animal acuático.", "Describe como mínimo dos características propias del animal acuático.").equivalent).toBe(true);
+  });
+
+  it("conserva la extensión evaluada, sin convertir los datos de otra tarea en restricciones", () => {
+    const a = fractionsCaseAnalysis();
+    const activity = { ...a.activities[0]!, instruction: "Describe el animal acuático en 70-90 palabras.", context: null, response_format: "write_text" as const, objective_ids: [], resource_ids: [] };
+    a.activities = [activity];
+    a.protected_elements = [{ ...a.protected_elements[0]!, id: "prt_1", type: "response_constraint", importance: "essential", value: "70-90 palabras", activity_ids: [activity.id], resource_ids: [] }];
+    const candidate = { prompt: "Describe las características principales del animal acuático.", steps: [], lines: 2, figure: null };
+    expect(substitutionEquivalence({ analysis: a, activity, visual: undefined, candidate, needs: [], drawable: false }).violations).toContain("constraint_lost");
+    a.protected_elements[0]!.activity_ids = ["act_99"];
+    expect(substitutionEquivalence({ analysis: a, activity, visual: undefined, candidate, needs: [], drawable: false }).violations).not.toContain("constraint_lost");
+  });
+});
 
 describe("perfil de la tarea: objetivo, operación cognitiva, representación, respuesta", () => {
   it("act 1 interpreta la barra; act 4 actúa sobre la recta: en ambas la representación es necesaria", () => {

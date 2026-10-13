@@ -1,6 +1,7 @@
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { VisualSpec } from "@/lib/visuals/spec";
-import { numbersIn, normalizeText, wordCount } from "./text";
+import { CONSTRAINT_TYPES } from "./facts";
+import { criticalTokens, hasToken, numbersIn, normalizeText, sharedTokens, wordCount } from "./text";
 
 /**
  * Whether an activity rewritten WITHOUT a figure of the original still evaluates the same thing (docs/VISUAL_RESOURCES.md §
@@ -121,9 +122,19 @@ export function substitutionEquivalence(input: { analysis: MaterialAnalysis; act
   if (profile.operation !== "use_data" && candidate.figure && operationOf(text, onFigure ? input.activity.response_format : "write_text", candidate.lines === 0) !== profile.operation) violations.push(`operation_changed(${profile.operation})`);
   // Marking stays on the figure: no writing lines instead of it.
   if (onFigure && (!candidate.figure || candidate.lines !== 0)) violations.push(`response_type_changed(${input.activity.response_format})`);
+  // The substitute contract only produces writing lines or a figure to act on, never options, matching pairs or blanks.
+  if (!onFigure && (NON_WRITTEN.has(profile.responseType) || profile.responseType === "none")) violations.push(`response_type_changed(${profile.responseType})`);
   if (!onFigure && candidate.lines === 0) violations.push("no_answer_space");
   const verbs = (s: string) => new Set([...s.matchAll(ACTION_VERBS)].map((m) => m[1]!));
   for (const v of verbs(original)) if (!verbs(text).has(v)) violations.push(`action_lost(${v})`);
+  for (const v of verbs(text)) if (!verbs(original).has(v)) violations.push(`action_added(${v})`);
+  // A substitute may change its figure's data, but not the conditions under which this task is assessed. Only constraints
+  // corroborated by the source count: the analyzer's wording must not invent a requirement or borrow it from another activity.
+  const constraints = input.analysis.protected_elements
+    .filter((p) => p.activity_ids.includes(input.activity.id) && (CONSTRAINT_TYPES as readonly string[]).includes(p.type))
+    .flatMap((p) => sharedTokens(p.value, original));
+  constraints.push(...criticalTokens(original).filter((t) => t.kind === "quantifier"));
+  if (constraints.some((t) => !hasToken(text, t))) violations.push("constraint_lost");
   const figureNumbers = candidate.figure ? specNumbers(candidate.figure) : [];
   const known = new Set([...numbersIn(original), ...numbersIn(visualText), ...figureNumbers]);
   const added = numbersIn(text).filter((n) => !known.has(n));

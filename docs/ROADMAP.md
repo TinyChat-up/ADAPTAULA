@@ -2,6 +2,16 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
+## Prioridad actual — continuidad de Hacer magia (2026-10-13)
+
+Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones autorizadas de verificación: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). Las secciones históricas de abajo mezclan hitos y propuestas; un título de fase no certifica despliegue.
+
+1. **Bloque implementado en esta rama:** sustitución pedagógica con corrección informada. Aceptación: rechazar cambios de formato, operaciones añadidas y pérdida de restricciones; enviar solo códigos seguros al segundo intento; máximo dos intentos por actividad/ejecución; entregar tras corrección válida o parar honestamente. Sin aprobación del docente ni llamadas reales para verificarlo.
+2. **Siguiente bloque recomendado:** ejecutor para selección única. Primero reproducir el caso que acaba en `needs_decision` e identificar su causa concreta. Aceptación: conservar opciones, orden cuando sea significativo, clave y trazabilidad; apoyo de acceso junto al ejercicio sin revelar la respuesta; avanzar automáticamente; rechazar pérdida/duplicación de opciones o alteración del objetivo; pruebas de orquestación y PDF con fixtures. Fuera de alcance: selección múltiple, relacionar, ordenar y simplificación general.
+3. **Después:** localización de figuras genéricas en escaneos sin texto, con fixtures sintéticos y rechazo de recortes ambiguos. Medir cobertura antes de plantear edición de originales o llamadas reales.
+
+Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni la compilación bloqueada por Google Fonts.
+
 ## Fase 0 — Cimientos y documentación ✅
 - Proyecto Next.js 16 + TS estricto + Tailwind 4 + pnpm + Vitest.
 - `CLAUDE.md`, `docs/*`, `.env.example`.
@@ -103,7 +113,7 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - **Eval opt-in con modelos reales:** `pnpm eval:illustrations`.
 - **Pendiente:**
   - primera ejecución real del eval de ilustraciones, con credenciales de OpenAI y la organización verificada;
-  - aplicar la migración 024 en staging y después en producción;
+  - comprobar el despliegue por entorno cuando se retomen las integraciones: el usuario confirma 024 aplicada en Supabase, sin verificación remota en esta sesión;
   - edición de imágenes del original (legibilidad, escaneos);
   - localizador para figuras genéricas en escaneos sin texto;
   - ejecutores para formatos cerrados, simplificación y reorganización en magia (hoy `needs_decision`);
