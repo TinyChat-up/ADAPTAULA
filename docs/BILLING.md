@@ -57,7 +57,7 @@ type EntitlementResult =
 | Acción | Comprobación |
 |---|---|
 | `adaptation.generate` | `monthly_adaptations` (unidades = número de perfiles) + `multi_profile` + `max_profiles_per_job` |
-| `image.generate` | `monthly_images` + `image_generation` + flag `AI_IMAGES_ENABLED` |
+| `image.generate` | `monthly_images` + `image_generation` + flag `FLAG_AI_IMAGES_ENABLED` (implementado en la migración 024: ilustraciones de «Hacer magia») |
 | `analysis.start` | `monthly_analyses` (Free 10 · Pro 100 · Max 250) + *rate limit* + análisis simultáneos. Una reutilización de caché no consume |
 | `block.revise` | `monthly_block_revisions` + rate limit |
 | `profile.create` | `max_profiles` (perfiles no archivados) |
@@ -65,6 +65,21 @@ type EntitlementResult =
 | `material.upload` | `max_file_mb`, `max_pages_per_material` |
 
 La UI usa el mismo resultado para mostrar el uso y los CTA, pero **el servidor siempre vuelve a comprobarlo** en la acción.
+
+**Ilustraciones (`image.generate`, migración 024).** Solo las pide el servidor, dentro de un trabajo de «Hacer magia»
+(`src/lib/materials/visuals/illustrate/server.ts`).
+- **Disponibilidad:** el flag, `features.image_generation = true` y `monthly_images > 0` en el plan efectivo (`workspace_plan`).
+  Hoy solo Max: 50 al mes. Free y Pro tienen 0, sin cambios en planes ni precios.
+- **Cuota:** cada ilustración reserva **una** unidad `image` con `consume_quota`. La clave es idempotente:
+  `image:<adaptación>:<necesidad>:<huella del brief>`.
+  - El segundo intento usa la misma unidad.
+  - Una ilustración ya aprobada se reutiliza sin unidad nueva.
+  - Si no se aprueba ninguna imagen, o si un fallo transitorio o la falta de tiempo aplazan la ilustración, se devuelve
+    (`refund_quota`).
+- **Límites:** como mucho 3 ilustraciones por adaptación y 2 imágenes por ilustración.
+- **Sin unidad disponible:** no se pide ninguna imagen, y la política visual sigue con el peldaño siguiente o se detiene con
+  honestidad.
+- **Unidades de adaptación:** la unidad de adaptación es independiente. Una parada por un visual sin resolver no la consume.
 
 ## Cuotas: libro de movimientos
 

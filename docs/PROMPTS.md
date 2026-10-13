@@ -20,7 +20,9 @@
 | `material_generator` | D | `GeneratedSegments` (bloques de `MaterialDocument` v1 solo para lo que cambia + `change_summary`) | STANDARD |
 | `pedagogical_reviewer` | E | `AiReviewDraft` (solo comprobaciones no deterministas de `PedagogicalReview` v1) | STANDARD |
 | `block_reviser` | edición | `Block` | STANDARD · low |
-| `image_brief` | imágenes | `ImageBrief` | STANDARD · low |
+| `image_brief` | magia · ilustraciones | Especificación pedagógica de una ilustración (`illustration_brief`), validada por el servidor | STANDARD |
+| `image_render` | magia · ilustraciones | Plantilla (no es una llamada a un modelo de texto): el prompt del modelo de imagen, construido desde el brief validado | IMAGE_QUALITY |
+| `image_review` | magia · ilustraciones | Revisión por visión de la ilustración contra su brief (`illustration_review`); acepta el servidor | STANDARD |
 | `visual_locator` | 8.2B.1 | Hipótesis de rectángulos (`visual_locations`) | STANDARD |
 | `visual_support` | magia | Apoyo nuevo: pasos o tarjetas (`visual_support`) | STANDARD |
 | `visual_rewriter` | magia | Actividad sin el visual que falta (`visual_free_activity`) | STANDARD |
@@ -82,5 +84,36 @@ región encontrada por su propia geometría.
 ### block_reviser_v1
 Modifica **únicamente** el bloque indicado según la petición del docente ("Pon un ejemplo antes", "Reduce las alternativas de 4 a 3"), respetando los objetivos protegidos y el perfil. Devuelve un bloque válido con el mismo `id` y el mismo tipo, salvo que la petición exija otro tipo compatible.
 
-### image_brief_v1
-Crea un `ImageBrief`, no una imagen. La imagen debe ser clara, con solo los elementos necesarios, sin decoración inútil ni fondos complejos, adecuada a la edad y de composición inequívoca; sin texto salvo que sea imprescindible; sin estereotipos y con diversidad natural. Secundaria: estética informativa y madura. Primaria: puede ser más ilustrativa.
+### image_brief_v1 (publicado con la migración 024; `prompts/image-brief/v1.ts`)
+Crea la especificación pedagógica de UNA ilustración, no la imagen.
+- **Recibe:** la actividad, su objetivo, la descripción del visual que falta, etapa, curso y asignatura, y los nombres de los apoyos
+  funcionales de la ficha. El material va como JSON escapado dentro de `<untrusted_material>`.
+- **Devuelve:** `feasible`, tipo, concepto, propósito, elementos imprescindibles (cada uno con un marcador numérico o una
+  etiqueta), elementos prohibidos, composición, nivel de detalle, restricciones conceptuales y texto alternativo.
+- **Reglas:**
+  - los marcadores que nombra la actividad van sin el nombre del elemento;
+  - ninguna etiqueta da la respuesta;
+  - estilo sobrio en ESO y Bachillerato; claro sin infantilizar en Primaria;
+  - `feasible: false` si la actividad depende de datos exactos, un mapa real o una persona o lugar concretos.
+- **El servidor lo valida** (`validateBrief`) antes de pagar ninguna imagen. Ver `docs/VISUAL_RESOURCES.md` § Ilustraciones
+  generadas.
+
+### image_render_v1 (publicado con la migración 024; `prompts/image-render/v1.ts`)
+Plantilla determinista, no un modelo. Construye el prompt del modelo de imagen a partir del brief validado:
+- estilo fijo de ficha impresa CLARO: dibujo vectorial plano, contornos negros, fondo blanco liso, rellenos en grises claros
+  (imprimible en blanco y negro), sin degradados, sombras, personajes ni decoración;
+- la edad de la etapa y el nivel de detalle;
+- los marcadores sin nombres;
+- «no escribas ningún texto, número ni letra» cuando no hay marcadores ni etiquetas;
+- los elementos prohibidos;
+- en el segundo intento, las correcciones que dio la revisión.
+
+El estilo es nuestro, no del modelo, y su versión entra en la huella del brief (idempotencia).
+
+### image_review_v1 (publicado con la migración 024; `prompts/image-review/v1.ts`)
+Revisor exigente por visión. Recibe la imagen y, como JSON escapado dentro de `<untrusted_material>`, el brief y la actividad.
+- **Por cada elemento imprescindible:** si está, si su marcador es correcto y si su etiqueta es correcta.
+- **Además:** elementos prohibidos presentes, errores conceptuales, texto añadido o ilegible, respuesta revelada, edad, si es
+  imprimible y si sirve para la actividad, y un veredicto.
+- **Su respuesta es solo evidencia:** acepta el servidor (`acceptReview`) y cada problema se convierte en una corrección para el
+  segundo intento.

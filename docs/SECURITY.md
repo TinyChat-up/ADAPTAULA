@@ -52,11 +52,19 @@ El producto trata material educativo y perfiles de necesidades de menores (datos
 - **Figuras reconstruidas (8.2B.1):** el SVG lo dibuja nuestro componente a partir de números validados con Zod (VisualSpec v1). No
   hay cadenas de marcado, scripts, enlaces, recursos externos, `style` ni `foreignObject`, y un test lo comprueba. El PDF sigue
   saliendo de Chromium sin red y con una CSP que no permite nada externo.
+- **Ilustraciones generadas (migración 024).**
+  - Las genera solo el servidor, con la clave de servicio, dentro de un trabajo ya autorizado.
+  - Los bytes se validan (firma PNG, IHDR, dimensiones, 10 MiB) antes de revisarse y guardarse.
+  - Bucket privado, en `<workspace>/<adaptación>/illustrations/<sha256>.png`.
+  - Fila inmutable (trigger) y única por adaptación, necesidad y brief. El navegador no puede escribirla.
+  - Se leen por `/api/adaptations/[id]/generated/[assetId]`, que autoriza con la sesión del usuario (RLS), exige que el activo sea
+    de esa adaptación y verifica el sha-256. Cabeceras privadas, sin URL pública.
+  - El PDF fija la instancia exacta por su sha-256.
 - Escaneo de malware: no disponible en el MVP. Riesgo aceptado y documentado: los ficheros solo los procesan las APIs de los proveedores de IA y nuestro parser, nunca se ejecutan ni se sirven públicamente.
 
 ## Material no confiable e inyección de prompts
 
-El contenido de un material es **dato**, nunca instrucción. El fichero viaja como bloque binario entre `<untrusted_material>` y `</untrusted_material>`; el system prompt lo declara y las instrucciones reales van después. Una frase dirigida a la IA dentro del material se registra como incertidumbre y no se obedece. Además, la salida del modelo nunca ejecuta nada: se valida contra un schema cerrado (enumeraciones, longitudes, referencias) y el modelo no tiene herramientas ni acceso a datos. El contexto del docente se escapa (`<`, `>`) antes de entrar al prompt. Cubierto por tests unitarios y por el caso `esp-prompt-injection` de los evals.
+El contenido de un material es **dato**, nunca instrucción. El fichero viaja como bloque binario entre `<untrusted_material>` y `</untrusted_material>`; el system prompt lo declara y las instrucciones reales van después. Una frase dirigida a la IA dentro del material se registra como incertidumbre y no se obedece. Además, la salida del modelo nunca ejecuta nada: se valida contra un schema cerrado (enumeraciones, longitudes, referencias) y el modelo no tiene herramientas ni acceso a datos. El contexto del docente se escapa (`<`, `>`) antes de entrar al prompt; en los prompts de «Hacer magia» publicados con la migración 024 (`image_brief`, `image_review`, `visual_substitute`) el material también va como JSON con `<` y `>` escapados, así que no puede cerrar su envoltorio (test en `tests/unit/illustrations.test.ts`). Un brief o una revisión manipulados no bastan para colar nada en una ficha: el brief pasa reglas deterministas y la imagen solo se acepta si el servidor confirma cada punto de la revisión. Cubierto por tests unitarios y por el caso `esp-prompt-injection` de los evals.
 
 ## Rutas de API
 
@@ -73,7 +81,7 @@ Las rutas `/api/*` que modifican datos exigen sesión y comprueban el **origen**
 - `.env*` en `.gitignore` (excepto `.env.example`, sin valores reales).
 - Variables de servidor validadas en `src/lib/config/env.ts`; acceder a una variable de servidor desde el cliente rompe el build (`server-only`).
 - Rotación documentada de: service role, claves de IA, secreto del webhook de Stripe.
-- **La clave del proveedor de IA** (`ANTHROPIC_API_KEY`) solo existe en el servidor. Comprobaciones automáticas: (1) `tests/unit/boundaries.test.ts` — ningún componente cliente llega, directa o indirectamente, a un SDK de proveedor de IA ni a un módulo `server-only`, y la clave solo se nombra en el esquema de env validado, el *runtime* y el *router* de IA; (2) `tests/unit/secrets.test.ts` — `.env.local` está ignorado y no se versiona, ninguna variable `NEXT_PUBLIC_*` puede ser un secreto, `.env.example` no lleva valores, el *logger* descarta los campos con nombre de secreto y enmascara valores con forma de clave; (3) `pnpm check:secrets` (último paso de `pnpm check`, tras el build) — busca por **valor** y por **forma** (`sk-ant-…`, `sk-…`, `sb_secret_…`, Stripe) y, en los bundles del navegador, también por **nombre**, en `.next/static`, las páginas renderizadas en el build, `evals/results` y los snapshots. Imprime rutas y el tipo de secreto, nunca el secreto.
+- **Las claves de los proveedores de IA** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) solo existen en el servidor. Comprobaciones automáticas: (1) `tests/unit/boundaries.test.ts` — ningún componente cliente llega, directa o indirectamente, a un SDK de proveedor de IA ni a un módulo `server-only`, y la clave solo se nombra en el esquema de env validado, el *runtime* y el *router* de IA; (2) `tests/unit/secrets.test.ts` — `.env.local` está ignorado y no se versiona, ninguna variable `NEXT_PUBLIC_*` puede ser un secreto, `.env.example` no lleva valores, el *logger* descarta los campos con nombre de secreto y enmascara valores con forma de clave; (3) `pnpm check:secrets` (último paso de `pnpm check`, tras el build) — busca por **valor** y por **forma** (`sk-ant-…`, `sk-…`, `sb_secret_…`, Stripe) y, en los bundles del navegador, también por **nombre**, en `.next/static`, las páginas renderizadas en el build, `evals/results` y los snapshots. Imprime rutas y el tipo de secreto, nunca el secreto.
 - Los errores del proveedor no llegan al usuario ni a los logs con su texto original: se categorizan (`AIError`) y el mensaje técnico solo vive en `cause`. Las herramientas de evals pasan cualquier texto de error por `redactSecrets`.
 
 ## Logs

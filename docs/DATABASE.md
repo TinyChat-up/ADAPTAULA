@@ -179,7 +179,7 @@ Free no tiene fila: **sin suscripción vigente = plan `free`**.
 
 **adaptation_versions**: `id`, `adaptation_id`, `workspace_id`, `version` (unique con adaptation_id), `document jsonb` (`MaterialDocument` v1, con trazabilidad por bloque y clave de respuestas aparte), `review jsonb` (`PedagogicalReview` v1), `source` (`ai_generated`,`ai_revised`,`teacher_edit`), `created_by`, `created_at`. Las ediciones del docente con autoguardado se agrupan (una versión cada pocos minutos de actividad o al salir), no una por tecla.
 
-**generated_assets**: `id`, `workspace_id`, `adaptation_id`, `block_id`, `type` (`illustration`,`card`,`sequence`…), `storage_path`, `image_brief jsonb`, `prompt`, `alt_text`, `metadata`, `created_at`.
+**generated_assets**: `id`, `workspace_id`, `adaptation_id`, `block_id`, `type` (`illustration`,`card`,`sequence`…), `storage_path`, `image_brief jsonb`, `prompt`, `alt_text`, `metadata`, `created_at`. La migración 024 le añade, para las ilustraciones de «Hacer magia», `need_key`, `brief_fingerprint`, `sha256`, `mime`, `width`, `height`, `bytes`, `model_alias`, `review` y `attempts` (ver abajo).
 
 **exports**: `id`, `workspace_id`, `adaptation_id`, `version`, `format` (`pdf`), `status`, `storage_path`, `created_at`. Caché: si existe un export `ready` para la misma versión y plantilla, se reutiliza.
 
@@ -211,7 +211,7 @@ Sin tablas nuevas. `list_claimable_adaptation_jobs` (qué puede reclamar un work
 
 ## Operación interna (solo service role)
 
-- **ai_runs**: `id`, `workspace_id`, `job_id`, `material_id`, `adaptation_id`, `purpose` (`analyze`,`plan`,`generate`,`review`,`revise_block`,`image_brief`,`image`), `model_alias`, `provider`, `model`, `prompt_key`, `prompt_version`, `effort`, `attempt` (reintento de reparación dentro del paso), `input_tokens` (solo la entrada **no** cacheada), `output_tokens`, `cached_input_tokens` (lecturas de caché), `cache_creation_input_tokens` (escrituras de caché, facturadas a 1,25×; migración 012), `estimated_cost_usd numeric(10,6)` (**null** si el modelo no tiene precio: nunca un 0 inventado), `latency_ms`, `status` (`success`,`error`,`refused`,`invalid_output`), `error_code` (categoría), `review_score`, `created_at`. **Sin contenido.** `material_id` conserva el coste aunque el material se borre (`on delete set null`).
+- **ai_runs**: `id`, `workspace_id`, `job_id`, `material_id`, `adaptation_id`, `purpose` (`analyze`,`plan`,`generate`,`review`,`revise_block`,`image_brief`,`image`,`image_review`,`locate_visual`,`visual_support`,`visual_rewrite`), `model_alias`, `provider`, `model`, `prompt_key`, `prompt_version`, `effort`, `attempt` (reintento de reparación dentro del paso), `input_tokens` (solo la entrada **no** cacheada), `output_tokens`, `cached_input_tokens` (lecturas de caché), `cache_creation_input_tokens` (escrituras de caché, facturadas a 1,25×; migración 012), `estimated_cost_usd numeric(10,6)` (**null** si el modelo no tiene precio: nunca un 0 inventado), `latency_ms`, `status` (`success`,`error`,`refused`,`invalid_output`), `error_code` (categoría), `review_score`, `created_at`. **Sin contenido.** `material_id` conserva el coste aunque el material se borre (`on delete set null`).
 - **prompt_versions**: `id`, `key`, `version`, `content`, `content_hash`, `schema_version`, `active`, `notes`, `created_at`. Unique (`key`,`version`); índice único parcial: una sola versión activa por `key`.
 - **app_settings**: `key` PK, `value jsonb`, `updated_at`, `updated_by`.
 - **stripe_events**: `stripe_event_id` PK, `type`, `processed_at`, `payload_summary jsonb`.
@@ -284,6 +284,25 @@ Ver `docs/VISUAL_RESOURCES.md` § Visuales automáticos.
 
 **Migración 023.** `adaptation_artifacts.kind` admite `visual_resolution`: la decisión de la política visual de «Hacer magia»,
 única por entrada de generación. `ai_runs.purpose` admite `visual_support` y `visual_rewrite`.
+
+## Ilustraciones generadas (migración 024)
+
+Es aditiva: solo columnas nuevas y nulas en `generated_assets`, una tabla de la migración 004 que no tenía filas. No cambia planes,
+precios ni cuotas: la cuota `image` ya existía.
+- **Columnas:**
+  - `need_key` (`vis_N`, `dec_N` o `act_N`) y `brief_fingerprint` (sha-256);
+  - `sha256`, `mime = 'image/png'`, `width` y `height` (256–4096) y `bytes` (≤ 10 MiB);
+  - `model_alias` (`IMAGE_FAST` o `IMAGE_QUALITY`, nunca un ID de modelo);
+  - `review` (jsonb: aprobada, intentos y elementos comprobados) y `attempts` (1–3).
+- **Restricciones:**
+  - una ilustración se registra completa o no se registra (`generated_assets_illustration_complete`, con `type = 'illustration'`);
+  - es única por `(adaptation_id, need_key, brief_fingerprint)` (índice parcial; idempotencia);
+  - es inmutable (trigger `generated_assets_immutable`), porque el PDF fija su sha-256;
+  - se borra en cascada con su adaptación o su workspace.
+- **Acceso:** RLS de lectura para los miembros. Escribe el servidor con la clave de servicio; el navegador no puede escribir.
+- `ai_runs.purpose` admite `image_review`.
+
+Ver `docs/VISUAL_RESOURCES.md` § Ilustraciones generadas y revisadas.
 
 ## Funciones SQL de negocio
 

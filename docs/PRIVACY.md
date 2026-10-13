@@ -22,6 +22,13 @@ Roles previsibles (a confirmar legalmente): para usuarios individuales, Adaptaul
 
 Solo el material, el contexto educativo, las dimensiones funcionales y la petición del docente (tabla completa en `docs/AI_PIPELINE.md`). Nunca el alias, las etiquetas ni la identidad del docente. **El análisis del material (fase 3) no usa ningún dato de alumnado:** solo el fichero y el contexto que el docente ha confirmado. Configuración de los proveedores: sin uso para entrenamiento; retención mínima o nula cuando esté disponible; procesamiento en la UE cuando el proveedor lo ofrezca. Las transferencias internacionales se documentan en el registro de subencargados.
 
+**Ilustraciones generadas (migración 024).**
+- El brief se escribe con la actividad, su objetivo, la descripción del visual que falta y los nombres de los apoyos de la ficha.
+  Nunca lleva alias, perfil ni identidad del docente.
+- El modelo de imagen recibe solo el prompt construido a partir de ese brief.
+- La imagen se guarda en el bucket privado del workspace, sin URL pública. Se borra en cascada con su adaptación y su espacio de
+  trabajo.
+
 `ai_runs` y los logs **no guardan contenido**. Los evals usan materiales preparados internamente, nunca contenido real de usuarios sin consentimiento expreso.
 
 ## Subencargados (registro inicial a completar)
@@ -31,7 +38,7 @@ Solo el material, el contexto educativo, las dimensiones funcionales y la petici
 | Supabase | Base de datos, autenticación, almacenamiento | UE (Frankfurt) |
 | Vercel | Hosting y ejecución | Funciones en `fra1`; CDN global |
 | Anthropic | Procesamiento de IA de texto | A documentar (opciones de geografía de inferencia) |
-| OpenAI | IA de imagen (Max) y proveedor alternativo de texto | A documentar |
+| OpenAI | IA de imagen (Max: ilustraciones de «Hacer magia»; recibe solo el prompt construido desde el brief validado, nunca el material ni datos del alumnado). Proveedor alternativo de texto (sin uso) | A documentar |
 | Stripe | Pagos | UE/EE. UU. |
 | Proveedor de email transaccional | Emails de autenticación y avisos | A elegir (preferiblemente UE) |
 
