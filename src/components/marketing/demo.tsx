@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 const CHANGES = ["Instrucciones en pasos", "Ejemplo resuelto antes de empezar", "Menos tareas a la vista", "Más espacio para escribir"];
 
@@ -8,8 +8,8 @@ export function Demo() {
       <h2 id="demo-titulo" className="sr-only">
         Ejemplo: de la ficha original a la versión adaptada
       </h2>
-      <div className="grid items-stretch gap-4 lg:grid-cols-[1fr_auto_1fr]">
-        <article aria-label="Ficha original" className="rounded-card border border-border bg-surface p-6 shadow-card">
+      <div className="reveal grid items-stretch gap-4 lg:grid-cols-[1fr_auto_1fr]">
+        <article aria-label="Ficha original" className="lift rounded-card border border-border bg-surface p-6 shadow-card">
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Original</p>
           <h3 className="text-lg font-semibold">Ficha 4. Fracciones</h3>
           <p className="mt-3 text-sm leading-snug">
@@ -26,12 +26,17 @@ export function Demo() {
           </ol>
         </article>
 
-        <div aria-hidden className="flex items-center justify-center text-muted-foreground">
-          <ArrowRight className="size-8 rotate-90 lg:rotate-0" />
+        <div aria-hidden className="flex items-center justify-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-linear-to-br from-primary to-accent text-primary-foreground shadow-lg shadow-primary/25">
+            <ArrowRight className="nudge-x size-6 rotate-90 lg:rotate-0" />
+          </span>
         </div>
 
-        <article aria-label="Ficha adaptada" className="rounded-card border border-primary/30 bg-surface p-6 shadow-card">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-primary">Adaptado</p>
+        <article aria-label="Ficha adaptada" className="lift relative rounded-card border border-primary/30 bg-surface p-6 shadow-lg shadow-primary/10">
+          <p className="mb-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+            <Sparkles aria-hidden className="size-3.5" />
+            Adaptado
+          </p>
           <h3 className="text-lg font-semibold">Ficha 4. Fracciones</h3>
           <ol className="mt-3 space-y-1.5 text-base">
             <li>
@@ -62,10 +67,10 @@ export function Demo() {
           </div>
         </article>
       </div>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="reveal mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ul aria-label="Qué ha cambiado" className="flex flex-wrap gap-2">
           {CHANGES.map((c) => (
-            <li key={c} className="rounded-full border border-border bg-surface px-3 py-1 text-sm">
+            <li key={c} className="rounded-full border border-primary/20 bg-primary-soft/60 px-3 py-1 text-sm">
               {c}
             </li>
           ))}

@@ -20,6 +20,16 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Rasteriser of original pages (src/lib/materials/visuals/raster.ts): a native addon and pdf.js run from node_modules, unbundled.
   serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
+  // Sections that are not built (classes, templates, a help centre) left the navigation, and settings joined «Plan y cuenta»
+  // (docs/UX.md § Mapa de rutas). Their old addresses still lead somewhere useful. Temporary (307): they may come back.
+  async redirects() {
+    return [
+      { source: "/app/plantillas", destination: "/app", permanent: false },
+      { source: "/app/ayuda", destination: "/como-funciona", permanent: false },
+      { source: "/app/clases/:path*", destination: "/app/alumnos", permanent: false },
+      { source: "/app/configuracion/:path*", destination: "/app/uso", permanent: false },
+    ];
+  },
   outputFileTracingIncludes: {
     // Keys are picomatch globs of the route path (a literal `[id]` would be a character class): one `*` per dynamic segment.
     // `scripts/smoke-raster.mjs` checks after every build that both traces really contain these files.

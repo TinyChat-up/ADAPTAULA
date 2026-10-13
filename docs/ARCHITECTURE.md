@@ -243,3 +243,14 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 **Límites de la evidencia:** se corrobora la estructura y el texto extraíble del PDF con posiciones y tinta, no se realiza OCR independiente de sus glifos. Una capa de texto deliberadamente falsa superpuesta a otros glifos no queda certificada por este método. Tampoco se corrobora aquí la transcripción del enunciado o de la clave del análisis. Escaneos, fotos, celdas multilínea, cuadrículas sin bordes, tablas duplicadas y paráfrasis no reconocidas se rechazan. La cobertura es conservadora; las pruebas sintéticas no certifican todos los PDF ni el análisis con IA real.
 
 **Verificación:** unitarias y transporte con mocks, PGlite local con orquestador real, tres PDF Chromium (tabla y regresiones de #27/fracciones), typecheck y lint. No se ha ejecutado IA de pago, SQL remoto ni validado Vercel.
+
+### ADR-024 · Navegación sin pantallas vacías y movimiento que no altera el contraste (2026-10-13)
+
+**Contexto:** la app enlazaba cuatro pantallas «Próximamente» sin contenido (Clases, Plantillas, Ayuda y Configuración) y Configuración repetía lo que ya mostraba Uso. La interfaz era correcta pero estática: sin respuesta al pasar el ratón ni esqueletos con forma real en la mayoría de secciones.
+
+**Decisión:**
+1. **Solo se enlazan pantallas con contenido real.** Se retiran `/app/plantillas`, `/app/ayuda`, `/app/clases` y `/app/configuracion` (y `coming-soon.tsx`). Redirigen de forma temporal desde `next.config.ts` a `/app`, `/como-funciona`, `/app/alumnos` y `/app/uso`, para que ningún enlace guardado dé un 404. Configuración se funde en **«Plan y cuenta»** (`/app/uso`), que acogerá la facturación con Stripe. Historial pasa a llamarse **«Adaptaciones»**, con la misma ruta (`/app/historial`) y filtros por estado (`?estado=`). Navegación: Inicio · Adaptar material · Materiales · Perfiles · Adaptaciones, y Plan y cuenta aparte.
+2. **Movimiento propio en `globals.css`, sin dependencias.** Lo que lleva texto solo se anima con `transform`, nunca con opacidad: el texto conserva su contraste real en todo momento, también para las auditorías axe que corren justo al navegar. `prefers-reduced-motion: reduce` lo detiene todo.
+3. **Carga por sección sin romper el 404.** Cada sección tiene su `loading.tsx` (grupos de rutas `(inicio)` y `(lista)`). Ninguno envuelve `/app/adaptaciones/[id]` ni `/vista`: el *streaming* enviaría la respuesta antes del `notFound()` y el 404 de otra cuenta pasaría a ser un 200.
+
+**Consecuencias:** cuando Clases o Plantillas tengan contenido, vuelven al mapa con su ruta y se retira su redirección. Detalle en `docs/UX.md` (§ Mapa de rutas, § Navegación de la app y § Movimiento). Es un cambio de presentación: no hay migraciones ni cambios en datos, permisos, planes, cuotas, precios o IA.

@@ -14,7 +14,7 @@ import { listMaterials, getSubjects } from "@/lib/materials/repository";
 import { MATERIAL_STATUSES, STATUS_LABELS, type MaterialStatus } from "@/lib/materials/types";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog } from "@/lib/profiles/repository";
-import { deleteMaterialAction, retryAnalysisAction } from "./actions";
+import { deleteMaterialAction, retryAnalysisAction } from "../actions";
 
 export const metadata: Metadata = { title: "Materiales" };
 
@@ -37,6 +37,7 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
   return (
     <div className="space-y-8">
       <PageHeader
+        icon={FolderOpen}
         title="Materiales"
         description="Tus fichas y textos, analizados una sola vez y listos para adaptar."
         actions={
@@ -98,14 +99,14 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
           </EmptyState>
         )
       ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
+        <ul className="stagger divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
           {materials.map((m) => {
             const labels = labelsFor(catalog, m.stage_slug, m.grade_slug);
             const subjectName = subjects.find((s) => s.slug === m.subject_slug)?.name;
             const Icon = m.source_type === "pdf" ? FileText : ImageIcon;
             return (
-              <li key={m.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-                <span aria-hidden className="hidden size-12 shrink-0 items-center justify-center rounded-control bg-primary/10 text-primary sm:flex">
+              <li key={m.id} className="group flex flex-col gap-3 p-4 transition-colors duration-150 hover:bg-primary-soft/40 sm:flex-row sm:items-center sm:gap-4">
+                <span aria-hidden className="hidden size-12 shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary transition-transform duration-200 group-hover:scale-105 sm:flex">
                   <Icon className="size-6" />
                 </span>
                 <div className="min-w-0 flex-1 space-y-1">

@@ -11,12 +11,12 @@ const NAV: NavItem[] = [
 
 export function MarketingHeader() {
   return (
-    <header className="relative border-b border-border bg-surface/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md supports-[backdrop-filter]:bg-surface/70">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
         <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
           {NAV.map((item) => (
-            <Link key={item.href} href={item.href} className="rounded-control px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link key={item.href} href={item.href} className="rounded-control px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground">
               {item.label}
             </Link>
           ))}

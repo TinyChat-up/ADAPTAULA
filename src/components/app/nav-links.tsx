@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { PRIMARY_NAV, SECONDARY_NAV, isActive, type AppNavItem } from "./nav-items";
+import { PRIMARY_NAV, SECONDARY_NAV, isItemActive, type AppNavItem } from "./nav-items";
 
-function NavList({ items, label, lockedHrefs }: { items: AppNavItem[]; label: string; lockedHrefs: string[] }) {
+function NavList({ items, label }: { items: AppNavItem[]; label: string }) {
   const pathname = usePathname();
   return (
     <nav aria-label={label}>
       <ul className="space-y-1">
-        {items.map(({ href, label: text, icon: Icon }) => {
-          const active = isActive(pathname, href);
-          const locked = lockedHrefs.includes(href);
+        {items.map((item) => {
+          const { href, label: text, icon: Icon } = item;
+          const active = isItemActive(pathname, item);
           const cta = href === "/app/adaptar";
           return (
             <li key={href}>
@@ -21,19 +20,21 @@ function NavList({ items, label, lockedHrefs }: { items: AppNavItem[]; label: st
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-10 items-center gap-3 rounded-control px-3 text-sm font-medium",
+                  "group relative flex min-h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors duration-150",
                   cta && !active && "text-primary",
-                  active ? "bg-primary/10 text-primary" : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground",
+                  active ? "bg-primary-soft text-primary" : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground",
                 )}
               >
-                <Icon aria-hidden className="size-5 shrink-0" />
+                {/* The active entry carries a bar as well as its colour and `aria-current` (never colour alone). */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-y-2 left-0 w-1 origin-center rounded-full bg-primary transition-transform duration-200 ease-out",
+                    active ? "scale-y-100" : "scale-y-0",
+                  )}
+                />
+                <Icon aria-hidden className={cn("size-5 shrink-0 transition-transform duration-200 ease-out", !active && "group-hover:scale-110")} />
                 <span className="flex-1">{text}</span>
-                {locked ? (
-                  <>
-                    <Lock aria-hidden className="size-3.5 text-muted-foreground" />
-                    <span className="sr-only">No incluido en tu plan</span>
-                  </>
-                ) : null}
               </Link>
             </li>
           );
@@ -43,10 +44,10 @@ function NavList({ items, label, lockedHrefs }: { items: AppNavItem[]; label: st
   );
 }
 
-export function SidebarPrimaryNav({ lockedHrefs }: { lockedHrefs: string[] }) {
-  return <NavList items={PRIMARY_NAV} label="Principal" lockedHrefs={lockedHrefs} />;
+export function SidebarPrimaryNav() {
+  return <NavList items={PRIMARY_NAV} label="Principal" />;
 }
 
 export function SidebarSecondaryNav() {
-  return <NavList items={SECONDARY_NAV} label="Ayuda y ajustes" lockedHrefs={[]} />;
+  return <NavList items={SECONDARY_NAV} label="Tu cuenta" />;
 }

@@ -9,6 +9,8 @@
   --color-muted-foreground: #556070;
   --color-primary: #2453c2;
   --color-primary-foreground: #ffffff;
+  /* Fondo suave de la marca: insignias de icono, pestañas activas, paneles destacados. */
+  --color-primary-soft: #eaf0fc;
   --color-accent: #0f766e;
   --color-accent-soft: #e6f4f2;
   --color-success: #15803d;
@@ -16,9 +18,12 @@
   --color-success-strong: #14532d;
   --color-warning: #b45309;
   --color-danger: #b91c1c;
-  --radius-card: 0.625rem;
+  --radius-card: 0.75rem;
   --radius-control: 0.5rem;
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06);
+  /* Elevación al pasar el ratón o al enfocar una tarjeta enlazada. */
+  --shadow-lift: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px -8px rgb(36 83 194 / 0.18);
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @theme inline {
@@ -41,13 +46,205 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Movimiento (docs/UX.md § Movimiento). Las entradas solo DESPLAZAN: nunca animan la opacidad del texto, para que el texto tenga
+ * siempre su contraste real (también para las comprobaciones automáticas de accesibilidad) y nada parpadee. Con
+ * `prefers-reduced-motion` todo queda quieto (regla al final del fichero).
+ */
+@keyframes enter-up {
+  from {
+    transform: translateY(14px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes enter-scale {
+  from {
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes nudge-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Decoración (sin texto): sí puede aparecer con opacidad. */
+@keyframes glow-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* La página entra al navegar (template.tsx de la app). */
+.page-enter {
+  animation: enter-up 420ms var(--ease-out-soft) both;
+}
+
+/* Hijos que entran uno detrás de otro: tarjetas, filas y secciones. */
+.stagger > * {
+  animation: enter-scale 460ms var(--ease-out-soft) both;
+}
+.stagger > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.stagger > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.stagger > :nth-child(4) {
+  animation-delay: 150ms;
+}
+.stagger > :nth-child(5) {
+  animation-delay: 200ms;
+}
+.stagger > :nth-child(6) {
+  animation-delay: 250ms;
+}
+.stagger > :nth-child(n + 7) {
+  animation-delay: 300ms;
+}
+
+/* Un bloque que aparece en su sitio (el archivo elegido, un aviso nuevo). */
+.pop-in {
+  animation: enter-scale 320ms var(--ease-out-soft) both;
+}
+
+/* La barra de una cuota se llena al aparecer. */
+.meter-fill {
+  transform-origin: left center;
+  animation: grow-x 700ms var(--ease-out-soft) both;
+  animation-delay: 120ms;
+}
+
+/* Tarjeta enlazada: se eleva al pasar el ratón o al enfocarla con el teclado. */
+.lift {
+  transition:
+    transform 180ms var(--ease-out-soft),
+    box-shadow 180ms var(--ease-out-soft),
+    border-color 180ms var(--ease-out-soft);
+}
+.lift:hover,
+.lift:focus-within {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+  border-color: rgb(36 83 194 / 0.35);
+}
+
+.float-soft {
+  animation: float-soft 6s ease-in-out infinite;
+}
+
+.nudge-x {
+  animation: nudge-x 2.4s ease-in-out infinite;
+}
+
+.glow-in {
+  animation: glow-in 900ms var(--ease-out-soft) both;
+}
+
+/* Esqueleto de carga con un brillo que recorre la forma. */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, rgb(226 230 236 / 0.7) 25%, rgb(241 244 248) 37%, rgb(226 230 236 / 0.7) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Hoja inferior del menú «Más» en el móvil. */
+dialog[open].sheet {
+  animation: sheet-up 280ms var(--ease-out-soft) both;
+}
+dialog.sheet::backdrop {
+  animation: glow-in 200ms ease-out both;
+}
+
+/* Fondo de marca: suave, sin restar contraste al texto (que siempre va sobre superficie clara). */
+.brand-wash {
+  background:
+    radial-gradient(60rem 30rem at 0% 0%, rgb(36 83 194 / 0.1), transparent 60%),
+    radial-gradient(50rem 26rem at 100% 0%, rgb(15 118 110 / 0.09), transparent 60%),
+    var(--color-background);
+}
+
+/* Cuadrícula decorativa, desvanecida hacia abajo. */
+.grid-fade {
+  background-image:
+    linear-gradient(to right, rgb(23 32 51 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(23 32 51 / 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+/* En la web pública, las secciones se desplazan suavemente al entrar en pantalla (donde el navegador lo admite). */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: enter-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .lift:hover,
+  .lift:focus-within {
+    transform: none;
   }
 }

@@ -110,13 +110,13 @@ Nunca "Error 403 quota exceeded". Ejemplos de copy:
 - Perfiles: *"Tu plan incluye 2 perfiles guardados. Puedes archivar uno o pasar a Pro para guardar hasta 30."*
 - Fallo de IA: *"No hemos podido terminar esta adaptación. No se ha descontado de tu límite."*
 
-## `/app/uso`
+## `/app/uso` — «Plan y cuenta»
 
-Plan, adaptaciones `35 / 75`, imágenes `18 / 50` (solo Max) y fecha de reinicio. Sin tokens ni costes. CTA contextual "Mejorar plan".
+Plan, adaptaciones `35 / 75`, imágenes `18 / 50` (solo Max) y fecha de reinicio, más los datos de la cuenta (nombre, email, espacio de trabajo y plan). Sin tokens ni costes. CTA contextual "Mejorar plan" (hoy «Ver planes» → `/precios`).
 
-## `/app/configuracion/facturacion`
+## Facturación (dentro de «Plan y cuenta»)
 
-Plan, precio, ciclo, próxima renovación o fecha de fin si se cancela, uso, y botones Cambiar plan / Gestionar pago / Cancelar (los tres abren el Customer Portal).
+No hay pantalla aparte: `/app/configuracion` se retiró y redirige a `/app/uso`. Cuando se conecte Stripe, «Plan y cuenta» mostrará plan, precio, ciclo, próxima renovación o fecha de fin si se cancela, y los botones Cambiar plan / Gestionar pago / Cancelar (los tres abren el Customer Portal).
 
 ## Tests
 

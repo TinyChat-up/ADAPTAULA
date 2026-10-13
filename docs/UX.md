@@ -29,12 +29,10 @@ Profesional · educativa · accesible · moderna · tranquila · fiable. **No** 
 | `/app/adaptaciones/[id]/comparar` | Comparador original/adaptado |
 | `/app/materiales` · `/app/materiales/[id]` | Biblioteca con filtros (etapa, asignatura, estado), reintentar y eliminar · detalle: progreso real, «Adaptaula ha identificado», actividades, elementos a conservar, elementos visuales, puntos a revisar, original y corrección del contexto |
 | `/app/alumnos` · `/app/alumnos/nuevo` · `/app/alumnos/[id]` | Perfiles de alumnado · editor de perfil |
-| `/app/clases` · `/app/clases/[id]` | Clases (Fase 2) |
-| `/app/plantillas` | Plantillas visuales |
-| `/app/historial` | Historial de adaptaciones |
-| `/app/uso` | Uso del plan |
-| `/app/ayuda` | Ayuda y contacto |
-| `/app/configuracion` | Tabs: Cuenta · Workspace · Facturación · Privacidad · Datos · Notificaciones (`/app/configuracion/<tab>`) |
+| `/app/historial` | **Adaptaciones**: todas, con filtros por estado (`?estado=`) |
+| `/app/uso` | **Plan y cuenta**: uso del periodo, datos de la cuenta y ayuda (sustituye a Configuración) |
+
+**Rutas retiradas** (eran pantallas «Próximamente» sin contenido): `/app/plantillas`, `/app/ayuda`, `/app/clases` y `/app/configuracion`. Redirigen de forma temporal (`next.config.ts`) a `/app`, `/como-funciona`, `/app/alumnos` y `/app/uso`, para que ningún enlace antiguo dé un 404. Volverán al mapa cuando tengan contenido real (Clases en la Fase 2; la facturación de Stripe vivirá en «Plan y cuenta»).
 
 ### Admin — `/admin` (solo `system_admin`, 404 para el resto)
 `/admin` (KPIs) · `/admin/jobs` · `/admin/ia` · `/admin/prompts` · `/admin/usuarios`.
@@ -44,17 +42,17 @@ Profesional · educativa · accesible · moderna · tranquila · fiable. **No** 
 
 ## Navegación de la app
 
-**Escritorio — sidebar izquierda**: logo · Inicio · Adaptar material · Materiales · Alumnos · Clases · Plantillas · Historial · Uso — separador — Ayuda · Configuración — abajo: plan actual, barra de uso (%), avatar y menú de usuario. "Adaptar material" lleva un estilo primario.
+**Escritorio — sidebar izquierda**: logo · Inicio · Adaptar material · Materiales · Perfiles · Adaptaciones — abajo: Plan y cuenta, tarjeta del plan con la barra de uso (enlaza a Plan y cuenta), avatar y cerrar sesión. «Adaptar material» lleva el color primario. La entrada activa lleva fondo, barra lateral y `aria-current` (nunca solo color); «Adaptaciones» también queda activa dentro de `/app/adaptaciones/[id]`.
 
-**Móvil — barra inferior**: Inicio · Adaptar (botón central) · Materiales · Alumnos · Más (menú con el resto).
+**Móvil — cabecera fija** con el logo y el plan (`Plan Free · 1/5`, enlaza a Plan y cuenta) **y barra inferior**: Inicio · Materiales · Adaptar (botón central) · Perfiles · Más (hoja inferior con Adaptaciones, Plan y cuenta y Cerrar sesión).
 
-Las secciones que dependen de un flag o un plan (p. ej. Clases en Free) se muestran con su estado bloqueado y una explicación, no se ocultan sin más.
+En la navegación solo hay pantallas con contenido real: nada de entradas «Próximamente». Cuando una sección exista y dependa de un flag o un plan (p. ej. Clases en Free), se mostrará con su estado bloqueado y una explicación, no se ocultará sin más.
 
 ## Flujos clave
 
 **Onboarding (máx. 3 pasos):** ¿Qué enseñas? (Primaria / ESO / Bachillerato / varias) → ¿Cómo quieres empezar? (Adaptar una ficha ahora / Crear primero un perfil / Ver ejemplo) → Privacidad ("Puedes utilizar alias en lugar del nombre real de tus alumnos.") → **Entrar en Adaptaula**.
 
-**Dashboard:** "Buenos días, [nombre]" (saludo según la hora en Europe/Madrid) · CTA grande **+ Adaptar material** · tarjetas (adaptaciones este mes, perfiles, plan, uso) · *(Fase 6)* **Necesitan tu atención** (pendientes de empezar, esperando revisión, listas para crear la ficha, con error o que necesitan revisión), **En curso** y **Fichas preparadas** (con «Ver todas las adaptaciones» → historial); si hay materiales analizados y ninguna adaptación, «Siguiente paso: adapta un material» · Tus materiales (últimos 4) · Tus clases. Estado vacío: *"Empieza subiendo una ficha que ya utilizas."*
+**Dashboard:** cabecera con "Buenos días, [nombre]" (saludo según la hora en Europe/Madrid) y una línea que cambia con el estado (lo que necesita atención, lo que está en curso o «¿Qué material adaptamos hoy?») · CTA grande **Adaptar material** (y «Crear un perfil» si aún no hay ninguno) · tarjetas (adaptaciones este mes con su barra, perfiles, plan con su renovación) · *(Fase 6)* **Necesitan tu atención** (pendientes de empezar, esperando revisión, listas para crear la ficha, con error o que necesitan revisión), **En curso** y **Fichas preparadas** (con «Ver todas las adaptaciones» → Adaptaciones; en el móvil el enlace se lee «Ver todas» y conserva el nombre completo para lectores de pantalla); si hay materiales analizados y ninguna adaptación, «Siguiente paso: adapta un material» · Tus materiales (últimos 4, la tarjeta entera es el enlace). Estado vacío: *"Empieza subiendo una ficha que ya utilizas."* con los tres pasos (Sube tu ficha · Elige un perfil · Haz magia).
 
 **Wizard `/app/adaptar`** (estado en la URL y en el cliente; un paso visible cada vez, con barra de progreso y atrás/siguiente):
 1. **Material** *(implementado en `/app/adaptar` como pantalla propia)*: título «Adapta un material», área de arrastrar y soltar («Arrastra tu ficha aquí» / «o selecciona un archivo»), formatos y límites del plan visibles, tarjeta del archivo (nombre, tipo, tamaño, vista previa si es imagen, cambiar/quitar) y el botón «Analizar material». Aviso de privacidad **siempre visible, sin modal**: «Evita incluir información personal innecesaria del alumnado en los archivos que subas.» Todavía no pide perfil: se elige después, cuando el material está comprendido. Las páginas de un PDF se muestran tras la subida (el navegador no puede contarlas con fiabilidad).
@@ -85,6 +83,7 @@ Optimización del camino rápido: con un perfil guardado y el contexto autodetec
 | `muted-foreground` | `#556070` | texto secundario | 6,4:1 |
 | `primary` | `#2453C2` | acción principal, enlaces, foco | 6,8:1 |
 | `primary-foreground` | `#FFFFFF` | texto sobre primario | — |
+| `primary-soft` | `#EAF0FC` | fondo suave de marca: insignias de icono, entrada activa, paneles destacados | `primary` encima: 5,9:1 |
 | `accent` | `#0F766E` | acentos (verde azulado) | 5,5:1 |
 | `accent-soft` | `#E6F4F2` | fondos suaves | — |
 | `success` | `#15803D` | | 5,0:1 |
@@ -99,10 +98,25 @@ Los estados nunca dependen solo del color: siempre llevan un icono y/o texto. Lo
 - **Material (fichas):** por defecto Atkinson Hyperlegible Next, con alternativas Source Sans 3 y Lexend, configurables en la plantilla. Ninguna se presenta como "fuente para dislexia" ni como solución; se ofrecen como preferencias de presentación (tamaño, interlineado, espaciado entre letras y palabras, ancho de línea).
 
 ### Forma y espacio
-Radio 10 px (tarjetas) / 8 px (controles); sombras discretas (`0 1px 2px rgb(16 24 40 / .06)`); escala de espaciado de 4 px; mucho aire. Iconos Lucide de 1,75 px de trazo, siempre con etiqueta visible o `aria-label`.
+Radio 12 px (tarjetas) / 8 px (controles) / 16 px (paneles destacados: cabecera del inicio, tarjeta de acceso); sombras discretas (`shadow-card`: `0 1px 2px rgb(16 24 40 / .06)`) y una elevación teñida de marca para las tarjetas enlazadas (`shadow-lift`); escala de espaciado de 4 px; mucho aire. Iconos Lucide de 1,75 px de trazo, siempre con etiqueta visible o `aria-label`; en las cabeceras y tarjetas de resumen van dentro de una `IconBadge` (cuadro teñido, decorativo).
 
 ### Componentes
-Primitivas propias en `components/ui` (Button, campos, Alert, Card, Badge, UsageMeter, Skeleton, EmptyState, PageHeader, ChoiceCards, ConfirmDialog con `<dialog>` nativo); shadcn/Radix se incorporará si hace falta un componente complejo. Componentes de producto: `PageHeader`, `EmptyState`, `ErrorState`, `LimitReachedCard`, `UsageMeter`, `StepProgress`, `FileDropzone`, `ProfileSummary`, `ChangeSummary`, `MaterialRenderer`.
+Primitivas propias en `components/ui` (Button, campos, Alert, Card —con `interactive` para las enlazadas—, IconBadge, Badge, UsageMeter, Skeleton, EmptyState, PageHeader —con `icon` opcional—, ChoiceCards, ConfirmDialog con `<dialog>` nativo) y `PageSkeleton` (`components/app`) para los `loading.tsx` de cada sección; shadcn/Radix se incorporará si hace falta un componente complejo. Componentes de producto: `PageHeader`, `EmptyState`, `ErrorState`, `LimitReachedCard`, `UsageMeter`, `StepProgress`, `FileDropzone`, `ProfileSummary`, `ChangeSummary`, `MaterialRenderer`.
+
+### Movimiento
+
+El movimiento orienta y confirma; nunca retrasa la tarea. Duraciones de 150 a 460 ms con la curva `--ease-out-soft`; clases en `globals.css`:
+
+- **Entradas:** `page-enter` (cada sección de la app al navegar, desde `app/app/(shell)/template.tsx`), `stagger` (tarjetas y filas, 50 ms de desfase, como mucho 300 ms), `pop-in` (un bloque que aparece en su sitio, p. ej. el archivo elegido) y `meter-fill` (las barras de cuota se llenan).
+- **Respuesta:** `lift` en las tarjetas enlazadas (se elevan al pasar el ratón **y** al enfocarlas con el teclado), botones con `active:scale-[0.98]`, flechas que avanzan al pasar el ratón, zona de subida que reacciona al arrastrar.
+- **Carga:** esqueletos con `skeleton-shimmer` y la forma real de la pantalla (`loading.tsx` de Inicio, Materiales, Perfiles, Adaptaciones y Plan y cuenta).
+- **Web pública:** `reveal` (las secciones se desplazan al entrar en pantalla, solo donde el navegador admite `animation-timeline: view()`) y decoración `float-soft`, `nudge-x` y `glow-in`.
+
+Reglas:
+
+1. Todo lo que lleva texto solo se **desplaza** (`transform`): nunca se anima su opacidad, para que el texto tenga siempre su contraste real (también para axe en los E2E, que audita justo al navegar). Solo la decoración sin texto puede aparecer con opacidad.
+2. Con `prefers-reduced-motion: reduce` todo queda quieto: duraciones a 0, sin elevación y sin animaciones infinitas.
+3. Ningún `loading.tsx` envuelve `/app/adaptaciones/[id]` ni su `/vista`: el *streaming* enviaría la respuesta antes del `notFound()` y el 404 de otra cuenta pasaría a ser un 200. Por eso Inicio y la lista de Materiales cuelgan de los grupos de rutas `(inicio)` y `(lista)`.
 
 ## Análisis del material (fase 3)
 
@@ -136,7 +150,7 @@ Un solo camino, sobre las pantallas existentes y sin asistente nuevo:
 
 **Solo lectura** (rol `viewer`): ve materiales, adaptaciones, estados, la ficha y su PDF; no ve comandos («Adaptar material», «Preparar propuesta», revisión, «Crear material adaptado», reintentar, cancelar) y su pantalla de adaptación no pide ejecutar nada.
 
-**Historial** (`/app/historial`): todas las adaptaciones, de la actividad más reciente a la más antigua; vacío → «Adaptar material».
+**Adaptaciones** (`/app/historial`, antes «Historial»): todas las adaptaciones, de la actividad más reciente a la más antigua, con filtros por estado (Todas · Necesitan tu atención · En curso · Preparadas · Canceladas; `?estado=`, con el recuento en cada filtro y `aria-current` en el elegido). Solo se ofrecen los filtros con resultados; vacío → «Adaptar material»; un filtro sin resultados → «Ver todas».
 
 ## Pantalla de adaptación (`/app/adaptaciones/[id]`)
 

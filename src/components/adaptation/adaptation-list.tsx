@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, FileText, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import type { AdaptationListItem } from "@/lib/adaptation/orchestration/page-data";
 import { listHref, type ListGroup } from "@/lib/adaptation/presentation/list";
 import { formatDateTime } from "@/lib/format/date";
@@ -29,24 +29,32 @@ export function ListStateBadge({ item }: { item: Pick<AdaptationListItem, "state
  */
 export function AdaptationList({ items, show = { material: true, profile: true } }: { items: AdaptationListItem[]; show?: { material?: boolean; profile?: boolean } }) {
   return (
-    <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
+    <ul className="stagger divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
       {items.map((item) => {
         const title = show.material ? item.materialTitle : item.profileName ? `Para ${item.profileName}` : "Adaptación";
         const detail = [show.material && show.profile && item.profileName ? `Para ${item.profileName}` : null, `Actualizada el ${formatDateTime(item.updatedAt)}`].filter(Boolean).join(" · ");
         return (
-          <li key={item.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:gap-4">
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="truncate font-medium">{title}</p>
-              <p className="text-xs text-muted-foreground">{detail}</p>
+          <li key={item.id} className="group flex flex-col gap-3 p-4 transition-colors duration-150 hover:bg-primary-soft/40 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span aria-hidden className="hidden size-10 shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary sm:inline-flex">
+                <FileText className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="truncate font-medium">{title}</p>
+                <p className="text-xs text-muted-foreground">{detail}</p>
+              </div>
             </div>
-            <ListStateBadge item={item} />
-            <Link
-              href={listHref(item.id, item.state)}
-              className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2"
-              aria-label={`${item.state.cta}: ${item.materialTitle}${item.profileName ? `, para ${item.profileName}` : ""}`}
-            >
-              {item.state.cta}
-            </Link>
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              <ListStateBadge item={item} />
+              <Link
+                href={listHref(item.id, item.state)}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-sm font-medium text-primary underline underline-offset-2 transition-colors hover:bg-primary-soft"
+                aria-label={`${item.state.cta}: ${item.materialTitle}${item.profileName ? `, para ${item.profileName}` : ""}`}
+              >
+                {item.state.cta}
+                <ArrowRight aria-hidden className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+              </Link>
+            </div>
           </li>
         );
       })}

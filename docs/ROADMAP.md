@@ -122,12 +122,13 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
 
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
-- Plan efectivo, entitlements en todas las acciones, `/app/uso`, `/app/configuracion/facturacion` y `/precios` conectada.
+- Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.
 - Copy de límite alcanzado en todos los puntos.
 - **Tests:** unit (plan efectivo, periodos); integración (webhooks: firma, duplicados, orden invertido); E2E (Free genera 5 y la 6.ª se bloquea; upgrade con Stripe test + CLI; un fallo de IA no consume cuota).
 
 ## Fase 7 — Pulido, accesibilidad y seguridad (cierre del MVP)
 - Auditoría WCAG 2.2 AA (axe + revisión manual con teclado y lector de pantalla).
+- **Hecho (2026-10-13, ADR-024):** navegación sin pantallas «Próximamente» (Clases, Plantillas, Ayuda y Configuración retiradas con redirección), «Plan y cuenta», «Adaptaciones» con filtros, esqueletos por sección y movimiento con `prefers-reduced-motion`. Pendiente: revisión manual con teclado y lector de pantalla.
 - Cabeceras de seguridad + CSP con nonce; rate limits; revisión de logs sin datos sensibles.
 - Admin mínimo: KPIs, jobs, coste de IA, prompts (activar versión).
 - Retención (cron), exportar mis datos, eliminar cuenta.
