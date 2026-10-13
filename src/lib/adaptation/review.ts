@@ -24,6 +24,7 @@ import {
   responseFormatAppropriate,
   traceabilityComplete,
   visualLoadReasonable,
+  visualReferencesResolved,
   type ReviewInput,
 } from "./review-checks";
 
@@ -42,6 +43,7 @@ const DETERMINISTIC: Partial<Record<ReviewCheck, (input: ReviewInput) => CheckRe
   reading_load_reasonable: readingLoadReasonable,
   no_infantilization: noInfantilization,
   traceability_complete: traceabilityComplete,
+  visual_references_resolved: visualReferencesResolved,
 };
 
 const RANK: Record<CheckStatus, number> = { SKIPPED: 0, PASS: 1, WARN: 2, FAIL: 3 };

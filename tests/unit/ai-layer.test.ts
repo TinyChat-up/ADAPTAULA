@@ -567,7 +567,10 @@ describe("registry and router (aliases, never model ids in business code)", () =
   });
 
   it("fails with a categorized error when nothing usable is configured", () => {
-    expect(() => resolveModel("IMAGE_FAST", {})).toThrowError(expect.objectContaining({ code: "not_configured" }));
+    // Image aliases have verified defaults (an image model, not a text one); an invalid reference is still refused.
+    expect(resolveModel("IMAGE_FAST", {})).toMatchObject({ alias: "IMAGE_FAST", provider: "openai", model: "gpt-image-2.5-flare" });
+    expect(resolveModel("IMAGE_QUALITY", {})).toMatchObject({ alias: "IMAGE_QUALITY", provider: "openai", model: "gpt-image-2.5-sunburst" });
+    expect(() => resolveModel("IMAGE_FAST", { AI_MODEL_IMAGE_FAST: "sin-proveedor" })).toThrowError(expect.objectContaining({ code: "not_configured" }));
     expect(() => resolveModel("STANDARD", { AI_MODEL_STANDARD: "sin-proveedor" })).toThrowError(expect.objectContaining({ code: "not_configured" }));
     expect(parseModelRef("anthropic:claude-x")).toEqual({ provider: "anthropic", model: "claude-x" });
     expect(parseModelRef("desconocido:x")).toBeNull();

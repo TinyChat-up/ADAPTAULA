@@ -23,6 +23,7 @@ export const REVIEW_CHECKS = [
   "age_appropriate",
   "no_infantilization",
   "traceability_complete",
+  "visual_references_resolved",
 ] as const;
 export type ReviewCheck = (typeof REVIEW_CHECKS)[number];
 
@@ -42,6 +43,8 @@ export const CHECK_METHODS: Record<ReviewCheck, "deterministic" | "ai" | "hybrid
   age_appropriate: "ai",
   no_infantilization: "hybrid",
   traceability_complete: "deterministic",
+  /** An activity that tells the student to look at a picture the sheet does not have cannot be done as written. */
+  visual_references_resolved: "deterministic",
 };
 
 /** A FAIL here means the document cannot be delivered as it is: it changes what is taught or gives the answer away. */

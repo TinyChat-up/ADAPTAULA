@@ -103,6 +103,7 @@ export const CHECK_COPY: Record<ReviewCheck, string> = {
   age_appropriate: "Comprueba que el tono es adecuado para la edad del alumnado.",
   no_infantilization: "Comprueba que el material no resulta infantil.",
   traceability_complete: "Hay una ayuda repetida o que no se corresponde con ninguna decisión aprobada.",
+  visual_references_resolved: "Una actividad remite a una imagen que la ficha no tiene: añade la imagen o cambia la consigna.",
 };
 const CHECK_FALLBACK = "Hay una observación que conviene revisar antes de usar la ficha.";
 

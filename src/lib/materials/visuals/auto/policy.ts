@@ -1,14 +1,16 @@
 import "server-only";
 import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeText } from "@/lib/adaptation/text";
 import { materialNumbers } from "@/lib/adaptation/facts";
-import { VISUAL_POLICY_VERSION, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
+import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
+import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { drawableFamily, generateEquivalentFigure } from "@/lib/visuals/from-task";
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, specIssues, type VisualSpec } from "@/lib/visuals/spec";
 import type { RewriteDraft, SubstituteDraft, SupportDraft, VisualAssistants } from "./assistants";
+import { ILLUSTRATION_LIMITS, type IllustrationOutcome, type IllustrationRequest } from "../illustrate/service";
 
 /**
  * The visual policy of «Hacer magia», decided for one assembled sheet (rungs and categories: `src/lib/adaptation/visual-policy.ts`).
@@ -28,6 +30,11 @@ export interface MagicVisualDeps {
   corroborate?(visual: AnalysisVisual, activityTexts: readonly string[]): Promise<VisualSpec | null>;
   /** Absent → no model rung (the deterministic ones still run). */
   assistants?: VisualAssistants | null;
+  /**
+   * A new educational illustration (image model + vision review, `../illustrate`), bound to this adaptation. Absent → not
+   * available to it (flag, plan, quota or credentials): its rung is skipped.
+   */
+  illustrate?: ((request: Omit<IllustrationRequest, "workspaceId" | "adaptationId">) => Promise<IllustrationOutcome>) | null;
   recordAiRun?(run: AIRunRecord): Promise<void>;
 }
 
@@ -36,9 +43,17 @@ export interface MagicVisualInput {
   document: MaterialDocument;
   requiredVisuals: readonly string[];
   stage: string | null;
+  grade?: string | null;
+  subject?: string | null;
   /** The functional dimensions the sheet attends (no student data): they decide how many steps a rewrite may add. */
   functionalNeeds?: readonly string[];
 }
+
+/** Kinds of original picture an image model may stand in for: never data, measures, scales or real places. */
+const ILLUSTRABLE = new Set<AnalysisVisual["kind"]>(["image", "diagram", "other"]);
+const EXACT_IN_WORDS = /\b\d+(?:[.,]\d+)?\s?(?:mm|cm|dm|m|km|g|kg|l|ml|%|°|º|grados|metros|litros|euros|€)\b|\bescala\b/;
+const LOW_DETAIL: ReadonlySet<string> = new Set(["visual_distraction_reduction", "visual_density"]);
+const illustrable = (visual: AnalysisVisual) => ILLUSTRABLE.has(visual.kind) && visual.role !== "decorative" && !EXACT_IN_WORDS.test(normalizeText(`${visual.title ?? ""} ${visual.description} ${visual.text ?? ""}`));
 
 /** Words that point at an image the student will not see. */
 const IMAGE_WORDS = /\b(imagen|imagenes|figura|figuras|dibujo|dibujos|grafico|ilustracion|foto|fotografia|observa|mira)\b/;
@@ -167,14 +182,53 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   const ready = await deps.readyOriginals(needs.filter((n) => n.origin === "original").map((n) => n.key));
   const outcomes: VisualNeedOutcome[] = [];
   const record = async (run: AIRunRecord) => deps.recordAiRun?.(run).catch(() => undefined);
+  const functionalNeeds = input.functionalNeeds ?? [];
+  const supports = functionalNeeds.flatMap((d) => (d in DIMENSIONS ? [DIMENSIONS[d as DimensionKey].label] : []));
+  let illustrations = 0;
+  /** One illustration for a need: within the adaptation's limit, with the activities' own words and answers. */
+  const illustrate = async (needKey: string, activities: readonly AnalysisActivity[], missing: string | null, purpose: string): Promise<IllustrationOutcome | null> => {
+    if (!deps.illustrate || illustrations >= ILLUSTRATION_LIMITS.perAdaptation || activities.length === 0) return null;
+    illustrations += 1;
+    const objective = input.analysis.pedagogical_intent.objectives.filter((o) => activities.some((a) => a.objective_ids.includes(o.id))).map((o) => o.text).join(". ") || null;
+    const answers = activities.map((a) => a.expected_answer.value).filter((v): v is string => Boolean(v));
+    return deps.illustrate({ needKey, stage: input.stage, grade: input.grade ?? null, subject: input.subject ?? null, activity: activities.map((a) => activityText(input.analysis, a.id)).join("\n"), objective, missing, purpose, supports, expectedAnswer: answers.length > 0 ? answers.join("; ") : null, signatures: signaturesFor(input.analysis, activities.map((a) => a.id)), lowDetail: functionalNeeds.some((d) => LOW_DETAIL.has(d)) });
+  };
 
   for (const need of needs) {
     const attempts: string[] = [];
-    const done = (category: VisualNeedCategory, resolution: VisualAction) => outcomes.push({ ...need, category, resolution, attempts });
+    const visual = need.origin === "original" ? input.analysis.visuals.find((v) => v.id === need.key) : undefined;
+    const done = (category: VisualNeedCategory, resolution: VisualAction) => {
+      const outcome = { ...need, category, resolution, attempts };
+      outcomes.push({ ...outcome, contract: contractOf(outcome, visual?.kind ?? null) });
+    };
     const signatures = signaturesFor(input.analysis, need.activityIds);
+    const activities = need.activityIds.map((id) => input.analysis.activities.find((a) => a.id === id)).filter((a): a is AnalysisActivity => a !== undefined);
+    // Only a rung really tried is recorded (no illustrations for this adaptation → nothing to record).
+    const illustrated = (outcome: IllustrationOutcome | null) => {
+      if (!outcome) return false;
+      if (!outcome.ok) {
+        attempts.push(`illustrate:${outcome.reason}`);
+        return false;
+      }
+      attempts.push("illustrate");
+      done("generated_illustration", { action: "illustration", asset: { id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, alt: outcome.asset.alt });
+      return true;
+    };
+
+    if (need.origin === "referenced") {
+      // The activity's words point at a picture the sheet does not have: drawn from its own data, or illustrated; never delivered as is.
+      attempts.push("generate");
+      const generated = generateEquivalentFigure({ kind: "other", title: null, description: "", text: null }, activities);
+      if (generated) {
+        done("generatable_support_visual", { action: "figure", spec: generated.spec, provenance: "generated" });
+        continue;
+      }
+      if (illustrated(await illustrate(need.key, activities, null, "La actividad remite a una imagen que la ficha no tiene"))) continue;
+      done("unresolved_visual", { action: "unresolved", reason: deps.illustrate ? "referenced_picture_not_built" : "referenced_picture_unavailable" });
+      continue;
+    }
 
     if (need.origin === "original") {
-      const visual = input.analysis.visuals.find((v) => v.id === need.key);
       attempts.push("locate");
       if (ready.has(need.key)) {
         done("exact_original_visual", { action: "located" });
@@ -191,7 +245,6 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         done("rewritable_without_visual", { action: "omit", reason: "optional_original" });
         continue;
       }
-      const activities = need.activityIds.map((id) => input.analysis.activities.find((a) => a.id === id)).filter((a): a is AnalysisActivity => a !== undefined);
       if (!visual || activities.length === 0) {
         done("unresolved_visual", { action: "unresolved", reason: "exact_visual_unavailable" });
         continue;
@@ -203,10 +256,13 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         done("generatable_support_visual", { action: "figure", spec: generated.spec, provenance: "generated" });
         continue;
       }
-      const ctx = { analysis: input.analysis, visual, signatures, functionalNeeds: input.functionalNeeds ?? [] };
-      const visualText = visualTextOf(visual);
-      // 4 · Rewritten without it, only when the figure was a mere data source (decided before any model is asked).
       const required = activities.some((a) => taskProfile(input.analysis, a, visual).representation === "required");
+      const drawable = drawableFamily(visual, activities) !== null;
+      // 4 · A new illustration for a picture that carries no exact data (a cell, a scene, a process), reviewed before it is used.
+      if (illustrable(visual) && illustrated(await illustrate(need.key, activities, visualTextOf(visual), "Sustituye a una imagen del original que no está disponible"))) continue;
+      const ctx = { analysis: input.analysis, visual, signatures, functionalNeeds };
+      const visualText = visualTextOf(visual);
+      // 5 · Rewritten without it, only when the figure was a mere data source (decided before any model is asked).
       if (!required && deps.assistants && visualText) {
         attempts.push("rewrite");
         const rewrites: ActivityRewrite[] = [];
@@ -222,20 +278,23 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
           continue;
         }
       }
-      // 5 · A new equivalent activity (with its own figure when the representation can be drawn); a rejected proposal is asked again once.
-      if (deps.assistants) {
+      // 6 · A new equivalent activity: with its own figure when the representation is required (only a drawable one can be);
+      // a representation we cannot draw is never replaced by words.
+      if (deps.assistants && (drawable || !required)) {
         attempts.push("substitute");
-        const drawable = drawableFamily(visual, activities) !== null;
         const substituted = await substituteAll(deps.assistants, record, input, activities, visualText, { ...ctx, drawable });
         if (substituted) {
           done("substituted_activity", { action: "substitute", activities: substituted.activities, spec: substituted.spec });
           continue;
         }
       }
-      done("unresolved_visual", { action: "unresolved", reason: deps.assistants ? "no_equivalent_activity" : "no_model_available" });
+      done("unresolved_visual", { action: "unresolved", reason: !deps.assistants && !deps.illustrate ? "no_model_available" : required && !drawable ? "representation_not_buildable" : "no_equivalent_activity" });
       continue;
     }
 
+    // A support a decision asked for: a picture (an illustration) when that is what it asked, a drawn sequence or cards otherwise.
+    const wantsPicture = need.purpose !== undefined && requestedStyle(input.document, need.key) !== null && ["illustration", "photo_like"].includes(requestedStyle(input.document, need.key)!);
+    if (wantsPicture && illustrated(await illustrate(need.key, activities, null, need.purpose ?? "Apoyo visual para la actividad"))) continue;
     attempts.push("generate");
     // A support for the whole sheet (no activity linked) is built from the sheet itself; it must give away no answer of any activity.
     const sheetWide = need.activityIds.length === 0;
@@ -252,6 +311,7 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       done("generatable_support_visual", { action: "figure", spec, provenance: "generated" });
       continue;
     }
+    if (!wantsPicture && need.essential && illustrated(await illustrate(need.key, activities, null, need.purpose ?? "Apoyo visual para la actividad"))) continue;
     if (!need.essential) {
       attempts.push("omit");
       done("rewritable_without_visual", { action: "omit", reason: "optional_support" });
@@ -260,6 +320,12 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     done("unresolved_visual", { action: "unresolved", reason: "support_unavailable" });
   }
   return { policy_version: VISUAL_POLICY_VERSION, needs: outcomes };
+}
+
+/** The style a decision asked for its visual (`requested` image block), if the sheet has it. */
+function requestedStyle(document: MaterialDocument, decisionId: string): string | null {
+  const block = allBlocks(document).find((b) => b.type === "image" && b.source.kind === "requested" && b.source.decision_id === decisionId);
+  return block?.type === "image" && block.source.kind === "requested" ? block.source.style : null;
 }
 
 const SUBSTITUTE_ATTEMPTS = 2;

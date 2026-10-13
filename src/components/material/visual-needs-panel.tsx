@@ -22,7 +22,7 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
         {need.origin === "original" ? need.label : `Recurso: ${need.label}`}
         {need.essential && !done ? " · imprescindible para imprimir la ficha" : ""}
       </p>
-      {canWrite && need.origin === "original" ? (
+      {canWrite && need.origin === "original" && !need.generated ? (
         <div className="flex flex-wrap items-start gap-2">
           <LinkButton size="sm" variant={need.status === "ready" ? "secondary" : "primary"} href={locateHref(need.key)}>
             {need.status !== "ready" ? "Localizar en el original" : need.locatedBy === "automatic" ? "Cambiar" : "Cambiar la selección"}
@@ -34,7 +34,7 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
           ) : null}
         </div>
       ) : null}
-      {canWrite && need.origin === "requested" ? (
+      {canWrite && need.origin === "requested" && !need.generated ? (
         <ResourceActions adaptationId={adaptationId} decisionId={need.key} canOmit={need.status === "to_provide" && need.omittable && !need.essential} hasResource={need.status === "provided"} />
       ) : null}
     </li>

@@ -11,7 +11,7 @@ export const DEFAULT_MODEL_REFS: Record<ModelAlias, string | null> = {
   PREMIUM: "anthropic:claude-opus-5-5",
   // Verified on 2026-10-12 in the provider's model list and SDK (openai@7.24.0 `ImageModel`): «flare» is the fast everyday
   // generator, «sunburst» the most capable one (generation and edits). Overridable with AI_MODEL_IMAGE_*; used only when
-  // FLAG_AI_IMAGES_ENABLED is on and OPENAI_API_KEY is set.
+  // FLAG_AI_IMAGES_ENABLED is on and the provider's credentials are configured.
   IMAGE_FAST: "openai:gpt-image-2.5-flare",
   IMAGE_QUALITY: "openai:gpt-image-2.5-sunburst",
 };

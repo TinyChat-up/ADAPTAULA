@@ -104,11 +104,10 @@ const STOP = new Set(["actividad", "escribe", "escribela", "respuesta", "fraccio
 
 /**
  * A NEW activity in place of one whose figure is lost (`visual_substitute`). It may change the material it works on, never what it
- * works: the operation stays (acting on or interpreting a representation keeps a figure the student acts on or reads, when that
- * representation can be drawn; one we cannot draw becomes a guided activity in words), the response type stays (marking stays on
- * the figure when there is one), the same actions are asked, no data are
- * invented beyond its own figure, the demand and the reading load stay, and it is about the same content (shared content words
- * with the original or its objective).
+ * works: when the representation is required (acting on it, interpreting it, or it is the objective), the substitute brings its
+ * own figure and keeps the operation — a representation we cannot draw is never replaced by words (that is the illustration's
+ * rung, or an honest stop) —; marking stays on the figure; the same actions are asked; no data are invented beyond its own figure;
+ * the demand and the reading load stay; and it is about the same content (shared content words with the original or its objective).
  */
 export function substitutionEquivalence(input: { analysis: MaterialAnalysis; activity: AnalysisActivity; visual: AnalysisVisual | undefined; candidate: SubstituteCandidate; needs: readonly string[]; drawable: boolean }): { equivalent: boolean; profile: TaskProfile; violations: string[] } {
   const profile = taskProfile(input.analysis, input.activity, input.visual);
@@ -118,13 +117,11 @@ export function substitutionEquivalence(input: { analysis: MaterialAnalysis; act
   const visualText = input.visual ? normalizeText([input.visual.title, input.visual.description, input.visual.text].filter(Boolean).join(" ")) : "";
   const text = normalizeText([candidate.prompt, ...candidate.steps].join(" "));
   const onFigure = input.activity.response_format === "mark" || input.activity.response_format === "draw";
-  if (profile.operation !== "use_data" && input.drawable) {
-    if (!candidate.figure) violations.push("representation_lost");
-    else if (operationOf(text, onFigure ? input.activity.response_format : "write_text", candidate.lines === 0) !== profile.operation) violations.push(`operation_changed(${profile.operation})`);
-  }
-  // Marking stays on a figure when one can be drawn; a representation we cannot draw becomes a guided activity answered in writing.
-  if (onFigure && input.drawable && (!candidate.figure || candidate.lines !== 0)) violations.push(`response_type_changed(${input.activity.response_format})`);
-  if ((!onFigure || !input.drawable) && candidate.lines === 0) violations.push("no_answer_space");
+  if (profile.representation === "required" && !candidate.figure) violations.push(input.drawable ? "representation_lost" : "representation_not_drawable");
+  if (profile.operation !== "use_data" && candidate.figure && operationOf(text, onFigure ? input.activity.response_format : "write_text", candidate.lines === 0) !== profile.operation) violations.push(`operation_changed(${profile.operation})`);
+  // Marking stays on the figure: no writing lines instead of it.
+  if (onFigure && (!candidate.figure || candidate.lines !== 0)) violations.push(`response_type_changed(${input.activity.response_format})`);
+  if (!onFigure && candidate.lines === 0) violations.push("no_answer_space");
   const verbs = (s: string) => new Set([...s.matchAll(ACTION_VERBS)].map((m) => m[1]!));
   for (const v of verbs(original)) if (!verbs(text).has(v)) violations.push(`action_lost(${v})`);
   const figureNumbers = candidate.figure ? specNumbers(candidate.figure) : [];

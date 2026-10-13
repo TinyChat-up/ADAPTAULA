@@ -108,13 +108,13 @@ describe("sustitución por otra actividad equivalente (cuando el recurso origina
     expect(!leaked.ok && leaked.violations).toContain("answer_leaked(figure)");
   });
 
-  it("un recurso que no sabemos dibujar (esquema de una célula) puede pasar a una actividad guiada por escrito sobre el mismo contenido", () => {
+  it("un recurso que no sabemos dibujar (esquema de una célula) NO se sustituye por palabras: eso es la ilustración revisada, o la parada", () => {
     const a = structuredClone(analysis);
     a.visuals[1] = { ...a.visuals[1]!, kind: "diagram", title: null, description: "Esquema de una célula animal con membrana, citoplasma y núcleo señalados.", text: null };
     Object.assign(a.activities.find((x) => x.id === "act_4")!, { instruction: "Rodea en el esquema el núcleo de la célula.", objective_ids: ["obj_4"] });
     a.pedagogical_intent.objectives = a.pedagogical_intent.objectives.map((o) => (o.id === "obj_4" ? { ...o, text: "Identificar las partes de la célula animal" } : o));
-    expect(sub(a, "act_4", "vis_2", { prompt: "La célula animal tiene membrana, citoplasma y núcleo. Escribe qué parte de la célula guarda la información y controla su actividad.", lines: 2, figure: null }, false)).toMatchObject({ ok: true, spec: null });
-    const unrelated = sub(a, "act_4", "vis_2", { prompt: "Escribe el nombre de tres animales que viven en el mar y explica cómo respiran.", lines: 2, figure: null }, false);
-    expect(!unrelated.ok && unrelated.violations).toContain("objective_unrelated");
+    const guided = sub(a, "act_4", "vis_2", { prompt: "La célula animal tiene membrana, citoplasma y núcleo. Escribe qué parte de la célula guarda la información y controla su actividad.", lines: 2, figure: null }, false);
+    expect(guided.ok).toBe(false);
+    expect(!guided.ok && guided.violations).toEqual(expect.arrayContaining(["representation_not_drawable", "response_type_changed(mark)"]));
   });
 });

@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { estimateCostUsd } from "@/lib/ai/costs";
 import { toAIError } from "@/lib/ai/errors";
 import { parseStructured } from "@/lib/ai/structured";
-import type { AIProvider, AIPurpose, AIRunRecord, ModelSelection } from "@/lib/ai/types";
+import type { AIProvider, AIPurpose, AIRunRecord, ContentPart, ModelSelection } from "@/lib/ai/types";
 
 /**
  * The model calls of the visual policy of «Hacer magia», through `src/lib/ai` (alias only). Each answer is parsed with Zod and
@@ -25,10 +25,15 @@ export interface VisualAssistants {
   substitute(input: { stage: string | null; activity: string; objective: string | null; visual: string }): Promise<{ draft: SubstituteDraft | null; run: AIRunRecord }>;
 }
 
-async function call<S extends z.ZodType>(provider: AIProvider, selection: ModelSelection, purpose: AIPurpose, prompt: { key: string; version: number; system: string; output: { name: string; schema: S } }, text: string): Promise<{ draft: z.infer<S> | null; run: AIRunRecord }> {
+/**
+ * One structured call of a visual assistant: the answer parsed with Zod and returned as an untrusted draft, with its `ai_runs`
+ * record (no content). Shared by the assistants here and the illustration pipeline (`../illustrate`).
+ */
+export async function callStructured<S extends z.ZodType>(provider: AIProvider, selection: ModelSelection, purpose: AIPurpose, prompt: { key: string; version: number; system: string; output: { name: string; schema: S } }, content: string | ContentPart[], maxOutputTokens = 900): Promise<{ draft: z.infer<S> | null; run: AIRunRecord }> {
   const base = { purpose, attempt: 1, alias: selection.alias, provider: selection.provider, model: selection.model, effort: selection.effort, promptKey: prompt.key, promptVersion: prompt.version };
   try {
-    const response = await provider.generateStructured({ selection, system: prompt.system, messages: [{ role: "user", content: [{ type: "text", text }] }], output: { name: prompt.output.name, schema: prompt.output.schema, delivery: "prompted" }, maxOutputTokens: 900, timeoutMs: 45_000 });
+    const parts: ContentPart[] = typeof content === "string" ? [{ type: "text", text: content }] : content;
+    const response = await provider.generateStructured({ selection, system: prompt.system, messages: [{ role: "user", content: parts }], output: { name: prompt.output.name, schema: prompt.output.schema, delivery: "prompted" }, maxOutputTokens, timeoutMs: 45_000 });
     const u = response.usage;
     const run: AIRunRecord = { ...base, inputTokens: u.inputTokens, outputTokens: u.outputTokens, cachedInputTokens: u.cachedInputTokens, cacheCreationInputTokens: u.cacheCreationInputTokens, estimatedCostUsd: estimateCostUsd(response.provider, response.model, u), latencyMs: response.latencyMs, status: "success", errorCode: null };
     if (response.stopReason === "refusal") return { draft: null, run: { ...run, status: "refused", errorCode: "refused" } };
@@ -41,8 +46,8 @@ async function call<S extends z.ZodType>(provider: AIProvider, selection: ModelS
 
 export function createVisualAssistants(selection: ModelSelection, provider: AIProvider): VisualAssistants {
   return {
-    support: (input) => call(provider, selection, "visual_support", VISUAL_SUPPORT_V1, VISUAL_SUPPORT_V1.buildUserText(input)),
-    rewrite: (input) => call(provider, selection, "visual_rewrite", VISUAL_REWRITER_V1, VISUAL_REWRITER_V1.buildUserText(input)),
-    substitute: (input) => call(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V1, VISUAL_SUBSTITUTE_V1.buildUserText(input)),
+    support: (input) => callStructured(provider, selection, "visual_support", VISUAL_SUPPORT_V1, VISUAL_SUPPORT_V1.buildUserText(input)),
+    rewrite: (input) => callStructured(provider, selection, "visual_rewrite", VISUAL_REWRITER_V1, VISUAL_REWRITER_V1.buildUserText(input)),
+    substitute: (input) => callStructured(provider, selection, "visual_rewrite", VISUAL_SUBSTITUTE_V1, VISUAL_SUBSTITUTE_V1.buildUserText(input)),
   };
 }

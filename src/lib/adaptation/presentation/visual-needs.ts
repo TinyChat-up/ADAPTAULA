@@ -23,6 +23,8 @@ export interface VisualNeed {
   omittable: boolean;
   /** Who located an original visual that is ready: the teacher, or the automatic locator (the teacher can always change it). */
   locatedBy?: "teacher" | "automatic";
+  /** A new illustration «Hacer magia» created and had reviewed: informative only (it is changed by editing the sheet). */
+  generated?: true;
 }
 
 const activityOf = (document: MaterialDocument, blockId: string | undefined) => {
@@ -48,7 +50,7 @@ function requestedMessage(essential: boolean, status: VisualNeedStatus) {
   return "Esta actividad necesita un recurso visual que no está en el documento original: añádelo para poder imprimir la ficha.";
 }
 
-export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages?: readonly string[] }): VisualNeed[] {
+export function visualNeedsOf(input: { document: MaterialDocument; visuals: VisualState[]; requiredVisuals: readonly string[]; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages?: readonly string[]; generated?: Readonly<Record<string, unknown>> }): VisualNeed[] {
   const blocks = allBlocks(input.document);
   const original: VisualNeed[] = input.visuals.map((v) => {
     const block = blocks.find((b) => b.type === "image" && (b.source.kind === "original" || b.source.kind === "figure") && b.source.visual_ref === v.visualId);
@@ -65,8 +67,24 @@ export function visualNeedsOf(input: { document: MaterialDocument; visuals: Visu
     const status: VisualNeedStatus = r.state.status === "provided" ? "provided" : r.state.status === "omitted" ? "omitted" : "to_provide";
     return { key: r.decisionId, origin: "requested", essential: r.essential, status, label: r.purpose, activity: activityOf(input.document, block?.id), message: requestedMessage(r.essential, status), omittable: r.omittable };
   });
-  return [...original, ...requested];
+  // Illustrations «Hacer magia» created and had reviewed: shown as what they are, never as something left to do.
+  const generated: VisualNeed[] = blocks.flatMap((b) => {
+    if (b.type !== "image" || b.source.kind !== "generated") return [];
+    // Ready when its verified bytes were found (the loader's `generated`); without that information, the document's word stands.
+    const ready = !input.generated || b.source.asset_id in input.generated;
+    const key = b.source.visual_ref ?? b.source.decision_id ?? b.source.activity_ref ?? b.id;
+    const origin = b.source.decision_id ? ("requested" as const) : ("original" as const);
+    const message = b.source.visual_ref ? GENERATED_COPY.original : b.source.decision_id ? GENERATED_COPY.support : GENERATED_COPY.referenced;
+    return [{ key, origin, essential: true, status: ready ? ("ready" as const) : ("to_select" as const), label: b.caption ?? "Ilustración de la actividad", activity: activityOf(input.document, b.id), message, omittable: false, locatedBy: "automatic" as const, generated: true as const }];
+  });
+  return [...original, ...requested, ...generated];
 }
+
+const GENERATED_COPY = {
+  original: "Ilustración nueva, creada y revisada automáticamente porque la imagen del original no se podía usar.",
+  support: "Apoyo visual nuevo, creado y revisado automáticamente.",
+  referenced: "Imagen que la actividad necesitaba y la ficha no tenía, creada y revisada automáticamente.",
+} as const;
 
 /** Needs the printed sheet waits for: an essential visual still to select or to provide. */
 export const blockingNeeds = (needs: readonly VisualNeed[]) => needs.filter((n) => n.essential && (n.status === "to_select" || n.status === "to_provide"));

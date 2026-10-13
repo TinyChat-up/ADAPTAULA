@@ -8,6 +8,7 @@ import { answeredOnFigure } from "./document";
 import { blocksFor, studentText, textOf } from "./document-text";
 import { CONSTRAINT_TYPES, answersOf, evaluatesOperation, evaluatesWriting, isLiteralSourceText, isOpenActivity, materialNumbers, quotedReferences } from "./facts";
 import { STAGE_RULES, infantilizingMatches } from "./stage-rules";
+import { danglingPictureReferences } from "./visual-policy";
 import { answerSignatures, averageSentenceLength, criticalTokens, describeToken, hasToken, leakedSignature, normalizeText, numbersIn, sharedTokens, wordCount } from "./text";
 
 /**
@@ -59,7 +60,9 @@ export function traceabilityComplete({ analysis, plan, document }: ReviewInput):
     // An activity «Hacer magia» rewrote so it no longer needs a figure of the original traces to that figure instead of to a
     // decision (docs/VISUAL_RESOURCES.md § Política visual): the visual policy, not the plan, made that change.
     const rewrittenAroundVisual = origin === "adapted" && b.type === "activity" && source_refs.some((r) => r.startsWith("vis_"));
-    if ((origin === "support" || origin === "extension" || origin === "adapted") && decision_ids.length === 0 && !rewrittenAroundVisual) note("FAIL", `${b.id} sin decisión`, b.id);
+    // So does the figure or illustration it drew for the picture an activity referred to: it traces to that activity.
+    const drawnByVisualPolicy = origin === "adapted" && b.type === "image" && (b.source.kind === "figure" || b.source.kind === "generated") && source_refs.some((r) => r.startsWith("act_"));
+    if ((origin === "support" || origin === "extension" || origin === "adapted") && decision_ids.length === 0 && !rewrittenAroundVisual && !drawnByVisualPolicy) note("FAIL", `${b.id} sin decisión`, b.id);
     for (const id of decision_ids) if (!decisionIds.has(id)) note("FAIL", `${b.id} cita ${id}, que no existe`, b.id);
   }
   const removed = new Set(plan.decisions.filter((d) => d.action === "remove").map((d) => d.target));
@@ -70,6 +73,17 @@ export function traceabilityComplete({ analysis, plan, document }: ReviewInput):
   const unused = plan.decisions.filter((d) => d.action !== "keep" && d.action !== "remove" && !used.has(d.id)).map((d) => d.id);
   if (unused.length > 0) return result("traceability_complete", "WARN", unused, `Decisiones sin bloque: ${list(unused)}`);
   return result("traceability_complete", "PASS", [], "Cada bloque remite al original o a una decisión, y cada actividad está presente");
+}
+
+/**
+ * «Observa el esquema» on a sheet without the scheme: the activity cannot be done as written. A picture counts if it is linked to
+ * the activity or lies in its zone of the sheet (between the previous activity and the next one).
+ */
+export function visualReferencesResolved({ document }: ReviewInput): CheckResult {
+  const dangling = danglingPictureReferences(document);
+  if (dangling.length === 0) return result("visual_references_resolved", "PASS", [], "Cada actividad que remite a una imagen la tiene en la ficha");
+  const targets = dangling.flatMap((d) => [d.blockId, ...(d.activityId ? [d.activityId] : [])]);
+  return result("visual_references_resolved", "FAIL", targets, `Actividades que remiten a una imagen que la ficha no tiene: ${list(dangling.map((d) => d.activityId ?? d.blockId))}`);
 }
 
 export function objectivesPreserved(input: ReviewInput): CheckResult {
