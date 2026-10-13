@@ -195,6 +195,12 @@ El alta crea perfil + workspace personal + membresía `owner` en la misma transa
 ### ADR-015 · E2E sin proyecto real
 Superado por ADR-017: el backend de pruebas ejecuta ahora las migraciones reales. La prueba contra un proyecto Supabase de pruebas sigue pendiente (`E2E_BASE_URL`, confirmación de email desactivada).
 
+### ADR-021 · Sustitución visual con corrección informada y validación conservadora
+
+La sustitución debe conservar el formato de respuesta que su contrato sabe representar, las acciones evaluadas y las restricciones corroboradas en la consigna. Un formato cerrado no se convierte en líneas porque conserve el tema. Se reutilizan los detectores de acciones y tokens críticos existentes; son controles heurísticos adicionales, no sustituyen la revisión pedagógica posterior.
+
+`visual_substitute@v2` mantiene el esquema de salida de v1 y recibe el formato original. Tras una propuesta inválida, el segundo intento recibe únicamente códigos de validación permitidos, sin texto rechazado ni respuestas. Se conserva el máximo de dos intentos por actividad/ejecución; una negativa del proveedor, un error permanente o `feasible=false` no provoca corrección. Los errores transitorios conservan los reintentos técnicos existentes. La ficha solo cambia tras validar la propuesta; no se añade aprobación del docente. No hay migración, cambio comercial ni dependencia nueva. La eficacia del prompt con proveedores reales queda pendiente; el contrato se verifica con fixtures y mocks.
+
 ## Configuración
 
 - `src/lib/config/env.public.ts` (solo `NEXT_PUBLIC_*`) y `env.server.ts` (`server-only`, esquema en `env.server-schema.ts`): validación con Zod, evaluada de forma perezosa. La app arranca sin claves de IA, Stripe ni `CRON_SECRET`; cada consumidor las exige cuando se use.

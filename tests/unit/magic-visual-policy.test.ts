@@ -124,6 +124,26 @@ describe("classification and order of the rungs", () => {
     await expect(resolve(sheet(undeterminedBar), deps(["vis_2"], transient))).rejects.toMatchObject({ code: "provider_transient", kind: "retryable" });
   });
 
+  it("corrects a rejected substitute once, with validation codes and the original response format", async () => {
+    const substitute = vi.fn<VisualAssistants["substitute"]>()
+      .mockResolvedValueOnce({ draft: { ...DATA_REWRITE, prompt: `${DATA_REWRITE.prompt} Explica el resultado.`, figure: null }, run })
+      .mockResolvedValueOnce({ draft: { ...DATA_REWRITE, figure: null }, run });
+    const recordAiRun = vi.fn<NonNullable<MagicVisualDeps["recordAiRun"]>>().mockResolvedValue(undefined);
+    const plan = await resolve(sheet(dataSource), { ...deps(["vis_1"], { ...scripted(), substitute }), recordAiRun });
+    expect(outcome(plan, "vis_2").resolution.action).toBe("substitute");
+    expect(substitute).toHaveBeenCalledTimes(2);
+    expect(substitute.mock.calls[0]![0]).toMatchObject({ responseFormat: "calculate", rejectionCodes: [] });
+    expect(substitute.mock.calls[1]![0]).toMatchObject({ responseFormat: "calculate", rejectionCodes: ["action_added"] });
+    expect(recordAiRun.mock.calls.slice(-2).map(([r]) => r.attempt)).toEqual([1, 2]);
+  });
+
+  it.each(["refused", "error"] as const)("does not retry a provider %s as a pedagogical correction", async (status) => {
+    const substitute = vi.fn<VisualAssistants["substitute"]>().mockResolvedValue({ draft: null, run: { ...run, status, errorCode: status === "refused" ? "refused" : "invalid_credentials" } });
+    const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"], { ...scripted(), substitute }));
+    expect(outcome(plan, "vis_1").resolution.action).toBe("unresolved");
+    expect(substitute).toHaveBeenCalledTimes(1);
+  });
+
   it("6 · no model available and nothing derivable: the stop says why (a technical limit, not a pedagogical request)", async () => {
     const plan = await resolve(sheet(undeterminedBar), deps(["vis_2"]));
     expect(outcome(plan, "vis_1")).toMatchObject({ category: "unresolved_visual", resolution: { action: "unresolved", reason: "no_model_available" } });

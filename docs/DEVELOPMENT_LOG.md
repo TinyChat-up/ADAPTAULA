@@ -1,0 +1,17 @@
+# Registro de desarrollo
+
+Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
+
+## 2026-10-13 — Sustitución pedagógica con corrección acotada
+
+- **Base:** `main` / `6c91552`; inspeccionadas las integraciones #24 (equivalencia) y #25 (ilustraciones, contratos y costes). `origin/main` actualizado antes de crear la rama `phase8/sustitucion-pedagogica-acotada`.
+- **Problema reproducido:** la sustitución podía convertir formatos cerrados en escritura, añadir una operación o perder restricciones; el segundo intento repetía la misma petición sin indicar el fallo. Ocho casos nuevos fallaban antes del cambio.
+- **Implementación:** controles en `pedagogical-equivalence.ts`; códigos de rechazo permitidos en `substitution-feedback.ts`; prompt inmutable nuevo `visual-substitute/v2.ts`; conexión y corrección en `auto/assistants.ts` y `auto/policy.ts`. Máximo existente de dos intentos, sin reintentar una negativa explícita o error permanente como corrección pedagógica. Los errores transitorios mantienen el mecanismo de reintento del job.
+- **Pruebas:** equivalencia y política visual unitarias, frontera del prompt/proveedor y orquestación sobre PGlite. Asistentes simulados; sin Anthropic/OpenAI reales. La integración comprueba rechazo → corrección → ficha imprimible y registros de ambos intentos.
+- **Documentación:** nuevos `PROJECT_STATUS.md` y este registro; prioridades en `ROADMAP.md`, decisión ADR-021 en `ARCHITECTURE.md`, contrato en `VISUAL_RESOURCES.md` y `PROMPTS.md`; enlaces de continuidad en `AGENTS.md` y `CLAUDE.md`. Se reutilizan los documentos existentes en lugar de duplicar decisiones o próximos pasos.
+- **Validación real pendiente:** rendimiento pedagógico del prompt v2 con modelos reales, imágenes generadas y Vercel. No se ejecutó SQL remoto, no hay migración nueva ni cambios de facturación.
+- **Cierre de calidad:** por petición expresa del usuario se limita la verificación al área modificada, typecheck, lint y una regresión PDF; no se vuelve a ejecutar `pnpm check` completo. El bloqueo de red de Google Fonts sigue documentado, sin modificar fuentes del producto.
+- **Resultados:** `pnpm typecheck` PASS; ESLint sobre los nueve archivos TypeScript afectados PASS; `pnpm exec vitest run tests/unit/pedagogical-equivalence.test.ts tests/unit/magic-visual-policy.test.ts tests/unit/visual-substitution.test.ts tests/db/magic-visual-policy.test.ts` **60/60 PASS**; `pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/automatic-visuals.test.ts` **1/1 PASS** (PDF real de dos páginas, geometría y espacios vacíos conservados). `git diff --check` PASS. Estos resultados no certifican llamadas reales ni el despliegue.
+- **Riesgos:** controles lexicales conservadores (pueden rechazar paráfrasis válidas), no una demostración completa de equivalencia; los formatos cerrados sin representación compatible terminan honestamente. El límite de dos intentos es por actividad/ejecución; los reintentos técnicos del job siguen su presupuesto existente.
+- **PR:** pendiente de publicación al cerrar esta entrada; la consulta de PR abiertas por API devolvió `Forbidden`. No se ha realizado merge.
+- **Siguiente acción exacta:** leer estado y roadmap, comprobar main/PR abiertas, reproducir con fixture una selección única que hoy requiere decisión y diseñar su ejecutor conservando opciones y clave; después implementar solo ese formato.

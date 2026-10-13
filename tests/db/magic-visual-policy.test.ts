@@ -199,6 +199,26 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     expect(await t.entitlement(id)).toBe("consumed");
   });
 
+  it("rejects an added operation, corrects once with feedback and delivers a printable sheet with both attempts recorded", async () => {
+    const inputs: Parameters<VisualAssistants["substitute"]>[0][] = [];
+    const prompt = "Una botella de 1 litro contiene 3/4 de litro de agua. Calcula cuántos cuartos de litro le faltan para estar llena.";
+    const assistants: VisualAssistants = {
+      support: async () => ({ draft: null, run: aiRun }),
+      rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }),
+      substitute: async (input) => {
+        inputs.push(input);
+        return { draft: { feasible: true, prompt: inputs.length === 1 ? `${prompt} Explica el resultado.` : prompt, steps: [], lines: 2, figure: null }, run: { ...aiRun, promptKey: "visual_substitute", promptVersion: 2 } };
+      },
+    };
+    const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });
+    const id = await t.magic();
+    expect(inputs.map((input) => input.rejectionCodes)).toEqual([[], ["action_added"]]);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, automaticStop: null });
+    expect((await t.sheet(id)).readiness).toMatchObject({ printable: true });
+    expect(await q("select attempt, prompt_version from public.ai_runs where adaptation_id = $1 and prompt_key = 'visual_substitute' order by attempt", [id])).toEqual([{ attempt: 1, prompt_version: 2 }, { attempt: 2, prompt_version: 2 }]);
+    expect(await t.entitlement(id)).toBe("consumed");
+  });
+
   it("only when nothing valid can be built (every proposal rejected): the stop — not ready, no PDF, no unit, no AI review; and no loop", async () => {
     const assistants: VisualAssistants = { support: async () => ({ draft: null, run: aiRun }), rewrite: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null }, run: aiRun }), substitute: async () => ({ draft: { feasible: false, prompt: null, steps: null, lines: null, figure: null }, run: aiRun }) };
     const t = await teacher({ analysis: dataSourceAnalysis(), pdf: { withoutNumberLine: true }, assistants });

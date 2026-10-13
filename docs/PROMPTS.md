@@ -30,6 +30,12 @@
 
 ## Diseño de cada prompt (v1)
 
+### visual_substitute_v2 (activo en el asistente visual; validado con mocks)
+
+`prompts/visual-substitute/v2.ts` conserva la salida Zod de v1 y añade formato de respuesta original y códigos de rechazo del servidor. Lo activa la importación en `src/lib/materials/visuals/auto/assistants.ts`; este asistente no usa `ACTIVE_PROMPT_VERSIONS`. `ai_runs` registra `visual_substitute`, versión 2, con propósito `visual_rewrite`.
+
+El material, objetivo, descripción y etapa se serializan como JSON dentro de `<untrusted_material>`, escapando los delimitadores. `<validation_feedback>` solo contiene códigos permitidos y deduplicados: nunca la propuesta rechazada ni valores de respuestas. La política permite hasta dos intentos por actividad/ejecución, con feedback solo tras una propuesta inválida; mantiene los reintentos técnicos del job. El contrato no representa opciones, parejas, ordenación o huecos: no debe convertirlos en escritura libre. Pruebas de límites, transporte y orquestación offline; calidad con IA real pendiente.
+
 ### material_analyzer_v1 (implementado, `prompts/material-analyzer/v1.ts`)
 Rol: especialista en análisis de materiales educativos. Debe **comprender el material sin modificarlo**: no lo adapta, simplifica, reescribe ni mejora.
 - Describe estructura, instrucciones, actividades, textos, imágenes, tablas, gráficos, fórmulas, objetivos, dificultad, conocimientos previos y respuestas esperables cuando se infieren con confianza.
