@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-14. Base revisada: `main` en `1929849` (**PR #29 integrada**; #27 y #28 también, en `bb38cd0` y `70fb9ea`), comprobada por Git.
+Actualizado: 2026-10-14. Base revisada: `main` en `f827001` (**PR #30 integrada**, endurecimiento de procedencia; #27–#29 también), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -15,7 +15,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Módulo | Implementado | Pendiente o límite |
 | --- | --- | --- |
 | Auth, workspace y perfiles | Supabase, workspace personal, permisos y perfiles funcionales | Revalidar integraciones contra el entorno real; las pruebas locales no certifican la configuración remota |
-| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: aceptación automática retirada tras falsos positivos (ADR-027); falta evidencia independiente de identidad/asociación; ampliar evaluaciones |
+| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: aceptación automática retirada tras falsos positivos (ADR-027). Diseño 8.2B.7 en [propuesta](proposals/LOCALIZACION_FIGURAS_ESCANEOS.md): propuesta en el análisis + OCR local + contrato de verificación; pendiente del experimento real |
 | Hacer magia | Plan automático, ensamblado, revisión y autocorrección, entrega o parada explicada | Algunos formatos cerrados, simplificación y reorganización aún carecen de ejecutores automáticos; no añadir aprobación intermedia como solución |
 | Visuales originales | Recortes, localización automática acotada, reconstrucción determinista de figuras compatibles y selección humana sobre escaneos; bloqueo de recortes scan inseguros heredados | La fase 8.2B.6 NO está completada: páginas sin texto se rechazan automáticamente; no ampliar cobertura sin contrato de evidencia |
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
@@ -35,13 +35,18 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama única `claude/fase-8-2b6-escaneos`, PR #30, base `1929849`, referencia `d9f61a0`. **Alcance final: endurecimiento de procedencia y rechazo de recortes de escaneo no verificados. La fase 8.2B.6 permanece pendiente.**
+Rama: `claude/fase-8-2b7-identificacion-figuras`, desde `main` en `f827001`. PR #30 integrada (verificado con `git merge-base --is-ancestor`).
 
-- **Demostrado en main:** fuente precargada aceptada con SHA distinto de la revisión efectiva; acuerdo de visión aceptado sin ancla de actividad. Dos regresiones fallan contra `1929849` y pasan con la corrección.
-- **Solo experimento de #30:** falsos positivos del criterio de figura única, motor v3 y evidencia scan. Se retira el módulo completo y se bloquean preventivamente esos activos. **No se ha comprobado su existencia en producción.**
-- **Cierre defensivo:** metadatos completos, evidencia positiva, relación activo/localizador, receta, identidad y ruta privada; pins con localizador completo/RLS. Algunas pruebas simulan respuestas de persistencia defectuosas, no fallos explotables por usuarios. Humano admite evidencia null; ausencia no autoriza.
-- **Contrato vigente:** `auto_visuals@v5`, ancla/zona obligatorias; sin texto no hay recorte automático, visión ni corroboración de forma. Selección humana y localización anclada conservadas. Sin migraciones, SQL remoto, OCR, modelos nuevos o cambios comerciales.
-- **Simplificación:** eliminado `auto/scan.ts`, dos suites redundantes y variantes del generador de escaneos; integraciones agrupadas sin desactivar triggers. Fixtures adversariales y resultados históricos conservados para auditoría.
-- **Verificación actual:** 149 pruebas focalizadas en 11 archivos, 3 PDF Chromium y typecheck PASS; lint sin errores, un aviso previo. Sin suite completa ni build. La célula del PDF usa selección manual.
+**Bloque: Fase 8.2B.7 · diseño de la identificación fiable de figuras en escaneos.** No cambia el comportamiento de producción.
+- [Propuesta técnica](proposals/LOCALIZACION_FIGURAS_ESCANEOS.md): compara cuatro enfoques (A, B, C y D) y define el contrato de aceptación (11 comprobaciones), qué es verificable y qué sigue siendo hipótesis, riesgos, medición, experimento mínimo y costes estimados.
+- **Recomendación:** el análisis inicial propone la ubicación (enfoque A), un OCR local da las anclas en escaneos y un verificador determinista acepta o bloquea, sin puntuación. Sin ADR hasta que haya resultados del experimento.
+- **Prototipo aislado** (`evals/visual-location/`): contrato tipado, verificador, 11 fixtures sintéticos y arnés. No lo importa `src/`. 15 pruebas PASS.
+  - Con OCR perfecto: 0 falsos positivos y 0 falsos negativos en 42 propuestas guionizadas.
+  - Con OCR degradado: 0 falsos positivos y 5 falsos negativos.
+  - El verificador se ajustó con esos mismos fixtures: no es una medida de precisión real.
+- Sin llamadas a modelos, OCR real, migraciones, cambios de UI, Stripe ni planes.
 
-**Recomendación: MERGE técnico únicamente como endurecimiento**, con el título/alcance corregidos. [Informe y delimitación frente a main](qa/pr30/README.md). La API GitHub devuelve `Forbidden`: título y descripción preparados en [PR_DESCRIPTION.md](qa/pr30/PR_DESCRIPTION.md); no se afirma su actualización remota. Los commits se publican en la misma rama; sin nueva PR ni merge. Antes de integrar, aplicar/verificar esos metadatos. La siguiente fase necesitará evidencia independiente; no está implementada. Sin validación de producción, escaneos reales o carga máxima en Vercel.
+**Siguiente acción:**
+1. Revisar la propuesta.
+2. Autorizar o no el experimento mínimo: 30 escaneos reales sin datos del alumnado; primero la fase sin modelo, después una ejecución de pago con tope.
+3. Elegir el motor de OCR local tras medir su tamaño y su latencia en Vercel.
