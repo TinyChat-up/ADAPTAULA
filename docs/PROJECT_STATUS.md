@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-14. Base revisada: `main` en `bafae45` (**PR #31 integrada**, propuesta y prototipo bloqueado de 8.2B.7; #27–#30 también), comprobada por Git.
+Actualizado: 2026-10-14. Base revisada: `main` en `37c381b` (**PR #32 integrada**, piloto OCR experimental; #27–#31 también), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -35,28 +35,20 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama: `claude/piloto-ocr-local`, creada desde `main` en `bafae45`. Se comprobó con `git merge-base --is-ancestor` que la PR #31 está integrada.
+Rama: `codex/corregir-anclas-etiquetas-ocr`, creada desde `main` / `37c381b`. PR #32 integrada, verificado por Git.
 
-**Bloque: auditoría independiente de PR #32, piloto OCR local** ([README](../evals/ocr-pilot/README.md)).
-Producción intacta; rama remota inicial en `53ee15b`.
+**Bloque: reparación focalizada del evaluador de anclas y etiquetas inventadas**, sin cambiar OCR ni geometría.
+- Dos defectos reproducidos antes de corregir: cajas de ancla con/sin numeración comparadas por centro; regex que extrae «es» de «están».
+- El evaluador diferencia hallazgo, asociación correcta/incorrecta, sin verificar y ausencia. Comprueba soporte del mismo texto y
+  referencias coherentes sin ampliar tolerancia; falla de forma cerrada ante mezcla de actividades o evidencia insuficiente.
+- `instructionLabels()` exige listas explícitas completas; cambio solo en prototipo. Versiones `ocr_pilot@audit3` y `figure_proposal_verifier@proto3`.
+- Misma ejecución sobre diez fichas **sintéticas adjuntas**, conservadas fuera de Git y con referencias originales intactas:
+  exacto 16/20 encontradas, 15 asociadas, 1 sin verificar, 4 omitidas; tolerante 17 encontradas, 16 asociadas, 1 sin verificar, 3 omitidas.
+- OCR idéntico por ficha: 36/44 etiquetas, WER 11,6 %, CER 3,8 %, confianza y llamadas sin cambios. Geometría: 1/10 candidatas, 0 aprobaciones.
+- [Reproducción y tabla antes/después](qa/ocr-anclas-etiquetas/README.md). El corpus y sus documentos no se publican; el reporte audit2 de once bases queda histórico.
 
-- **Fallos demostrados:** una detección recuperaba varias etiquetas verdaderas, errores cercanos desaparecían y duplicados se
-  contaban repetidamente. Anclas puntuadas solo por altura aceptaban la otra columna. El manifest admitía escapes de ruta/cajas
-  fuera de página. Ruido estructurado generaba más de mil grupos OCR sin presupuesto.
-- **Corregido:** asociación geométrica uno a uno; precisión con denominador de detecciones; CER Unicode; anclas en dos dimensiones,
-  y ancla humana explícita en corpus real. Carga acotada fuera de Git, symlinks/rutas validados, informes sin transcripción ni
-  caracteres de etiquetas, estado de ejecución y fallo sin reportes parciales. Presupuestos de glifos/componentes/llamadas/tiempo.
-- **Medido sobre los mismos 11 documentos sintéticos ×5 condiciones (no independientes):**
-  - Etiquetas: 135 correctas/135 detecciones/135 referencias; la cifra concreta no estaba inflada, aunque el algoritmo sí era defectuoso.
-  - Anclas: 108/115 exactas dentro de tolerancia (antes 109); tolerantes 111/115 (antes 113). Las cajas parciales/desplazadas también penalizan.
-  - Candidatos: 19/30, referencia 23/30, 0 erróneos en ensayos guionizados y 0 recortes aprobados.
-  - WER/CER global con etiquetas: 4,0 % /1,7 %. Pico RSS muestreado 1.089 MB; máximo 2.759 ms/página; 171 llamadas de etiquetas,
-    máximo 18 por página. Ejecución completa con red bloqueada. Sin comparación de velocidad entre contenedores.
-- **Límites:** los umbrales se ajustaron con estos mismos dibujos; no hay corpus real ni prueba Vercel/bundle tracing. Glifos unidos
-  a líneas o fuera de tamaño pueden perderse. PDF comprimido y código nativo requieren límites de proceso; los presupuestos internos
-  no son una garantía absoluta de memoria. Identidad, integridad y respuesta visual siguen sin comprobarse.
-- **Recomendación:** MERGE solo como piloto experimental; fases funcionales 8.2B.6/8.2B.7 pendientes.
+**Pendiente real:** letras C/etiquetas, columnas y firmas geométricas; ninguna de esas variables se modifica aquí. Identidad,
+integridad pedagógica y respuesta visual siguen no verificables. No afirmar validación con escaneos físicos ni Vercel.
 
-**Siguiente acción:** 20–30 fichas autorizadas sin datos personales, preferentemente imágenes saneadas, fuera de Git. Dos personas
-anotan `texts` en orden de lectura, `anchorTextIndex` e `instructionTextIndices`; apartar documentos de reserva por origen y ejecutar en un proceso local
-con límites de memoria/tiempo. Medir OCR y candidatos antes de invertir en integración o propuestas pagadas.
+**Siguiente acción:** revisar la reparación y su PR antes de modificar otra variable del OCR o del localizador. No hay merge automático,
+llamadas pagadas, producción, Hacer magia, UI, SQL, Stripe, Supabase ni migraciones.

@@ -16,3 +16,7 @@ pnpm exec vitest run tests/unit/visual-location-prototype.test.ts tests/unit/vis
 
 Cuatro pruebas adversariales demostraron aceptaciones indebidas del contrato anterior. Ahora los candidatos geométricos no son
 recortes aprobados. Las cifras miden fixtures con los que se ajustó el prefiltro: no estiman precisión real ni prueban OCR real.
+
+Corrección focalizada `figure_proposal_verifier@proto3`: `instructionLabels()` solo toma enumeraciones explícitas completas
+(de al menos dos elementos) y respeta palabras completas; descarta listas ambiguas y sigue buscando otras listas válidas.
+No exige «es» por «números están». No cambia firmas, geometría, umbrales ni bloqueos semánticos.

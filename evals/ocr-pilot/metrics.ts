@@ -2,6 +2,7 @@ import { activityAnchors } from "@/lib/materials/visuals/auto/locate";
 import { iou, isLabel, textLines, type PageModel, type Rect, type TextBox, type TextLine } from "@/lib/materials/visuals/auto/page-model";
 import type { FigureProposal, VerificationReport } from "../visual-location/contract";
 import { verifyProposal, type PageActivity } from "../visual-location/verify";
+import { associateAnchor, normalizeAnchorText } from "./anchor-association";
 
 /**
  * Pure metrics of the OCR pilot. Ground truth (the transcription and its boxes) is used HERE only, to score what the OCR read;
@@ -124,27 +125,24 @@ export function labelOutcomes(model: PageModel, truth: readonly TextBox[], ocr: 
   return { outcomes, spurious, detections: detections.length };
 }
 
-export type AnchorStatus = "correct" | "wrong" | "missed";
+export type AnchorStatus = "correct" | "wrong" | "missed" | "unverifiable";
 export interface InstructionOutcome {
   activityId: string;
+  found: boolean;
+  tolerantFound: boolean;
   /** With the locator's exact matcher (`activityAnchors`). */
   anchor: AnchorStatus;
   /** With an edit-distance matcher (`tolerantAnchors`), not in production: would it recover OCR typos without confusions? */
   tolerant: AnchorStatus;
+  associationReason: string;
+  tolerantAssociationReason: string;
   /** Words of the printed instruction recovered at its place (share of truth words, order ignored). */
   recall: number;
-  /** Two-dimensional offset of the OCR anchor line centre against reference (mm). */
+  /** Maximum matched-support offset against reference region (X) and reference baseline centre (Y), mm. */
   offsetMm: number | null;
 }
 
-const normalize = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9/ ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+const normalize = normalizeAnchorText;
 const stripLabel = (s: string) => s.replace(/^\(?[0-9a-z]{1,3}[.)]?\s+/, "");
 
 /**
@@ -178,14 +176,13 @@ export function instructionOutcomes(model: PageModel, truth: readonly TextBox[],
   const ocrLines = textLines(ocr);
   const read = activityAnchors(ocrLines, activities);
   const tolerant = tolerantAnchors(ocrLines, activities);
-  const status = (ref: TextLine | undefined, got: TextLine | undefined): AnchorStatus =>
-    !got ? "missed" : ref && distMm(model, ref, got) <= 3 && overlaps(ref, got) ? "correct" : "wrong";
   return activities.map((a) => {
     const ref = reference.get(a.id);
     const got = read.get(a.id);
-    const offsetMm = ref && got ? distMm(model, ref, got) : null;
-    const anchor = status(ref, got);
     const printed = instructionTruth?.get(a.id) ?? truth.filter((t) => t.text.trim().length >= 8 && a.instruction.includes(t.text.trim()));
+    const association = got ? associateAnchor(model, a, got, ref, ocr, reference, instructionTruth?.get(a.id)) : null;
+    const tolerantGot = tolerant.get(a.id);
+    const tolerantAssociation = tolerantGot ? associateAnchor(model, a, tolerantGot, ref, ocr, reference, instructionTruth?.get(a.id), true) : null;
     const want = printed.flatMap((t) => tokens(t.text));
     const there = ocr.filter((o) => printed.some((t) => overlaps(o, { x0: t.x0 - 2, y0: t.y0 - 2, x1: t.x1 + 2, y1: t.y1 + 2 }))).flatMap((o) => tokens(o.text));
     const pool = [...there];
@@ -194,7 +191,9 @@ export function instructionOutcomes(model: PageModel, truth: readonly TextBox[],
       if (i >= 0) pool.splice(i, 1);
       return i >= 0;
     }).length;
-    return { activityId: a.id, anchor, tolerant: status(ref, tolerant.get(a.id)), recall: want.length ? hits / want.length : 0, offsetMm };
+    return { activityId: a.id, found: Boolean(got), tolerantFound: Boolean(tolerantGot), anchor: association?.status ?? "missed",
+      tolerant: tolerantAssociation?.status ?? "missed", associationReason: association?.reason ?? "not_found",
+      tolerantAssociationReason: tolerantAssociation?.reason ?? "not_found", recall: want.length ? hits / want.length : 0, offsetMm: association?.offsetMm ?? null };
   });
 }
 

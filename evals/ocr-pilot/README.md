@@ -10,7 +10,7 @@ Hacer magia, análisis v3, localizador de producción, PDF, UI, Supabase ni Stri
 | `pages.ts` | 11 documentos sintéticos × 5 condiciones; corpus autorizado externo con rutas y límites validados |
 | `metrics.ts` | Métricas de texto, anclas, etiquetas y candidatos; emparejamiento uno a uno |
 | `run.ts` | Runner, informes sin transcripciones, estado de ejecución y publicación tras completar todas las páginas |
-| `results/` | Evaluación sintética completa, `ocr_pilot@audit2`; no contiene materiales reales |
+| `results/` | Evaluación sintética histórica, `ocr_pilot@audit2`; no reetiquetar como resultado del evaluador vigente |
 | `corpus.template.json` | Referencias humanas: orden de lectura, ancla por actividad, cajas y visuales |
 
 ## Ejecución local
@@ -50,10 +50,18 @@ Conservar los avisos aplicables de ambas procedencias; el SHA fija los bytes, no
   Se publican errores y denominadores; `100 − WER/CER` puede ser negativo. Se excluyen solo guiones bajos de campos vacíos.
 - **Orden:** OCR agrupa por altura y luego izquierda a derecha. Referencia sintética: cajas del original sin giro. Referencia real:
   array `texts` en el orden humano de lectura. Las columnas pueden penalizar el orden OCR y no están resueltas por el piloto.
-- **Ancla correcta:** solapamiento con la primera caja de consigna y distancia de centros ≤3 mm en X e Y. Una caja parcial puede
-  quedar fuera de tolerancia aunque sea de la consigna correcta: `wrong` significa fallo de este criterio, no prueba de confusión
-  semántica. En corpus real `anchorTextIndex` es obligatorio, independiente del matcher evaluado. En sintéticos el ancla de
-  referencia todavía se deriva con el matcher de producción, limitación orientativa.
+- **Anclas (`ocr_pilot@audit3`):** `found` indica únicamente que el matcher existente encontró una línea. `correct` exige
+  un prefijo reconocible de la consigna en su región anotada. Se comparan las cajas del mismo texto, sin distancia entre centros
+  de envolventes con numeración/extensión diferente: X dentro de referencia, solapamiento y límite vertical original de 3 mm.
+  Una caja parcial puede asociarse sin que se haya leído toda la consigna; el recall se informa aparte.
+- **Sin verificar:** prefijo insuficiente (se exige la evidencia de hasta 28 caracteres del matcher), referencia incoherente/ausente,
+  mezcla de actividades o mejores coincidencias empatadas. Nunca se suman a correctas ni desaparecen del denominador. `wrong`
+  significa soporte en otra ubicación; `missed`, línea no encontrada. El tolerante conserva su criterio existente de 20 % de edición.
+  Los informes separan encontrados, correctos, incorrectos, sin verificar y omitidos para cada matcher. `instructionsDetected`
+  ahora mide hallazgos; `instructionsAssociated` mide asociación; `instructionsReadAndAssociated` también exige recall ≥90 %.
+- **Referencias:** en corpus externo `anchorTextIndex` e `instructionTextIndices` designan el inicio y todas las líneas de una
+  consigna. Se comprueba su coherencia textual y espacial sin corregirlas desde el OCR. En los fixtures históricos la referencia
+  sigue derivada del matcher de producción: limitación orientativa.
 - **Coordenadas:** cajas OCR vuelven al marco original mediante la inversa de la rotación. Se prueban ambos signos, resoluciones
   150/200/300 y cajas cerca del borde. Rotar una envolvente AABB y desrotarla conserva su centro, pero expande sus lados; no usar
   esa doble envolvente para reconstruir el orden de lectura. IoU compara tinta OCR con caja tipográfica humana/vectorial, no una
@@ -136,3 +144,11 @@ indica ejecución incompleta; no usar archivos temporales ni resultados de una e
 
 **MERGE como piloto experimental**, con estas restricciones. Siguiente paso rentable: 20–30 fichas reales autorizadas, anotadas y
 separadas por origen, con reserva independiente; medir OCR y candidatos, sin integrar en Hacer magia ni pagar propuestas de modelos.
+
+## Corrección focalizada tras diez fichas adjuntas
+
+[Comparación y regresiones](../../docs/qa/ocr-anclas-etiquetas/README.md): mismo corpus externo sintético, sin publicarlo ni
+modificar sus referencias. Exacto: 16/20 encontradas y 15/20 correctamente asociadas; 1 sin verificar y 4 omitidas. Tolerante:
+17/20 encontradas, 16 asociadas, 1 sin verificar y 3 omitidas. OCR idéntico (36/44 etiquetas; WER 11,6 %; CER 3,8 %).
+El extractor del prototipo solo toma listas explícitas completas y ya no convierte «están» en «es». La geometría no cambia:
+1/10 candidatas y cero aprobaciones. El reporte de `results/` es histórico de once bases, no el de este corpus ni de `audit3`.
