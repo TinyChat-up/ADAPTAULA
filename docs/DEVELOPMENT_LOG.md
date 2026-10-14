@@ -2,6 +2,67 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — Fase 8.2B.6: localización conservadora de figuras en escaneos
+
+- **Base verificada:** `git fetch origin main` → `1929849`. #27 (`bb38cd0`), #28 (`70fb9ea`) y #29 (`1929849`) están integradas. Rama nueva: `claude/fase-8-2b6-escaneos`. La rama y el trabajo de la PR #29 no se tocan.
+- **Investigación:** `locate.ts` puntúa:
+  - firma 0,30 (una figura genérica, 0);
+  - zona de su actividad 0,25, que exige un ancla de la capa de texto del PDF;
+  - unicidad 0,20;
+  - limpieza 0,15;
+  - visión 0,20.
+
+  En un escaneo, `pageText` devuelve 0 cajas: no hay anclas y la «limpieza» no ve el texto escaneado. Una figura genérica nunca pasa de 0,35 sin visión, y una barra de 0,65. `MaterialAnalysis` v3 no guarda la posición de los visuales. Ya resuelto: figuras con anclas impresas (barra o recta con firma) y cualquier figura con acuerdo de visión. Fallaba: cualquier figura de una página sin capa de texto sin visión configurada.
+- **Fallo reproducido antes de cambiar producción:** `tests/support/scan-case.ts` construye «La célula animal» escaneada: 150 ppp, una imagen por página, papel, grano, motas y la sombra del escáner. `locateVisuals` daba `vis_1` no aceptado, confianza 0,15, `low_confidence`, sin ancla → D y parada.
+- **Implementación:**
+  - `src/lib/materials/visuals/auto/scan.ts` (`locateOnScan`):
+    - componentes conectados a resolución completa;
+    - descarte de motas, tinta en el borde, marcos (cuatro lados y poco interior), manchas claras y filas de letras grandes;
+    - unión de los trazos de un dibujo;
+    - etiquetas cercanas al recorte;
+    - holgura de 2,5 mm frente al texto;
+    - límite de texto y de tamaño;
+    - firma de barra cuando el análisis dice barra.
+  - Exige además que el análisis liste un único visual en la página y que sea `required`.
+  - `service.ts` (motor `auto_visuals@v3`) lo usa solo en páginas sin capa de texto, después del localizador con anclas. La visión no lo sobrescribe.
+  - Las señales `scan` se guardan en la evidencia del localizador, sin texto del material.
+  - Sin migraciones: el esquema ya admite `evidence` JSON.
+- **Evidencia para aceptar:** análisis (único visual, imprescindible) + único dibujo de tamaño de figura y tinta oscura + recorte limpio. Confianza exactamente 0,75; ninguna señal parcial basta.
+- **Pruebas:**
+  - `tests/unit/scan-location.test.ts` (20):
+    - el fallo anterior;
+    - acierto en PDF y PNG, con IoU > 0,8 respecto al esquema;
+    - recorte sin enunciado ni líneas de respuesta, a 200 ppp con margen;
+    - adorno pequeño;
+    - titular enorme y párrafo enmarcado junto a la figura;
+    - figura en el borde;
+    - negativos: dos figuras, adorno grande, sin figura, solo texto, texto pegado, varios visuales en el análisis, no `required`, barra que no lo es, recta numérica, página con capa de texto;
+    - coordenadas válidas;
+    - política: `exact_original_visual` en `act_1`, o parada `unresolved_visual`.
+  - `tests/db/scan-visuals.test.ts` (5, PGlite con migraciones reales):
+    - localizador `auto` con página, coordenadas, `page_box`, sha, motor y señales;
+    - recorte en Storage y lectura con RLS;
+    - imagen PNG;
+    - ambigüedad → D sin filas;
+    - nueva versión del original → D sin heredar;
+    - recorte automático anterior equivocado → `auto_not_revalidated`.
+  - `tests/pdf/scan-visuals.test.ts` (Chromium): el recorte fijado por sha es la figura de la actividad 1, antes de la actividad 2, sin peticiones ni scripts. PDF inspeccionado: una página con el esquema y sus números 1, 2 y 3.
+- **Resultados:**
+  - `pnpm exec vitest run` de las unitarias `scan-location`, `automatic-visuals`, `magic-visual-policy`, `visual-raster`, `visual-boundaries` y `boundaries`, y de db `scan-visuals`, `automatic-visuals`, `magic-visual-policy` y `visual-locators`: **144/144 PASS en 10 archivos**.
+  - `vitest.pdf.config.mts`: `scan-visuals`, `automatic-visuals` e `illustrations` **3/3 PASS**.
+  - `pnpm typecheck` PASS; `pnpm lint` 0 errores (el aviso previo en `analysis-run-auth.test.ts`).
+  - No se ejecutó la suite completa.
+- **Casos todavía ambiguos o fuera de alcance:**
+  - varias figuras por página;
+  - un adorno grande, o una mancha;
+  - texto a menos de 2,5 mm;
+  - rectas numéricas escaneadas;
+  - páginas con varios visuales en el análisis.
+
+  Riesgo residual documentado: una única letra enorme aislada, o texto que toca el dibujo, cuando el análisis afirma un solo visual. Sin OCR ni modelos de imagen; sin llamadas de pago, SQL remoto, Stripe ni cambios de planes. Validado solo con escaneos sintéticos.
+- **Publicación:** implementación `71b6080` en `claude/fase-8-2b6-escaneos`, publicada en la [PR #30](https://github.com/TinyChat-up/ADAPTAULA/pull/30) hacia `main`, sin merge.
+- **Siguiente acción:** revisar la PR; medir la cobertura con escaneos reales autorizados antes de ampliar el caso; no presentarlo como localización universal.
+
 ## 2026-10-14 — PR #29: redirección editorial como estudio pedagógico digital
 
 - **Continuidad verificada antes de editar:** rama única `claude/variables-expuestas-repo-f2o2et`, actualizada y limpia en `6fa99fc25fa9a152febf882c0a0fbacfd0b84ae7`; la rama remota y `refs/pull/29/head` coinciden. Publicación comprobada con `git push --dry-run`. Se leen AGENTS, CLAUDE y el contexto compartido y se inspecciona el diff de Claude respecto a `main` (`70fb9ea`). PR #29 abierta y sin merge según el usuario; no se reinicia ni sustituye su rama.

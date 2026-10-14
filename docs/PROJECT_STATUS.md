@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-14. Base revisada: `main` en `70fb9ea` (**PR #28 integrada**, contiene `1cc8833` y `3965092`), comprobada por Git. Las PR #24–27 también están integradas.
+Actualizado: 2026-10-14. Base revisada: `main` en `1929849` (**PR #29 integrada**; #27 y #28 también, en `bb38cd0` y `70fb9ea`), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -15,9 +15,9 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Módulo | Implementado | Pendiente o límite |
 | --- | --- | --- |
 | Auth, workspace y perfiles | Supabase, workspace personal, permisos y perfiles funcionales | Revalidar integraciones contra el entorno real; las pruebas locales no certifican la configuración remota |
-| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Localización de figuras genéricas en escaneos sin anclas de texto; ampliar materiales de evaluación |
+| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: solo el caso de un único visual y un único dibujo por página (ADR-026); cobertura con escaneos reales sin medir; ampliar materiales de evaluación |
 | Hacer magia | Plan automático, ensamblado, revisión y autocorrección, entrega o parada explicada | Algunos formatos cerrados, simplificación y reorganización aún carecen de ejecutores automáticos; no añadir aprobación intermedia como solución |
-| Visuales originales | Recortes, localización automática acotada y reconstrucción determinista de figuras compatibles | No hay edición general de imágenes originales ni un localizador universal para escaneos |
+| Visuales originales | Recortes, localización automática acotada, reconstrucción determinista de figuras compatibles y, en escaneos sin texto, la figura única de la página (8.2B.6) | No hay edición general de imágenes originales ni un localizador universal para escaneos: varias figuras por página, rectas numéricas escaneadas y adornos grandes paran |
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
 | Sustitución pedagógica | PR #26: equivalencia y corrección acotada. PR #27: selección única de fracciones. PR #28: consulta literal de celdas de tablas corroboradas contra PDF | Alcance acotado por ADR-023: cuadrícula, texto verificable y consigna explícita. Sin escaneos, inferencias, equivalencias numéricas ni unidades separadas. Calidad de prompts v2/v3/v4 con modelos reales pendiente |
 | Presentación y PDF | CLARO, apoyos junto a actividades, render compartido, validación y descarga PDF | Calidad de cada imagen real y runtime PDF en Vercel pendientes de comprobación; no se promete soporte universal |
@@ -35,25 +35,27 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama única: `claude/variables-expuestas-repo-f2o2et`. **[PR #29](https://github.com/TinyChat-up/ADAPTAULA/pull/29) abierta, sin merge**, según el usuario; cabeza remota y referencia `refs/pull/29/head` comprobadas iguales a `6fa99fc` antes de modificar archivos. Se continúa directamente sobre el trabajo de Claude, sin reiniciar la rama ni abrir otra PR.
+Rama: `claude/fase-8-2b6-escaneos`, creada desde `main` actualizado en `1929849`. La PR #29 (interfaz) no se toca.
 
-**Bloque actual: redirección editorial (ADR-025).**
-- Papel cálido, tinta, azul editorial, titulares serif y UI Inter. Sin degradados, halos, flotación, sombras teñidas ni métricas dominantes.
-- Hero con original → adaptado en hojas A4 de demostración, tabla y alternativas reales sin solución señalada. Copy compatible con Hacer magia y revisión manual.
-- Inicio: Adaptar material → atención → en curso → materiales recientes → fichas preparadas; plan y cuotas secundarios. Filas para materiales/perfiles/adaptaciones; subida y formularios con controles claros.
-- Mejoras funcionales de Claude conservadas: navegación, redirecciones, filtros, cuenta, estados, errores, carga, responsive y reduced motion. Sin tocar lógica de negocio, SQL, Stripe, IA, pipeline ni renderer/PDF.
+**Bloque: Fase 8.2B.6 · localización conservadora de figuras en escaneos (ADR-026).**
+- Fallo reproducido: el esquema imprescindible de la ficha de la célula escaneada (sin capa de texto) quedaba en confianza 0,15, opción D y parada.
+- Ahora `auto/scan.ts` (motor `auto_visuals@v3`) lo localiza solo si se dan dos condiciones:
+  - el análisis lista un único visual en la página, y es el `required`;
+  - los píxeles muestran un único dibujo, sin marcos, manchas, bordes, letras grandes ni texto que toque el recorte.
+- Reutiliza el localizador `auto`, el recorte, Storage, la política, el renderer y el PDF.
+- Sin OCR, sin modelos de imagen, sin migraciones y sin cambios pedagógicos.
 
-**Probado en esta redirección (local, PGlite y proveedores simulados):**
-- typecheck y build PASS; lint sin errores, un aviso previo.
-- 62 pruebas focalizadas en 8 archivos PASS; no suite completa.
-- **4/4 Playwright** editoriales en escritorio y móvil: portada y flujo de trabajo. Axe sin infracciones detectadas, salto al contenido, Escape/retorno de foco, subida válida/inválida, filtros y resultado con fixture. Biblioteca sin desbordamiento a 320 px con texto al 200 %.
-- Capturas antes/después: portada, inicio, materiales, perfiles, adaptar, adaptaciones, material, revisión, resultado y cuenta, en ambos tamaños. [Galería y capturas versionadas](qa/pr29/README.md); no contienen datos reales.
+**Probado (local, escaneos sintéticos, PGlite y Chromium; sin llamadas de pago ni servicios remotos):**
+- 20 unitarias nuevas, 5 de integración y 1 PDF.
+- Regresión focalizada: 144 pruebas en 10 archivos PASS, y 3 PDF (escaneo, fracciones e ilustración) PASS.
+- typecheck PASS; lint sin errores (el aviso previo).
+- Detalle en el registro.
 
-**Antecedentes, no revalidados aquí:** los E2E generales desactualizados/intermitentes identificados por Claude siguen pendientes en un bloque separado; ver la entrada anterior de DEVELOPMENT_LOG. Esta sesión añade `editorial-interface.spec.ts`, no corrige aquellos tests ni afirma que toda la suite pase.
+**Pendiente de validar:** cobertura con escaneos reales autorizados; comportamiento en Vercel; varias figuras por página y rectas numéricas escaneadas (hoy paran).
 
-**Publicación:** los cambios se publican en la misma rama para actualizar #29; nunca se crea otra PR ni se hace merge desde esta tarea.
+**Publicación:** implementación `71b6080` en `claude/fase-8-2b6-escaneos`, publicada en la [PR #30](https://github.com/TinyChat-up/ADAPTAULA/pull/30) hacia `main`, sin merge.
 
 **Siguiente acción:**
-1. Revisar la comparativa visual y la PR #29, y comprobar su Preview de Vercel. Validación remota y revisión manual con lector de pantalla pendientes. No integrar automáticamente.
-2. En un bloque aparte, actualizar los E2E generales documentados por Claude, empezando por esperar la navegación del onboarding.
-3. Después, retomar la variante verificable de selección tabular del ROADMAP, sin mezclarla con este encargo visual.
+1. Revisar la PR de esta fase. La integración la hace una persona.
+2. Medir con escaneos reales autorizados cuántas paradas visuales resuelve, y cuáles siguen siendo ambiguas, antes de ampliar el caso.
+3. En un bloque aparte, actualizar los E2E generales documentados (empezando por la espera tras el onboarding).
