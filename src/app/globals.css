@@ -1,250 +1,93 @@
 @import "tailwindcss";
 
-/* Tokens de diseño de Adaptaula (docs/UX.md). Contrastes verificados WCAG AA sobre --color-surface. */
+/* Estudio pedagógico: papel, tinta y una sola familia de azules. docs/UX.md. */
 @theme {
-  --color-background: #f7f8fa;
+  --color-background: #f5f3ee;
   --color-surface: #ffffff;
-  --color-border: #e2e6ec;
-  --color-foreground: #172033;
-  --color-muted-foreground: #556070;
-  --color-primary: #2453c2;
+  --color-border: #d5d7d5;
+  --color-control-border: #7c8790;
+  --color-foreground: #192b40;
+  --color-muted-foreground: #526171;
+  --color-primary: #315a86;
   --color-primary-foreground: #ffffff;
-  /* Fondo suave de la marca: insignias de icono, pestañas activas, paneles destacados. */
-  --color-primary-soft: #eaf0fc;
-  --color-accent: #0f766e;
-  --color-accent-soft: #e6f4f2;
-  --color-success: #15803d;
-  /* Texto sobre fondos teñidos de success (success/10): #15803d solo da 4,1:1 sobre ese tinte. */
-  --color-success-strong: #14532d;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06);
-  /* Elevación al pasar el ratón o al enfocar una tarjeta enlazada. */
-  --shadow-lift: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px -8px rgb(36 83 194 / 0.18);
+  --color-primary-soft: #e7eef4;
+  --color-accent: #315a86;
+  --color-accent-soft: #e7eef4;
+  --color-success: #24623e;
+  --color-success-strong: #1c5132;
+  --color-warning: #925015;
+  --color-danger: #b12828;
+  --radius-card: 0.25rem;
+  --radius-control: 0.25rem;
+  --shadow-card: none;
   --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --font-editorial: Georgia, "Times New Roman", serif;
 }
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
-html {
-  scroll-padding-top: 5rem;
-}
-
+html { scroll-padding-top: 5rem; }
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   line-height: 1.5;
 }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+::selection { background: #c9d8e7; color: #192b40; }
 
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
+.eyebrow { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.editorial-list { border-block: 1px solid var(--color-border); }
+.editorial-list > * + * { border-top: 1px solid var(--color-border); }
 
-/*
- * Movimiento (docs/UX.md § Movimiento). Las entradas solo DESPLAZAN: nunca animan la opacidad del texto, para que el texto tenga
- * siempre su contraste real (también para las comprobaciones automáticas de accesibilidad) y nada parpadee. Con
- * `prefers-reduced-motion` todo queda quieto (regla al final del fichero).
- */
-@keyframes enter-up {
-  from {
-    transform: translateY(14px);
-  }
-  to {
-    transform: none;
-  }
-}
+/* La interacción cambia el borde/fondo; el contenido de una lista nunca se desplaza. */
+.lift { transition: border-color 160ms ease, background-color 160ms ease; }
+.lift:hover, .lift:focus-within { border-color: var(--color-primary); }
 
-@keyframes enter-scale {
-  from {
-    transform: translateY(8px) scale(0.985);
-  }
-  to {
-    transform: none;
-  }
-}
+@keyframes sheet-up { from { transform: translateY(24px); } to { transform: none; } }
+@keyframes load-pulse { 50% { background-color: #e9e9e4; } }
+.skeleton-shimmer { background: #dedfd9; animation: load-pulse 1.6s ease-in-out infinite; }
+dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
 
-@keyframes grow-x {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
+/* Muestras web de demostración; clases propias, sin compartir ni alterar el renderer del alumno. */
+.sample-pair { display: grid; gap: 1.25rem; }
+.sample-paper {
+  aspect-ratio: 210 / 297;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.4rem 1.2rem;
+  background: #fff;
+  color: #192b40;
+  border: 1px solid #b8c1c8;
+  font-size: 0.75rem;
+  line-height: 1.55;
 }
-
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: none;
-  }
+.sample-paper h3 { font-size: 1.125rem; line-height: 1.2; font-weight: 600; margin-block: 0.75rem; }
+.sample-paper table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; margin-block: 0.75rem; }
+.sample-paper th, .sample-paper td { border: 1px solid #b8c1c8; padding: 0.35rem 0.25rem; text-align: left; }
+.sample-paper th { font-weight: 600; }
+.sample-paper--adapted { border-top: 3px solid #315a86; }
+.sample-paper--adapted th { background: #e7eef4; }
+.sample-paper--adapted td { padding-block: 0.55rem; }
+.sample-paper--original { font-family: Georgia, "Times New Roman", serif; }
+.sample-options { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+.sample-options li { display: flex; align-items: center; gap: 0.6rem; }
+.sample-circle { width: 0.875rem; height: 0.875rem; border: 1px solid #192b40; border-radius: 50%; flex-shrink: 0; }
+@media (min-width: 640px) { .sample-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 639px) {
+  .sample-pair { max-width: 26rem; margin-inline: auto; }
+  .sample-paper { font-size: 0.875rem; padding: 1.25rem; }
+  .sample-paper table { font-size: 0.75rem; }
 }
-
-@keyframes float-soft {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-@keyframes nudge-x {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(5px);
-  }
-}
-
-@keyframes shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-
-/* Decoración (sin texto): sí puede aparecer con opacidad. */
-@keyframes glow-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* La página entra al navegar (template.tsx de la app). */
-.page-enter {
-  animation: enter-up 420ms var(--ease-out-soft) both;
-}
-
-/* Hijos que entran uno detrás de otro: tarjetas, filas y secciones. */
-.stagger > * {
-  animation: enter-scale 460ms var(--ease-out-soft) both;
-}
-.stagger > :nth-child(2) {
-  animation-delay: 50ms;
-}
-.stagger > :nth-child(3) {
-  animation-delay: 100ms;
-}
-.stagger > :nth-child(4) {
-  animation-delay: 150ms;
-}
-.stagger > :nth-child(5) {
-  animation-delay: 200ms;
-}
-.stagger > :nth-child(6) {
-  animation-delay: 250ms;
-}
-.stagger > :nth-child(n + 7) {
-  animation-delay: 300ms;
-}
-
-/* Un bloque que aparece en su sitio (el archivo elegido, un aviso nuevo). */
-.pop-in {
-  animation: enter-scale 320ms var(--ease-out-soft) both;
-}
-
-/* La barra de una cuota se llena al aparecer. */
-.meter-fill {
-  transform-origin: left center;
-  animation: grow-x 700ms var(--ease-out-soft) both;
-  animation-delay: 120ms;
-}
-
-/* Tarjeta enlazada: se eleva al pasar el ratón o al enfocarla con el teclado. */
-.lift {
-  transition:
-    transform 180ms var(--ease-out-soft),
-    box-shadow 180ms var(--ease-out-soft),
-    border-color 180ms var(--ease-out-soft);
-}
-.lift:hover,
-.lift:focus-within {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lift);
-  border-color: rgb(36 83 194 / 0.35);
-}
-
-.float-soft {
-  animation: float-soft 6s ease-in-out infinite;
-}
-
-.nudge-x {
-  animation: nudge-x 2.4s ease-in-out infinite;
-}
-
-.glow-in {
-  animation: glow-in 900ms var(--ease-out-soft) both;
-}
-
-/* Esqueleto de carga con un brillo que recorre la forma. */
-.skeleton-shimmer {
-  background: linear-gradient(90deg, rgb(226 230 236 / 0.7) 25%, rgb(241 244 248) 37%, rgb(226 230 236 / 0.7) 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
-}
-
-/* Hoja inferior del menú «Más» en el móvil. */
-dialog[open].sheet {
-  animation: sheet-up 280ms var(--ease-out-soft) both;
-}
-dialog.sheet::backdrop {
-  animation: glow-in 200ms ease-out both;
-}
-
-/* Fondo de marca: suave, sin restar contraste al texto (que siempre va sobre superficie clara). */
-.brand-wash {
-  background:
-    radial-gradient(60rem 30rem at 0% 0%, rgb(36 83 194 / 0.1), transparent 60%),
-    radial-gradient(50rem 26rem at 100% 0%, rgb(15 118 110 / 0.09), transparent 60%),
-    var(--color-background);
-}
-
-/* Cuadrícula decorativa, desvanecida hacia abajo. */
-.grid-fade {
-  background-image:
-    linear-gradient(to right, rgb(23 32 51 / 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(23 32 51 / 0.05) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(to bottom, black, transparent 85%);
-}
-
-/* En la web pública, las secciones se desplazan suavemente al entrar en pantalla (donde el navegador lo admite). */
-@supports (animation-timeline: view()) {
-  .reveal {
-    animation: enter-up linear both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 60%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-  .lift:hover,
-  .lift:focus-within {
-    transform: none;
   }
 }

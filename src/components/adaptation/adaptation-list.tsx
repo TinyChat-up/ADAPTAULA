@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, ArrowRight, CheckCircle2, FileText, Loader2, XCircle, type LucideIcon } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import type { AdaptationListItem } from "@/lib/adaptation/orchestration/page-data";
 import { listHref, type ListGroup } from "@/lib/adaptation/presentation/list";
 import { formatDateTime } from "@/lib/format/date";
@@ -16,7 +16,7 @@ const GROUP_STYLE: Record<ListGroup, { icon: LucideIcon; tone: string }> = {
 export function ListStateBadge({ item }: { item: Pick<AdaptationListItem, "state"> }) {
   const { icon: Icon, tone } = GROUP_STYLE[item.state.group];
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium", tone)}>
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-1 text-xs font-medium", tone)}>
       <Icon aria-hidden className="size-3.5" />
       {item.state.label}
     </span>
@@ -29,22 +29,19 @@ export function ListStateBadge({ item }: { item: Pick<AdaptationListItem, "state
  */
 export function AdaptationList({ items, show = { material: true, profile: true } }: { items: AdaptationListItem[]; show?: { material?: boolean; profile?: boolean } }) {
   return (
-    <ul className="stagger divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
+    <ul className="editorial-list">
       {items.map((item) => {
         const title = show.material ? item.materialTitle : item.profileName ? `Para ${item.profileName}` : "Adaptación";
         const detail = [show.material && show.profile && item.profileName ? `Para ${item.profileName}` : null, `Actualizada el ${formatDateTime(item.updatedAt)}`].filter(Boolean).join(" · ");
         return (
-          <li key={item.id} className="group flex flex-col gap-3 p-4 transition-colors duration-150 hover:bg-primary-soft/40 sm:flex-row sm:items-center sm:gap-4">
+          <li key={item.id} className="group flex flex-col gap-3 py-4 transition-colors duration-150 hover:bg-surface/60 sm:flex-row sm:items-center sm:gap-5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <span aria-hidden className="hidden size-10 shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary sm:inline-flex">
-                <FileText className="size-5" />
-              </span>
               <div className="min-w-0 flex-1 space-y-1">
-                <p className="truncate font-medium">{title}</p>
+                <p className="break-words font-medium">{title}</p>
                 <p className="text-xs text-muted-foreground">{detail}</p>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
               <ListStateBadge item={item} />
               <Link
                 href={listHref(item.id, item.state)}
@@ -52,7 +49,7 @@ export function AdaptationList({ items, show = { material: true, profile: true }
                 aria-label={`${item.state.cta}: ${item.materialTitle}${item.profileName ? `, para ${item.profileName}` : ""}`}
               >
                 {item.state.cta}
-                <ArrowRight aria-hidden className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                <ArrowRight aria-hidden className="size-4" />
               </Link>
             </div>
           </li>

@@ -19,15 +19,15 @@ export function Section({
 }) {
   return (
     <section id={id} aria-labelledby={id ? `${id}-titulo` : undefined} className={cn("py-16 sm:py-24", tone === "surface" && "border-y border-border bg-surface")}>
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="reveal mb-10 max-w-2xl space-y-3">
-          {eyebrow ? <p className="text-sm font-semibold uppercase tracking-wide text-primary">{eyebrow}</p> : null}
-          <h2 id={id ? `${id}-titulo` : undefined} className="text-2xl font-semibold tracking-tight sm:text-4xl">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <div className="mb-10 max-w-2xl space-y-4">
+          {eyebrow ? <p className="eyebrow text-primary">{eyebrow}</p> : null}
+          <h2 id={id ? `${id}-titulo` : undefined} className="font-editorial text-3xl leading-tight tracking-tight sm:text-5xl">
             {title}
           </h2>
           {intro ? <p className="text-lg text-muted-foreground">{intro}</p> : null}
         </div>
-        <div className="reveal">{children}</div>
+        <div className="min-w-0">{children}</div>
       </div>
     </section>
   );

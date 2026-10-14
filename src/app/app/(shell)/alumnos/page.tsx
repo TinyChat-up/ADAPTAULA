@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { LimitReachedCard } from "@/components/app/limit-reached-card";
 import { LinkButton } from "@/components/ui/button";
-import { Alert, Badge } from "@/components/ui/feedback";
+import { Alert } from "@/components/ui/feedback";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { formatDay } from "@/lib/format/date";
@@ -46,7 +46,6 @@ export default async function ProfilesPage({ searchParams }: PageProps<"/app/alu
         actions={
           canCreate ? (
             <LinkButton href="/app/alumnos/nuevo">
-              <Plus aria-hidden className="size-4" />
               Nuevo perfil
             </LinkButton>
           ) : null
@@ -67,25 +66,20 @@ export default async function ProfilesPage({ searchParams }: PageProps<"/app/alu
           title="Todavía no tienes perfiles"
           description="Crea un perfil para reutilizar las mismas adaptaciones en diferentes materiales."
         >
-          {canCreate ? <LinkButton href="/app/alumnos/nuevo">Nuevo perfil</LinkButton> : null}
+          {canCreate ? <LinkButton href="/app/alumnos/nuevo" variant="secondary">Nuevo perfil</LinkButton> : null}
         </EmptyState>
       ) : (
-        <ul className="stagger divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
+        <ul className="editorial-list">
           {profiles.map((p) => {
             const labels = labelsFor(catalog, p.stage_slug, p.grade_slug);
             const { shown, more } = teaser(summarizeProfile(p.functional_profile));
-            const initials = p.display_name.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2).toUpperCase();
             return (
               <li key={p.id}>
-                <Link href={`/app/alumnos/${p.id}`} className="group flex items-start gap-4 p-5 transition-colors duration-150 hover:bg-primary-soft/40">
-                  <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary-soft to-accent-soft text-sm font-semibold text-primary transition-transform duration-200 group-hover:scale-105">
-                    {initials || "?"}
-                  </span>
-                  <span className="min-w-0 flex-1 space-y-2">
+                <Link href={`/app/alumnos/${p.id}`} className="group block py-6 transition-colors duration-150 hover:bg-surface/60">
+                  <span className="block min-w-0 space-y-2">
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="text-lg font-semibold">{p.display_name}</span>
-                      {labels.stage ? <Badge>{labels.stage}</Badge> : null}
-                      {labels.grade ? <Badge>{labels.grade}</Badge> : null}
+                      <span className="text-sm text-muted-foreground">{[labels.stage, labels.grade].filter(Boolean).join(" · ")}</span>
                     </span>
                     <span className="block text-sm text-muted-foreground">
                       {shown.length > 0 ? `${shown.join(" · ")}${more > 0 ? ` · y ${more} más` : ""}` : "Sin ajustes configurados"}

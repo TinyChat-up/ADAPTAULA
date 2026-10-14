@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImageIcon, Info, UploadCloud, X } from "lucide-react";
+import { FileText, ImageIcon, Info, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -110,7 +110,7 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
       {file ? (
-        <div className="pop-in flex items-center gap-4 rounded-card border border-border bg-surface p-4 shadow-card">
+        <div className="flex items-center gap-4 rounded-card border border-border bg-surface p-4 shadow-card">
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- local object URL preview, nothing to optimize
             <img src={previewUrl} alt="Vista previa del archivo seleccionado" className="size-16 shrink-0 rounded-control border border-border object-cover" />
@@ -146,23 +146,15 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
             accept(e.dataTransfer.files);
           }}
           className={cn(
-            "group flex flex-col items-center gap-3 rounded-card border-2 border-dashed px-6 py-14 text-center transition-[border-color,background-color,transform] duration-200 ease-out",
-            dragging ? "scale-[1.01] border-primary bg-primary-soft/70" : "border-border bg-surface hover:border-primary/40 hover:bg-primary-soft/30",
+            "group flex flex-col items-center gap-3 rounded-card border border-dashed px-5 py-12 text-center transition-colors duration-150",
+            dragging ? "border-primary bg-primary-soft" : "border-control-border bg-surface hover:border-primary hover:bg-primary-soft/30",
           )}
         >
-          <span
-            aria-hidden
-            className={cn(
-              "mb-1 inline-flex size-16 items-center justify-center rounded-full bg-primary-soft text-primary ring-8 ring-primary-soft/40 transition-transform duration-200 ease-out",
-              dragging ? "-translate-y-1 scale-110" : "group-hover:-translate-y-0.5",
-            )}
-          >
-            <UploadCloud className="size-8" />
-          </span>
+          <Upload aria-hidden className="mb-2 size-7 text-primary" strokeWidth={1.5} />
           <p className="text-xl font-semibold">{dragging ? "Suelta tu ficha aquí" : "Arrastra tu ficha aquí"}</p>
           <p className="text-muted-foreground">
             o{" "}
-            <button type="button" onClick={() => inputRef.current?.click()} className="font-medium text-primary underline underline-offset-2">
+            <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4">
               selecciona un archivo
             </button>
           </p>

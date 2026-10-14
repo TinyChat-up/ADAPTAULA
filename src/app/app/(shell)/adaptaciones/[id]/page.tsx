@@ -41,7 +41,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
         <ChevronLeft aria-hidden className="size-4" />
         Volver al material
       </Link>
-      <PageHeader title="Adaptación" description={data.profileName ? `${data.context.materialTitle} · para ${data.profileName}` : data.context.materialTitle} />
+      <div className="space-y-3"><p className="eyebrow text-muted-foreground">Adaptación{data.profileName ? ` · Perfil ${data.profileName}` : ""}</p><PageHeader title={data.context.materialTitle} description="El material, los apoyos y el estado de tu ficha, en un mismo lugar." /></div>
       <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} editing={editing} />
     </div>
   );

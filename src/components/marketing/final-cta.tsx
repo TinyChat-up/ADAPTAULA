@@ -1,25 +1,15 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { LinkButton } from "@/components/ui/button";
 
 export function FinalCta() {
   return (
-    <section aria-labelledby="cta-final-titulo" className="px-4 py-16 sm:px-6 sm:py-24">
-      <div className="reveal relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-linear-to-br from-primary to-accent px-6 py-14 text-center text-primary-foreground shadow-xl shadow-primary/20 sm:px-12">
-        <div aria-hidden className="absolute -right-16 -top-16 size-64 rounded-full bg-white/10" />
-        <div aria-hidden className="absolute -bottom-20 -left-10 size-56 rounded-full bg-white/10" />
-        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-6">
-          <h2 id="cta-final-titulo" className="text-2xl font-semibold tracking-tight sm:text-4xl">
-            Empieza con una ficha que ya utilizas.
-          </h2>
-          <p className="text-lg">Crea tu cuenta gratis y prueba con tu propio material.</p>
-          <Link
-            href="/registro"
-            className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-surface px-6 text-base font-semibold text-primary shadow-lg shadow-black/10 transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.98]"
-          >
-            Adaptar mi primera ficha
-            <ArrowRight aria-hidden className="size-5 transition-transform group-hover:translate-x-0.5" />
-          </Link>
+    <section aria-labelledby="cta-final-titulo" className="border-y border-border bg-primary-soft">
+      <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-5 py-14 sm:px-8 sm:py-20 md:flex-row md:items-center">
+        <div className="max-w-2xl space-y-4">
+          <p className="eyebrow text-primary">Tu próxima ficha empieza aquí</p>
+          <h2 id="cta-final-titulo" className="font-editorial text-3xl leading-tight tracking-tight sm:text-5xl">Empieza con un material que ya utilizas.</h2>
+          <p className="text-muted-foreground">Crea tu cuenta gratis y prepara tu primera adaptación.</p>
         </div>
+        <LinkButton href="/registro" size="lg" className="shrink-0">Adaptar mi primera ficha</LinkButton>
       </div>
     </section>
   );

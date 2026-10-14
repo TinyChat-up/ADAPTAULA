@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileCheck2, FilePlus2 } from "lucide-react";
+import { FileCheck2 } from "lucide-react";
 import { AdaptationList } from "@/components/adaptation/adaptation-list";
 import { LinkButton } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
@@ -40,7 +40,6 @@ export default async function HistoryPage({ searchParams }: PageProps<"/app/hist
         actions={
           items.length > 0 ? (
             <LinkButton href="/app/adaptar">
-              <FilePlus2 aria-hidden className="size-4" />
               Adaptar material
             </LinkButton>
           ) : null
@@ -53,7 +52,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/app/hist
       ) : (
         <>
           <nav aria-label="Filtrar adaptaciones" className="-mx-1 overflow-x-auto px-1 pb-1">
-            <ul className="flex w-max gap-2">
+            <ul className="flex flex-wrap gap-2">
               {offered.map((f) => {
                 const active = f === chosen;
                 return (
@@ -63,12 +62,12 @@ export default async function HistoryPage({ searchParams }: PageProps<"/app/hist
                       aria-current={active ? "page" : undefined}
                       scroll={false}
                       className={cn(
-                        "inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors duration-150",
-                        active ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "border-border bg-surface text-foreground hover:border-primary/40 hover:bg-primary-soft/60",
+                        "inline-flex min-h-10 items-center gap-2 rounded-control border px-3 text-sm font-medium transition-colors duration-150",
+                        active ? "border-foreground bg-foreground text-primary-foreground" : "border-border bg-surface text-foreground hover:border-primary/40 hover:bg-primary-soft/60",
                       )}
                     >
                       {f.label}
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", active ? "bg-white/15" : "bg-foreground/5 text-muted-foreground")}>{count(f.groups)}</span>
+                      <span className={cn("rounded-sm px-2 py-0.5 text-xs tabular-nums", active ? "bg-white/15" : "bg-foreground/5 text-muted-foreground")}>{count(f.groups)}</span>
                     </Link>
                   </li>
                 );

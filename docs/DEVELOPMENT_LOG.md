@@ -2,6 +2,38 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — PR #29: redirección editorial como estudio pedagógico digital
+
+- **Continuidad verificada antes de editar:** rama única `claude/variables-expuestas-repo-f2o2et`, actualizada y limpia en `6fa99fc25fa9a152febf882c0a0fbacfd0b84ae7`; la rama remota y `refs/pull/29/head` coinciden. Publicación comprobada con `git push --dry-run`. Se leen AGENTS, CLAUDE y el contexto compartido y se inspecciona el diff de Claude respecto a `main` (`70fb9ea`). PR #29 abierta y sin merge según el usuario; no se reinicia ni sustituye su rama.
+- **Método:** capturas de diez pantallas × escritorio/móvil antes de modificar producto, decisión de sistema visual y rediseño sobre las primitivas existentes. Capturas finales comparadas visualmente; [galería versionada y método](qa/pr29/README.md), con copia ZIP entregada al usuario. Solo datos sintéticos y workspace local de prueba; no sesiones ni credenciales en los artefactos publicados.
+- **Decisión ADR-025:** papel cálido, tinta y azul editorial; Inter en UI y Georgia del sistema en titulares públicos; filetes, numeración y jerarquía. Sin nuevos paquetes/fuentes, gradientes, halos, tarjetas flotantes ni animaciones ornamentales. Bordes de controles separados de los filetes decorativos. Contrastes sobre papel/blanco: tinta ≥12,96:1, texto secundario ≥5,73:1, enlaces ≥6,45:1 y borde de campo ≥3,31:1.
+- **Portada:** dos hojas A4 legibles, con la misma tabla de animales, pregunta y opciones, sin marcar solución; demostración estática explícita. Copy de pasos y acceso conforme a Hacer magia o Revisar antes de crear, con descarga cuando la ficha esté lista. Tipografía, secciones públicas, navegación, acceso y CTA coherentes con el sistema.
+- **Aplicación:** Inicio coloca atención y trabajos por delante de materiales/fichas, con una acción principal; cuotas y plan secundarios. Materiales, perfiles y adaptaciones pasan a filas. Subida, selección de perfil/modo y pantalla de adaptación enfatizan contenido y estado. Móvil conserva acciones visibles y diálogo nativo. Se corrige el reflujo con texto ampliado en cabecera, barra y acciones de filas.
+- **Funciones de Claude conservadas:** rutas y redirecciones, retirada de «Próximamente», filtros, Plan y cuenta, estados, errores, cuotas y permisos. Sin cambios en `src/lib`, esquemas, SQL, Stripe, IA, pipeline, `components/material`, renderer ni PDF. Las clases de demo son exclusivamente web. Los grupos de rutas y límites de loading de ADR-024 conservan su protección del 404.
+- **Archivos:** `globals.css`, primitivas UI, shell/navegación, Inicio/listas/Adaptar/uso, presentación de adaptación, componentes públicos y acceso. Nuevo `tests/e2e/editorial-interface.spec.ts`. Contexto actualizado en UX, PROJECT_STATUS, ARCHITECTURE y este registro; AGENTS/CLAUDE ya enlazan esos documentos.
+- **Verificación final local:**
+  - `pnpm typecheck` PASS. Al iniciar había tipos ignorados obsoletos de `.next/dev/types` de rutas retiradas por Claude; se regeneraron sin cambiar configuración ni producto.
+  - `pnpm lint`: 0 errores, 1 aviso previo (`_id` en `tests/unit/analysis-run-auth.test.ts`).
+  - **62/62 pruebas focalizadas, 8 archivos PASS**: boundaries, adaptation-web-boundaries, visual-boundaries, immediate-dispatch, next-tracing, pdf-single-renderer, pricing-truth y print-html. No se ejecutó toda la suite.
+  - **4/4 Playwright PASS**, dos recorridos en escritorio 1440 y móvil 390: demo fiel/A4, movimiento reducido, salto al contenido y navegación pública; registro/perfil/subida válida e inválida/análisis simulado, revisión, estados de Inicio, filtros, menú con Escape/retorno de foco y resultado con fixture imprimible. Axe sin infracciones detectadas en las pantallas auditadas. Biblioteca a 320 px con texto al 200 % sin desbordamiento.
+  - Sin desbordamiento horizontal en las diez pantallas capturadas a 1440/390; comprobación adicional de portada, Inicio, materiales, perfiles y Adaptar a 320/768/1280.
+  - `pnpm build` PASS en el estado final: Google Fonts no bloquea esta sesión. No se cambia la carga de fuentes ni la red para conseguirlo. `git diff --check` PASS.
+
+  Comandos portables (Chrome instalado para la configuración E2E por defecto):
+
+  ```bash
+  pnpm typecheck
+  pnpm lint
+  pnpm exec vitest run tests/unit/boundaries.test.ts tests/unit/adaptation-web-boundaries.test.ts tests/unit/visual-boundaries.test.ts tests/unit/immediate-dispatch.test.ts tests/unit/next-tracing.test.ts tests/unit/pdf-single-renderer.test.ts tests/unit/pricing-truth.test.ts tests/unit/print-html.test.ts
+  pnpm exec playwright test tests/e2e/editorial-interface.spec.ts
+  pnpm build
+  ```
+
+  En este cloud, Playwright utilizó configuración temporal equivalente con Chromium de `@sparticuz/chromium`, sin `--disable-web-security`, contra `next dev` y `fake-supabase.mjs` (PGlite). La configuración temporal solo cambia el binario disponible, escritorio a 1440, reportes y servidor ya iniciado. Los E2E generales desactualizados registrados por Claude no se reejecutan ni se corrigen aquí.
+- **Límites:** QA local con proveedores simulados; no llamadas pagadas ni Supabase remoto. No se certifica Preview de Vercel, IA real ni accesibilidad con lector de pantalla. La ficha de resultado es un fixture sembrado, no una salida obtenida del modelo. El método de capturas explica la densidad reducida de la portada móvil larga para evitar un artefacto de teselas de Chromium.
+- **Publicación autorizada:** commit sobre la misma rama y push para actualizar [PR #29](https://github.com/TinyChat-up/ADAPTAULA/pull/29), sin crear otra PR ni hacer merge.
+- **Siguiente acción:** revisar galería y Preview de esa PR. Cualquier integración requiere una tarea posterior; después retomar el bloque de tests generales o la variante tabular del roadmap, por separado.
+
 ## 2026-10-13 — UI/UX: navegación sin pantallas vacías, «Plan y cuenta», «Adaptaciones» con filtros y movimiento
 
 - **Base verificada:** `git fetch origin main` → `70fb9ea` (merge de PR #28; #25–#27 también integradas). La PR #25, de la rama `claude/variables-expuestas-repo-f2o2et`, ya estaba integrada (`6c91552`; en esta sesión la API de GitHub sí responde). Por eso la rama se reinicia desde `main` y este bloque va como cambio nuevo, sin apilarlo sobre historia ya integrada.

@@ -9,7 +9,7 @@ interface FieldShellProps {
 }
 
 const controlClasses =
-  "block w-full rounded-control border border-border bg-surface px-3 min-h-11 text-base text-foreground placeholder:text-muted-foreground/70 aria-[invalid=true]:border-danger";
+  "block w-full rounded-control border border-control-border bg-surface px-3 min-h-11 text-base text-foreground placeholder:text-muted-foreground/70 aria-[invalid=true]:border-danger";
 
 function Shell({
   id,

@@ -11,7 +11,7 @@ function NavList({ items, label }: { items: AppNavItem[]; label: string }) {
     <nav aria-label={label}>
       <ul className="space-y-1">
         {items.map((item) => {
-          const { href, label: text, icon: Icon } = item;
+          const { href, label: text } = item;
           const active = isItemActive(pathname, item);
           const cta = href === "/app/adaptar";
           return (
@@ -20,20 +20,19 @@ function NavList({ items, label }: { items: AppNavItem[]; label: string }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative flex min-h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors duration-150",
+                  "group relative flex min-h-11 items-center gap-3 rounded-none px-3 text-sm font-medium transition-colors duration-150",
                   cta && !active && "text-primary",
-                  active ? "bg-primary-soft text-primary" : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground",
+                  active ? "bg-primary-soft font-semibold text-foreground" : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground",
                 )}
               >
                 {/* The active entry carries a bar as well as its colour and `aria-current` (never colour alone). */}
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute inset-y-2 left-0 w-1 origin-center rounded-full bg-primary transition-transform duration-200 ease-out",
+                    "absolute inset-y-0 left-0 w-0.5 origin-center bg-primary transition-transform duration-200 ease-out",
                     active ? "scale-y-100" : "scale-y-0",
                   )}
                 />
-                <Icon aria-hidden className={cn("size-5 shrink-0 transition-transform duration-200 ease-out", !active && "group-hover:scale-110")} />
                 <span className="flex-1">{text}</span>
               </Link>
             </li>

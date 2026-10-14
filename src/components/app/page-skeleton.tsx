@@ -1,14 +1,14 @@
 import { Skeleton } from "@/components/ui/feedback";
 
 /**
- * What a screen looks like while its data arrives: its header, a row of cards and a list, in the place they will occupy. Never an
+ * What a screen looks like while its data arrives: its header, controls and editorial rows, in the place they will occupy. Never an
  * empty spinner (docs/UX.md). Announced once to assistive technology by its label.
  */
 export function PageSkeleton({ label, cards = 0, rows = 3, hero = false }: { label: string; cards?: number; rows?: number; hero?: boolean }) {
   return (
     <div className="space-y-8" role="status" aria-label={label}>
       {hero ? (
-        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-36 rounded-card" />
       ) : (
         <div className="space-y-3">
           <Skeleton className="h-9 w-72 max-w-full" />

@@ -1,4 +1,3 @@
-import { Demo } from "@/components/marketing/demo";
 import { Faq } from "@/components/marketing/faq";
 import { FinalCta } from "@/components/marketing/final-cta";
 import { Hero } from "@/components/marketing/hero";
@@ -13,7 +12,6 @@ export default async function LandingPage() {
   return (
     <>
       <Hero />
-      <Demo />
       <HowItWorks />
       <AdaptationTypes />
       <Stages />

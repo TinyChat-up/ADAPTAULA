@@ -17,10 +17,11 @@ export function AppShell({
   user: { name: string | null; email: string | undefined };
 }) {
   return (
-    <div data-app-grid className="min-h-screen md:grid md:grid-cols-[16rem_1fr]">
-      <aside data-app-chrome className="sticky top-0 hidden h-screen flex-col gap-6 border-r border-border bg-surface p-4 md:flex">
-        <div className="px-3 pt-2">
+    <div data-app-grid className="min-h-screen md:grid md:grid-cols-[14rem_1fr]">
+      <aside data-app-chrome className="sticky top-0 hidden h-screen flex-col gap-9 border-r border-border bg-surface p-4 md:flex">
+        <div className="px-3 pt-4">
           <Logo href="/app" />
+          <p className="eyebrow mt-3 text-muted-foreground">Espacio docente</p>
         </div>
         <div className="flex-1 space-y-6 overflow-y-auto">
           <SidebarPrimaryNav />
@@ -29,14 +30,14 @@ export function AppShell({
         <UserFooter name={user.name} email={user.email} usage={usage} />
       </aside>
       <div className="min-w-0">
-        <header data-app-chrome className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface/85 px-4 backdrop-blur md:hidden">
+        <header data-app-chrome className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center justify-between gap-2 py-2 border-b border-border bg-surface px-4 md:hidden">
           <Logo href="/app" />
-          <Link href="/app/uso" className="inline-flex min-h-8 items-center rounded-full bg-primary-soft px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/10">
+          <Link href="/app/uso" className="inline-flex min-h-11 items-center px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10">
             Plan {usage.plan.name} · {usage.adaptations.used}/{usage.adaptations.limit}
             <span className="sr-only"> adaptaciones este mes</span>
           </Link>
         </header>
-        <main id="contenido" className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 md:pb-12">
+        <main id="contenido" className="mx-auto w-full max-w-6xl px-5 py-8 pb-28 sm:px-8 md:py-12 md:pb-12 lg:px-12">
           {children}
         </main>
       </div>
