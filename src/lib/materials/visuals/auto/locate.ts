@@ -51,7 +51,7 @@ export interface Evidence {
   clean: boolean;
   anchor: string | null;
   vision: { used: boolean; agrees: boolean; confidence: number | null; iou: number | null };
-  /** Only on a page without a text layer (`scan.ts`): what the pixels showed. */
+  /** Textless-page gate (`scan.ts`): the analysis claim and the absence of independent identity evidence. */
   scan?: ScanSignals;
   reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | ScanReason;
 }
@@ -204,6 +204,12 @@ interface Scored {
  * proposals by visual id: they only ever ADD agreement to a region found here.
  */
 export function locateVisuals(model: PageModel, targets: readonly VisualTarget[], activities: readonly ActivityText[], hypotheses: ReadonlyMap<string, Hypothesis> = new Map()): Located[] {
+  // Vision agreement alone does not supply an independent activity anchor on a scan.
+  if (model.texts.length === 0) return targets.map((target) => ({
+    visualId: target.id, accepted: false, bounds: null, confidence: 0,
+    evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor: null,
+      vision: { used: false, agrees: false, confidence: null, iou: null }, reason: "scan_identity_unverified" },
+  }));
   const mask = textMask(model);
   const lines = textLines(model.texts);
   const anchors = activityAnchors(lines, activities);

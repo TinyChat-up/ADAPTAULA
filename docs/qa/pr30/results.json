@@ -1,0 +1,666 @@
+{
+  "baseline": "ccfbf3e",
+  "base": "1929849",
+  "cases": [
+    {
+      "id": "A",
+      "description": "una A mayúscula aislada",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.295238,
+          "y": 0.209596,
+          "w": 0.219048,
+          "h": 0.195286
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "B",
+      "description": "un signo más aislado",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.297619,
+          "y": 0.23569,
+          "w": 0.238095,
+          "h": 0.16835
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "C",
+      "description": "un logotipo floral, sin la figura que afirma el análisis",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.384524,
+          "y": 0.309764,
+          "w": 0.183333,
+          "h": 0.121212
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "D",
+      "description": "un esquema unido a una consigna por una línea",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.25,
+          "y": 0.284512,
+          "w": 0.440476,
+          "h": 0.190236
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "E",
+      "description": "dos gráficos unidos accidentalmente por un trazo",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.265476,
+          "y": 0.292929,
+          "w": 0.421429,
+          "h": 0.138047
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "F",
+      "description": "la figura requerida cortada por el borde y un logotipo interior",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.384524,
+          "y": 0.309764,
+          "w": 0.183333,
+          "h": 0.121212
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 1,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "G",
+      "description": "un formulario con cuadrícula y texto",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.235714,
+          "y": 0.250842,
+          "w": 0.480952,
+          "h": 0.205387
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "H",
+      "description": "escaneo inclinado con sombra y ruido, sin evidencia de identidad",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.305952,
+          "y": 0.28367,
+          "w": 0.327381,
+          "h": 0.154882
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 1,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "I",
+      "description": "la única figura pertenece a la actividad 2, no a la actividad 1",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.384524,
+          "y": 0.309764,
+          "w": 0.183333,
+          "h": 0.121212
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    },
+    {
+      "id": "J",
+      "description": "etiquetas imprescindibles separadas más de 4 mm del dibujo",
+      "before": {
+        "visualId": "vis_1",
+        "bounds": {
+          "x": 0.30119,
+          "y": 0.284512,
+          "w": 0.325,
+          "h": 0.154882
+        },
+        "confidence": 0.75,
+        "accepted": true,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": true,
+          "clean": true,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_single_region@v1",
+            "sole_visual": true,
+            "regions": 1,
+            "frames": 0,
+            "edge_artifacts": 0,
+            "faint": 0,
+            "large_glyphs": 0,
+            "labels": 0
+          },
+          "reason": "accepted"
+        }
+      },
+      "after": {
+        "visualId": "vis_1",
+        "bounds": null,
+        "confidence": 0,
+        "accepted": false,
+        "evidence": {
+          "shape": "figure",
+          "signature": false,
+          "placement": false,
+          "unique": false,
+          "clean": false,
+          "anchor": null,
+          "vision": {
+            "used": false,
+            "agrees": false,
+            "confidence": null,
+            "iou": null
+          },
+          "scan": {
+            "method": "scan_identity_gate@v2",
+            "sole_visual": true,
+            "identity_verified": false
+          },
+          "reason": "scan_identity_unverified"
+        }
+      }
+    }
+  ]
+}

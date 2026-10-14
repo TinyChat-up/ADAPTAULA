@@ -271,6 +271,8 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 
 ### ADR-026 · Escaneos sin capa de texto: una sola figura, o ninguna (Fase 8.2B.6, 2026-10-14)
 
+**Sustituida por ADR-027 tras la auditoría de PR #30: el criterio de identidad descrito abajo produjo falsos positivos demostrados. No es la política vigente.**
+
 **Contexto.** El localizador automático (`auto_visuals@v2`) ancla cada figura a la zona impresa de su actividad. Un escaneo no
 tiene capa de texto, así que no hay anclas. Una figura genérica no tiene firma, de modo que sin visión nunca llegaba a 0,75 y
 «Hacer magia» se paraba. `MaterialAnalysis` v3 no guarda la posición de los visuales.
@@ -291,3 +293,14 @@ y no sobrescribe un recorte aceptado así.
 - El cambio de versión del motor revalida los recortes automáticos anteriores.
 - Ampliar a varias figuras por página necesitaría una evidencia de asociación que hoy no existe (posición en el análisis u OCR
   autorizado), y sería un ADR nuevo.
+
+
+### ADR-027 · Rechazar escaneos sin identidad verificable y bloquear recortes heredados (2026-10-14)
+
+**Contexto:** auditoría independiente de #30 sobre `ccfbf3e`. Diez aserciones adversariales y tres de integración fallan contra el código anterior. Nueve adversarios muestran texto/decoración/contaminación/asociación errónea o etiquetas omitidas; el décimo verifica ruido y falta de evidencia. Un único componente y una declaración de análisis no certifican qué figura es. La confianza 0,75 es suma heurística, no probabilidad ni garantía semántica.
+
+**Decisión:** se retira la aceptación geométrica en `scan.ts`. Hasta disponer de evidencia independiente, todas las páginas sin capa de texto paran automáticamente (`scan_identity_unverified`). Se cierra también el paso por visión/corroboración matemática en esas páginas: reconocer una forma no establece su actividad. La selección humana y las vías con texto siguen existiendo. Es una restricción de la PR actual; no una nueva fase ni un pipeline nuevo.
+
+**Persistencia:** `auto_visuals@v4` evita el caché de decisiones v3. Además, lectores, productor y pins rechazan la evidencia automática `scan`; sin ello una vista/exportación podía seguir entregando el activo anterior. Se leen procedencia y objeto con el mismo control de acceso; no se borran revisiones/objetos ni se migra la BD. Un docente puede crear una revisión corregida. El hash de una fuente precargada se contrasta contra el localizador real antes de reutilizar/producir un recorte.
+
+**Recursos y consecuencias:** se elimina el análisis de componentes completo y se limita la retención de modelos de 200 ppp a una página. La capacidad automática de escaneos queda **no completada**, incluso para el fixture correcto. El documento no se entrega sin el visual imprescindible. No hay OCR, modelos externos nuevos, cambios comerciales o de renderer. Alcance, pruebas, riesgos y recomendación en [auditoría](qa/pr30/README.md).

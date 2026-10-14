@@ -4,6 +4,7 @@ import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import type { VisualAssetFailure, VisualState } from "@/lib/render/visual-assets";
 import { VisualSpecSchema, type VisualSpec } from "@/lib/visuals/spec";
+import { isUnverifiedScanLocator } from "./auto/scan";
 import { SPEC_EXTRACTOR_VERSION } from "./auto/extract";
 import { NormalizedBoundsSchema, pixelRect, withMargin, type NormalizedBounds } from "./geometry";
 import { RasterError, cropPng, engineProvenance, pageBox, pageCount, renderPage, sameBox, type PageBox } from "./raster";
@@ -30,6 +31,7 @@ export interface LocatorRow {
   revision: number;
   method: LocatorMethod;
   confidence?: number | null;
+  evidence?: unknown;
   page: number;
   x: number;
   y: number;
@@ -81,7 +83,7 @@ export interface VisualDeps {
     material(id: string): Promise<MaterialForVisuals | null>;
     /** Each locator with ALL its instances, newest first, and its reconstructions (when it was located automatically). */
     activeLocators(materialId: string, analysisFingerprint: string): Promise<Array<LocatorRow & { assets: AssetRow[]; specs?: SpecRow[] }>>;
-    asset(id: string): Promise<AssetRow | null>;
+    asset(id: string): Promise<(AssetRow & { locator?: Pick<LocatorRow, "method" | "evidence"> }) | null>;
     readObject(path: string): Promise<Uint8Array | null>;
   };
   /** Server side (service role), only after the reader has authorised the material. */
@@ -187,6 +189,9 @@ export async function produceVisualAsset(deps: Pick<VisualDeps, "admin">, locato
     await deps.admin.setFailure(row.id, null);
     return { ok: true as const };
   };
+  if (isUnverifiedScanLocator(row)) return fail("geometry_missing");
+  // createLocator can return an existing revision: preloaded bytes must match THAT revision too.
+  if (preloaded && sha256(preloaded.bytes) !== row.source_sha256) return fail("source_missing");
   const locator = toLocator(row);
   const identity = assetIdentity(locator);
 
@@ -314,7 +319,7 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
   const active = input.sourceSha256 ? await deps.reader.activeLocators(input.materialId, input.analysisFingerprint) : [];
   for (const visualId of input.visualIds) {
     const locator = active.find((l) => l.visual_id === visualId && l.source_sha256 === input.sourceSha256);
-    if (!locator) {
+    if (!locator || isUnverifiedScanLocator(locator)) {
       out.states[visualId] = { visualId, status: "missing_locator", resolution: "D" };
       continue;
     }
@@ -361,7 +366,7 @@ function verifiedSpec(specs: readonly SpecRow[]): VisualSpec | null {
  */
 export async function readAssetInstance(deps: VisualDeps, pin: { assetId: string; sha256: string }): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; failure: "not_found" | "asset_missing" | "asset_corrupt" }> {
   const instance = await deps.reader.asset(pin.assetId);
-  if (!instance || instance.sha256 !== pin.sha256) return { ok: false, failure: "not_found" };
+  if (!instance || instance.sha256 !== pin.sha256 || isUnverifiedScanLocator(instance.locator)) return { ok: false, failure: "not_found" };
   const stored = await deps.reader.readObject(instance.storage_path);
   if (!stored) return { ok: false, failure: "asset_missing" };
   if (sha256(stored) !== pin.sha256) return { ok: false, failure: "asset_corrupt" };

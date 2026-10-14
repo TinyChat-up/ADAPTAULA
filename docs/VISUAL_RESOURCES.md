@@ -664,74 +664,20 @@ La vía usa `visual_substitute@v4`, el contrato tabular existente y un verificad
 
 Alcance exacto en ADR-023: tablas rectangulares pequeñas con capa de texto, valores literales del vocabulario de la columna, sin alternativas numéricas, celdas vacías/ambiguas, unidades separadas ni inferencias. No cubre escaneos ni certifica los glifos por OCR. La comparación contra el texto extraíble del PDF no equivale a verificar la transcripción del enunciado o clave. Pruebas en `table-choice.test.ts`, `table-choice-prompt.test.ts`, integración PGlite y `tests/pdf/table-choice-substitution.test.ts`. El PDF usa CLARO sin cambios globales: tabla/pregunta/opciones juntas, encabezados distinguidos y círculos vacíos. IA real y Vercel pendientes.
 
-### Escaneos sin capa de texto — Fase 8.2B.6 (`auto_visuals@v3`)
+### Escaneos sin capa de texto — auditoría de PR #30 (`auto_visuals@v4`)
 
-**Qué fallaba.** Una página escaneada (un PDF hecho de una imagen por página, o una foto subida) no tiene capa de texto. Sin
-palabras no hay anclas de actividad, así que la señal «en la zona de su actividad» vale 0. Una figura genérica, además, no aporta
-firma. El esquema imprescindible de «La célula animal» escaneada se quedaba en confianza 0,15 (`low_confidence`, opción D). Sin
-visión configurada, «Hacer magia» se paraba siempre. Reproducido con `tests/support/scan-case.ts`: la ficha vectorial rasterizada
-a 150 ppp, con tono de papel, grano, motas y la banda oscura del escáner en un borde.
+**Restricción vigente (ADR-027, sustituye ADR-026):** el criterio de «único dibujo conectado» NO verifica identidad ni asociación pedagógica. Se retira la aceptación automática de páginas sin capa de texto, tanto PDF como imagen. `scan_identity_gate@v2` devuelve `scan_identity_unverified`, sin coordenadas ni confianza de aceptación. Tampoco puede eludirse por hipótesis de visión ni reconstrucción de `VisualSpec` en estas páginas. No se implementa OCR, otro modelo o pipeline.
 
-**Qué funciona ahora (`auto/scan.ts`, solo en páginas sin capa de texto).** Se acepta un recorte únicamente si se cumplen **todas**
-estas condiciones:
+La auditoría reproduce aceptación a 0,75 de letras, símbolos, decoración, consignas unidas, dos gráficos conectados, figura cortada acompañada de un logo, formularios y un dibujo perteneciente a otra actividad. También se omitían etiquetas separadas. [Fixtures, resultados y auditoría completa](qa/pr30/README.md). El caso de ruido/rotación comprueba insuficiencia de evidencia, no demuestra por sí solo una identidad equivocada.
 
-1. El análisis lista **un único visual en esa página** (de cualquier papel o tipo) y es el `required`.
-2. Los píxeles muestran **exactamente un dibujo**: una mancha conectada de al menos 15 × 15 mm, con un 30 % o más de tinta oscura.
-   Sus trazos separados (núcleo, puntos, líneas guía) se unen si están a 4 mm o menos. No cuentan como dibujo:
-   - las motas;
-   - la tinta pegada al borde de la página (sombra de escáner o figura cortada): se descarta y se cuenta;
-   - los marcos (cuadros de texto o de respuesta): rectángulo cerrado por los cuatro lados y poco interior;
-   - las filas de letras muy grandes: tres o más manchas de igual altura, una junto a otra.
-3. **Las etiquetas** (los «1», «2», «3» de un esquema) entran en el recorte si caen enteras a 4 mm o menos del dibujo. Ninguna línea
-   de texto que siga más allá entra, y ninguna puede quedar a menos de 2,5 mm del recorte, porque el margen de la receta la
-   cortaría.
-4. El recorte no es mayor que media página, y el texto escaneado no supone más de la mitad de su tinta.
-5. Si el análisis dice que es una barra, los píxeles tienen que leerse como barra. Las rectas numéricas no se intentan en un escaneo.
+**Vías conservadas:** selección humana explícita (A), con fuente, página, geometría, rasterizado y hash; localización anterior con capa de texto y sus criterios existentes. El PDF de la célula es ahora una regresión de **selección manual**, no prueba de localización automática. La fase de escaneos sigue pendiente de un contrato verificable de identidad/asociación, integridad y etiquetas.
 
-La confianza usa la misma tabla que `locate.ts`:
+**Activos anteriores:** las filas y objetos no se borran. Un localizador automático que contenga evidencia `scan` no se considera listo, ni en lectura rápida, ni en vista, ni en lectura de bytes/pins, ni en reintento de producción. Su procedencia se lee con RLS; una corrección humana conserva la revisión anterior y crea otra. El pin antiguo permanece bloqueado. El motor cambia a v4 para no reutilizar caché v3, pero esa versión por sí sola no sustituye el control en lectores.
 
-| Señal | Peso |
-| --- | --- |
-| Único visual (`required`) de la página según el análisis; sustituye al ancla | 0,25 |
-| Único dibujo | 0,20 |
-| Recorte limpio | 0,15 |
-| Dibujo grande y conectado (una barra que se lee como barra: su firma) | 0,15 (0,30) |
+**Procedencia:** `produceVisualAsset` compara también los bytes precargados con `source_sha256` de la revisión efectivamente recuperada. Un PNG con hash válido puede provenir del original equivocado; se comprueban ambos eslabones.
 
-Una figura genérica que cumple todo llega exactamente a 0,75. Nada parcial se acepta. A partir de ahí el camino es el de siempre:
+**Recursos:** se elimina el etiquetado de componentes a resolución completa y sus agrupaciones potencialmente cuadráticas; el rechazo no recorre los píxeles. La caché de modelos de 200 ppp se limpia por página. Sigue existiendo coste de descarga/rasterizado y no se certifica rendimiento máximo en Vercel.
 
-- localizador `auto` con página, coordenadas, `page_box`, `source_sha256`, motor y señales `scan` (sin texto del material);
-- recorte `visual_crop@v1` en Storage privado;
-- la misma política, el mismo renderer y el mismo PDF.
+**Parada:** sin figura imprescindible resuelta, Hacer magia termina `blocked`, sin entrega ni PDF y sin consumir cuota (reserva existente). No se añade una aprobación intermedia a Hacer magia; la selección manual pertenece al recorrido de revisión ya existente.
 
-La visión, si está configurada, solo se consulta para lo que queda sin resolver y nunca sobrescribe un recorte aceptado por escaneo.
-
-**Sigue sin localizarse, y la parada es honesta:**
-
-| Caso | Motivo |
-| --- | --- |
-| Dos dibujos, o un dibujo más un adorno de tamaño de figura | `scan_ambiguous` |
-| Una mancha clara (de papel o de escáner) | `scan_ambiguous` |
-| Página sin dibujo, o solo con texto (titular enorme, párrafo enmarcado) | `scan_no_region` |
-| Figura cortada por el borde | `scan_no_region` |
-| Texto corrido demasiado cerca | `scan_text_overlap` |
-| Más de un visual en la página según el análisis, o el visual no es `required` | `scan_not_sole_visual` |
-| El análisis dice barra y los píxeles no la muestran | `scan_signature_mismatch` |
-| Rectas numéricas | `scan_shape_unsupported` |
-| Página con capa de texto (decide el localizador con anclas) | `scan_has_text_layer` |
-
-Una versión nueva del original no hereda el recorte anterior. Un recorte automático anterior que este motor no vuelve a encontrar
-no se conserva.
-
-**Límites.**
-- No es OCR ni una localización universal de escaneos.
-- No separa dos figuras de una misma página ni asocia una figura a su actividad por posición.
-- No reconoce un adorno grande como decorativo: es ambiguo y se para.
-- Un párrafo cuyas letras toquen un dibujo puede quedar dentro del recorte si cumple todas las reglas. Los textos que tocan el
-  marco o las manchas oscuras que imitan un trazo no se distinguen.
-- Una sola letra enorme aislada podría pasar por dibujo si es el único elemento grande y el análisis afirma un único visual.
-- Pruebas solo con escaneos sintéticos: falta medir la cobertura con escaneos reales autorizados.
-
-Pruebas:
-- `tests/unit/scan-location.test.ts`: 20 casos;
-- `tests/db/scan-visuals.test.ts`: 5 casos, con migraciones reales sobre PGlite;
-- `tests/pdf/scan-visuals.test.ts`: PDF con Chromium.
+Pruebas: `scan-adversarial`, `scan-location`, db `scan-audit`/`scan-visuals`/`magic-visual-policy`, regresiones de localizador/activos/RLS/exportación y cuatro PDF. Proveedores simulados; no se ha validado el despliegue ni material privado real.

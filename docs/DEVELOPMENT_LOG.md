@@ -2,7 +2,24 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
-## 2026-10-14 — Fase 8.2B.6: localización conservadora de figuras en escaneos
+## 2026-10-14 — Auditoría independiente y correcciones de PR #30
+
+- **Base y alcance:** `main` en `1929849`; rama `claude/fase-8-2b6-escaneos`, HEAD auditado `ccfbf3e`, coincidente con remoto y `refs/pull/30/head`. Se corrige esa misma PR, sin fase nueva, otra PR ni merge. Entorno ya preparado; no se repite la suite completa.
+- **Fallos reproducidos antes de corregir:** diez fixtures adversariales aceptados a 0,75 sin ancla independiente (A–I solicitados y J, pérdida de etiquetas). Nueve muestran selección equivocada, contaminación o pérdida; H muestra el límite de evidencia en un escaneo plausible. Fallan las diez aserciones de rechazo contra el código original. Otras tres pruebas PGlite demuestran entrega de decoración, reutilización de activos scan antiguos y aceptación de una fuente precargada con SHA distinto del localizador efectivo.
+- **Correcciones de producción:** `auto/scan.ts` rechaza la localización sin evidencia independiente; `auto/locate.ts` y `auto/service.ts` cierran entradas alternativas por visión y corroboración de forma en páginas sin texto. Motor `auto_visuals@v4` invalida el resultado cacheado anterior. `visuals/service.ts` y `server.ts` consultan evidencia bajo RLS, bloquean activos automáticos scan antiguos en resolución, producción y pins y comprueban el SHA de la fuente precargada. Se conservan filas/bytes históricos y selección humana. Se elimina el recorrido de componentes del escaneo y se libera la caché de alta resolución entre páginas.
+- **Pruebas añadidas o ajustadas:** `scan-adversarial`, `scan-location`, `scan-audit`, `scan-visuals`, harness PGlite, integración `magic-visual-policy` y PDF de célula con selección manual explícita. La integración demuestra parada sin entrega/descarga cuando falta la figura, ausencia de llamada a visión y cuota no consumida. El fixture de procedencia antigua modifica evidencia únicamente en PGlite; no se altera la inmutabilidad de producción.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/scan-adversarial.test.ts tests/unit/scan-location.test.ts tests/db/scan-audit.test.ts tests/db/scan-visuals.test.ts tests/db/magic-visual-policy.test.ts`: **57 PASS**.
+  - `pnpm exec vitest run tests/unit/automatic-visuals.test.ts tests/unit/visual-raster.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts tests/db/automatic-visuals.test.ts tests/db/visual-locators.test.ts tests/db/visual-instances.test.ts tests/db/pdf-export.test.ts`: **97 PASS**.
+  - `pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/scan-visuals.test.ts tests/pdf/automatic-visuals.test.ts tests/pdf/table-choice-substitution.test.ts tests/pdf/illustrations.test.ts`: **4 PDF PASS**. Inspección visual de célula: esquema y etiquetas completos junto a la actividad correcta; renderer sin cambios.
+  - **154 pruebas focalizadas únicas en 13 archivos**, más los 4 PDF; la repetición de `scan-audit` tras ampliar comprobaciones de lectura rápida, bytes y corrección manual no suma casos nuevos.
+  - Typecheck PASS; lint sin errores, un aviso previo en `analysis-run-auth.test.ts`; `git diff --check` limpio.
+  - Sin suite completa, build, llamadas pagadas, SQL remoto, migraciones, Stripe ni cambios comerciales.
+- **Evidencia y documentación:** [informe reproducible con fixtures y resultados antes/después](qa/pr30/README.md), `PROJECT_STATUS.md`, `VISUAL_RESOURCES.md`, ADR-027 en `ARCHITECTURE.md` y `ROADMAP.md`. La entrada original que sigue es histórica y sus afirmaciones de aceptación automática quedan sustituidas por esta auditoría.
+- **Límites:** se rechazan automáticamente todos los escaneos sin texto, incluso la célula correcta. Se mantienen selección humana y localización anterior con capa de texto. No se certifican selecciones humanas arbitrarias, páginas híbridas/OCR falso, escaneos reales ni consumo máximo en Vercel. No se consultó producción ni se recuperan documentos ya descargados.
+- **Decisión y siguiente acción:** **NO MERGE como Fase 8.2B.6 terminada**. Publicar las correcciones en la misma rama de #30; revisar la PR como restricción de alcance y protección contra entregas incorrectas. Antes de retomar la localización automática, definir una fuente independiente de identidad/asociación e integridad; esa implementación queda fuera de esta auditoría.
+
+## 2026-10-14 — Fase 8.2B.6: localización conservadora de figuras en escaneos (histórico; aceptación retirada por la auditoría anterior)
 
 - **Base verificada:** `git fetch origin main` → `1929849`. #27 (`bb38cd0`), #28 (`70fb9ea`) y #29 (`1929849`) están integradas. Rama nueva: `claude/fase-8-2b6-escaneos`. La rama y el trabajo de la PR #29 no se tocan.
 - **Investigación:** `locate.ts` puntúa:

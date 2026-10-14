@@ -1,3 +1,6 @@
+import { adversarialScanPdf } from "../support/scan-adversarial-case";
+import { cellCaseAnalysis } from "../support/cell-case";
+import { exportAdaptationPdf } from "@/lib/render/pdf-export";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
@@ -108,6 +111,18 @@ async function teacher(options: { analysis?: MaterialAnalysis; pdf?: FractionsPd
   const plan = async (id: string) => (await q<{ payload: { plan: { needs: Array<{ key: string; category: string; resolution: { action: string } }> } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'visual_resolution'", [id]))[0]?.payload.plan;
   return { user, materialId, learner, deps, actor, spy, orchestrator, status, magic, sheet, entitlement, plan, resolveCalls, visuals, auto, sourceSha256 };
 }
+
+it("escaneo con figura de otra actividad: parada visual, sin entrega, cuota consumida ni descarga", async () => {
+  const t = await teacher({ analysis: cellCaseAnalysis(), sourcePdf: await adversarialScanPdf("I") });
+  const id = await t.magic();
+  expect(await t.status(id)).toMatchObject({ status: "blocked", delivered: false, automaticStop: { reason: "visual" } });
+  expect(await t.entitlement(id)).toBe("reserved");
+  expect(t.spy.reviewer).toBe(0);
+  expect((await t.plan(id))?.needs).toEqual(expect.arrayContaining([expect.objectContaining({ key: "vis_1", category: "unresolved_visual" })]));
+  let rendered = false;
+  expect(await exportAdaptationPdf({ service: t.deps, visuals: t.visuals.deps, engine: { name: "never", render: async () => { rendered = true; throw new Error("must not print"); } } }, t.actor, id)).toEqual({ ok: false, code: "not_ready" });
+  expect(rendered).toBe(false);
+});
 
 describe("selección única de tabla en Hacer magia", () => {
   it.each(["corrected", "invalid", "unverified"] as const)("corrobora el PDF y finaliza sin aprobación intermedia: %s", async (mode) => {

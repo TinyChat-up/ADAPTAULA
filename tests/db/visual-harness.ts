@@ -23,7 +23,7 @@ const num = (v: unknown) => Number(v);
 const locatorRow = (r: Record<string, unknown>): LocatorRow => ({ ...(r as unknown as LocatorRow), x: num(r.x), y: num(r.y), w: num(r.w), h: num(r.h), confidence: r.confidence === null || r.confidence === undefined ? null : num(r.confidence) });
 const SPEC_COLUMNS = "id, locator_id, visual_id, extractor_version, spec, spec_sha256";
 // `confidence` read through the row's JSON: the same query works on a database migrated only up to 016/017 (null there).
-const LOCATOR_COLUMNS = "id, workspace_id, material_id, analysis_fingerprint, visual_id, source_sha256, locator_version, revision, method, page, x, y, w, h, page_box, superseded_at, last_failure, (to_jsonb(material_visual_locators.*) -> 'confidence') as confidence";
+const LOCATOR_COLUMNS = "id, workspace_id, material_id, analysis_fingerprint, visual_id, source_sha256, locator_version, revision, method, page, x, y, w, h, page_box, superseded_at, last_failure, (to_jsonb(material_visual_locators.*) -> 'confidence') as confidence, (to_jsonb(material_visual_locators.*) -> 'evidence') as evidence";
 const ASSET_COLUMNS = "id, locator_id, identity, recipe_version, storage_path, width, height, bytes, sha256";
 
 export function visualHarness(db: PGlite, user: User, shared?: Pick<VisualHarness, "objects" | "sources">): VisualHarness {
@@ -43,7 +43,12 @@ export function visualHarness(db: PGlite, user: User, shared?: Pick<VisualHarnes
         const specs = hasSpecs ? (await asUser(() => db.query<SpecRow>(`select ${SPEC_COLUMNS} from public.material_visual_specs where material_id = $1`, [materialId]))).rows : [];
         return locators.map((l) => ({ ...l, assets: assets.filter((a) => a.locator_id === l.id), specs: specs.filter((s) => s.locator_id === l.id) }));
       },
-      asset: async (id) => (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where id = $1`, [id]))).rows[0] ?? null,
+      asset: async (id) => {
+        const asset = (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where id = $1`, [id]))).rows[0];
+        if (!asset) return null;
+        const locator = (await asUser(() => db.query<Pick<LocatorRow, "method" | "evidence">>("select method, to_jsonb(material_visual_locators.*)->'evidence' as evidence from public.material_visual_locators where id=$1", [asset.locator_id]))).rows[0];
+        return locator ? { ...asset, locator } : null;
+      },
       readObject: async (path) => {
         const visible = (await asUser(() => db.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [BUCKET, path]))).rows.length > 0;
         return visible ? (objects.get(path) ?? null) : null;
