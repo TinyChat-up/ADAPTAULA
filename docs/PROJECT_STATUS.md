@@ -52,3 +52,7 @@ integridad pedagógica y respuesta visual siguen no verificables. No afirmar val
 
 **Siguiente acción:** revisar la reparación y su PR antes de modificar otra variable del OCR o del localizador. No hay merge automático,
 llamadas pagadas, producción, Hacer magia, UI, SQL, Stripe, Supabase ni migraciones.
+
+**Publicación:** corrección `20fd658` subida a `codex/corregir-anclas-etiquetas-ocr`. La creación de PR por GraphQL y REST devolvió
+`Forbidden`; no se confirma ninguna PR nueva. [Abrir PR con esta rama](https://github.com/TinyChat-up/ADAPTAULA/pull/new/codex/corregir-anclas-etiquetas-ocr).
+El título y la descripción están preparados en la salida local de la evaluación; no se ha hecho merge.
