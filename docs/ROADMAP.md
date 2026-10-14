@@ -15,6 +15,21 @@ Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones au
    - **Recomendado:** la propuesta de ubicación sale del análisis inicial; las anclas, de un OCR local; y la aceptación, de un contrato de 11 comprobaciones sin puntuación.
    - **Siguiente:** el experimento mínimo de la sección 9 de la propuesta (30 escaneos reales autorizados), primero sin modelo (OCR + propuestas oráculo) y después con una sola ejecución de pago con tope.
    - **Criterio:** 0 falsos positivos con ≥ 60 aceptados y una cobertura ≥ 40 %. Si no se cumple, no se implementa.
+7. **Piloto OCR local hecho (2026-10-14, [`evals/ocr-pilot`](../evals/ocr-pilot/README.md)); veredicto INVESTIGAR MÁS.**
+   - Qué es: tesseract.js 7 (Tesseract 5 en WASM) como devDependency aislada, sin API ni OCR remoto, aplicado a los píxeles de los
+     fixtures **sintéticos**. No es una validación real.
+   - Qué recupera: la pasada de página pierde todas las etiquetas sueltas; una pasada por glifo recupera 135/135.
+   - Anclas de actividad: 109/115 exactas, 0 mal asignadas.
+   - Candidatos con caja humana: 19/30, frente a 23/30 con la capa de referencia.
+   - Dónde se rompe:
+     - en páginas giradas, por la integración (hay que enderezar antes del prefiltro);
+     - en fotocopias degradadas, por el umbral de tinta del prefiltro.
+   - Siguiente, en orden:
+     1. Ejecutar `pnpm eval:ocr -- --corpus` con 20–30 escaneos reales autorizados (fuera del repo).
+     2. Enderezar antes del prefiltro.
+     3. Hacer robusto el umbral de tinta.
+     4. Probar un despliegue en Vercel (2 GB y unos 5 s/página).
+   - Límites: no autoriza recortes automáticos ni se integra en producción.
 
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 

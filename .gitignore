@@ -72,3 +72,6 @@ evals/adaptation/private/
 *.tsbuildinfo
 next-env.d.ts
 /.pdf-smoke/
+
+# piloto OCR: modelo de idioma descargado localmente (sha-256 fijado en evals/ocr-pilot/engine.ts)
+/evals/ocr-pilot/.cache/

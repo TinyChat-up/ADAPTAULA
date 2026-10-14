@@ -99,4 +99,9 @@ describe("client/server boundaries", () => {
       .map(rel);
     expect(offenders).toEqual([]);
   });
+
+  it("the local OCR pilot (evals/ocr-pilot, devDependency) is never imported by the app", () => {
+    const offenders = files.filter((f) => /["'](tesseract\.js|tesseract\.js-core)["']|evals\/ocr-pilot/.test(source.get(f)!)).map(rel);
+    expect(offenders).toEqual([]);
+  });
 });

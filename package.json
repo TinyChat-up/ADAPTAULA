@@ -21,6 +21,7 @@
     "db:setup-sql": "node scripts/build-setup-sql.mjs",
     "test:e2e": "playwright test",
     "eval:analysis": "node --env-file-if-exists=.env.local --import tsx evals/material-analysis/run.ts",
+    "eval:ocr": "node --conditions=react-server --import tsx evals/ocr-pilot/run.ts",
     "eval:analysis:mock": "node --import tsx evals/material-analysis/run.ts --mock",
     "eval:illustrations": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx evals/illustrations/run.ts",
     "eval:illustrations:mock": "node --conditions=react-server --import tsx evals/illustrations/run.ts --mock",
@@ -70,6 +71,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
+    "tesseract.js": "7.0.0",
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.3"

@@ -2,6 +2,63 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — Piloto OCR local sin API de pago (viabilidad, no producción)
+
+- **Base y rama:** `origin/main` en `bafae45`; la PR #31 es ancestro (`git merge-base --is-ancestor 1cee7ca origin/main`). Rama
+  nueva: `claude/piloto-ocr-local`.
+- **Leído antes de empezar:**
+  - AGENTS y CLAUDE;
+  - la propuesta 8.2B.7 auditada;
+  - la QA de PR #30;
+  - `evals/visual-location` tras la auditoría `91848b6`;
+  - ROADMAP y PROJECT_STATUS.
+- **Fase 1 · motor:**
+  - Comparación documental de tesseract.js, Tesseract nativo, PaddleOCR/RapidOCR, docTR/EasyOCR, Surya y OCR en la nube.
+  - Elegido **tesseract.js 7.0.0**: Apache-2.0, WASM y sin binarios nativos; es el único que podría ir en el mismo runtime Node.
+  - Instalado como devDependency exacta, con `postinstall` bloqueado en `pnpm-workspace.yaml`.
+  - Modelo `spa` 4.0.0_best_int (2,1 MB) descargado una vez desde jsDelivr a `evals/ocr-pilot/.cache/` (ignorada por Git), con
+    el sha-256 fijado.
+- **Fase 2 · prototipo** (`evals/ocr-pilot/`):
+  - **Entrada:** el OCR solo recibe los píxeles del raster escaneado. La capa vectorial se usa únicamente para puntuar.
+  - **Hallazgo 1:** la pasada de página (PSM 3 y PSM 11) pierde **todas** las etiquetas aisladas. Se añade una pasada que relee
+    cada glifo aislado (PSM 8, lista blanca).
+  - **Hallazgo 2:** sin enderezar, 3° mezcla líneas y 4,5° casi vacía la lectura. `rotateAuto` lo corrige a 3° y 4,5°, pero no
+    a 8°. Las cajas se devuelven al marco de la página.
+  - **Métricas:** palabras y caracteres (en orden de lectura enderezado, sin guiones bajos de los campos de rellenar), consignas,
+    anclas exactas y tolerantes, etiquetas (leída, confundida, perdida, duplicada, espuria), desvíos y candidatos del prefiltro de
+    #31 con la caja humana. Las de candidatos se calculan con la capa OCR y con la de referencia.
+- **Fase 3 · resultados** sobre 11 fixtures **sintéticos** × 5 condiciones (limpio 300, escáner 300, escáner 150, girado +3° 200,
+  degradado 200), con el motor «página + etiquetas»:
+  - **Texto:** 100 % de palabras y caracteres en limpio y escáner; 97,6 % de palabras girado; 83 % de palabras (94,6 % de
+    caracteres) degradado.
+  - **Etiquetas:** 135/135, sin confusiones, duplicados ni espurias; desvío del centro con p90 de 0,09 mm.
+  - **Anclas:** 109/115 exactas, 0 mal asignadas. Con el comparador tolerante, 113/115.
+  - **Candidatos:** 19/30, frente a 23/30 con referencia (18/18 en limpio y escáner, 1/6 girado, 0/6 degradado). 0 erróneos y 0
+    aceptados.
+  - **Rendimiento:** 1,2–4,9 s por página (4 vCPU). RSS de 147 MB antes del motor, 259 MB con dos workers y pico de 1.076 MB.
+  - **Tamaño de dependencia:** 47 MB más 2,1 MB de modelo.
+  - **Informe:** `evals/ocr-pilot/results/report.md`, con desglose por tipo de documento.
+- **Fase 4 · decisión: INVESTIGAR MÁS.**
+  - El OCR deja de ser el cuello de botella en estos fixtures.
+  - Los fallos restantes son de integración (enderezar antes del prefiltro) y del prefiltro (umbral de tinta frente al grano).
+  - Sin corpus real ni prueba en Vercel no se puede afirmar utilidad. Un OCR correcto no prueba el contenido de la figura. No se
+    autorizan recortes.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/ocr-pilot-metrics.test.ts tests/unit/boundaries.test.ts tests/unit/visual-location-prototype.test.ts tests/unit/visual-location-adversarial.test.ts`
+    → **39/39 PASS**.
+  - `pnpm typecheck` PASS.
+  - `pnpm lint`: 0 errores; el aviso previo de `analysis-run-auth.test.ts` sigue ahí.
+  - `git diff --check` PASS.
+  - `pnpm eval:ocr`: 2 min 48 s.
+  - No se ejecutan suite completa ni build (fuera del alcance autorizado). Tampoco modelos, OCR remoto, SQL, Stripe ni migraciones.
+- **Riesgos:**
+  - Los umbrales de la pasada de etiquetas y la degradación sintética se fijaron con estos fixtures.
+  - La memoria y el tiempo en Vercel son desconocidos.
+  - El *file tracing* del WASM y del modelo no está probado.
+  - El comparador tolerante no está en producción y solo se ha probado aquí.
+- **Siguiente acción:** corpus real autorizado (20–30 escaneos, fuera del repo) con `pnpm eval:ocr -- --corpus`, guardando fichas
+  de reserva. Según el resultado, enderezar antes del prefiltro y probar en Vercel, o descartar.
+
 ## 2026-10-14 — Auditoría independiente de PR #31: propuesta y prototipo
 
 - **Base/rama:** `origin/main` en `f827001`, rama de PR #31 `claude/fase-8-2b7-identificacion-figuras` en `1cee7ca` al empezar; árbol limpio. Se inspeccionaron AGENTS/CLAUDE, documentos compartidos, QA de PR #30, contrato, verificador, fixtures y arnés. La producción no se modifica.
