@@ -268,3 +268,26 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 5. Móvil conserva barra etiquetada y diálogo nativo. Texto ampliado y acciones envuelven sin recortarse. Las hojas ilustrativas pueden crecer al ampliar texto: accesibilidad antes que una proporción forzada.
 
 **Validación y límites:** comparación antes/después en 10 pantallas × escritorio/móvil; Playwright focalizado con axe, teclado, subida, revisión, filtros y fixture imprimible; comprobación a 320 px con texto al 200 %. Proveedores simulados y PGlite local; no certifica IA real, Supabase remoto, Vercel ni auditoría con lector de pantalla. No hay cambios de SQL, Stripe, planes, cuotas, prompts, pipeline ni PDF. Detalle del sistema en UX y resultados reproducibles en DEVELOPMENT_LOG.
+
+### ADR-026 · Escaneos sin capa de texto: una sola figura, o ninguna (Fase 8.2B.6, 2026-10-14)
+
+**Contexto.** El localizador automático (`auto_visuals@v2`) ancla cada figura a la zona impresa de su actividad. Un escaneo no
+tiene capa de texto, así que no hay anclas. Una figura genérica no tiene firma, de modo que sin visión nunca llegaba a 0,75 y
+«Hacer magia» se paraba. `MaterialAnalysis` v3 no guarda la posición de los visuales.
+
+**Decisión.** `auto/scan.ts` amplía el localizador existente (motor `auto_visuals@v3`) para un caso verificable. La página no tiene
+capa de texto y el análisis lista un único visual en ella, que es el imprescindible. Los píxeles muestran un único dibujo conectado
+de tamaño de figura, que no es marco, mancha, borde de escáner ni fila de letras grandes. Ningún texto cruza el recorte. Todas las
+condiciones son obligatorias. La confianza reutiliza la tabla de `locate.ts`: el ancla se sustituye por «único visual de la
+página», y un caso genérico completo da exactamente 0,75.
+
+Se reutilizan el localizador `auto`, la receta `visual_crop@v1`, el Storage privado, la política visual, el renderer y el PDF. No
+hay OCR, ni modelos de imagen, ni migraciones, ni un segundo pipeline. La visión, si existe, solo complementa lo que no se resolvió
+y no sobrescribe un recorte aceptado así.
+
+**Consecuencias.**
+- Las ambigüedades (dos dibujos, un adorno grande, una mancha, texto pegado, varios visuales en el análisis) terminan en la parada
+  honesta de siempre: nunca se recorta una zona arbitraria ni se decide por tamaño.
+- El cambio de versión del motor revalida los recortes automáticos anteriores.
+- Ampliar a varias figuras por página necesitaría una evidencia de asociación que hoy no existe (posición en el análisis u OCR
+  autorizado), y sería un ADR nuevo.

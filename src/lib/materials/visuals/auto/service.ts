@@ -12,6 +12,7 @@ import { SPEC_EXTRACTOR_VERSION, extractSpec } from "./extract";
 import { candidates, locateVisuals, toBounds, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
 import { iou, type PageModel } from "./page-model";
 import { readPage } from "./read";
+import { locateOnScan } from "./scan";
 import type { VisionLocator } from "./vision";
 
 /**
@@ -31,7 +32,8 @@ import type { VisionLocator } from "./vision";
  * for the essential visuals it lacks, honestly, as before.
  */
 
-export const AUTO_ENGINE_VERSION = "auto_visuals@v2";
+/** v3 (Phase 8.2B.6): a scanned page with one required visual and one drawing can be located without words (`scan.ts`). */
+export const AUTO_ENGINE_VERSION = "auto_visuals@v3";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -104,7 +106,7 @@ export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { 
     .map((v) => ({ id: v.id, page: v.page, shape: shapeOf(v), activityIds: v.activity_ids, visual: v }));
 }
 
-const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision });
+const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision, ...(e.scan ? { scan: e.scan } : {}) });
 
 export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Promise<AutoRunSummary> {
   const targets = autoTargets(input.analysis);
@@ -168,6 +170,18 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
       }
       const activities = input.analysis.activities.filter((a) => a.page === page).map((a) => ({ id: a.id, label: a.label, instruction: a.instruction }));
       let located = locateVisuals(read.model, pending, activities);
+      // A scanned page (no text layer) has no anchors: its single required figure may still be found from its pixels alone.
+      const byScan = new Map<string, Located>();
+      if (read.model.texts.length === 0) {
+        const visualsOnPage = input.analysis.visuals.filter((v) => v.page === page).length;
+        located = located.map((l) => {
+          if (l.accepted) return l;
+          const target = pending.find((t) => t.id === l.visualId)!;
+          const scan = locateOnScan(read.model, target, { visualsOnPage, required: target.visual.role === "required" });
+          if (scan.accepted) byScan.set(l.visualId, scan);
+          return scan.accepted ? scan : { ...l, evidence: { ...l.evidence, scan: scan.evidence.scan, reason: scan.evidence.reason } };
+        });
+      }
       const unresolved = located.filter((l) => !l.accepted);
       if (unresolved.length > 0 && deps.vision && visionCalls < MAX_VISION_PAGES) {
         visionCalls += 1;
@@ -179,7 +193,7 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
         const { hypotheses, run } = await deps.vision.locate({ pagePng: await encodePng(read.raster), figures });
         await deps.recordAiRun?.(run, { workspaceId: input.workspaceId, materialId: input.materialId, adaptationId: input.adaptationId ?? null });
         // The second reading adds agreement for the unresolved ones; the accepted ones score exactly as before.
-        if (hypotheses.size > 0) located = locateVisuals(read.model, pending, activities, hypotheses);
+        if (hypotheses.size > 0) located = locateVisuals(read.model, pending, activities, hypotheses).map((l) => byScan.get(l.visualId) ?? l);
       }
       for (const l of located) {
         if (!l.accepted || !l.bounds) {

@@ -1,5 +1,6 @@
 import { MIN_SIDE, type NormalizedBounds } from "../geometry";
 import { area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
+import type { ScanReason, ScanSignals } from "./scan";
 import { barShape, numberLineShape } from "./shapes";
 
 /**
@@ -50,7 +51,9 @@ export interface Evidence {
   clean: boolean;
   anchor: string | null;
   vision: { used: boolean; agrees: boolean; confidence: number | null; iou: number | null };
-  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict";
+  /** Only on a page without a text layer (`scan.ts`): what the pixels showed. */
+  scan?: ScanSignals;
+  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | ScanReason;
 }
 
 export interface Located {
