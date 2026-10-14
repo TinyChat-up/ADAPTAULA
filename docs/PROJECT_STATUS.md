@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-14. Base revisada: `main` en `70fb9ea` (**PR #28 integrada**, contiene `1cc8833` y `3965092`), comprobada por Git. Las PR #24–27 también están integradas.
+Actualizado: 2026-10-14. Base revisada: `main` en `1929849` (**PR #29 integrada**; #27 y #28 también, en `bb38cd0` y `70fb9ea`), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -15,9 +15,9 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Módulo | Implementado | Pendiente o límite |
 | --- | --- | --- |
 | Auth, workspace y perfiles | Supabase, workspace personal, permisos y perfiles funcionales | Revalidar integraciones contra el entorno real; las pruebas locales no certifican la configuración remota |
-| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Localización de figuras genéricas en escaneos sin anclas de texto; ampliar materiales de evaluación |
+| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: aceptación automática retirada tras falsos positivos (ADR-027); falta evidencia independiente de identidad/asociación; ampliar evaluaciones |
 | Hacer magia | Plan automático, ensamblado, revisión y autocorrección, entrega o parada explicada | Algunos formatos cerrados, simplificación y reorganización aún carecen de ejecutores automáticos; no añadir aprobación intermedia como solución |
-| Visuales originales | Recortes, localización automática acotada y reconstrucción determinista de figuras compatibles | No hay edición general de imágenes originales ni un localizador universal para escaneos |
+| Visuales originales | Recortes, localización automática acotada, reconstrucción determinista de figuras compatibles y selección humana sobre escaneos; bloqueo de recortes scan inseguros heredados | La fase 8.2B.6 NO está completada: páginas sin texto se rechazan automáticamente; no ampliar cobertura sin contrato de evidencia |
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
 | Sustitución pedagógica | PR #26: equivalencia y corrección acotada. PR #27: selección única de fracciones. PR #28: consulta literal de celdas de tablas corroboradas contra PDF | Alcance acotado por ADR-023: cuadrícula, texto verificable y consigna explícita. Sin escaneos, inferencias, equivalencias numéricas ni unidades separadas. Calidad de prompts v2/v3/v4 con modelos reales pendiente |
 | Presentación y PDF | CLARO, apoyos junto a actividades, render compartido, validación y descarga PDF | Calidad de cada imagen real y runtime PDF en Vercel pendientes de comprobación; no se promete soporte universal |
@@ -28,32 +28,20 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 - El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que esté desplegada en todos los entornos. Esta fase no añade migraciones.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
-- El bloqueo anterior de Google Fonts no se reproduce en esta sesión de la PR #29: `pnpm build` PASS sin modificar fuentes, configuración de red ni dependencias.
+- En la sesión anterior de PR #29, `pnpm build` PASS sin modificar fuentes, configuración de red ni dependencias. Este cierre no repite el build.
 - La API de GitHub responde `Forbidden` desde este entorno; Git HTTPS permite leer y publicar ramas. El merge de #27 está verificado por historial y ascendencia Git; no se infiere el estado de otras PR abiertas.
 - Sesión de Claude Code (bloque UI/UX, 2026-10-13): ese entorno sí descarga Google Fonts, y `pnpm build` se ejecutó una vez sobre el bloque (resultado en el registro). También ve la API de GitHub: allí la PR #25 figura como integrada.
 - **Aparcado por el usuario:** Max temporal, SQL de siete días, Stripe de prueba y llamadas pagadas. No son requisitos para continuar el producto.
 
 ## Trabajo actual y continuidad
 
-Rama única: `claude/variables-expuestas-repo-f2o2et`. **[PR #29](https://github.com/TinyChat-up/ADAPTAULA/pull/29) abierta, sin merge**, según el usuario; cabeza remota y referencia `refs/pull/29/head` comprobadas iguales a `6fa99fc` antes de modificar archivos. Se continúa directamente sobre el trabajo de Claude, sin reiniciar la rama ni abrir otra PR.
+Rama única `claude/fase-8-2b6-escaneos`, PR #30, base `1929849`, referencia `d9f61a0`. **Alcance final: endurecimiento de procedencia y rechazo de recortes de escaneo no verificados. La fase 8.2B.6 permanece pendiente.**
 
-**Bloque actual: redirección editorial (ADR-025).**
-- Papel cálido, tinta, azul editorial, titulares serif y UI Inter. Sin degradados, halos, flotación, sombras teñidas ni métricas dominantes.
-- Hero con original → adaptado en hojas A4 de demostración, tabla y alternativas reales sin solución señalada. Copy compatible con Hacer magia y revisión manual.
-- Inicio: Adaptar material → atención → en curso → materiales recientes → fichas preparadas; plan y cuotas secundarios. Filas para materiales/perfiles/adaptaciones; subida y formularios con controles claros.
-- Mejoras funcionales de Claude conservadas: navegación, redirecciones, filtros, cuenta, estados, errores, carga, responsive y reduced motion. Sin tocar lógica de negocio, SQL, Stripe, IA, pipeline ni renderer/PDF.
+- **Demostrado en main:** fuente precargada aceptada con SHA distinto de la revisión efectiva; acuerdo de visión aceptado sin ancla de actividad. Dos regresiones fallan contra `1929849` y pasan con la corrección.
+- **Solo experimento de #30:** falsos positivos del criterio de figura única, motor v3 y evidencia scan. Se retira el módulo completo y se bloquean preventivamente esos activos. **No se ha comprobado su existencia en producción.**
+- **Cierre defensivo:** metadatos completos, evidencia positiva, relación activo/localizador, receta, identidad y ruta privada; pins con localizador completo/RLS. Algunas pruebas simulan respuestas de persistencia defectuosas, no fallos explotables por usuarios. Humano admite evidencia null; ausencia no autoriza.
+- **Contrato vigente:** `auto_visuals@v5`, ancla/zona obligatorias; sin texto no hay recorte automático, visión ni corroboración de forma. Selección humana y localización anclada conservadas. Sin migraciones, SQL remoto, OCR, modelos nuevos o cambios comerciales.
+- **Simplificación:** eliminado `auto/scan.ts`, dos suites redundantes y variantes del generador de escaneos; integraciones agrupadas sin desactivar triggers. Fixtures adversariales y resultados históricos conservados para auditoría.
+- **Verificación actual:** 149 pruebas focalizadas en 11 archivos, 3 PDF Chromium y typecheck PASS; lint sin errores, un aviso previo. Sin suite completa ni build. La célula del PDF usa selección manual.
 
-**Probado en esta redirección (local, PGlite y proveedores simulados):**
-- typecheck y build PASS; lint sin errores, un aviso previo.
-- 62 pruebas focalizadas en 8 archivos PASS; no suite completa.
-- **4/4 Playwright** editoriales en escritorio y móvil: portada y flujo de trabajo. Axe sin infracciones detectadas, salto al contenido, Escape/retorno de foco, subida válida/inválida, filtros y resultado con fixture. Biblioteca sin desbordamiento a 320 px con texto al 200 %.
-- Capturas antes/después: portada, inicio, materiales, perfiles, adaptar, adaptaciones, material, revisión, resultado y cuenta, en ambos tamaños. [Galería y capturas versionadas](qa/pr29/README.md); no contienen datos reales.
-
-**Antecedentes, no revalidados aquí:** los E2E generales desactualizados/intermitentes identificados por Claude siguen pendientes en un bloque separado; ver la entrada anterior de DEVELOPMENT_LOG. Esta sesión añade `editorial-interface.spec.ts`, no corrige aquellos tests ni afirma que toda la suite pase.
-
-**Publicación:** los cambios se publican en la misma rama para actualizar #29; nunca se crea otra PR ni se hace merge desde esta tarea.
-
-**Siguiente acción:**
-1. Revisar la comparativa visual y la PR #29, y comprobar su Preview de Vercel. Validación remota y revisión manual con lector de pantalla pendientes. No integrar automáticamente.
-2. En un bloque aparte, actualizar los E2E generales documentados por Claude, empezando por esperar la navegación del onboarding.
-3. Después, retomar la variante verificable de selección tabular del ROADMAP, sin mezclarla con este encargo visual.
+**Recomendación: MERGE técnico únicamente como endurecimiento**, con el título/alcance corregidos. [Informe y delimitación frente a main](qa/pr30/README.md). La API GitHub devuelve `Forbidden`: título y descripción preparados en [PR_DESCRIPTION.md](qa/pr30/PR_DESCRIPTION.md); no se afirma su actualización remota. Los commits se publican en la misma rama; sin nueva PR ni merge. Antes de integrar, aplicar/verificar esos metadatos. La siguiente fase necesitará evidencia independiente; no está implementada. Sin validación de producción, escaneos reales o carga máxima en Vercel.

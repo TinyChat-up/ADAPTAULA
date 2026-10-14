@@ -31,7 +31,8 @@ import type { VisionLocator } from "./vision";
  * for the essential visuals it lacks, honestly, as before.
  */
 
-export const AUTO_ENGINE_VERSION = "auto_visuals@v2";
+/** v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions. */
+export const AUTO_ENGINE_VERSION = "auto_visuals@v5";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -144,6 +145,8 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
     };
 
     for (const page of [...new Set(targets.map((t) => t.page))].sort((a, b) => a - b)) {
+      // Only this page needs a 200-dpi model; do not retain every page of a large document.
+      hiRes.clear();
       const pending: typeof targets = [];
       const earlierAuto = new Map<string, LocatorRow>();
       for (const target of targets.filter((t) => t.page === page)) {
@@ -167,9 +170,10 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
         continue;
       }
       const activities = input.analysis.activities.filter((a) => a.page === page).map((a) => ({ id: a.id, label: a.label, instruction: a.instruction }));
+      const textless = read.model.texts.length === 0;
       let located = locateVisuals(read.model, pending, activities);
       const unresolved = located.filter((l) => !l.accepted);
-      if (unresolved.length > 0 && deps.vision && visionCalls < MAX_VISION_PAGES) {
+      if (!textless && unresolved.length > 0 && deps.vision && visionCalls < MAX_VISION_PAGES) {
         visionCalls += 1;
         const figures = unresolved.map((l) => {
           const t = pending.find((p) => p.id === l.visualId)!;
@@ -236,6 +240,8 @@ export async function corroborateSpec(deps: Pick<AutoRunDeps, "admin">, input: {
   } catch {
     return null;
   }
+  // A matching shape cannot prove which activity owns it on a textless page.
+  if (model.texts.length === 0) return null;
   const matches: Array<{ crop: { x0: number; y0: number; x1: number; y1: number }; spec: VisualSpec }> = [];
   for (const c of candidates(model)) {
     const read = extractSpec(model, toBounds(model, c.crop), shape);

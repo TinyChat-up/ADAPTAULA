@@ -50,7 +50,7 @@ export interface Evidence {
   clean: boolean;
   anchor: string | null;
   vision: { used: boolean; agrees: boolean; confidence: number | null; iou: number | null };
-  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict";
+  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | "scan_identity_unverified" | "activity_unverified";
 }
 
 export interface Located {
@@ -201,6 +201,12 @@ interface Scored {
  * proposals by visual id: they only ever ADD agreement to a region found here.
  */
 export function locateVisuals(model: PageModel, targets: readonly VisualTarget[], activities: readonly ActivityText[], hypotheses: ReadonlyMap<string, Hypothesis> = new Map()): Located[] {
+  // Vision agreement alone does not supply an independent activity anchor on a scan.
+  if (model.texts.length === 0) return targets.map((target) => ({
+    visualId: target.id, accepted: false, bounds: null, confidence: 0,
+    evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor: null,
+      vision: { used: false, agrees: false, confidence: null, iou: null }, reason: "scan_identity_unverified" },
+  }));
   const mask = textMask(model);
   const lines = textLines(model.texts);
   const anchors = activityAnchors(lines, activities);
@@ -240,7 +246,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
   const taken: Rect[] = [];
   for (const s of [...scored].sort((a, b) => b.score - a.score)) {
     if (out.has(s.target.id)) continue;
-    if (!s.evidence.clean || s.score < ACCEPT) continue;
+    if (!s.evidence.clean || !s.evidence.placement || !s.evidence.anchor || s.score < ACCEPT) continue;
     if (taken.some((t) => iou(t, s.candidate.crop) > 0.2)) continue;
     taken.push(s.candidate.crop);
     out.set(s.target.id, { visualId: s.target.id, bounds: toBounds(model, s.candidate.crop), confidence: round3(Math.min(1, s.score)), accepted: true, evidence: { ...s.evidence, reason: "accepted" } });
@@ -258,7 +264,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
       out.set(target.id, { visualId: target.id, bounds: null, confidence: 0, accepted: false, evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor, vision: { used: hypothesis !== undefined, agrees: false, confidence: hypothesis?.confidence ?? null, iou: null }, reason: "no_candidate" } });
       continue;
     }
-    const reason: Evidence["reason"] = !best.evidence.clean ? "not_clean" : best.score >= ACCEPT ? "conflict" : "low_confidence";
+    const reason: Evidence["reason"] = !best.evidence.clean ? "not_clean" : !best.evidence.placement || !anchor ? "activity_unverified" : best.score >= ACCEPT ? "conflict" : "low_confidence";
     out.set(target.id, { visualId: target.id, bounds: null, confidence: round3(Math.min(1, best.score)), accepted: false, evidence: { ...best.evidence, reason } });
   }
   return targets.map((t) => out.get(t.id)!);

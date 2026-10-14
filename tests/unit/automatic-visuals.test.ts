@@ -104,13 +104,12 @@ describe("automatic location of the bar and the number line (geometry only, no m
 
 describe("a model's rectangle is a hypothesis, never a fact", () => {
   const blind: VisualTarget = { id: "vis_1", shape: "bar", activityIds: [] };
-  it("without an anchor the bar is not certain enough by geometry alone; a hypothesis that lands on it makes it so", () => {
+  it("without an activity anchor neither geometry nor an agreeing hypothesis establishes identity", () => {
     const [alone] = locateVisuals(page, [blind], []);
     expect(alone!.accepted).toBe(false);
     expect(alone!.confidence).toBeLessThan(ACCEPT);
     const [helped] = locateVisuals(page, [blind], [], new Map([["vis_1", { bounds: { x: BAR_BOUNDS.x - 0.01, y: BAR_BOUNDS.y - 0.005, w: BAR_BOUNDS.w + 0.02, h: BAR_BOUNDS.h + 0.01 }, confidence: 0.9 }]]));
-    expect(helped).toMatchObject({ accepted: true, evidence: { vision: { used: true, agrees: true } } });
-    expect(iou(asRect(helped!.bounds!), asRect(BAR_BOUNDS))).toBeGreaterThan(0.8);
+    expect(helped).toMatchObject({ accepted: false, bounds: null, evidence: { reason: "activity_unverified", vision: { used: true, agrees: true } } });
   });
 
   it("a confident rectangle over empty paper (or over another exercise) is rejected: capped at 0.60, nothing located", () => {
@@ -317,5 +316,16 @@ describe("contracts for 8.2B.2 / 8.2B.3, reserved and not wired", () => {
     const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []));
     const users = files("src").filter((f) => !f.endsWith("visuals/contracts.ts") && /GeneratedImageRequest|visuals\/contracts/.test(readFileSync(f, "utf8")));
     expect(users).toEqual([]);
+  });
+});
+
+
+describe("textless originals have no independently verified activity identity", () => {
+  it("rejects even a matching vision hypothesis before accessing pixels", () => {
+    const textless: PageModel = { width: 4096, height: 4096, texts: [], mmPerPx: .05,
+      get gray(): Uint8Array { throw new Error("must reject before pixel traversal"); } };
+    const hypotheses = new Map(targets.map((t) => [t.id, { bounds: BAR_BOUNDS, confidence: 1 }]));
+    for (const result of locateVisuals(textless, targets, activities, hypotheses))
+      expect(result).toMatchObject({ accepted: false, bounds: null, evidence: { reason: "scan_identity_unverified" } });
   });
 });

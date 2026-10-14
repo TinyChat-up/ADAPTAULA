@@ -2,6 +2,101 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — Cierre de alcance de PR #30: seguridad y procedencia
+
+- **Base/rama verificadas:** `main` permanece en `1929849`; rama local, remota y referencia de #30 en `d9f61a0` al comenzar. Misma rama `claude/fase-8-2b6-escaneos`, sin otra PR ni merge. Entorno ya disponible; no cambia configuración, instalación ni dependencias.
+- **Clasificación del diff completo frente a main:** SHA precargado incorrecto y aceptación por visión sin ancla son defectos anteriores a #30. Ambos se reprodujeron fallando contra `1929849` con las nuevas expectativas y pasan tras corregir. La aceptación geométrica de escaneos y sus activos/evidencia scan pertenecen exclusivamente al experimento de #30. No se ha comprobado la existencia de activos inseguros en producción.
+- **Cierre de procedencia:** `visuals/service.ts` valida localizador completo, geometría, versión, método y evidencia positiva. Humano admite null explícito; automático requiere PDF, motor conocido, ancla/zona, señales completas y ausencia de scan. Activo y pin se vinculan a id/localizador/identidad/receta/ruta/hash; rutas pre-017 conservadas. `server.ts` consulta el padre completo bajo RLS. Los 24 casos iniciales de metadatos defectuosos dieron 20 fallos sobre d9; ampliados a 26, todos pasan. Son pruebas de respuestas defectuosas de persistencia: no se afirma que un usuario normal pueda insertar esas filas.
+- **Identidad y simplificación:** `auto/locate.ts` exige ancla/zona incluso si existe acuerdo de visión; `auto/service.ts` usa v5 para invalidar decisiones anteriores. Se retiran `auto/scan.ts`, sus tipos/señales/dispatch y dos suites redundantes. `scan-case.ts` baja de 114 a 21 líneas. Se agrupan las integraciones en `scan-visuals.test.ts` y se elimina `scan-audit.test.ts`; los fixtures heredados ya no desactivan triggers. Se conservan A–J como evidencia histórica, C/I en integración y rechazo sin acceso a píxeles en el localizador real. No hay OCR, modelo nuevo ni pipeline alternativo.
+- **Verificación del cierre (local, proveedores simulados):**
+  - `pnpm exec vitest run tests/unit/visual-provenance.test.ts tests/unit/automatic-visuals.test.ts tests/unit/visual-raster.test.ts tests/unit/visual-boundaries.test.ts tests/unit/boundaries.test.ts tests/db/scan-visuals.test.ts tests/db/automatic-visuals.test.ts tests/db/visual-instances.test.ts tests/db/visual-locators.test.ts tests/db/pdf-export.test.ts tests/db/magic-visual-policy.test.ts` → **149 PASS, 11 archivos**.
+  - `pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/scan-visuals.test.ts tests/pdf/automatic-visuals.test.ts tests/pdf/table-choice-substitution.test.ts` → **3 PDF PASS**. Célula con selección manual, fracciones automáticas y selección tabular; sin cambiar renderer.
+  - `pnpm typecheck` PASS; `pnpm lint` 0 errores, aviso previo `_id` en `analysis-run-auth.test.ts`; `git diff --check` limpio.
+  - Los dos fallos esperados contra main, las 20 aserciones iniciales contra d9 y las repeticiones no se suman al total final. Una regresión anterior esperaba producir un localizador con evidencia incompleta; se conserva el caso y ahora se comprueba el rechazo correcto antes de continuar su reconstrucción corroborada.
+  - Sin suite completa, build, llamadas pagadas, SQL remoto, migraciones, Stripe ni cambios comerciales.
+- **Documentos:** actualizados `PROJECT_STATUS.md`, `ROADMAP.md`, `ARCHITECTURE.md` (ADR-026 reducido a antecedente retirado; ADR-027 vigente), `VISUAL_RESOURCES.md` e [informe](qa/pr30/README.md). Los resultados históricos antes/después en `results.json` siguen referidos a ccfbf3e/d9, no al nuevo motor.
+- **PR y bloqueo externo:** título y descripción exactos en [PR_DESCRIPTION.md](qa/pr30/PR_DESCRIPTION.md). Tanto lectura GraphQL como actualización REST `PATCH /repos/TinyChat-up/ADAPTAULA/pulls/30` devuelven `Forbidden`; no se pudieron cambiar los metadatos remotos. Git HTTPS permite publicar en la misma rama. No se afirma que el título/descripcion actuales de GitHub reflejen este cierre.
+- **Recomendación:** **MERGE técnico exclusivamente como endurecimiento de seguridad/procedencia**, una vez aplicado/verificado el título y descripción. Todas las correcciones restantes aportan valor frente a main. **8.2B.6 permanece pendiente**. Los controles son de aplicación: no revocan el acceso legítimo del propietario a objetos históricos de Storage ni recuperan descargas/cachés previas. Falta validar producción, documentos reales y carga máxima en Vercel.
+- **Siguiente acción concreta:** publicar este cierre en #30; aplicar/verificar los metadatos preparados desde un entorno con acceso a la API/UI de GitHub y revisar para integración humana con ese alcance. No desarrollar otra fase en este bloque.
+
+## 2026-10-14 — Auditoría independiente y correcciones de PR #30
+
+- **Base y alcance:** `main` en `1929849`; rama `claude/fase-8-2b6-escaneos`, HEAD auditado `ccfbf3e`, coincidente con remoto y `refs/pull/30/head`. Se corrige esa misma PR, sin fase nueva, otra PR ni merge. Entorno ya preparado; no se repite la suite completa.
+- **Fallos reproducidos antes de corregir:** diez fixtures adversariales aceptados a 0,75 sin ancla independiente (A–I solicitados y J, pérdida de etiquetas). Nueve muestran selección equivocada, contaminación o pérdida; H muestra el límite de evidencia en un escaneo plausible. Fallan las diez aserciones de rechazo contra el código original. Otras tres pruebas PGlite demuestran entrega de decoración, reutilización de activos scan antiguos y aceptación de una fuente precargada con SHA distinto del localizador efectivo.
+- **Correcciones de producción:** `auto/scan.ts` rechaza la localización sin evidencia independiente; `auto/locate.ts` y `auto/service.ts` cierran entradas alternativas por visión y corroboración de forma en páginas sin texto. Motor `auto_visuals@v4` invalida el resultado cacheado anterior. `visuals/service.ts` y `server.ts` consultan evidencia bajo RLS, bloquean activos automáticos scan antiguos en resolución, producción y pins y comprueban el SHA de la fuente precargada. Se conservan filas/bytes históricos y selección humana. Se elimina el recorrido de componentes del escaneo y se libera la caché de alta resolución entre páginas.
+- **Pruebas añadidas o ajustadas:** `scan-adversarial`, `scan-location`, `scan-audit`, `scan-visuals`, harness PGlite, integración `magic-visual-policy` y PDF de célula con selección manual explícita. La integración demuestra parada sin entrega/descarga cuando falta la figura, ausencia de llamada a visión y cuota no consumida. El fixture de procedencia antigua modifica evidencia únicamente en PGlite; no se altera la inmutabilidad de producción.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/scan-adversarial.test.ts tests/unit/scan-location.test.ts tests/db/scan-audit.test.ts tests/db/scan-visuals.test.ts tests/db/magic-visual-policy.test.ts`: **57 PASS**.
+  - `pnpm exec vitest run tests/unit/automatic-visuals.test.ts tests/unit/visual-raster.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts tests/db/automatic-visuals.test.ts tests/db/visual-locators.test.ts tests/db/visual-instances.test.ts tests/db/pdf-export.test.ts`: **97 PASS**.
+  - `pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/scan-visuals.test.ts tests/pdf/automatic-visuals.test.ts tests/pdf/table-choice-substitution.test.ts tests/pdf/illustrations.test.ts`: **4 PDF PASS**. Inspección visual de célula: esquema y etiquetas completos junto a la actividad correcta; renderer sin cambios.
+  - **154 pruebas focalizadas únicas en 13 archivos**, más los 4 PDF; la repetición de `scan-audit` tras ampliar comprobaciones de lectura rápida, bytes y corrección manual no suma casos nuevos.
+  - Typecheck PASS; lint sin errores, un aviso previo en `analysis-run-auth.test.ts`; `git diff --check` limpio.
+  - Sin suite completa, build, llamadas pagadas, SQL remoto, migraciones, Stripe ni cambios comerciales.
+- **Evidencia y documentación:** [informe reproducible con fixtures y resultados antes/después](qa/pr30/README.md), `PROJECT_STATUS.md`, `VISUAL_RESOURCES.md`, ADR-027 en `ARCHITECTURE.md` y `ROADMAP.md`. La entrada original que sigue es histórica y sus afirmaciones de aceptación automática quedan sustituidas por esta auditoría.
+- **Límites:** se rechazan automáticamente todos los escaneos sin texto, incluso la célula correcta. Se mantienen selección humana y localización anterior con capa de texto. No se certifican selecciones humanas arbitrarias, páginas híbridas/OCR falso, escaneos reales ni consumo máximo en Vercel. No se consultó producción ni se recuperan documentos ya descargados.
+- **Decisión y siguiente acción:** **NO MERGE como Fase 8.2B.6 terminada**. Publicar las correcciones en la misma rama de #30; revisar la PR como restricción de alcance y protección contra entregas incorrectas. Antes de retomar la localización automática, definir una fuente independiente de identidad/asociación e integridad; esa implementación queda fuera de esta auditoría.
+
+## 2026-10-14 — Fase 8.2B.6: localización conservadora de figuras en escaneos (histórico; aceptación retirada por la auditoría anterior)
+
+- **Base verificada:** `git fetch origin main` → `1929849`. #27 (`bb38cd0`), #28 (`70fb9ea`) y #29 (`1929849`) están integradas. Rama nueva: `claude/fase-8-2b6-escaneos`. La rama y el trabajo de la PR #29 no se tocan.
+- **Investigación:** `locate.ts` puntúa:
+  - firma 0,30 (una figura genérica, 0);
+  - zona de su actividad 0,25, que exige un ancla de la capa de texto del PDF;
+  - unicidad 0,20;
+  - limpieza 0,15;
+  - visión 0,20.
+
+  En un escaneo, `pageText` devuelve 0 cajas: no hay anclas y la «limpieza» no ve el texto escaneado. Una figura genérica nunca pasa de 0,35 sin visión, y una barra de 0,65. `MaterialAnalysis` v3 no guarda la posición de los visuales. Ya resuelto: figuras con anclas impresas (barra o recta con firma) y cualquier figura con acuerdo de visión. Fallaba: cualquier figura de una página sin capa de texto sin visión configurada.
+- **Fallo reproducido antes de cambiar producción:** `tests/support/scan-case.ts` construye «La célula animal» escaneada: 150 ppp, una imagen por página, papel, grano, motas y la sombra del escáner. `locateVisuals` daba `vis_1` no aceptado, confianza 0,15, `low_confidence`, sin ancla → D y parada.
+- **Implementación:**
+  - `src/lib/materials/visuals/auto/scan.ts` (`locateOnScan`):
+    - componentes conectados a resolución completa;
+    - descarte de motas, tinta en el borde, marcos (cuatro lados y poco interior), manchas claras y filas de letras grandes;
+    - unión de los trazos de un dibujo;
+    - etiquetas cercanas al recorte;
+    - holgura de 2,5 mm frente al texto;
+    - límite de texto y de tamaño;
+    - firma de barra cuando el análisis dice barra.
+  - Exige además que el análisis liste un único visual en la página y que sea `required`.
+  - `service.ts` (motor `auto_visuals@v3`) lo usa solo en páginas sin capa de texto, después del localizador con anclas. La visión no lo sobrescribe.
+  - Las señales `scan` se guardan en la evidencia del localizador, sin texto del material.
+  - Sin migraciones: el esquema ya admite `evidence` JSON.
+- **Evidencia para aceptar:** análisis (único visual, imprescindible) + único dibujo de tamaño de figura y tinta oscura + recorte limpio. Confianza exactamente 0,75; ninguna señal parcial basta.
+- **Pruebas:**
+  - `tests/unit/scan-location.test.ts` (20):
+    - el fallo anterior;
+    - acierto en PDF y PNG, con IoU > 0,8 respecto al esquema;
+    - recorte sin enunciado ni líneas de respuesta, a 200 ppp con margen;
+    - adorno pequeño;
+    - titular enorme y párrafo enmarcado junto a la figura;
+    - figura en el borde;
+    - negativos: dos figuras, adorno grande, sin figura, solo texto, texto pegado, varios visuales en el análisis, no `required`, barra que no lo es, recta numérica, página con capa de texto;
+    - coordenadas válidas;
+    - política: `exact_original_visual` en `act_1`, o parada `unresolved_visual`.
+  - `tests/db/scan-visuals.test.ts` (5, PGlite con migraciones reales):
+    - localizador `auto` con página, coordenadas, `page_box`, sha, motor y señales;
+    - recorte en Storage y lectura con RLS;
+    - imagen PNG;
+    - ambigüedad → D sin filas;
+    - nueva versión del original → D sin heredar;
+    - recorte automático anterior equivocado → `auto_not_revalidated`.
+  - `tests/pdf/scan-visuals.test.ts` (Chromium): el recorte fijado por sha es la figura de la actividad 1, antes de la actividad 2, sin peticiones ni scripts. PDF inspeccionado: una página con el esquema y sus números 1, 2 y 3.
+- **Resultados:**
+  - `pnpm exec vitest run` de las unitarias `scan-location`, `automatic-visuals`, `magic-visual-policy`, `visual-raster`, `visual-boundaries` y `boundaries`, y de db `scan-visuals`, `automatic-visuals`, `magic-visual-policy` y `visual-locators`: **144/144 PASS en 10 archivos**.
+  - `vitest.pdf.config.mts`: `scan-visuals`, `automatic-visuals` e `illustrations` **3/3 PASS**.
+  - `pnpm typecheck` PASS; `pnpm lint` 0 errores (el aviso previo en `analysis-run-auth.test.ts`).
+  - No se ejecutó la suite completa.
+- **Casos todavía ambiguos o fuera de alcance:**
+  - varias figuras por página;
+  - un adorno grande, o una mancha;
+  - texto a menos de 2,5 mm;
+  - rectas numéricas escaneadas;
+  - páginas con varios visuales en el análisis.
+
+  Riesgo residual documentado: una única letra enorme aislada, o texto que toca el dibujo, cuando el análisis afirma un solo visual. Sin OCR ni modelos de imagen; sin llamadas de pago, SQL remoto, Stripe ni cambios de planes. Validado solo con escaneos sintéticos.
+- **Publicación:** implementación `71b6080` en `claude/fase-8-2b6-escaneos`, publicada en la [PR #30](https://github.com/TinyChat-up/ADAPTAULA/pull/30) hacia `main`, sin merge.
+- **Siguiente acción:** revisar la PR; medir la cobertura con escaneos reales autorizados antes de ampliar el caso; no presentarlo como localización universal.
+
 ## 2026-10-14 — PR #29: redirección editorial como estudio pedagógico digital
 
 - **Continuidad verificada antes de editar:** rama única `claude/variables-expuestas-repo-f2o2et`, actualizada y limpia en `6fa99fc25fa9a152febf882c0a0fbacfd0b84ae7`; la rama remota y `refs/pull/29/head` coinciden. Publicación comprobada con `git push --dry-run`. Se leen AGENTS, CLAUDE y el contexto compartido y se inspecciona el diff de Claude respecto a `main` (`70fb9ea`). PR #29 abierta y sin merge según el usuario; no se reinicia ni sustituye su rama.

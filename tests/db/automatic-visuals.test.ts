@@ -107,8 +107,8 @@ describe("idempotency, concurrency and cost", () => {
     expect(await count("material_visual_specs", w.materialId)).toBe(2);
   });
 
-  it("vision only when geometry is not enough: ONE call for the page, recorded in ai_runs (no content); a stray rectangle is not accepted", async () => {
-    // Without the analysis's link between activity 1 and the bar, geometry alone is not sure enough.
+  it("vision agreement without an activity anchor stays unresolved; calls are recorded and stray rectangles rejected", async () => {
+    // Without the analysis's link between activity 1 and the bar, a model cannot establish independent activity identity.
     const unlinked = fractionsCaseAnalysis();
     unlinked.activities = unlinked.activities.map((a) => (a.id === "act_1" ? { ...a, resource_ids: [] } : a));
     unlinked.visuals = unlinked.visuals.map((v) => (v.id === "vis_1" ? { ...v, activity_ids: [] } : v));
@@ -117,7 +117,7 @@ describe("idempotency, concurrency and cost", () => {
     const w = await world({ analysis: unlinked, vision: agrees });
     const summary = await prepareVisuals(w.auto.deps, w.input);
     expect(w.auto.calls.vision).toBe(1);
-    expect(summary).toMatchObject({ status: "completed", result: { vision_pages: 1, visuals: { vis_1: { choice: "C", signals: { vision: { used: true, agrees: true } } }, vis_2: { choice: "C" } } } });
+    expect(summary).toMatchObject({ status: "completed", result: { vision_pages: 1, visuals: { vis_1: { choice: "D", reason: "activity_unverified", signals: { vision: { used: true, agrees: true } } }, vis_2: { choice: "C" } } } });
     const runs = await q<{ purpose: string; prompt_key: string; model_alias: string; estimated_cost_usd: string }>("select purpose, prompt_key, model_alias, estimated_cost_usd::text from public.ai_runs where material_id = $1", [w.materialId]);
     expect(runs).toEqual([{ purpose: "locate_visual", prompt_key: "visual_locator", model_alias: "STANDARD", estimated_cost_usd: "0.004800" }]);
     expect((await q<{ vision_calls: number }>("select vision_calls from public.material_visual_autolocations where material_id = $1", [w.materialId]))[0]!.vision_calls).toBe(1);

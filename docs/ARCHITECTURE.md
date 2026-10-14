@@ -268,3 +268,17 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 5. Móvil conserva barra etiquetada y diálogo nativo. Texto ampliado y acciones envuelven sin recortarse. Las hojas ilustrativas pueden crecer al ampliar texto: accesibilidad antes que una proporción forzada.
 
 **Validación y límites:** comparación antes/después en 10 pantallas × escritorio/móvil; Playwright focalizado con axe, teclado, subida, revisión, filtros y fixture imprimible; comprobación a 320 px con texto al 200 %. Proveedores simulados y PGlite local; no certifica IA real, Supabase remoto, Vercel ni auditoría con lector de pantalla. No hay cambios de SQL, Stripe, planes, cuotas, prompts, pipeline ni PDF. Detalle del sistema en UX y resultados reproducibles en DEVELOPMENT_LOG.
+
+### ADR-026 · Experimento de figura única en escaneos (retirado; 2026-10-14)
+
+La propuesta de `auto_visuals@v3` en PR #30 sustituyó un ancla de actividad por unicidad geométrica y la declaración del análisis. La auditoría demostró falsos positivos. **Nunca formó parte de main en `1929849` y no es una capacidad aceptada.** Código histórico en `71b6080` / `ccfbf3e`; evidencias en [auditoría](qa/pr30/README.md). Sustituida por ADR-027.
+
+### ADR-027 · Procedencia verificada y rechazo de escaneos automáticos (2026-10-14)
+
+**Alcance:** PR #30 se cierra como endurecimiento, no como Fase 8.2B.6 terminada. Frente a main se reproducen dos defectos: fuente precargada sin cotejar contra el SHA del localizador efectivo y aceptación por visión sin ancla de actividad. Los falsos positivos del criterio de figura única pertenecen exclusivamente al experimento de #30; no se ha comprobado la existencia de activos inseguros en producción.
+
+**Decisión:** eliminar `auto/scan.ts`. El localizador existente rechaza páginas sin texto antes de recorrer píxeles y exige ancla/zona de actividad para aceptar, incluso con visión. Las páginas sin texto tampoco entran en visión ni corroboración de forma. Selección humana y vías ancladas con texto conservadas. `auto_visuals@v5` invalida decisiones anteriores sin migración ni borrado.
+
+**Lectura/producción:** validar positivamente metadatos y geometría del localizador; humano con evidencia null, automático con evidencia completa de un motor conocido, ancla/zona y sin propiedad scan. La ausencia de datos no autoriza. El pin carga el localizador completo con RLS y comprueba id, SHA, receta, identidad, relación y ruta privada (incluido el formato pre-017). Los lectores y el productor comparten el control. Se contrasta además la fuente precargada con el SHA de la revisión realmente devuelta por la RPC.
+
+**Consecuencias:** los recortes automáticos históricos sin ancla/evidencia suficiente dejan de entregarse y requieren corrección humana. Se conservan revisiones/objetos. No se garantiza identidad universal, no se revoca acceso del propietario a objetos históricos en Storage y no se recuperan documentos ya descargados. El motor conserva una sola página en la caché de alta resolución; sin benchmark Vercel. Sin OCR, modelos nuevos, cambios comerciales o de renderer. [Alcance, pruebas y recomendación MERGE técnico](qa/pr30/README.md).

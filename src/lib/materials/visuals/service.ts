@@ -1,13 +1,15 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import type { VisualAssetFailure, VisualState } from "@/lib/render/visual-assets";
 import { VisualSpecSchema, type VisualSpec } from "@/lib/visuals/spec";
+import { ACCEPT } from "./auto/locate";
 import { SPEC_EXTRACTOR_VERSION } from "./auto/extract";
 import { NormalizedBoundsSchema, pixelRect, withMargin, type NormalizedBounds } from "./geometry";
 import { RasterError, cropPng, engineProvenance, pageBox, pageCount, renderPage, sameBox, type PageBox } from "./raster";
-import { VISUAL_CROP_RECIPE, assetIdentity, assetInstancePath, recipeFingerprint, type LocatorMethod, type VisualLocator } from "./recipe";
+import { VISUAL_CROP_RECIPE, VisualLocatorSchema, assetIdentity, assetInstancePath, recipeFingerprint, type LocatorMethod, type VisualLocator } from "./recipe";
 
 /**
  * Visual locators and their crops. The browser only ever sends a page and a rectangle; everything else (which material, which
@@ -30,6 +32,7 @@ export interface LocatorRow {
   revision: number;
   method: LocatorMethod;
   confidence?: number | null;
+  evidence: unknown;
   page: number;
   x: number;
   y: number;
@@ -81,7 +84,7 @@ export interface VisualDeps {
     material(id: string): Promise<MaterialForVisuals | null>;
     /** Each locator with ALL its instances, newest first, and its reconstructions (when it was located automatically). */
     activeLocators(materialId: string, analysisFingerprint: string): Promise<Array<LocatorRow & { assets: AssetRow[]; specs?: SpecRow[] }>>;
-    asset(id: string): Promise<AssetRow | null>;
+    asset(id: string): Promise<(AssetRow & { locator: LocatorRow }) | null>;
     readObject(path: string): Promise<Uint8Array | null>;
   };
   /** Server side (service role), only after the reader has authorised the material. */
@@ -125,7 +128,7 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const isPng = (b: Uint8Array) => b.length > PNG_SIGNATURE.length && PNG_SIGNATURE.every((v, i) => b[i] === v);
 
 export const toLocator = (row: LocatorRow): VisualLocator => ({
-  locator_version: 1,
+  locator_version: row.locator_version as 1,
   material_id: row.material_id,
   analysis_fingerprint: row.analysis_fingerprint,
   visual_id: row.visual_id,
@@ -135,6 +138,35 @@ export const toLocator = (row: LocatorRow): VisualLocator => ({
   page: row.page,
   bounds: { x: row.x, y: row.y, w: row.w, h: row.h },
 });
+
+const PageBoxSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("image"), width_px: z.number().positive(), height_px: z.number().positive() }),
+  z.object({ kind: z.literal("pdf"), width_pt: z.number().positive(), height_pt: z.number().positive(), rotation: z.number().finite(), view: z.tuple([z.number(), z.number(), z.number(), z.number()]) }),
+]);
+const AutoEvidenceSchema = z.object({
+  engine: z.enum(["auto_visuals@v1", "auto_visuals@v2", "auto_visuals@v3", "auto_visuals@v4", "auto_visuals@v5"]),
+  shape: z.enum(["bar", "number_line", "figure"]), signature: z.boolean(), unique: z.boolean(),
+  placement: z.literal(true), clean: z.literal(true), anchor: z.string().regex(/^act_[0-9]{1,4}$/),
+  vision: z.object({ used: z.boolean(), agrees: z.boolean(), confidence: z.number().min(0).max(1).nullable(), iou: z.number().min(0).max(1).nullable() }),
+});
+
+/** Missing evidence is not evidence of safety. Human selections legitimately store null; automatic ones need an activity anchor. */
+function verifiedLocator(row: LocatorRow | null | undefined): row is LocatorRow {
+  if (!row || !z.uuid().safeParse(row.id).success || !z.uuid().safeParse(row.workspace_id).success
+    || !VisualLocatorSchema.safeParse(toLocator(row)).success || !PageBoxSchema.safeParse(row.page_box).success) return false;
+  if (row.method === "human") return row.evidence === null && row.confidence == null;
+  return row.page_box.kind === "pdf" && typeof row.confidence === "number" && row.confidence >= ACCEPT && row.confidence <= 1
+    && !!row.evidence && typeof row.evidence === "object" && !("scan" in row.evidence) && AutoEvidenceSchema.safeParse(row.evidence).success;
+}
+
+/** Bind every instance to its locator, recipe and private object, including historical pre-017 paths. */
+function matchesLocator(instance: AssetRow, row: LocatorRow): boolean {
+  const identity = assetIdentity(toLocator(row));
+  return z.uuid().safeParse(instance.id).success && /^[a-f0-9]{64}$/.test(instance.sha256)
+    && instance.locator_id === row.id && instance.recipe_version === VISUAL_CROP_RECIPE.version && instance.identity === identity
+    && (instance.storage_path === assetInstancePath(row.workspace_id, row.material_id, identity, instance.sha256)
+      || instance.storage_path === `${row.workspace_id}/${row.material_id}/visuals/${identity}.png`);
+}
 
 /** The material as the user may see it, with its current analysis and that analysis's fingerprint (the one adaptations pin). */
 async function authorisedMaterial(deps: VisualDeps, actor: VisualActor, materialId: string) {
@@ -178,7 +210,7 @@ async function verifiedInstance(read: (path: string) => Promise<Uint8Array | nul
  */
 export async function produceVisualAsset(deps: Pick<VisualDeps, "admin">, locatorId: string, preloaded?: { mime: string; bytes: Uint8Array }): Promise<{ ok: true } | { ok: false; failure: VisualAssetFailure }> {
   const row = await deps.admin.locator(locatorId);
-  if (!row) return { ok: false, failure: "geometry_missing" };
+  if (!verifiedLocator(row) || row.id !== locatorId) return { ok: false, failure: "geometry_missing" };
   const fail = async (failure: VisualAssetFailure) => {
     await deps.admin.setFailure(row.id, failure);
     return { ok: false as const, failure };
@@ -187,10 +219,12 @@ export async function produceVisualAsset(deps: Pick<VisualDeps, "admin">, locato
     await deps.admin.setFailure(row.id, null);
     return { ok: true as const };
   };
+  // createLocator can return an existing revision: preloaded bytes must match THAT revision too.
+  if (preloaded && sha256(preloaded.bytes) !== row.source_sha256) return fail("source_missing");
   const locator = toLocator(row);
   const identity = assetIdentity(locator);
 
-  const instances = await deps.admin.assetInstances(identity);
+  const instances = (await deps.admin.assetInstances(identity)).filter((a) => matchesLocator(a, row));
   if ("stored" in (await verifiedInstance((path) => deps.admin.readObject(path), instances))) return done();
 
   const source = preloaded ?? (await loadSource(deps, row.material_id, row.source_sha256));
@@ -313,14 +347,13 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
   const out: ResolvedVisuals = { states: {}, bytes: {}, instances: {} };
   const active = input.sourceSha256 ? await deps.reader.activeLocators(input.materialId, input.analysisFingerprint) : [];
   for (const visualId of input.visualIds) {
-    const locator = active.find((l) => l.visual_id === visualId && l.source_sha256 === input.sourceSha256);
-    if (!locator) {
+    const locator = active.find((l) => l.material_id === input.materialId && l.analysis_fingerprint === input.analysisFingerprint && l.visual_id === visualId && l.source_sha256 === input.sourceSha256);
+    if (!verifiedLocator(locator)) {
       out.states[visualId] = { visualId, status: "missing_locator", resolution: "D" };
       continue;
     }
     const provenance = { page: locator.page, revision: locator.revision, method: locator.method, ...(locator.method === "auto" && typeof locator.confidence === "number" ? { confidence: locator.confidence } : {}) };
-    const identity = assetIdentity(toLocator(locator));
-    const instances = locator.assets.filter((a) => a.recipe_version === VISUAL_CROP_RECIPE.version && a.identity === identity);
+    const instances = locator.assets.filter((a) => matchesLocator(a, locator));
     if (instances.length === 0) {
       out.states[visualId] = locator.last_failure ? { visualId, status: "extraction_failed", failure: locator.last_failure, provenance, resolution: "D" } : { visualId, status: "located_processing", provenance, resolution: "D" };
       continue;
@@ -361,7 +394,8 @@ function verifiedSpec(specs: readonly SpecRow[]): VisualSpec | null {
  */
 export async function readAssetInstance(deps: VisualDeps, pin: { assetId: string; sha256: string }): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; failure: "not_found" | "asset_missing" | "asset_corrupt" }> {
   const instance = await deps.reader.asset(pin.assetId);
-  if (!instance || instance.sha256 !== pin.sha256) return { ok: false, failure: "not_found" };
+  if (!instance || instance.id !== pin.assetId || instance.sha256 !== pin.sha256 || !verifiedLocator(instance.locator)
+    || !matchesLocator(instance, instance.locator)) return { ok: false, failure: "not_found" };
   const stored = await deps.reader.readObject(instance.storage_path);
   if (!stored) return { ok: false, failure: "asset_missing" };
   if (sha256(stored) !== pin.sha256) return { ok: false, failure: "asset_corrupt" };
