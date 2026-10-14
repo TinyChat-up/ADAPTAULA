@@ -14,7 +14,7 @@ import { CANDIDATE_CHECKS, CHECKS, type CheckName, type CheckStatus, type Figure
  * a text layer is judged like a born-digital PDF. OCR/pixels can be wrong together, and neither proves semantic identity.
  */
 
-export const VERIFIER_VERSION = "figure_proposal_verifier@proto2";
+export const VERIFIER_VERSION = "figure_proposal_verifier@proto3";
 
 export interface PageActivity extends ActivityText {
   /** The analysis's expected answer, if any (never shown to the student). */
@@ -42,13 +42,17 @@ const norm = (s: string) =>
 
 /** Labels the instruction itself says the figure shows: «los números 1, 2 y 3», «las letras A y B». */
 export function instructionLabels(instruction: string): string[] {
-  const m = /(?:numeros|letras|etiquetas)\s+((?:[0-9a-z]{1,2})(?:\s*(?:,|y|e)\s*[0-9a-z]{1,2})*)/i.exec(norm(instruction));
-  if (!m) return [];
-  return m[1]!
-    .split(/\s*(?:,|\by\b|\be\b)\s*/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
-    .map((t) => (/^[a-z]$/.test(t) ? t.toUpperCase() : t));
+  const text = norm(instruction), labels: string[] = [];
+  for (const keyword of text.matchAll(/\b(numeros|letras|etiquetas)\s+/g)) {
+    const token = keyword[1] === "numeros" ? "[0-9]{1,3}" : keyword[1] === "letras" ? "[a-z]" : "(?:[0-9]{1,3}|[a-z])";
+    const item = `${token}(?![a-z0-9/])`;
+    const rest = text.slice(keyword.index + keyword[0].length);
+    // Require a complete enumeration, never a word prefix or a bare preposition such as «etiquetas a la derecha».
+    const list = new RegExp(`^(${item}(?:\\s*(?:,|\\by\\b|\\be\\b)\\s*${item})+)(?=\\s|[.;:!?)]|$)`).exec(rest);
+    if (!list || /^\s*(?:,|\by\b|\be\b)/.test(rest.slice(list[0].length))) continue;
+    labels.push(...list[1]!.split(/\s*,\s*|\s+[ye]\s+/).map((s) => s.trim().toUpperCase()));
+  }
+  return [...new Set(labels)];
 }
 
 const STOP = new Set(["parte", "partes", "esta", "este", "como", "para", "entre", "sobre", "tiene", "donde"]);

@@ -73,6 +73,14 @@ function aggregate(results: readonly PageResult[], engine: Engine) {
   const instructions = e.flatMap((x) => x.instructions);
   const cands = candidateSummary(e.flatMap((x) => x.candidates));
   const ref = candidateSummary(results.flatMap((r) => r.referenceCandidates));
+  const anchors = (key: "anchor" | "tolerant") => ({
+    found: instructions.filter((i) => key === "anchor" ? i.found : i.tolerantFound).length,
+    correct: instructions.filter((i) => i[key] === "correct").length,
+    wrong: instructions.filter((i) => i[key] === "wrong").length,
+    unverifiable: instructions.filter((i) => i[key] === "unverifiable").length,
+    missed: instructions.filter((i) => i[key] === "missed").length,
+    of: instructions.length,
+  });
   return {
     pages: results.length,
     wordReference: sum((x) => x.text.words),
@@ -83,10 +91,12 @@ function aggregate(results: readonly PageResult[], engine: Engine) {
     CER: pct(sum((x) => x.text.charErrors), sum((x) => x.text.chars)),
     wordAccuracy: pct(sum((x) => x.text.words) - sum((x) => x.text.wordErrors), sum((x) => x.text.words)),
     charAccuracy: pct(sum((x) => x.text.chars) - sum((x) => x.text.charErrors), sum((x) => x.text.chars)),
-    instructionsDetected: pct(instructions.filter((i) => i.anchor === "correct" && i.recall >= 0.9).length, instructions.length),
+    instructionsDetected: pct(instructions.filter((i) => i.found).length, instructions.length),
+    instructionsAssociated: pct(instructions.filter((i) => i.anchor === "correct").length, instructions.length),
+    instructionsReadAndAssociated: pct(instructions.filter((i) => i.anchor === "correct" && i.recall >= 0.9).length, instructions.length),
     instructionWordRecall: pct(instructions.reduce((n, i) => n + i.recall, 0), instructions.length),
-    anchors: { correct: instructions.filter((i) => i.anchor === "correct").length, wrong: instructions.filter((i) => i.anchor === "wrong").length, missed: instructions.filter((i) => i.anchor === "missed").length, of: instructions.length },
-    tolerantAnchors: { correct: instructions.filter((i) => i.tolerant === "correct").length, wrong: instructions.filter((i) => i.tolerant === "wrong").length, missed: instructions.filter((i) => i.tolerant === "missed").length, of: instructions.length },
+    anchors: anchors("anchor"),
+    tolerantAnchors: anchors("tolerant"),
     anchorOffsetMmP90: quantile(instructions.flatMap((i) => (i.offsetMm === null ? [] : [i.offsetMm])), 0.9),
     labels: {
       of: labels.length,
@@ -112,8 +122,8 @@ const groupBy = <T>(xs: readonly T[], key: (x: T) => string) => xs.reduce<Record
 
 function markdown(report: ReturnType<typeof buildReport>, real: boolean) {
   const row = (name: string, a: ReturnType<typeof aggregate>) =>
-    `| ${name} | ${a.pages} | ${a.wordAccuracy ?? "—"} | ${a.charAccuracy ?? "—"} | ${a.instructionsDetected ?? "—"} | ${a.anchors.correct}/${a.anchors.wrong}/${a.anchors.missed} | ${a.tolerantAnchors.correct}/${a.tolerantAnchors.wrong}/${a.tolerantAnchors.missed} | ${a.labels.detected ?? "—"} (${a.labels.of}) | ${a.labels.lost} | ${a.labels.confused} | ${a.labels.spurious} | ${a.labels.offsetMmP90 ?? "—"} | ${a.candidates.covered}/${a.candidates.eligible} (ref ${a.candidates.referenceCoverage ?? "—"} %) | ${a.candidates.wrongCandidates} | ${a.pageMsMedian} |`;
-  const head = "| grupo | págs | palabras % | caracteres % | consignas % | anclas ok/mal/no | anclas tolerantes ok/mal/no | etiquetas % (n) | perdidas | confusiones | espurias | desvío etiqueta p90 mm | candidatos ok/elegibles | candidatos erróneos | ms/pág (mediana) |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+    `| ${name} | ${a.pages} | ${a.wordAccuracy ?? "—"} | ${a.charAccuracy ?? "—"} | ${a.instructionsDetected ?? "—"} | ${a.anchors.found}; ${a.anchors.correct}/${a.anchors.wrong}/${a.anchors.unverifiable}/${a.anchors.missed} | ${a.tolerantAnchors.found}; ${a.tolerantAnchors.correct}/${a.tolerantAnchors.wrong}/${a.tolerantAnchors.unverifiable}/${a.tolerantAnchors.missed} | ${a.labels.detected ?? "—"} (${a.labels.of}) | ${a.labels.lost} | ${a.labels.confused} | ${a.labels.spurious} | ${a.labels.offsetMmP90 ?? "—"} | ${a.candidates.covered}/${a.candidates.eligible} (ref ${a.candidates.referenceCoverage ?? "—"} %) | ${a.candidates.wrongCandidates} | ${a.pageMsMedian} |`;
+  const head = "| grupo | págs | palabras % | caracteres % | consignas encontradas % | anclas halladas; bien/mal/sin verificar/omitidas | tolerantes halladas; bien/mal/sin verificar/omitidas | etiquetas % (n) | perdidas | confusiones | espurias | desvío etiqueta p90 mm | candidatos ok/elegibles | candidatos erróneos | ms/pág (mediana) |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
   const out = [
     `# Piloto OCR local — ${real ? "corpus real autorizado" : "fixtures SINTÉTICOS"}`,
     "",
@@ -122,7 +132,7 @@ function markdown(report: ReturnType<typeof buildReport>, real: boolean) {
     `Motor: ${report.engine}. Generado con \`pnpm eval:ocr\`. Memoria (RSS de todo el proceso, con pdf.js y canvas): ${report.memory.beforeEngineRssMb} MB antes de cargar el motor, ${report.memory.withEngineRssMb} MB con los dos workers cargados, pico ${report.memory.peakRssMb} MB. Dependencia: tesseract.js ${report.dependency.tesseractJsMb} MB + núcleo WASM ${report.dependency.coreMb} MB (${report.dependency.coreWasmVariants} variantes) + modelo spa ${report.dependency.spaModelGzMb} MB (gzip).`,
     "",
   ];
-  out.push("WER/CER y denominadores, precisión de etiquetas y detecciones están en report.json. Palabras/caracteres % = 100 menos tasa de edición: puede ser negativo por inserciones. Ancla correcta exige solapamiento y distancia de centros ≤3 mm en dos dimensiones. Orden de lectura: altura y luego izquierda a derecha; no valida columnas.", "");
+  out.push("WER/CER y denominadores, precisión de etiquetas y detecciones están en report.json. Palabras/caracteres % = 100 menos tasa de edición: puede ser negativo por inserciones. Ancla hallada no implica asociación verificada. Se comprueba el soporte del mismo prefijo de consigna en su región anotada, sin comparar centros de líneas con numeración diferente; vertical ≤3 mm, X dentro de referencia. Prefijos insuficientes, referencias incoherentes y líneas entre actividades quedan sin verificar. Orden de lectura: altura y luego izquierda a derecha; no valida columnas.", "");
   for (const engine of ENGINES) {
     out.push(`## Motor «${engine}»`, "", "### Por condición de escaneo", "", head);
     for (const [k, a] of Object.entries(report.byCondition[engine])) out.push(row(k, a));
@@ -144,7 +154,7 @@ export function buildReport(results: PageResult[], memory: { beforeEngineRssMb: 
   }
   const by = (key: (r: PageResult) => string) => Object.fromEntries(ENGINES.map((e) => [e, Object.fromEntries(Object.entries(groupBy(results, key)).map(([k, rs]) => [k, aggregate(rs, e)]))])) as Record<Engine, Record<string, ReturnType<typeof aggregate>>>;
   return {
-    metricsVersion: "ocr_pilot@audit2",
+    metricsVersion: "ocr_pilot@audit3",
     complete: true,
     corpus: { kind: real ? "authorized_real" : "synthetic", baseDocuments: real ? null : 11, pageConditions: results.length },
     engine: "tesseract.js 7.0.0 (Tesseract 5, WASM) · spa 4.0.0_best_int · PSM 3 + enderezado automático en página, PSM 8 en etiquetas",

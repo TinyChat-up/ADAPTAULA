@@ -30,6 +30,10 @@ Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones au
      4. Medir un despliegue experimental si el corpus aporta valor; memoria, tracing y tiempos Vercel siguen sin probarse.
    - Límites: corpus fuera de Git, anotación humana de orden/anclas, rutas y recursos acotados, informes sin transcripciones. Son 11 documentos ×5 condiciones dependientes; no autoriza recortes automáticos ni se integra en producción.
 
+8. **Corrección focalizada tras diez fichas sintéticas, desde PR #32 integrada (`37c381b`):** evaluador de anclas y parser de etiquetas
+   reparados; exacto 16 encontradas /15 asociadas /1 sin verificar /4 omitidas de 20. OCR 36/44, WER/CER y geometría sin cambios.
+   [Comparación](qa/ocr-anclas-etiquetas/README.md). Revisar esta reparación antes de optimizar C, columnas o firmas. Sin producción ni aprobación automática.
+
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 
 ## Fase 0 — Cimientos y documentación ✅
