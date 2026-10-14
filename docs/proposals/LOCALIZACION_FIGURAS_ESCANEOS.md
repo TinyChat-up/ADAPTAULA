@@ -152,6 +152,18 @@ bien.
 
 ## 6. Riesgos que siguen sin resolver
 
+> **Piloto OCR local (2026-10-14, [`evals/ocr-pilot`](../../evals/ocr-pilot/README.md)).** Tesseract 5 en WASM sobre los
+> píxeles de los 11 fixtures **sintéticos**, en 5 condiciones de escaneo.
+> - La pasada de página pierde todas las etiquetas aisladas. Una segunda pasada por glifo recupera 135 de 135, sin confusiones
+>   `1/I` u `0/O`.
+> - Consignas: 109/115 con ancla exacta y 0 mal asignadas.
+> - Candidatos con caja humana: 19/30, frente a 23/30 con la capa de referencia.
+> - Lo girado falla por integración: hay que enderezar antes del prefiltro.
+> - Lo degradado falla también en el prefiltro: su umbral de tinta no tolera el grano.
+>
+> Nada de esto está validado con escaneos reales ni en Vercel. Recomendación: **investigar más**. Los riesgos siguientes siguen
+> abiertos para documentos reales.
+
 - **OCR real.**
   - Dígitos sueltos y letras de etiqueta: el OCR los lee peor que el texto corrido, y cada etiqueta perdida bloquea (falso
     negativo).
@@ -173,7 +185,8 @@ bien.
 
 ## 7. Decisiones pendientes (sin ADR todavía)
 
-1. **Motor de OCR local.** Licencia, tamaño, memoria y latencia en Vercel. Medirlo antes de elegir.
+1. **Motor de OCR local.** Para el experimento: tesseract.js 7 (Apache-2.0, WASM, devDependency aislada); medido en el piloto
+   (47 MB, 1,2–4,9 s/página en 4 vCPU, pico de proceso ≈1,1 GB). Falta medirlo en Vercel y con escaneos reales.
 2. **Contrato del análisis.** Sidecar versionado o v4 con lector de v3, sin convertir propuestas anteriores en recortes válidos;
    medir tokens, latencia, errores y resolución. El análisis actual registra llamadas e intentos; una extensión no garantiza que
    se mantenga una sola llamada efectiva.
@@ -222,10 +235,14 @@ salida; análisis **medido** de 0,043–0,058 USD por material (`COSTS.md`).
 | --- | --- | --- |
 | A · campos de ubicación en el análisis | ≈ +0,0008–0,0012 USD por visual de salida +0,0006 USD por material de instrucciones; para 2–4 figuras ≈0,0022–0,0054 USD/material | 80–120 tokens de salida por visual a 10 USD/M + ~300 tokens de entrada a 2 USD/M; sin reintentos ni imágenes de mayor resolución |
 | B · llamada de visión por página | ≈ 0,005–0,006 USD por página; ≤ 0,017 USD por material | ~1.300 tokens de imagen (página a 100 ppp) + 400 de texto + 200 de salida |
-| OCR local | 0 USD de API; ≈ 1–4 s de CPU por página (estimado) | Motor WASM, página a 200–300 ppp |
+| OCR local | 0 USD de API; 0,6–2,8 s por página **medido** en la auditoría del piloto sobre fixtures (contenedor local, no en Vercel) | tesseract.js, página a 150–300 ppp, más la pasada de etiquetas |
 | Verificador | Despreciable; < 1 s por página | Medido solo en el prototipo, sobre fixtures |
 | Experimento (fase 2) | ≈ 1,5–3 USD en total | 30 reanálisis de 0,05–0,10 USD |
 
 Estas cifras omiten reintentos, ampliación de imagen y costes de CPU; deben medirse contra el prompt anterior con el mismo corpus.
 La opción A no obliga a añadir una llamada en Hacer magia si el análisis y OCR terminan antes, pero puede aumentar su latencia
 inicial y la tasa de reintentos. No cambia el comportamiento de producción en esta PR.
+
+Auditoría PR #32: el piloto usa asociación uno a uno, anclas con criterio en X/Y y corpus real con referencia humana explícita.
+135/135 se mantiene sobre 11 documentos sintéticos ×5 condiciones dependientes, sin evidenciar precisión real. Ver [límites,
+privacidad y requisitos de corpus](../../evals/ocr-pilot/README.md). No se autoriza integrar OCR ni aprobar recortes.

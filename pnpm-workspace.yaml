@@ -2,3 +2,4 @@ allowBuilds:
   esbuild: false
   sharp: false
   unrs-resolver: false
+  tesseract.js: false

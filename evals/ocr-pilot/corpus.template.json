@@ -1,0 +1,23 @@
+{
+  "pages": [
+    {
+      "id": "ficha_01",
+      "file": "ficha_01.png",
+      "page": 1,
+      "docType": "esquema_numerado",
+      "dpi": 300,
+      "activities": [
+        { "id": "act_1", "anchorTextIndex": 1, "instructionTextIndices": [1], "label": "1", "instruction": "Texto exacto de la consigna tal como está impresa.", "expectedAnswer": null }
+      ],
+      "texts": [
+        { "text": "1.", "x": 0.1, "y": 0.15, "w": 0.02, "h": 0.015 },
+        { "text": "Texto exacto de la consigna tal como está impresa.", "x": 0.13, "y": 0.15, "w": 0.6, "h": 0.015 },
+        { "text": "1", "x": 0.7, "y": 0.3, "w": 0.012, "h": 0.014 }
+      ],
+      "visuals": [
+        { "id": "vis_1", "activityId": "act_1", "kind": "figure", "labels": ["1"], "box": { "x": 0.2, "y": 0.2, "w": 0.55, "h": 0.2 }, "acceptable": true }
+      ],
+      "distractors": []
+    }
+  ]
+}

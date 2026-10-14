@@ -2,6 +2,76 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — Auditoría independiente del piloto OCR, PR #32
+
+- **Base verificada:** misma rama `claude/piloto-ocr-local`, local y remota en `53ee15b`, main en `bafae45`. Leídos AGENTS/CLAUDE, estado, roadmap, arquitectura, QA #30, propuesta, piloto y prototipo #31. Dependencias instaladas con lockfile congelado; modelo local descargado una vez, SHA fijado comprobado. Ningún documento privado ni llamada de pago.
+- **Reproducción previa:** 12 pruebas adversariales fallaron contra el piloto inicial: cuatro asociaciones de etiquetas incorrectas (detección compartida, confusión intermedia reutilizada, error junto a lectura correcta ocultado y duplicado contado repetidamente); ancla de otra columna considerada correcta; CER por unidades UTF-16; ruido estructurado de 1.024 glifos sin presupuesto; cuatro rutas de escape y caja normalizada que desbordaba la página.
+- **Métricas corregidas:** asociación voraz uno a uno por distancia, con desempate por índices sin preferir el texto correcto. Cada detección cuenta una vez en precisión; duplicados y espurias no desaparecen. CER Unicode, WER/CER explícitos con denominadores y límites de trabajo; anclas con criterio de solapamiento y desvío de centros en X/Y. Corpus real: ancla humana `anchorTextIndex`, líneas humanas `instructionTextIndices` para evitar recuperar texto de otra consigna repetida y array de transcripción en orden humano. Los sintéticos mantienen referencia derivada del matcher como limitación orientativa.
+- **Motor:** recorrido con stack tipado y descarte temprano de listas de píxeles de componentes grandes/motas; presupuestos de 12 Mpx, 20.000 componentes, 512 glifos y 64 reconocimientos de etiquetas. Agrupación cuadrática aún existente, ahora acotada. Timeout de 30 s por pasada de página y 30 s para la pasada completa de etiquetas; límite entre etapas de 10 min. Pruebas de guía unida, tamaños distintos, cajas fuera de borde, confusiones 1/I, 0/O y B/8. No se modifica el localizador de producción.
+- **Privacidad/loader:** corpus fuera de cualquier checkout Git; rutas relativas y realpath, rechazo de escapes y symlinks externos; manifiesto ≤2 MB, archivos ≤20 MB, ≤30 páginas/documento, ≤150 páginas anotadas, límites de dimensiones antes de decodificar imágenes y renderizar PDF. Referencias sin tinta se rechazan como anotación inválida. Informes reales sin transcripciones, etiquetas/read, respuestas ni IDs/tipos libres; solo ordinales, estados, códigos y recuentos. Logs reales ordinales y error CLI genérico. Informes anteriores invalidados al iniciar; publicación solo tras completar y `run-status.json` exige `complete`; fallo sin reportes parciales. Pruebas con temporales sintéticos y un sentinel de privacidad.
+- **Rotación/red:** pruebas analíticas ±3°/±4,5° a 150/300 ppp y dos reconocimientos Tesseract ±3° a 150/200 ppp de palabra cercana al borde. El centro vuelve al marco original; la AABB se expande al hacer doble rotación. En la primera reejecución un ajuste de referencia introdujo esa expansión en el orden de lectura: detectado y corregido antes de publicar. La ejecución final completa y las pruebas OCR corrieron con HTTP/HTTPS/TCP/TLS/fetch bloqueados mediante preload Node heredado por workers. No hay descarga durante el reconocimiento.
+- **Resultado final vs 53ee15b:** 135 etiquetas correctas/135 detecciones/135 referencias, sin cambios en este conjunto; no se demuestra inflación de la cifra concreta. Anclas exactas 108/115 dentro de tolerancia (antes 109); tolerantes 111/115 (antes 113); las cajas parciales/desplazadas también penalizan. WER/CER global con etiquetas 4,0 %/1,7 % (antes 3,9 %/1,6 % implícitos); denominadores 2.120 palabras/11.245 caracteres. Candidatos 19/30, referencia 23/30, sobre 145 propuestas guionizadas, 115 negativas; 0 erróneos observados y 0 recortes aprobados. **Son 11 documentos ×5 condiciones dependientes**, no 55 muestras independientes. Informe regenerado; los denominadores añadidos después se derivan de sus ensayos guardados, sin repetir reconocimiento.
+- **Rendimiento local:** pico RSS muestreado 1.089 MB (proceso completo), máximo 2.759 ms/página con etiquetas; 171 llamadas de etiquetas, máximo 18/página. La velocidad no es comparable con el contenedor anterior. Model/data: paquete spa declara MIT; Tesseract/core y upstream Tessdata Best Apache-2.0; procedencia y SHA documentados. Fronteras de imports verificadas; no se ejecutó build/file tracing ni prueba Vercel.
+- **Verificación final:** 77/77 pruebas focalizadas en siete archivos (métricas, auditoría, loader, runtime OCR local, boundaries y las dos suites de visual-location); typecheck PASS; lint sin errores y con aviso previo en `analysis-run-auth.test.ts`; diff check PASS. No suite completa, build, SQL, migraciones, Supabase, Stripe ni cambios UI/producción.
+- **Recomendación:** MERGE únicamente como piloto experimental. Memoria, decodificación de PDF comprimido y trabajo nativo no tienen cota absoluta por los temporizadores: usar proceso local aislado con límites del sistema, preferentemente PNG/JPEG saneados inicialmente. Identidad, integridad pedagógica y respuesta visual continúan no verificables; 8.2B.6 pendiente. Siguiente paso: 20–30 fichas autorizadas sin datos personales, anotadas por dos personas, separadas por origen con reserva independiente, antes de integrar OCR o pagar propuestas multimodales.
+
+## 2026-10-14 — Piloto OCR local sin API de pago (viabilidad, no producción)
+
+- **Base y rama:** `origin/main` en `bafae45`; la PR #31 es ancestro (`git merge-base --is-ancestor 1cee7ca origin/main`). Rama
+  nueva: `claude/piloto-ocr-local`.
+- **Leído antes de empezar:**
+  - AGENTS y CLAUDE;
+  - la propuesta 8.2B.7 auditada;
+  - la QA de PR #30;
+  - `evals/visual-location` tras la auditoría `91848b6`;
+  - ROADMAP y PROJECT_STATUS.
+- **Fase 1 · motor:**
+  - Comparación documental de tesseract.js, Tesseract nativo, PaddleOCR/RapidOCR, docTR/EasyOCR, Surya y OCR en la nube.
+  - Elegido **tesseract.js 7.0.0**: Apache-2.0, WASM y sin binarios nativos; es el único que podría ir en el mismo runtime Node.
+  - Instalado como devDependency exacta, con `postinstall` bloqueado en `pnpm-workspace.yaml`.
+  - Modelo `spa` 4.0.0_best_int (2,1 MB) descargado una vez desde jsDelivr a `evals/ocr-pilot/.cache/` (ignorada por Git), con
+    el sha-256 fijado.
+- **Fase 2 · prototipo** (`evals/ocr-pilot/`):
+  - **Entrada:** el OCR solo recibe los píxeles del raster escaneado. La capa vectorial se usa únicamente para puntuar.
+  - **Hallazgo 1:** la pasada de página (PSM 3 y PSM 11) pierde **todas** las etiquetas aisladas. Se añade una pasada que relee
+    cada glifo aislado (PSM 8, lista blanca).
+  - **Hallazgo 2:** sin enderezar, 3° mezcla líneas y 4,5° casi vacía la lectura. `rotateAuto` lo corrige a 3° y 4,5°, pero no
+    a 8°. Las cajas se devuelven al marco de la página.
+  - **Métricas:** palabras y caracteres (en orden de lectura enderezado, sin guiones bajos de los campos de rellenar), consignas,
+    anclas exactas y tolerantes, etiquetas (leída, confundida, perdida, duplicada, espuria), desvíos y candidatos del prefiltro de
+    #31 con la caja humana. Las de candidatos se calculan con la capa OCR y con la de referencia.
+- **Fase 3 · resultados** sobre 11 fixtures **sintéticos** × 5 condiciones (limpio 300, escáner 300, escáner 150, girado +3° 200,
+  degradado 200), con el motor «página + etiquetas»:
+  - **Texto:** 100 % de palabras y caracteres en limpio y escáner; 97,6 % de palabras girado; 83 % de palabras (94,6 % de
+    caracteres) degradado.
+  - **Etiquetas:** 135/135, sin confusiones, duplicados ni espurias; desvío del centro con p90 de 0,09 mm.
+  - **Anclas:** 109/115 exactas, 0 mal asignadas. Con el comparador tolerante, 113/115.
+  - **Candidatos:** 19/30, frente a 23/30 con referencia (18/18 en limpio y escáner, 1/6 girado, 0/6 degradado). 0 erróneos y 0
+    aceptados.
+  - **Rendimiento:** 1,2–4,9 s por página (4 vCPU). RSS de 147 MB antes del motor, 259 MB con dos workers y pico de 1.076 MB.
+  - **Tamaño de dependencia:** 47 MB más 2,1 MB de modelo.
+  - **Informe:** `evals/ocr-pilot/results/report.md`, con desglose por tipo de documento.
+- **Fase 4 · decisión: INVESTIGAR MÁS.**
+  - El OCR deja de ser el cuello de botella en estos fixtures.
+  - Los fallos restantes son de integración (enderezar antes del prefiltro) y del prefiltro (umbral de tinta frente al grano).
+  - Sin corpus real ni prueba en Vercel no se puede afirmar utilidad. Un OCR correcto no prueba el contenido de la figura. No se
+    autorizan recortes.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/ocr-pilot-metrics.test.ts tests/unit/boundaries.test.ts tests/unit/visual-location-prototype.test.ts tests/unit/visual-location-adversarial.test.ts`
+    → **39/39 PASS**.
+  - `pnpm typecheck` PASS.
+  - `pnpm lint`: 0 errores; el aviso previo de `analysis-run-auth.test.ts` sigue ahí.
+  - `git diff --check` PASS.
+  - `pnpm eval:ocr`: 2 min 48 s.
+  - No se ejecutan suite completa ni build (fuera del alcance autorizado). Tampoco modelos, OCR remoto, SQL, Stripe ni migraciones.
+- **Riesgos:**
+  - Los umbrales de la pasada de etiquetas y la degradación sintética se fijaron con estos fixtures.
+  - La memoria y el tiempo en Vercel son desconocidos.
+  - El *file tracing* del WASM y del modelo no está probado.
+  - El comparador tolerante no está en producción y solo se ha probado aquí.
+- **Siguiente acción:** corpus real autorizado (20–30 escaneos, fuera del repo) con `pnpm eval:ocr -- --corpus`, guardando fichas
+  de reserva. Según el resultado, enderezar antes del prefiltro y probar en Vercel, o descartar.
+
 ## 2026-10-14 — Auditoría independiente de PR #31: propuesta y prototipo
 
 - **Base/rama:** `origin/main` en `f827001`, rama de PR #31 `claude/fase-8-2b7-identificacion-figuras` en `1cee7ca` al empezar; árbol limpio. Se inspeccionaron AGENTS/CLAUDE, documentos compartidos, QA de PR #30, contrato, verificador, fixtures y arnés. La producción no se modifica.
