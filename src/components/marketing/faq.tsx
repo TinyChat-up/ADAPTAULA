@@ -31,12 +31,12 @@ export const FAQ_ITEMS = [
 export function Faq() {
   return (
     <Section id="faq" title="Preguntas frecuentes">
-      <div className="max-w-3xl divide-y divide-border rounded-card border border-border bg-surface">
+      <div className="max-w-3xl divide-y divide-border border-y border-border">
         {FAQ_ITEMS.map((item) => (
-          <details key={item.q} className="group p-5">
+          <details key={item.q} className="group py-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
               {item.q}
-              <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground transition-transform motion-safe:group-open:rotate-180" />
             </summary>
             <p className="mt-3 text-muted-foreground">{item.a}</p>
           </details>

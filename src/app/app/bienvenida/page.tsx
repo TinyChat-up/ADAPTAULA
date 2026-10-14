@@ -11,10 +11,10 @@ export default async function WelcomePage() {
   const ctx = await requireWorkspace();
   if (ctx.profile.onboardingCompleted) redirect("/app");
   return (
-    <div className="flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
+    <div className="bg-background flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
       <Logo href="/app" />
       <main id="contenido" className="mt-8 w-full max-w-xl">
-        <div className="rounded-card border border-border bg-surface p-6 shadow-card sm:p-8">
+        <div className="border-t-2 border-foreground bg-surface p-6 sm:p-8">
           <OnboardingWizard action={completeOnboarding} />
         </div>
       </main>

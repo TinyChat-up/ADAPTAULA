@@ -32,14 +32,14 @@ export function Alert({ tone = "info", title, children }: { tone?: Tone; title?:
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-control bg-border/70", className)} />;
+  return <div aria-hidden className={cn("skeleton-shimmer rounded-control", className)} />;
 }
 
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "accent" }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
         tone === "accent" ? "bg-accent-soft text-accent" : "bg-foreground/5 text-muted-foreground",
       )}
     >
@@ -58,9 +58,9 @@ export function UsageMeter({ used, limit, label }: { used: number; limit: number
       aria-valuemax={limit}
       aria-valuenow={Math.min(used, limit)}
       aria-valuetext={`${used} de ${limit}`}
-      className="h-2 w-full overflow-hidden rounded-full bg-border"
+      className="h-1 w-full overflow-hidden bg-border"
     >
-      <div className={cn("h-full rounded-full", percent >= 100 ? "bg-warning" : "bg-primary")} style={{ width: `${percent}%` }} />
+      <div className={cn("h-full transition-[width] duration-200", percent >= 100 ? "bg-warning" : "bg-primary")} style={{ width: `${percent}%` }} />
     </div>
   );
 }

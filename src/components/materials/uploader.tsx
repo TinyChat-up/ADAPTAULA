@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImageIcon, Info, UploadCloud, X } from "lucide-react";
+import { FileText, ImageIcon, Info, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -146,15 +146,15 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
             accept(e.dataTransfer.files);
           }}
           className={cn(
-            "flex flex-col items-center gap-3 rounded-card border-2 border-dashed px-6 py-14 text-center transition-colors",
-            dragging ? "border-primary bg-primary/5" : "border-border bg-surface",
+            "group flex flex-col items-center gap-3 rounded-card border border-dashed px-5 py-12 text-center transition-colors duration-150",
+            dragging ? "border-primary bg-primary-soft" : "border-control-border bg-surface hover:border-primary hover:bg-primary-soft/30",
           )}
         >
-          <UploadCloud aria-hidden className="size-10 text-primary" />
+          <Upload aria-hidden className="mb-2 size-7 text-primary" strokeWidth={1.5} />
           <p className="text-xl font-semibold">{dragging ? "Suelta tu ficha aquí" : "Arrastra tu ficha aquí"}</p>
           <p className="text-muted-foreground">
             o{" "}
-            <button type="button" onClick={() => inputRef.current?.click()} className="font-medium text-primary underline underline-offset-2">
+            <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4">
               selecciona un archivo
             </button>
           </p>

@@ -243,3 +243,28 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 **Límites de la evidencia:** se corrobora la estructura y el texto extraíble del PDF con posiciones y tinta, no se realiza OCR independiente de sus glifos. Una capa de texto deliberadamente falsa superpuesta a otros glifos no queda certificada por este método. Tampoco se corrobora aquí la transcripción del enunciado o de la clave del análisis. Escaneos, fotos, celdas multilínea, cuadrículas sin bordes, tablas duplicadas y paráfrasis no reconocidas se rechazan. La cobertura es conservadora; las pruebas sintéticas no certifican todos los PDF ni el análisis con IA real.
 
 **Verificación:** unitarias y transporte con mocks, PGlite local con orquestador real, tres PDF Chromium (tabla y regresiones de #27/fracciones), typecheck y lint. No se ha ejecutado IA de pago, SQL remoto ni validado Vercel.
+
+### ADR-024 · Navegación sin pantallas vacías y movimiento que no altera el contraste (2026-10-13)
+
+**Contexto:** la app enlazaba cuatro pantallas «Próximamente» sin contenido (Clases, Plantillas, Ayuda y Configuración) y Configuración repetía lo que ya mostraba Uso. La interfaz era correcta pero estática: sin respuesta al pasar el ratón ni esqueletos con forma real en la mayoría de secciones.
+
+**Decisión:**
+1. **Solo se enlazan pantallas con contenido real.** Se retiran `/app/plantillas`, `/app/ayuda`, `/app/clases` y `/app/configuracion` (y `coming-soon.tsx`). Redirigen de forma temporal desde `next.config.ts` a `/app`, `/como-funciona`, `/app/alumnos` y `/app/uso`, para que ningún enlace guardado dé un 404. Configuración se funde en **«Plan y cuenta»** (`/app/uso`), que acogerá la facturación con Stripe. Historial pasa a llamarse **«Adaptaciones»**, con la misma ruta (`/app/historial`) y filtros por estado (`?estado=`). Navegación: Inicio · Adaptar material · Materiales · Perfiles · Adaptaciones, y Plan y cuenta aparte.
+2. **Movimiento propio en `globals.css`, sin dependencias.** Lo que lleva texto solo se anima con `transform`, nunca con opacidad: el texto conserva su contraste real en todo momento, también para las auditorías axe que corren justo al navegar. `prefers-reduced-motion: reduce` lo detiene todo.
+3. **Carga por sección sin romper el 404.** Cada sección tiene su `loading.tsx` (grupos de rutas `(inicio)` y `(lista)`). Ninguno envuelve `/app/adaptaciones/[id]` ni `/vista`: el *streaming* enviaría la respuesta antes del `notFound()` y el 404 de otra cuenta pasaría a ser un 200.
+
+**Consecuencias:** cuando Clases o Plantillas tengan contenido, vuelven al mapa con su ruta y se retira su redirección. Detalle en `docs/UX.md` (§ Mapa de rutas, § Navegación de la app y § Movimiento). Es un cambio de presentación: no hay migraciones ni cambios en datos, permisos, planes, cuotas, precios o IA.
+
+
+### ADR-025 · Estudio pedagógico digital: identidad editorial sobre la interfaz existente (2026-10-14)
+
+**Contexto:** la PR #29 sigue abierta. Su navegación simplificada, filtros, estados y cuenta son mejoras útiles, pero la dirección visual se apoyaba en degradados, iconos repetidos, tarjetas de métricas y animación ornamental. El usuario pide redirigir esa misma rama, preservando sus funciones.
+
+**Decisión:**
+1. Sistema web de papel cálido, blanco, tinta y azul editorial. Inter para interfaz y Georgia del sistema para titulares públicos, sin otra dependencia de fuentes. Filetes, numeración, jerarquía y espacio reemplazan decoración. Bordes de controles distintos de los separadores para conservar contraste.
+2. La portada muestra dos hojas A4 con tabla, consigna y alternativas legibles, conservando exactamente los datos y sin dar la solución. Son una **demostración estática rotulada**, coherente con selección tabular existente, aislada con clases `sample-*`. No se reutiliza ni modifica el renderer del alumno para hacer marketing.
+3. Inicio ordena acción principal → atención → en curso → materiales → fichas preparadas; cuotas secundarias. Materiales, perfiles y adaptaciones usan filas. Se reservan paneles blancos para documentos, formularios y decisiones concretas.
+4. Se mantienen rutas, redirecciones, filtros, cuenta, permisos, carga y lógica existentes. Solo se conserva movimiento que comunica interacción, carga o estado; se sustituye la decisión de animación decorativa del punto 2 de ADR-024. Su navegación y protección de 404 (puntos 1 y 3) siguen vigentes.
+5. Móvil conserva barra etiquetada y diálogo nativo. Texto ampliado y acciones envuelven sin recortarse. Las hojas ilustrativas pueden crecer al ampliar texto: accesibilidad antes que una proporción forzada.
+
+**Validación y límites:** comparación antes/después en 10 pantallas × escritorio/móvil; Playwright focalizado con axe, teclado, subida, revisión, filtros y fixture imprimible; comprobación a 320 px con texto al 200 %. Proveedores simulados y PGlite local; no certifica IA real, Supabase remoto, Vercel ni auditoría con lector de pantalla. No hay cambios de SQL, Stripe, planes, cuotas, prompts, pipeline ni PDF. Detalle del sistema en UX y resultados reproducibles en DEVELOPMENT_LOG.

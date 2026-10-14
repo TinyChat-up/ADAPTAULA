@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileText, FolderOpen, ImageIcon, Plus } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import { LinkButton } from "@/components/ui/button";
-import { Alert, Badge } from "@/components/ui/feedback";
+import { Alert } from "@/components/ui/feedback";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
 import { SelectField } from "@/components/ui/fields";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { listMaterials, getSubjects } from "@/lib/materials/repository";
 import { MATERIAL_STATUSES, STATUS_LABELS, type MaterialStatus } from "@/lib/materials/types";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog } from "@/lib/profiles/repository";
-import { deleteMaterialAction, retryAnalysisAction } from "./actions";
+import { deleteMaterialAction, retryAnalysisAction } from "../actions";
 
 export const metadata: Metadata = { title: "Materiales" };
 
@@ -37,18 +37,18 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
   return (
     <div className="space-y-8">
       <PageHeader
+        icon={FolderOpen}
         title="Materiales"
         description="Tus fichas y textos, analizados una sola vez y listos para adaptar."
         actions={
           <LinkButton href="/app/adaptar">
-            <Plus aria-hidden className="size-4" />
             Subir material
           </LinkButton>
         }
       />
       {first(params.aviso) === "eliminado" ? <Alert tone="success">Material eliminado.</Alert> : null}
 
-      <form method="get" className="grid gap-4 rounded-card border border-border bg-surface p-4 shadow-card sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+      <form method="get" className="grid gap-4 border-b border-border pb-6 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
         <SelectField label="Etapa" name="etapa" defaultValue={stage ?? ""}>
           <option value="">Todas</option>
           {catalog.stages.map((s) => (
@@ -94,33 +94,27 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
           </EmptyState>
         ) : (
           <EmptyState icon={FolderOpen} title="Todavía no has subido ningún material." description="Sube una ficha que ya utilizas y la analizaremos para dejarla lista.">
-            <LinkButton href="/app/adaptar">Subir mi primera ficha</LinkButton>
+            <LinkButton href="/app/adaptar" variant="secondary">Subir mi primera ficha</LinkButton>
           </EmptyState>
         )
       ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
+        <ul className="editorial-list">
           {materials.map((m) => {
             const labels = labelsFor(catalog, m.stage_slug, m.grade_slug);
             const subjectName = subjects.find((s) => s.slug === m.subject_slug)?.name;
-            const Icon = m.source_type === "pdf" ? FileText : ImageIcon;
             return (
-              <li key={m.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-                <span aria-hidden className="hidden size-12 shrink-0 items-center justify-center rounded-control bg-primary/10 text-primary sm:flex">
-                  <Icon className="size-6" />
-                </span>
+              <li key={m.id} className="flex flex-col gap-3 py-5 transition-colors hover:bg-surface/60 lg:flex-row lg:items-center lg:gap-5">
                 <div className="min-w-0 flex-1 space-y-1">
-                  <Link href={`/app/materiales/${m.id}`} className="block truncate text-lg font-semibold hover:underline">
+                  <Link href={`/app/materiales/${m.id}`} className="block break-words text-lg font-semibold hover:underline">
                     {m.title}
                   </Link>
                   <div className="flex flex-wrap items-center gap-2">
-                    {subjectName ? <Badge>{subjectName}</Badge> : null}
-                    {labels.stage ? <Badge>{labels.stage}</Badge> : null}
-                    {labels.grade ? <Badge>{labels.grade}</Badge> : null}
+                    <span className="text-sm text-muted-foreground">{[m.source_type.toUpperCase(), subjectName, labels.stage, labels.grade].filter(Boolean).join(" · ")}</span>
                     <span className="text-xs text-muted-foreground">Subido el {formatDay(m.created_at)}</span>
                   </div>
                 </div>
                 <StatusBadge status={m.status as MaterialStatus} />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <LinkButton href={`/app/materiales/${m.id}`} variant="secondary" size="sm">
                     Abrir
                   </LinkButton>

@@ -1,52 +1,92 @@
 @import "tailwindcss";
 
-/* Tokens de diseño de Adaptaula (docs/UX.md). Contrastes verificados WCAG AA sobre --color-surface. */
+/* Estudio pedagógico: papel, tinta y una sola familia de azules. docs/UX.md. */
 @theme {
-  --color-background: #f7f8fa;
+  --color-background: #f5f3ee;
   --color-surface: #ffffff;
-  --color-border: #e2e6ec;
-  --color-foreground: #172033;
-  --color-muted-foreground: #556070;
-  --color-primary: #2453c2;
+  --color-border: #d5d7d5;
+  --color-control-border: #7c8790;
+  --color-foreground: #192b40;
+  --color-muted-foreground: #526171;
+  --color-primary: #315a86;
   --color-primary-foreground: #ffffff;
-  --color-accent: #0f766e;
-  --color-accent-soft: #e6f4f2;
-  --color-success: #15803d;
-  /* Texto sobre fondos teñidos de success (success/10): #15803d solo da 4,1:1 sobre ese tinte. */
-  --color-success-strong: #14532d;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --radius-card: 0.625rem;
-  --radius-control: 0.5rem;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06);
+  --color-primary-soft: #e7eef4;
+  --color-accent: #315a86;
+  --color-accent-soft: #e7eef4;
+  --color-success: #24623e;
+  --color-success-strong: #1c5132;
+  --color-warning: #925015;
+  --color-danger: #b12828;
+  --radius-card: 0.25rem;
+  --radius-control: 0.25rem;
+  --shadow-card: none;
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --font-editorial: Georgia, "Times New Roman", serif;
 }
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
-html {
-  scroll-padding-top: 5rem;
-}
-
+html { scroll-padding-top: 5rem; }
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   line-height: 1.5;
 }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+::selection { background: #c9d8e7; color: #192b40; }
 
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+.eyebrow { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.editorial-list { border-block: 1px solid var(--color-border); }
+.editorial-list > * + * { border-top: 1px solid var(--color-border); }
+
+/* La interacción cambia el borde/fondo; el contenido de una lista nunca se desplaza. */
+.lift { transition: border-color 160ms ease, background-color 160ms ease; }
+.lift:hover, .lift:focus-within { border-color: var(--color-primary); }
+
+@keyframes sheet-up { from { transform: translateY(24px); } to { transform: none; } }
+@keyframes load-pulse { 50% { background-color: #e9e9e4; } }
+.skeleton-shimmer { background: #dedfd9; animation: load-pulse 1.6s ease-in-out infinite; }
+dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
+
+/* Muestras web de demostración; clases propias, sin compartir ni alterar el renderer del alumno. */
+.sample-pair { display: grid; gap: 1.25rem; }
+.sample-paper {
+  aspect-ratio: 210 / 297;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.4rem 1.2rem;
+  background: #fff;
+  color: #192b40;
+  border: 1px solid #b8c1c8;
+  font-size: 0.75rem;
+  line-height: 1.55;
 }
-
+.sample-paper h3 { font-size: 1.125rem; line-height: 1.2; font-weight: 600; margin-block: 0.75rem; }
+.sample-paper table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; margin-block: 0.75rem; }
+.sample-paper th, .sample-paper td { border: 1px solid #b8c1c8; padding: 0.35rem 0.25rem; text-align: left; }
+.sample-paper th { font-weight: 600; }
+.sample-paper--adapted { border-top: 3px solid #315a86; }
+.sample-paper--adapted th { background: #e7eef4; }
+.sample-paper--adapted td { padding-block: 0.55rem; }
+.sample-paper--original { font-family: Georgia, "Times New Roman", serif; }
+.sample-options { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+.sample-options li { display: flex; align-items: center; gap: 0.6rem; }
+.sample-circle { width: 0.875rem; height: 0.875rem; border: 1px solid #192b40; border-radius: 50%; flex-shrink: 0; }
+@media (min-width: 640px) { .sample-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 639px) {
+  .sample-pair { max-width: 26rem; margin-inline: auto; }
+  .sample-paper { font-size: 0.875rem; padding: 1.25rem; }
+  .sample-paper table { font-size: 0.75rem; }
+}
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }

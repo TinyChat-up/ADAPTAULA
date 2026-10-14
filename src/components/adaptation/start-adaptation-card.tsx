@@ -1,6 +1,6 @@
 "use client";
 
-import { ListChecks, Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
@@ -72,7 +72,7 @@ export function StartAdaptationCard({
   }
 
   return (
-    <Card className="space-y-4">
+    <Card className="space-y-5 border-t-2 border-t-primary sm:p-7">
       <h2 className="text-lg font-semibold">Adaptar este material</h2>
       {!canWrite ? (
         <p className="text-sm text-muted-foreground">Tienes acceso de solo lectura en este espacio de trabajo: puedes ver las adaptaciones, pero no crear nuevas.</p>
@@ -97,9 +97,9 @@ export function StartAdaptationCard({
               {CREATION_COPY.question}
             </h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-2 rounded-card border border-primary/40 bg-primary/5 p-4">
+              <div className="flex flex-col gap-3 border-t border-primary py-4">
                 <Button size="lg" onClick={() => void start("automatic")} disabled={pending !== null} aria-describedby={`${uid}-magic`}>
-                  {pending === "automatic" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : <Sparkles aria-hidden className="size-4" />}
+                  {pending === "automatic" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
                   {CREATION_COPY.automatic.label}
                 </Button>
                 <p id={`${uid}-magic`} className="text-sm text-foreground/90">
@@ -107,9 +107,9 @@ export function StartAdaptationCard({
                   {CREATION_COPY.automatic.body}
                 </p>
               </div>
-              <div className="flex flex-col gap-2 rounded-card border border-border p-4">
+              <div className="flex flex-col gap-3 border-t border-border py-4">
                 <Button size="lg" variant="secondary" onClick={() => void start("review")} disabled={pending !== null} aria-describedby={`${uid}-review`}>
-                  {pending === "review" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : <ListChecks aria-hidden className="size-4" />}
+                  {pending === "review" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
                   {CREATION_COPY.review.label}
                 </Button>
                 <p id={`${uid}-review`} className="text-sm text-muted-foreground">
