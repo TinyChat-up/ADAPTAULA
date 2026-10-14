@@ -1,9 +1,13 @@
+import { createHash } from "node:crypto";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { AUTO_ENGINE_VERSION, prepareVisuals, type AutoRunInput } from "@/lib/materials/visuals/auto/service";
-import { pageBox } from "@/lib/materials/visuals/raster";
-import { locateVisual, resolveVisuals } from "@/lib/materials/visuals/service";
+import { cropPng, renderPage, pageBox } from "@/lib/materials/visuals/raster";
+import { locateVisual, produceVisualAsset, readAssetInstance, resolveVisuals, toLocator } from "@/lib/materials/visuals/service";
+import { assetIdentity, assetInstancePath, recipeFingerprint, VISUAL_CROP_RECIPE } from "@/lib/materials/visuals/recipe";
+import { pixelRect } from "@/lib/materials/visuals/geometry";
+import { adversarialScanPdf } from "../support/scan-adversarial-case";
 import { cellCaseAnalysis } from "../support/cell-case";
 import { SCHEME_BOUNDS, scannedPdf, scannedPng } from "../support/scan-case";
 import { createTestDb, createUser } from "./harness";
@@ -40,6 +44,7 @@ describe("scanned originals: restricted acceptance, manual fallback and versions
 
   it("PDF: no identity evidence, no automatic locator or asset, idempotent stop", async () => {
     const w = await world();
+    w.auto.deps.vision = { locate: async () => { throw new Error("scan must not reach a provider"); } };
     const first = await prepareVisuals(w.auto.deps, w.input);
     expect(first).toMatchObject({ status: "completed", result: { engine: AUTO_ENGINE_VERSION, vision_pages: 0,
       visuals: { vis_1: { choice: "D", reason: "scan_identity_unverified" } } } });
@@ -79,18 +84,59 @@ describe("scanned originals: restricted acceptance, manual fallback and versions
     expect(await q("select source_sha256 from public.material_visual_locators where material_id=$1", [w.materialId])).toEqual([{ source_sha256: w.input.sourceSha256 }]);
   });
 
-  it("an earlier automatic locator is not revalidated on a scan", async () => {
-    const w = await world();
-    await w.visuals.deps.admin.createLocator({ workspaceId: w.user.workspaceId, materialId: w.materialId, analysisFingerprint: w.input.analysisFingerprint,
-      visualId: "vis_1", sourceSha256: w.input.sourceSha256!, page: 1, bounds: SCHEME_BOUNDS, pageBox: await pageBox(base, "application/pdf", 1),
-      userId: null, method: "auto", confidence: .75, evidence: { engine: "auto_visuals@v3", scan: { method: "scan_single_region@v1" } } });
-    expect(await prepareVisuals(w.auto.deps, w.input)).toMatchObject({ result: { visuals: { vis_1: { choice: "D", reason: "auto_not_revalidated" } } } });
+  it("a wrong logo reaches neither private Storage nor ready state", async () => {
+    const w = await world({ mime: "application/pdf", bytes: await adversarialScanPdf("C") });
+    expect(await prepareVisuals(w.auto.deps, w.input)).toMatchObject({ result: { visuals: { vis_1: { choice: "D" } } } });
+    expect(await q("select id from public.material_visual_assets where material_id=$1", [w.materialId])).toEqual([]);
     expect((await w.resolve()).states.vis_1!.status).not.toBe("ready");
   });
 
-  it("does not call configured vision to override a missing independent anchor", async () => {
+  it("the locator returned by the RPC must match the preloaded original, including an existing revision", async () => {
     const w = await world();
-    w.auto.deps.vision = { locate: async () => { throw new Error("scan must not reach a provider"); } };
-    expect(await prepareVisuals(w.auto.deps, w.input)).toMatchObject({ status: "completed", result: { vision_pages: 0, visuals: { vis_1: { choice: "D" } } } });
+    const args = { workspaceId: w.user.workspaceId, materialId: w.materialId, analysisFingerprint: w.input.analysisFingerprint,
+      visualId: "vis_1", sourceSha256: w.input.sourceSha256!, page: 1, bounds: SCHEME_BOUNDS,
+      pageBox: await pageBox(base, "application/pdf", 1), userId: w.user.id };
+    const first = await w.visuals.deps.admin.createLocator(args);
+    const changed = await scannedPdf({ scheme: false });
+    const hash = createHash("sha256").update(changed).digest("hex");
+    const returned = await w.visuals.deps.admin.createLocator({ ...args, sourceSha256: hash, method: "auto", confidence: .9, evidence: {} });
+    expect(returned).toMatchObject({ id: first.id, created: false });
+    expect(await produceVisualAsset(w.visuals.deps, returned.id, { mime: "application/pdf", bytes: changed })).toMatchObject({ ok: false, failure: "source_missing" });
+    expect(await q("select id from public.material_visual_assets where material_id=$1", [w.materialId])).toEqual([]);
+  });
+
+  it("legacy scan assets cannot bypass the gate through cached runs, quick reads, pins or retries; manual correction remains possible", async () => {
+    const w = await world();
+    const created = await w.visuals.deps.admin.createLocator({ workspaceId: w.user.workspaceId, materialId: w.materialId, analysisFingerprint: w.input.analysisFingerprint,
+      visualId: "vis_1", sourceSha256: w.input.sourceSha256!, page: 1, bounds: SCHEME_BOUNDS, pageBox: await pageBox(base, "application/pdf", 1),
+      userId: null, method: "auto", confidence: .75, evidence: { engine: "auto_visuals@v3", scan: { method: "scan_single_region@v1" } } });
+    const row = (await w.visuals.deps.admin.locator(created.id))!;
+    // Seed an experimental v3 asset directly, without disabling immutable triggers or calling the corrected producer.
+    const page = await renderPage(base, "application/pdf", 1, { dpi: 200, maxPx: 4096 });
+    const crop = await cropPng(page, pixelRect(SCHEME_BOUNDS, page.width, page.height));
+    const sha256 = createHash("sha256").update(crop.png).digest("hex");
+    const identity = assetIdentity(toLocator(row));
+    const storage_path = assetInstancePath(w.user.workspaceId, w.materialId, identity, sha256);
+    await w.visuals.deps.admin.putObject(storage_path, crop.png, "create");
+    await w.visuals.deps.admin.insertAsset({ workspace_id: row.workspace_id, material_id: row.material_id, locator_id: row.id, identity,
+      recipe_version: VISUAL_CROP_RECIPE.version, recipe_fingerprint: recipeFingerprint(), storage_path, mime: "image/png",
+      width: crop.width, height: crop.height, bytes: crop.png.length, sha256, provenance: {} });
+    const [asset] = await q<{ id: string }>("select id from public.material_visual_assets where locator_id=$1", [row.id]);
+    const pin = { assetId: asset!.id, sha256 };
+    for (const options of [{ verify: false }, { withBytes: true }]) {
+      const resolved = await resolveVisuals(w.visuals.deps, { ...w.input, visualIds: ["vis_1"], ...options });
+      expect(resolved.states.vis_1!.status).not.toBe("ready");
+      expect(resolved.bytes).toEqual({});
+    }
+    expect(await readAssetInstance(w.visuals.deps, pin)).toMatchObject({ ok: false });
+    expect(await produceVisualAsset(w.visuals.deps, row.id)).toMatchObject({ ok: false });
+    const old = await w.auto.deps.runs.claim({ ...w.input, sourceSha256: w.input.sourceSha256!, engine: "auto_visuals@v4" });
+    if (!old.claimed) throw new Error("fixture run must be new");
+    await w.auto.deps.runs.complete(old.id, "completed", { engine: "auto_visuals@v4", vision_pages: 0,
+      visuals: { vis_1: { choice: "B", reason: "accepted", confidence: .75, method: "auto", spec: null } } }, 0);
+    expect(await prepareVisuals(w.auto.deps, w.input)).toMatchObject({ status: "completed", result: { visuals: { vis_1: { choice: "D", reason: "auto_not_revalidated" } } } });
+    expect(await select(w)).toMatchObject({ ok: true, status: "ready", revision: 2 });
+    expect((await w.resolve()).states.vis_1).toMatchObject({ status: "ready", resolution: "A" });
+    expect(await readAssetInstance(w.visuals.deps, pin)).toMatchObject({ ok: false });
   });
 });

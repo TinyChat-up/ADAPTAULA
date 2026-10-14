@@ -46,8 +46,8 @@ export function visualHarness(db: PGlite, user: User, shared?: Pick<VisualHarnes
       asset: async (id) => {
         const asset = (await asUser(() => db.query<AssetRow>(`select ${ASSET_COLUMNS} from public.material_visual_assets where id = $1`, [id]))).rows[0];
         if (!asset) return null;
-        const locator = (await asUser(() => db.query<Pick<LocatorRow, "method" | "evidence">>("select method, to_jsonb(material_visual_locators.*)->'evidence' as evidence from public.material_visual_locators where id=$1", [asset.locator_id]))).rows[0];
-        return locator ? { ...asset, locator } : null;
+        const locator = (await asUser(() => db.query<Record<string, unknown>>(`select ${LOCATOR_COLUMNS} from public.material_visual_locators where id=$1`, [asset.locator_id]))).rows[0];
+        return locator ? { ...asset, locator: locatorRow(locator) } : null;
       },
       readObject: async (path) => {
         const visible = (await asUser(() => db.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [BUCKET, path]))).rows.length > 0;

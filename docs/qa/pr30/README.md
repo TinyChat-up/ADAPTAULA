@@ -1,68 +1,65 @@
-# Auditoría independiente de PR #30 — 2026-10-14
+# PR #30 — Endurecimiento de procedencia y rechazo de recortes de escaneo no verificados
 
-Rama `claude/fase-8-2b6-escaneos`; código auditado `ccfbf3e`, base `1929849`. La rama remota y `refs/pull/30/head` se comprobaron iguales antes de editar. Sin merge. Solo fixtures sintéticos, PGlite local y proveedores simulados.
+Revisión y cierre de alcance: 2026-10-14. Rama `claude/fase-8-2b6-escaneos`, base `main` en `1929849`, referencia de la auditoría `d9f61a0`. La PR se propone exclusivamente como corrección de seguridad/procedencia. **La fase funcional 8.2B.6 permanece pendiente.** No se ha consultado producción ni comprobado si existen activos inseguros desplegados.
 
-## 1. Fallos demostrados
+## 1. Qué existía en main y qué introdujo el experimento
 
-**P1 — La geometría se confunde con identidad pedagógica.** Los diez casos siguientes se aceptaban a **0,75**, todos sin firma ni ancla de actividad. Nueve incluyen una región equivocada, contaminación o pérdida de información; H comprueba robustez y falta de evidencia, no demuestra por sí solo una figura equivocada. El dato «un único visual requerido» procede del análisis: no es una prueba independiente. El caso I prueba que solo cambiar `activityIds` no verifica la pertenencia del dibujo.
+| Hallazgo | Alcance demostrado | Corrección / valor frente a main |
+|---|---|---|
+| `produceVisualAsset(..., preloaded)` no contrastaba los bytes con `source_sha256` del localizador efectivo | **Main.** PGlite reproduce que `create_visual_locator` devuelve una revisión activa anterior y el productor acepta bytes diferentes de igual geometría. La nueva aserción falla contra `1929849` | Verificar SHA antes de reutilizar o producir cualquier instancia |
+| Una hipótesis de visión podía hacer superar el umbral sin ancla de actividad | **Main.** La prueba existente de una barra sin `activityIds` aceptaba el acuerdo de visión. La nueva expectativa de rechazo falla contra `1929849`; no se llama al proveedor | Exigir ancla y pertenencia a su zona en el localizador y en evidencia persistida; `auto_visuals@v5` evita decisiones cacheadas previas |
+| Aceptación de letras, decoración, regiones ajenas o etiquetas incompletas por «única figura» a 0,75 | **Solo implementación experimental de PR #30**, `71b6080` / `ccfbf3e`, nunca incorporada a la base revisada | Eliminar por completo `auto/scan.ts`; páginas sin texto quedan fuera del localizador automático y de corroboración de forma; no se consulta visión para ellas |
+| Reutilización de activos con `evidence.scan` | La ausencia de validación de procedencia estaba en **main**, pero **este formato scan solo lo escribía el experimento de #30**. El activo inseguro de la prueba es sintético, no un hallazgo en producción | Cierre preventivo de listado, vista, bytes, pins y reintento; conservar filas/objetos para trazabilidad |
+| Procedencia ausente o referencias incoherentes | **Endurecimiento defensivo.** Main no proyectaba evidencia ni el localizador del pin. `d9f61a0` los consultaba, pero su filtro negativo permitía omisiones. Veinte de 24 pruebas iniciales fallaban en d9; algunas usan adaptadores deliberadamente defectuosos | Validación positiva de localizador y enlace activo–localizador–receta–ruta. No se afirma que usuarios normales puedan insertar esas filas: FK, inmutabilidad, RLS y escritura de servicio ya limitan esa posibilidad |
 
-| Fixture reproducible | Qué demuestra | Antes | Después |
-|---|---|---|---|
-| [A](A.png): mayúscula aislada | Texto grande aceptado como figura | Aceptado 0,75 | Rechazado |
-| [B](B.png): signo + | Símbolo aislado aceptado como esquema | Aceptado 0,75 | Rechazado |
-| [C](C.png): logotipo floral | Decoración única aceptada como célula; se confirma también en integración PDF → Storage | Aceptado 0,75 | Rechazado |
-| [D](D.png): dibujo y consigna unidos | La conectividad absorbe texto ajeno | Aceptado 0,75 | Rechazado |
-| [E](E.png): dos gráficos unidos | Un trazo accidental oculta que son dos regiones | Aceptado 0,75 | Rechazado |
-| [F](F.png): figura cortada y logo interior | Se descarta el borde y se elige la otra región | Aceptado 0,75 | Rechazado |
-| [G](G.png): formulario cuadriculado | Un marco con suficiente tinta interior parece dibujo | Aceptado 0,75 | Rechazado |
-| [H](H.png): inclinación 1,5°, sombra y grano | Una imagen plausible sigue careciendo de identidad/asociación verificadas | Aceptado 0,75 | Rechazado |
-| [I](I.png): figura de la actividad 2 | Se entrega para la actividad 1 indicada por el análisis | Aceptado 0,75 | Rechazado |
-| [J](J.png): etiquetas distantes | Se acepta el dibujo sin todas sus etiquetas imprescindibles | Aceptado 0,75 | Rechazado |
+No se demuestra un acceso entre workspaces ni explotación remota. Se demuestra un defecto de integridad del original, aceptación sin asociación independiente y ausencia de controles defensivos de procedencia. La puntuación 0,75 no se convierte en garantía semántica.
 
-[Resultados originales y corregidos, con coordenadas y señales](results.json). El programa del fixture establece la verdad conocida; no se usa IA para evaluarlo. Antes de la corrección fallan las 10 aserciones de rechazo. No se afirma que los 10 sean errores semánticos distintos.
+## 2. Contrato final: rechazo por defecto
 
-**P1 — Un activo antiguo puede saltarse la nueva decisión.** La lectura de visuales, la lectura por pin y el productor no consultaban la evidencia del localizador. Un recorte `scan_single_region@v1` ya almacenado seguía `ready` aunque la nueva localización lo rechazase; cambiar la versión de caché no protegía la lectura directa. Reproducido con una fila de procedencia antigua y bytes/hash consistentes. El fixture modifica metadatos inmutables solo como superusuario en PGlite para representar el estado que dejó el motor anterior; no se cambia esa inmutabilidad en producción.
+- Todo recorte requiere localizador presente, identificadores, versión, huellas, página, coordenadas y geometría válidos. La consulta del pin obtiene su localizador completo con el mismo cliente y RLS.
+- **Humano:** método `human`, evidencia explícitamente `null` y sin confianza automática. Es el contrato real del esquema; `undefined` no equivale a una selección confirmada. Siguen funcionando PDF e imágenes.
+- **Automático:** PDF, confianza válida, versión de motor conocida (v1–v5), señales completas, `placement: true`, `clean: true` y ancla de actividad. Cualquier propiedad `scan`, incluso `null`, se rechaza. Evidencia ausente, vacía, mal formada, motor desconocido o PNG automático: rechazo antes de leer bytes.
+- Cada instancia debe referenciar ese localizador, tener identidad lógica y receta vigentes, id/hash válidos y la ruta privada esperada. Se conserva el formato de ruta anterior a la migración 017. Un pin exige su id y SHA exactos, sin sustituirlo por otra instancia.
+- Listado rápido, vista, bytes, pin y productor comparten estas comprobaciones. Los SHA del original y del PNG se verifican en sus respectivos puntos; un PNG válido no prueba por sí solo de qué original procede.
+- Sin texto se rechaza antes de recorrer los píxeles. También se rechaza la visión sin ancla aunque la página tenga texto: es una restricción deliberada respecto a main. Las vías ancladas conservan geometría y reconstrucción existentes.
+- La nueva versión evita resultados cacheados antiguos, pero no sustituye los controles del lector. Una corrección humana crea otra revisión; el pin inseguro anterior sigue bloqueado.
 
-**P1 — Fuente precargada sin verificar contra la revisión efectiva.** `produceVisualAsset(..., preloaded)` omitía comparar el SHA-256 con el localizador. Este puede ser una revisión anterior devuelta por `create_visual_locator`, que nunca reemplaza una selección activa automáticamente. Se reproducía un `ok: true` con bytes de otro original del mismo tamaño de página. Un hash correcto del PNG no subsana una procedencia falsa.
+## 3. Simplificación y pruebas conservadas
 
-Las tres aserciones de integración se reprodujeron fallando contra el código previo, antes de validar las correcciones.
+Se elimina el módulo scan, sus tipos/señales/versionado y el despacho paralelo al localizador existente. Se eliminan las dos suites que repetían el rechazo del localizador desactivado y se agrupan las integraciones de scan y procedencia. El generador de célula pasa de 114 a 21 líneas: solo rasteriza una ficha sintética conocida, sin combinatoria de ruido/decoración. El fixture de activo experimental se inserta directamente en PGlite: no desactiva triggers ni altera filas inmutables.
 
-## 2. Correcciones
+Se conservan:
 
-- Se elimina el criterio de aceptación de `scan.ts`; `scan_identity_gate@v2` devuelve `scan_identity_unverified`, sin rectángulo ni confianza semántica inventada. No se sube el umbral.
-- `auto_visuals@v4` impide reutilizar el resultado cacheado de v3. Las páginas sin texto tampoco pueden entrar por el localizador anterior con hipótesis de visión ni por la corroboración de `VisualSpec`. No se añade OCR, modelo, pipeline ni soporte de varias figuras.
-- Los localizadores automáticos con evidencia `scan` quedan excluidos de producción/reintento, listado, vista, bytes y pin. Se conservan filas y activos para trazabilidad; una selección humana crea una revisión nueva. El pin antiguo sigue bloqueado tras corregirla.
-- Lectura de `evidence` y del localizador de cada pin con el mismo cliente/RLS. Sin migraciones, borrados ni SQL remoto.
-- SHA-256 de la fuente precargada comprobado antes de cualquier reutilización o rasterizado.
-- Se elimina el análisis de componentes a resolución completa, con agrupaciones potencialmente cuadráticas. El rechazo no accede a `gray`. Los modelos de 200 ppp se retienen únicamente durante su página.
+- `visual-provenance.test.ts`: 26 casos de procedencia incompleta, enlaces incorrectos, pins exactos y controles positivos; prueba que no se leen bytes al rechazar.
+- Integración PGlite: SHA precargado, caché anterior, activos scan heredados, corrección humana, RLS y cambio de original; decoración C y actividad ajena I recorren servicios reales con proveedores simulados. El caso I comprueba bloqueo de Hacer magia y ausencia de descarga.
+- Regresiones existentes del localizador anclado, instancias, permisos y exportación. El acuerdo de visión sin ancla cambia expresamente a rechazo; la figura con ancla y visión simulada sigue aceptándose.
+- Un PDF de célula seleccionada manualmente, junto con fracciones automáticas y selección tabular. La disposición/renderer no cambian.
+- Los fixtures A–J y su pequeño generador como **evidencia histórica reproducible**, no diez ejecuciones equivalentes del rechazo incondicional. [Resultados sobre ccfbf3e y d9f61a0](results.json): el campo `after` corresponde a la primera auditoría, no al contrato actual v5.
 
-## 3. Riesgos y límites que continúan
-
-- **La localización automática de una figura escaneada no queda resuelta.** No existe en el contrato actual evidencia independiente suficiente de identidad, pertenencia, integridad y etiquetas. Incluso el escaneo correcto de la célula se rechaza automáticamente. La fase queda bloqueada como funcionalidad, no completada por hacer pasar las pruebas.
-- La selección humana depende de que el docente identifique y abarque la figura completa. La prueba de núcleo/etiquetas demuestra el fixture, no certifica cualquier selección.
-- La vía anterior con capa de texto conserva sus comprobaciones; una capa OCR falsa, páginas híbridas y la fiabilidad de visión no se certifican en esta auditoría. No se promete ausencia universal de falsos positivos.
-- El rasterizador sigue limitado a 4096 px por lado; fuente y páginas siguen consumiendo memoria/CPU. Se reduce la retención por página y se elimina la ruta costosa de componentes, pero no se ha medido carga máxima en Vercel ni escaneos reales.
-- No se ha consultado producción. No sabemos si existen activos v3 desplegados ni se recuperan ficheros ya descargados. El código corregido bloquea nuevas lecturas de los activos identificados como scan.
-
-## 4. Casos aceptados y rechazados
-
-| Vía | Resultado |
+| Evidencia histórica | Fallo del experimento |
 |---|---|
-| Escaneo sin capa de texto, PNG o PDF; uno o varios candidatos; incluso aparentemente correcto | Rechazo automático |
-| Escaneo con hipótesis de visión o apariencia de barra/recta | Rechazo: no puede evitar el control de identidad |
-| Selección humana explícita sobre el original correcto | Se conserva la vía A, con geometría, rasterizado, hash y permisos existentes |
-| Localización anterior con capa de texto | Se mantienen sus criterios; fracciones, tablas y regresiones focalizadas pasan |
-| Recorte automático previo con evidencia scan | No se entrega ni se reintenta; trazabilidad conservada |
-| Fuente precargada con SHA diferente | No se produce activo |
-| Figura imprescindible sin resolver en Hacer magia | `blocked`, sin entrega ni descarga; cuota reservada, no consumida |
+| [A](A.png), [B](B.png), [C](C.png) | Mayúscula, signo y logotipo aceptados como figura |
+| [D](D.png), [E](E.png) | Consigna unida y dos gráficos conectados aceptados como una región |
+| [F](F.png), [G](G.png) | Figura cortada sustituida por un logo; formulario confundido con esquema |
+| [H](H.png) | Rotación/sombra/ruido: falta evidencia independiente; no prueba por sí solo imagen equivocada |
+| [I](I.png), [J](J.png) | Actividad ajena; etiquetas imprescindibles omitidas |
 
-## 5. Verificación
+## 4. Verificación del cierre
 
-- **154 pruebas focalizadas PASS en 13 archivos**: 57 de adversarios, contrato de escaneo, integración y política; 97 de localizador anterior, raster, fronteras, RLS, instancias y exportación. Las 3 de caché se repiten tras ampliar las aserciones de lectura rápida, bytes y corrección manual; no se suman dos veces.
-- **4 PDF Chromium PASS**: célula escaneada con selección manual, fracciones automáticas, selección tabular e ilustración simulada. Inspección visual de célula: esquema y etiquetas 1/2/3 completos, junto a actividad 1 y antes de las líneas de respuesta. Renderer sin modificaciones.
+- **149 pruebas focalizadas PASS en 11 archivos**: `visual-provenance`, `automatic-visuals`, `visual-raster`, `visual-boundaries`, `boundaries`; db `scan-visuals`, `automatic-visuals`, `visual-instances`, `visual-locators`, `pdf-export`, `magic-visual-policy`.
+- **3 PDF Chromium PASS**: `scan-visuals` (manual), `automatic-visuals` y `table-choice-substitution`.
 - Typecheck PASS; lint sin errores, un aviso previo en `analysis-run-auth.test.ts`; diff sin errores de espacios.
-- No suite completa ni build innecesario; no IA de pago, SQL remoto, migraciones, Stripe ni cambios comerciales.
+- Dos regresiones reproducidas fallando contra main (`1929849`): original precargado equivocado y acuerdo de visión sin ancla. Los cambios de trabajo se restauraron después de esa comprobación. No se suman esos fallos esperados ni repeticiones al total final.
+- Sin suite completa, build, OCR, modelos nuevos, llamadas pagadas, SQL remoto, migraciones ni cambios comerciales.
 
-## 6. Recomendación
+## 5. Límites
 
-**NO MERGE como implementación terminada de la Fase 8.2B.6.** Los fallos de entrega detectados están corregidos de forma conservadora, pero la capacidad anunciada queda retirada por falta de evidencia. La PR puede revisarse como endurecimiento y restricción de alcance; no debe integrarse con la descripción o los criterios de aceptación originales de «localización automática de la figura única». No se hace merge desde esta auditoría.
+La fase 8.2B.6 sigue pendiente de evidencia independiente de identidad/asociación, integridad y etiquetas. No se certifican páginas híbridas, capas OCR falsas, toda selección humana, escaneos reales ni carga máxima en Vercel. La caché de 200 ppp se libera entre páginas, pero no se presenta como un benchmark de producción.
+
+**No se ha comprobado la existencia de activos inseguros en producción.** El bloqueo scan es preventivo. Tampoco se recuperan descargas o cachés previas. Los controles descritos operan en los servicios de la aplicación; la RLS de Storage sigue autorizando por pertenencia al workspace, no evalúa semántica del recorte. No se revocan los permisos del propietario para inspeccionar sus objetos históricos ni se cambia SQL.
+
+## 6. Recomendación y publicación
+
+**MERGE técnico como endurecimiento de seguridad y procedencia.** Todas las correcciones de producción que quedan aportan valor respecto a main: fuente correcta, asociación con actividad, rechazo de procedencia incompleta, integridad de referencias y protección preventiva ante activos del experimento. Las pruebas añadidas cubren esas rutas y sus controles positivos; no sostienen una capacidad de escaneo automática.
+
+Antes de integrar debe reflejarse ese alcance en el título y descripción de #30. [Texto preparado](PR_DESCRIPTION.md). La API de GitHub devuelve `Forbidden` desde este entorno; Git HTTPS sí permite publicar la rama. No se afirma que los metadatos remotos se hayan actualizado hasta verificarlo. No se crea otra PR ni se hace merge.

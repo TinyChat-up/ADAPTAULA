@@ -40,9 +40,9 @@ export function visualDeps(supabase: SupabaseClient): VisualDeps {
       async asset(id) {
         const { data } = await supabase.from("material_visual_assets").select(ASSET_COLUMNS).eq("id", id).maybeSingle();
         if (!data) return null;
-        const { data: locator } = await supabase.from("material_visual_locators").select("method, evidence").eq("id", data.locator_id).maybeSingle();
+        const { data: locator } = await supabase.from("material_visual_locators").select(LOCATOR_COLUMNS).eq("id", data.locator_id).maybeSingle();
         if (!locator) return null;
-        return { ...(data as AssetRow), locator };
+        return { ...(data as AssetRow), locator: locatorOf(locator) };
       },
       async readObject(path) {
         const { data, error } = await supabase.storage.from(BUCKET).download(path);

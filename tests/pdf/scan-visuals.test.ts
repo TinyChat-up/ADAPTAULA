@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { pixelRect, withMargin } from "@/lib/materials/visuals/geometry";
-import { readPage } from "@/lib/materials/visuals/auto/read";
-import { locateOnScan } from "@/lib/materials/visuals/auto/scan";
 import { cropPng, renderPage } from "@/lib/materials/visuals/raster";
 import { VISUAL_CROP_RECIPE } from "@/lib/materials/visuals/recipe";
 import { cellCaseDocument } from "../support/cell-case";
@@ -19,8 +17,6 @@ const ASSET = "8b6e2c1a-0000-4000-8000-000000000b26";
 describe("the scanned cell sheet, its manually selected scheme printed with its activity", () => {
   it("one page; the crop of the scan is the image of activity 1, from the pinned bytes; nothing fetched, no script", async () => {
     const bytes = await scannedPdf();
-    const located = locateOnScan((await readPage(bytes, PDF, 1, 100)).model, { id: "vis_1", shape: "figure", activityIds: ["act_1"] }, { visualsOnPage: 1, required: true });
-    expect(located.accepted).toBe(false);
     // Coordinates supplied by the fixture author, equivalent to the existing teacher selection, NOT inferred by the locator.
     const page = await renderPage(bytes, PDF, 1, { dpi: VISUAL_CROP_RECIPE.dpi, maxPx: VISUAL_CROP_RECIPE.max_px });
     const crop = await cropPng(page, pixelRect(withMargin(SCHEME_BOUNDS, { width: 595.28, height: 841.89 }, VISUAL_CROP_RECIPE.margin), page.width, page.height));

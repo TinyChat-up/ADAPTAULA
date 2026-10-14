@@ -1,6 +1,5 @@
 import { MIN_SIDE, type NormalizedBounds } from "../geometry";
 import { area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
-import type { ScanReason, ScanSignals } from "./scan";
 import { barShape, numberLineShape } from "./shapes";
 
 /**
@@ -51,9 +50,7 @@ export interface Evidence {
   clean: boolean;
   anchor: string | null;
   vision: { used: boolean; agrees: boolean; confidence: number | null; iou: number | null };
-  /** Textless-page gate (`scan.ts`): the analysis claim and the absence of independent identity evidence. */
-  scan?: ScanSignals;
-  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | ScanReason;
+  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | "scan_identity_unverified" | "activity_unverified";
 }
 
 export interface Located {
@@ -249,7 +246,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
   const taken: Rect[] = [];
   for (const s of [...scored].sort((a, b) => b.score - a.score)) {
     if (out.has(s.target.id)) continue;
-    if (!s.evidence.clean || s.score < ACCEPT) continue;
+    if (!s.evidence.clean || !s.evidence.placement || !s.evidence.anchor || s.score < ACCEPT) continue;
     if (taken.some((t) => iou(t, s.candidate.crop) > 0.2)) continue;
     taken.push(s.candidate.crop);
     out.set(s.target.id, { visualId: s.target.id, bounds: toBounds(model, s.candidate.crop), confidence: round3(Math.min(1, s.score)), accepted: true, evidence: { ...s.evidence, reason: "accepted" } });
@@ -267,7 +264,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
       out.set(target.id, { visualId: target.id, bounds: null, confidence: 0, accepted: false, evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor, vision: { used: hypothesis !== undefined, agrees: false, confidence: hypothesis?.confidence ?? null, iou: null }, reason: "no_candidate" } });
       continue;
     }
-    const reason: Evidence["reason"] = !best.evidence.clean ? "not_clean" : best.score >= ACCEPT ? "conflict" : "low_confidence";
+    const reason: Evidence["reason"] = !best.evidence.clean ? "not_clean" : !best.evidence.placement || !anchor ? "activity_unverified" : best.score >= ACCEPT ? "conflict" : "low_confidence";
     out.set(target.id, { visualId: target.id, bounds: null, confidence: round3(Math.min(1, best.score)), accepted: false, evidence: { ...best.evidence, reason } });
   }
   return targets.map((t) => out.get(t.id)!);

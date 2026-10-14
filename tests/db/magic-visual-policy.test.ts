@@ -245,9 +245,9 @@ describe("«Hacer magia» delivers the fractions sheet complete, with nothing fo
     const { readPage } = await import("@/lib/materials/visuals/auto/read");
     const { loadSource, produceVisualAsset } = await import("@/lib/materials/visuals/service");
     const { box } = await readPage(await fractionsPdf(), "application/pdf", 1, 100);
-    // A v1 false positive: a «figure» crop over another exercise, accepted at exactly 0.75 without vision, with its crop produced.
+    // A legacy false positive over another exercise: incomplete evidence must also prevent producing its crop now.
     const stale = await t.visuals.deps.admin.createLocator({ workspaceId: t.user.workspaceId, materialId: t.materialId, analysisFingerprint: fingerprint(analysis), visualId: "vis_1", sourceSha256: t.sourceSha256, page: 1, bounds: { x: 0.12, y: 0.36, w: 0.5, h: 0.05 }, pageBox: box, userId: null, method: "auto", confidence: 0.75, evidence: { engine: "auto_visuals@v1" } });
-    expect(await produceVisualAsset(t.visuals.deps, stale.id, (await loadSource(t.visuals.deps, t.materialId, t.sourceSha256))!)).toMatchObject({ ok: true });
+    expect(await produceVisualAsset(t.visuals.deps, stale.id, (await loadSource(t.visuals.deps, t.materialId, t.sourceSha256))!)).toMatchObject({ ok: false, failure: "geometry_missing" });
     const id = await t.magic();
     const result = (await q<{ result: { visuals: Record<string, { choice: string; reason: string }> } }>("select result from public.material_visual_autolocations where material_id = $1", [t.materialId]))[0]!.result;
     expect(result.visuals.vis_1).toMatchObject({ choice: "D", reason: "auto_not_revalidated" });

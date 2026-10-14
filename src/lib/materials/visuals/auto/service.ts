@@ -12,7 +12,6 @@ import { SPEC_EXTRACTOR_VERSION, extractSpec } from "./extract";
 import { candidates, locateVisuals, toBounds, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
 import { iou, type PageModel } from "./page-model";
 import { readPage } from "./read";
-import { locateOnScan } from "./scan";
 import type { VisionLocator } from "./vision";
 
 /**
@@ -32,8 +31,8 @@ import type { VisionLocator } from "./vision";
  * for the essential visuals it lacks, honestly, as before.
  */
 
-/** v4: reject textless crops without independent identity evidence; do not reuse the unsafe v3 run cache. */
-export const AUTO_ENGINE_VERSION = "auto_visuals@v4";
+/** v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions. */
+export const AUTO_ENGINE_VERSION = "auto_visuals@v5";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -106,7 +105,7 @@ export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { 
     .map((v) => ({ id: v.id, page: v.page, shape: shapeOf(v), activityIds: v.activity_ids, visual: v }));
 }
 
-const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision, ...(e.scan ? { scan: e.scan } : {}) });
+const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision });
 
 export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Promise<AutoRunSummary> {
   const targets = autoTargets(input.analysis);
@@ -172,10 +171,7 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
       }
       const activities = input.analysis.activities.filter((a) => a.page === page).map((a) => ({ id: a.id, label: a.label, instruction: a.instruction }));
       const textless = read.model.texts.length === 0;
-      const visualsOnPage = input.analysis.visuals.filter((v) => v.page === page).length;
-      let located = textless
-        ? pending.map((target) => locateOnScan(read.model, target, { visualsOnPage, required: target.visual.role === "required" }))
-        : locateVisuals(read.model, pending, activities);
+      let located = locateVisuals(read.model, pending, activities);
       const unresolved = located.filter((l) => !l.accepted);
       if (!textless && unresolved.length > 0 && deps.vision && visionCalls < MAX_VISION_PAGES) {
         visionCalls += 1;

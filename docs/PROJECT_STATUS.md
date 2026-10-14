@@ -28,27 +28,20 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 - El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que esté desplegada en todos los entornos. Esta fase no añade migraciones.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
-- El bloqueo anterior de Google Fonts no se reproduce en esta sesión de la PR #29: `pnpm build` PASS sin modificar fuentes, configuración de red ni dependencias.
+- En la sesión anterior de PR #29, `pnpm build` PASS sin modificar fuentes, configuración de red ni dependencias. Este cierre no repite el build.
 - La API de GitHub responde `Forbidden` desde este entorno; Git HTTPS permite leer y publicar ramas. El merge de #27 está verificado por historial y ascendencia Git; no se infiere el estado de otras PR abiertas.
 - Sesión de Claude Code (bloque UI/UX, 2026-10-13): ese entorno sí descarga Google Fonts, y `pnpm build` se ejecutó una vez sobre el bloque (resultado en el registro). También ve la API de GitHub: allí la PR #25 figura como integrada.
 - **Aparcado por el usuario:** Max temporal, SQL de siete días, Stripe de prueba y llamadas pagadas. No son requisitos para continuar el producto.
 
 ## Trabajo actual y continuidad
 
-Rama única: `claude/fase-8-2b6-escaneos`, PR #30, base `1929849`; cabeza auditada `ccfbf3e`, verificada contra remoto y referencia de PR. El bloque es una **auditoría y corrección**, no una fase nueva.
+Rama única `claude/fase-8-2b6-escaneos`, PR #30, base `1929849`, referencia `d9f61a0`. **Alcance final: endurecimiento de procedencia y rechazo de recortes de escaneo no verificados. La fase 8.2B.6 permanece pendiente.**
 
-**Hallazgos demostrados:** aceptación a 0,75 de regiones equivocadas/contaminadas o sin etiquetas; los activos scan antiguos podían entregarse sin nueva revalidación; bytes precargados se recortaban sin cotejar el hash del localizador efectivo. Informe y fixtures en [docs/qa/pr30](qa/pr30/README.md).
+- **Demostrado en main:** fuente precargada aceptada con SHA distinto de la revisión efectiva; acuerdo de visión aceptado sin ancla de actividad. Dos regresiones fallan contra `1929849` y pasan con la corrección.
+- **Solo experimento de #30:** falsos positivos del criterio de figura única, motor v3 y evidencia scan. Se retira el módulo completo y se bloquean preventivamente esos activos. **No se ha comprobado su existencia en producción.**
+- **Cierre defensivo:** metadatos completos, evidencia positiva, relación activo/localizador, receta, identidad y ruta privada; pins con localizador completo/RLS. Algunas pruebas simulan respuestas de persistencia defectuosas, no fallos explotables por usuarios. Humano admite evidencia null; ausencia no autoriza.
+- **Contrato vigente:** `auto_visuals@v5`, ancla/zona obligatorias; sin texto no hay recorte automático, visión ni corroboración de forma. Selección humana y localización anclada conservadas. Sin migraciones, SQL remoto, OCR, modelos nuevos o cambios comerciales.
+- **Simplificación:** eliminado `auto/scan.ts`, dos suites redundantes y variantes del generador de escaneos; integraciones agrupadas sin desactivar triggers. Fixtures adversariales y resultados históricos conservados para auditoría.
+- **Verificación actual:** 149 pruebas focalizadas en 11 archivos, 3 PDF Chromium y typecheck PASS; lint sin errores, un aviso previo. Sin suite completa ni build. La célula del PDF usa selección manual.
 
-**Corregido (ADR-027, sustituye ADR-026):**
-- `scan_identity_gate@v2` rechaza páginas sin capa de texto; `auto_visuals@v4` evita el caché v3. No hay evasión por visión o corroboración de forma.
-- Se excluyen activos automáticos con evidencia scan de vistas, bytes, pins, listado y reintento, preservando trazabilidad y corrección manual.
-- Hash de fuente precargada verificado; modelos de 200 ppp liberados por página; eliminada la heurística de componentes que no podía probar identidad.
-- Se conserva la selección humana y el localizador con capa de texto. Sin migraciones, SQL remoto, modelos nuevos, cambios comerciales o de PDF.
-
-**Probado localmente:** 154 pruebas focalizadas en 13 archivos y 4 PDF Chromium PASS; typecheck PASS; lint sin errores, un aviso previo. Fixture completo de Hacer magia: figura de otra actividad → bloqueo visual, sin entrega/descarga y cuota sin consumir. No suite completa ni llamadas pagadas.
-
-**Estado de producto:** la localización automática de escaneos permanece **no resuelta**. No se garantiza identidad, pertenencia, etiquetas o completitud con tamaño/tinta/unicidad. La aceptación del fixture correcto anterior se retira deliberadamente; el PDF de célula ahora verifica selección manual.
-
-**Publicación:** correcciones en la misma [PR #30](https://github.com/TinyChat-up/ADAPTAULA/pull/30), sin otra PR ni merge.
-
-**Recomendación y siguiente acción:** **NO MERGE como fase terminada de localización automática.** Revisar #30 con el alcance corregido de endurecimiento y restricción, antes de integrar. No presentar 8.2B.6 como validada. El siguiente trabajo requerirá definir evidencia independiente; no ampliar el algoritmo en esta auditoría. Vercel, escaneos reales y auditoría general de páginas híbridas siguen sin validar.
+**Recomendación: MERGE técnico únicamente como endurecimiento**, con el título/alcance corregidos. [Informe y delimitación frente a main](qa/pr30/README.md). La API GitHub devuelve `Forbidden`: título y descripción preparados en [PR_DESCRIPTION.md](qa/pr30/PR_DESCRIPTION.md); no se afirma su actualización remota. Los commits se publican en la misma rama; sin nueva PR ni merge. Antes de integrar, aplicar/verificar esos metadatos. La siguiente fase necesitará evidencia independiente; no está implementada. Sin validación de producción, escaneos reales o carga máxima en Vercel.

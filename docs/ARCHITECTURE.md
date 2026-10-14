@@ -269,38 +269,16 @@ Esta verificación prueba coherencia con el análisis y su clave, no certifica q
 
 **Validación y límites:** comparación antes/después en 10 pantallas × escritorio/móvil; Playwright focalizado con axe, teclado, subida, revisión, filtros y fixture imprimible; comprobación a 320 px con texto al 200 %. Proveedores simulados y PGlite local; no certifica IA real, Supabase remoto, Vercel ni auditoría con lector de pantalla. No hay cambios de SQL, Stripe, planes, cuotas, prompts, pipeline ni PDF. Detalle del sistema en UX y resultados reproducibles en DEVELOPMENT_LOG.
 
-### ADR-026 · Escaneos sin capa de texto: una sola figura, o ninguna (Fase 8.2B.6, 2026-10-14)
+### ADR-026 · Experimento de figura única en escaneos (retirado; 2026-10-14)
 
-**Sustituida por ADR-027 tras la auditoría de PR #30: el criterio de identidad descrito abajo produjo falsos positivos demostrados. No es la política vigente.**
+La propuesta de `auto_visuals@v3` en PR #30 sustituyó un ancla de actividad por unicidad geométrica y la declaración del análisis. La auditoría demostró falsos positivos. **Nunca formó parte de main en `1929849` y no es una capacidad aceptada.** Código histórico en `71b6080` / `ccfbf3e`; evidencias en [auditoría](qa/pr30/README.md). Sustituida por ADR-027.
 
-**Contexto.** El localizador automático (`auto_visuals@v2`) ancla cada figura a la zona impresa de su actividad. Un escaneo no
-tiene capa de texto, así que no hay anclas. Una figura genérica no tiene firma, de modo que sin visión nunca llegaba a 0,75 y
-«Hacer magia» se paraba. `MaterialAnalysis` v3 no guarda la posición de los visuales.
+### ADR-027 · Procedencia verificada y rechazo de escaneos automáticos (2026-10-14)
 
-**Decisión.** `auto/scan.ts` amplía el localizador existente (motor `auto_visuals@v3`) para un caso verificable. La página no tiene
-capa de texto y el análisis lista un único visual en ella, que es el imprescindible. Los píxeles muestran un único dibujo conectado
-de tamaño de figura, que no es marco, mancha, borde de escáner ni fila de letras grandes. Ningún texto cruza el recorte. Todas las
-condiciones son obligatorias. La confianza reutiliza la tabla de `locate.ts`: el ancla se sustituye por «único visual de la
-página», y un caso genérico completo da exactamente 0,75.
+**Alcance:** PR #30 se cierra como endurecimiento, no como Fase 8.2B.6 terminada. Frente a main se reproducen dos defectos: fuente precargada sin cotejar contra el SHA del localizador efectivo y aceptación por visión sin ancla de actividad. Los falsos positivos del criterio de figura única pertenecen exclusivamente al experimento de #30; no se ha comprobado la existencia de activos inseguros en producción.
 
-Se reutilizan el localizador `auto`, la receta `visual_crop@v1`, el Storage privado, la política visual, el renderer y el PDF. No
-hay OCR, ni modelos de imagen, ni migraciones, ni un segundo pipeline. La visión, si existe, solo complementa lo que no se resolvió
-y no sobrescribe un recorte aceptado así.
+**Decisión:** eliminar `auto/scan.ts`. El localizador existente rechaza páginas sin texto antes de recorrer píxeles y exige ancla/zona de actividad para aceptar, incluso con visión. Las páginas sin texto tampoco entran en visión ni corroboración de forma. Selección humana y vías ancladas con texto conservadas. `auto_visuals@v5` invalida decisiones anteriores sin migración ni borrado.
 
-**Consecuencias.**
-- Las ambigüedades (dos dibujos, un adorno grande, una mancha, texto pegado, varios visuales en el análisis) terminan en la parada
-  honesta de siempre: nunca se recorta una zona arbitraria ni se decide por tamaño.
-- El cambio de versión del motor revalida los recortes automáticos anteriores.
-- Ampliar a varias figuras por página necesitaría una evidencia de asociación que hoy no existe (posición en el análisis u OCR
-  autorizado), y sería un ADR nuevo.
+**Lectura/producción:** validar positivamente metadatos y geometría del localizador; humano con evidencia null, automático con evidencia completa de un motor conocido, ancla/zona y sin propiedad scan. La ausencia de datos no autoriza. El pin carga el localizador completo con RLS y comprueba id, SHA, receta, identidad, relación y ruta privada (incluido el formato pre-017). Los lectores y el productor comparten el control. Se contrasta además la fuente precargada con el SHA de la revisión realmente devuelta por la RPC.
 
-
-### ADR-027 · Rechazar escaneos sin identidad verificable y bloquear recortes heredados (2026-10-14)
-
-**Contexto:** auditoría independiente de #30 sobre `ccfbf3e`. Diez aserciones adversariales y tres de integración fallan contra el código anterior. Nueve adversarios muestran texto/decoración/contaminación/asociación errónea o etiquetas omitidas; el décimo verifica ruido y falta de evidencia. Un único componente y una declaración de análisis no certifican qué figura es. La confianza 0,75 es suma heurística, no probabilidad ni garantía semántica.
-
-**Decisión:** se retira la aceptación geométrica en `scan.ts`. Hasta disponer de evidencia independiente, todas las páginas sin capa de texto paran automáticamente (`scan_identity_unverified`). Se cierra también el paso por visión/corroboración matemática en esas páginas: reconocer una forma no establece su actividad. La selección humana y las vías con texto siguen existiendo. Es una restricción de la PR actual; no una nueva fase ni un pipeline nuevo.
-
-**Persistencia:** `auto_visuals@v4` evita el caché de decisiones v3. Además, lectores, productor y pins rechazan la evidencia automática `scan`; sin ello una vista/exportación podía seguir entregando el activo anterior. Se leen procedencia y objeto con el mismo control de acceso; no se borran revisiones/objetos ni se migra la BD. Un docente puede crear una revisión corregida. El hash de una fuente precargada se contrasta contra el localizador real antes de reutilizar/producir un recorte.
-
-**Recursos y consecuencias:** se elimina el análisis de componentes completo y se limita la retención de modelos de 200 ppp a una página. La capacidad automática de escaneos queda **no completada**, incluso para el fixture correcto. El documento no se entrega sin el visual imprescindible. No hay OCR, modelos externos nuevos, cambios comerciales o de renderer. Alcance, pruebas, riesgos y recomendación en [auditoría](qa/pr30/README.md).
+**Consecuencias:** los recortes automáticos históricos sin ancla/evidencia suficiente dejan de entregarse y requieren corrección humana. Se conservan revisiones/objetos. No se garantiza identidad universal, no se revoca acceso del propietario a objetos históricos en Storage y no se recuperan documentos ya descargados. El motor conserva una sola página en la caché de alta resolución; sin benchmark Vercel. Sin OCR, modelos nuevos, cambios comerciales o de renderer. [Alcance, pruebas y recomendación MERGE técnico](qa/pr30/README.md).
