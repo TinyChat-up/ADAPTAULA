@@ -2,6 +2,51 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Políticas legales y corpus de mejora autorizado (preparación, sin recolección)
+
+- **Base y rama:** `origin/main` en `1d4d07c`; la PR #33 es ancestro. Rama nueva: `claude/politicas-legales-corpus`.
+- **Lectura:** AGENTS, CLAUDE, PROJECT_STATUS, ROADMAP, PRIVACY, ARCHITECTURE, AI_PIPELINE y la QA de las diez fichas.
+- **Auditoría del código:** subida, Storage, workspaces, borrados, envíos a la IA, logs, evals y páginas legales.
+- **Discrepancias encontradas:**
+  - no hay registro de aceptación ni autorizaciones;
+  - los originales se guardan con sus metadatos;
+  - no existen borrado de cuenta, exportación ni job de retenciones (solo la limpieza de subidas abandonadas);
+  - los objetos de `generated-assets` no se borran al borrar la adaptación;
+  - las llamadas a Anthropic y OpenAI no llevan parámetros de retención ni de región.
+
+  Detalle en [AUDITORIA_DATOS.md](legal/AUDITORIA_DATOS.md).
+- **Proveedores:**
+  - Se consultó la documentación pública de Anthropic y OpenAI (retención, entrenamiento, ZDR y residencia) y la existencia de
+    los DPA de Supabase y Vercel.
+  - **No se comprobaron** los contratos aceptados ni la configuración de las cuentas; todo eso queda PENDIENTE.
+- **Diseño** (ADR-028, [FINALIDADES_Y_CORPUS.md](legal/FINALIDADES_Y_CORPUS.md)):
+  - finalidades A, B y C separadas;
+  - autorización explícita por material, ligada a bytes, aviso, caducidad y retirada;
+  - licencia de derechos de autor separada del permiso de datos personales;
+  - exclusión total de datos del alumnado y de terceros (la seudonimización no cuenta como anonimización);
+  - centros como responsables, con acuerdo específico para otros fines;
+  - límite del desaprendizaje documentado;
+  - registro del corpus con particiones separadas;
+  - esquema y RLS propuestos, sin aplicar.
+- **Código:**
+  - `src/lib/schemas/improvement-corpus.ts` y `src/lib/corpus/admission.ts`, sin llamadores en producción;
+  - `evals/corpus/` (sintético) y `.gitattributes` para conservar el SHA de las muestras;
+  - borradores de `/privacidad` y `/terminos`, sin controles;
+  - correcciones en `PRIVACY.md` y `AI_PIPELINE.md`.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/improvement-corpus.test.ts tests/unit/legal-pages.test.ts tests/unit/boundaries.test.ts` →
+    **28/28 PASS**;
+  - `pnpm typecheck` PASS;
+  - `pnpm lint`: 0 errores (sigue el aviso previo `_id`);
+  - `git diff --check` PASS.
+  - No se ejecutaron suite completa, build, E2E, SQL, migraciones, modelos ni Stripe.
+- **Riesgos:**
+  - los textos legales son borradores sin validez de garantía;
+  - la política del código depende de que nadie rellene sus campos sin la revisión jurídica;
+  - los metadatos de los originales y las retenciones siguen sin resolver.
+- **Siguiente acción:** revisión especializada ([lista](legal/REVISION_ESPECIALISTA.md)). En paralelo, Fase I técnica sobre
+  fichas propias (ROADMAP §9).
+
 ## 2026-10-14 — Corrección focalizada de anclas y etiquetas tras diez fichas
 
 - **Base y rama:** `origin/main` en `37c381b`, merge de PR #32, con `939b123` como ancestro verificado. Rama nueva `codex/corregir-anclas-etiquetas-ocr`. Leídos AGENTS/CLAUDE, estado, roadmap, arquitectura, piloto/prototipo e informe local de las diez fichas.

@@ -206,7 +206,7 @@ Un job con N perfiles: un análisis (cacheado) y luego plan → generación → 
 | Dimensiones del perfil funcional | Etiquetas diagnósticas: no existen en el esquema (`contextual_tags` eliminada en la migración 011) |
 | Tipo de adaptación y petición del docente | Nombre o email del docente, IDs internos |
 
-Las peticiones a los proveedores usan configuraciones sin entrenamiento con datos del cliente y, cuando sea posible, retención mínima o nula (ver `docs/PRIVACY.md`).
+Objetivo: proveedores sin entrenamiento con datos del cliente y con retención mínima o nula. **No lo impone el código** (no se envían parámetros de retención ni de región); depende de contratos y cuentas aún sin verificar ([`legal/FINALIDADES_Y_CORPUS.md` §6](legal/FINALIDADES_Y_CORPUS.md#6-estado-real-de-los-proveedores)).
 
 El modelo de imagen (OpenAI) recibe todavía menos: solo el prompt que construye nuestra plantilla a partir del brief validado (qué
 debe verse, el estilo, la edad de la etapa). Nunca el fichero, el texto completo del material ni nada del perfil.

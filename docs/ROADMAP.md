@@ -34,6 +34,57 @@ Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones au
    reparados; exacto 16 encontradas /15 asociadas /1 sin verificar /4 omitidas de 20. OCR 36/44, WER/CER y geometría sin cambios.
    [Comparación](qa/ocr-anclas-etiquetas/README.md). Revisar esta reparación antes de optimizar C, columnas o firmas. Sin producción ni aprobación automática.
 
+9. **Preparación legal y corpus de mejora (2026-10-15, ADR-028; [propuesta](legal/FINALIDADES_Y_CORPUS.md)).**
+   - **Finalidades:**
+     - A (servicio);
+     - B (evaluación interna, autorización opcional por material, aún inexistente);
+     - C (entrenamiento, desactivado).
+   - **Implementado en esta PR:**
+     - contrato `improvement-corpus`;
+     - reglas `corpus/admission`;
+     - pruebas;
+     - registro sintético `evals/corpus`;
+     - borradores de `/privacidad` y `/terminos`;
+     - auditoría y lista para el especialista.
+   - **Sin hacer:** SQL, migración, casilla ni recolección.
+   - **Antes de recoger una sola ficha de usuario:**
+     1. Revisión jurídica de [REVISION_ESPECIALISTA.md](legal/REVISION_ESPECIALISTA.md).
+     2. Responsable, plazos y aviso definidos.
+     3. Migración y RPC de autorizaciones con pruebas RLS.
+     4. Limpieza de metadatos y procedimiento de revisión de privacidad.
+     5. Contratos y configuración de proveedores verificados.
+
+**Fases técnicas siguientes, sobre fichas propias.** Ninguna aprueba recortes visuales cuya identidad o integridad pedagógica no
+pueda verificarse.
+
+- **Fase I · corregir OCR y geometría observados en las diez fichas sintéticas** ([QA](qa/ocr-anclas-etiquetas/README.md)):
+  - **Errores a corregir:**
+    - letras C perdidas o confundidas, y etiquetas espurias (36/44);
+    - consignas omitidas (4/20) y la mezcla de columnas;
+    - etiquetas fuera del recorte y firmas de barra o recta que no se reconocen.
+  - **Método:** reproducir cada fallo con una prueba que falle antes de corregirlo, y medir sobre `development` sin tocar
+    `evaluation` ni `holdout`.
+  - **Criterio:** mejora de etiquetas y anclas en `evaluation` sin perder la regresión sintética. Las aprobaciones de recorte
+    siguen en 0.
+- **Fase II · ampliar el corpus original de evaluación:**
+  - **Contenido:**
+    - otras materias (Lengua, Ciencias, Sociales, Inglés);
+    - otros formatos (tablas, columnas, textos largos, mapas, gráficas, escaneos físicos de fichas propias impresas);
+    - otras etapas.
+  - **Registro y particiones:** cada ficha se registra con `CorpusEntrySchema`, y las familias quedan separadas por partición.
+    Una reserva fija no se mira al ajustar.
+- **Fase III · comparar adaptaciones con referencias pedagógicas validadas por un docente:**
+  - **Referencias:** el docente valida, para fichas propias, la adaptación esperada por perfil funcional (`expectedResult.validatedBy:
+    "docente"`).
+  - **Rúbrica:** fidelidad, resolubilidad, lectura, respeto a la edad y ausencia de respuestas filtradas.
+  - **Pagos:** las ejecuciones de pago requieren autorización expresa por tanda.
+- **Fase IV · optimizar el pipeline:**
+  - **Primero:** prompts, reglas y modelos por alias.
+  - **Después, y solo con evidencia suficiente** (mejora estable en `evaluation` y `holdout`, con datos con licencia y sin datos
+    personales), valorar el ajuste fino: con base jurídica, licencia y acuerdo específicos para C, EIPD y el límite de
+    desaprendizaje documentado.
+  - **Restricciones:** nunca con corpus privados cedidos a terceros, ni con preferencias de docentes recogidas automáticamente.
+
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 
 ## Fase 0 — Cimientos y documentación ✅

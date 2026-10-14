@@ -1,0 +1,2 @@
+# Muestras del corpus sintético: su sha-256 está registrado, no normalizar finales de línea.
+evals/corpus/samples/* -text

@@ -20,7 +20,15 @@ Roles previsibles (a confirmar legalmente): para usuarios individuales, Adaptaul
 
 ## Datos enviados a proveedores de IA
 
-Solo el material, el contexto educativo, las dimensiones funcionales y la petición del docente (tabla completa en `docs/AI_PIPELINE.md`). Nunca el alias, las etiquetas ni la identidad del docente. **El análisis del material (fase 3) no usa ningún dato de alumnado:** solo el fichero y el contexto que el docente ha confirmado. Configuración de los proveedores: sin uso para entrenamiento; retención mínima o nula cuando esté disponible; procesamiento en la UE cuando el proveedor lo ofrezca. Las transferencias internacionales se documentan en el registro de subencargados.
+Solo el material, el contexto educativo, las dimensiones funcionales y la petición del docente (tabla completa en `docs/AI_PIPELINE.md`). Nunca el alias, las etiquetas ni la identidad del docente. **El análisis del material (fase 3) no usa ningún dato de alumnado:** solo el fichero y el contexto que el docente ha confirmado.
+
+**Objetivo, no verificado:**
+- que los proveedores no usen los datos para entrenamiento, con retención mínima o nula y procesamiento en la UE cuando exista;
+- transferencias internacionales documentadas en el registro de subencargados.
+
+**Esto no lo impone el código:** las llamadas no envían parámetros de retención ni de región. Depende de los contratos y de la
+configuración de las cuentas, que están sin comprobar. Ver
+[`legal/FINALIDADES_Y_CORPUS.md` §6](legal/FINALIDADES_Y_CORPUS.md#6-estado-real-de-los-proveedores).
 
 **Ilustraciones generadas (migración 024).**
 - El brief se escribe con la actividad, su objetivo, la descripción del visual que falta y los nombres de los apoyos de la ficha.
@@ -29,7 +37,19 @@ Solo el material, el contexto educativo, las dimensiones funcionales y la petici
 - La imagen se guarda en el bucket privado del workspace, sin URL pública. Se borra en cascada con su adaptación y su espacio de
   trabajo.
 
-`ai_runs` y los logs **no guardan contenido**. Los evals usan materiales preparados internamente, nunca contenido real de usuarios sin consentimiento expreso.
+`ai_runs` y los logs **no guardan contenido**. Los evals usan materiales preparados internamente.
+
+## Finalidades separadas y corpus de mejora (2026-10-15)
+
+- **A · prestar el servicio:** la única finalidad activa.
+- **B · evaluación interna y mejora:** requiere una autorización opcional, separada y por material, que aún no existe en el
+  producto. Hoy solo entran fichas propias.
+- **C · entrenamiento o ajuste fino:** desactivado en el código.
+- Aceptar los términos o subir un fichero nunca autoriza B ni C.
+- Fichas con datos del alumnado o de terceros: excluidas siempre. La seudonimización no cuenta como anonimización.
+
+Diseño, contrato y decisiones pendientes: [`legal/FINALIDADES_Y_CORPUS.md`](legal/FINALIDADES_Y_CORPUS.md). Estado real
+auditado: [`legal/AUDITORIA_DATOS.md`](legal/AUDITORIA_DATOS.md).
 
 ## Subencargados (registro inicial a completar)
 
@@ -44,7 +64,11 @@ Solo el material, el contexto educativo, las dimensiones funcionales y la petici
 
 ## Retención
 
-| Dato | Retención por defecto |
+> **Objetivos de diseño, NO implementados** salvo el borrado de subidas abandonadas y el borrado individual de materiales sin
+> adaptaciones. No existe job de retención, exportación, borrado de cuenta ni opción de borrado automático de originales. Los
+> plazos están pendientes de revisión jurídica ([auditoría §3](legal/AUDITORIA_DATOS.md#3-conservación-y-borrado)).
+
+| Dato | Retención por defecto (objetivo) |
 |---|---|
 | Ficheros originales | Hasta que el usuario los borre; opción "Eliminar originales automáticamente" (7/30/90 días) en Configuración → Privacidad |
 | Adaptaciones y versiones | Hasta borrado; Free: historial visible de 30 días (los datos se conservan hasta borrado para no perder trabajo al cambiar de plan) |
@@ -53,9 +77,11 @@ Solo el material, el contexto educativo, las dimensiones funcionales y la petici
 | `audit_logs` | 24 meses |
 | Cuenta eliminada | Borrado completo de datos y Storage en ≤ 30 días; se conserva solo lo que exige la ley (facturación en Stripe) |
 
-Un cron diario aplica las retenciones.
+Un cron diario aplicaría las retenciones. Hoy solo limpia subidas abandonadas.
 
 ## Derechos del usuario
+
+> Objetivo. Hoy solo existe el borrado individual de materiales; ni la exportación ni el borrado de cuenta están implementados.
 
 - **Exportar mis datos** (Configuración → Datos): ZIP con JSON de perfiles, materiales, adaptaciones y PDFs.
 - **Eliminar cuenta**: confirmación reforzada; cancela la suscripción en Stripe y borra workspace(s) personales.
@@ -64,7 +90,7 @@ Un cron diario aplica las retenciones.
 ## Analítica y cookies
 
 - Cookies estrictamente necesarias: sesión de Supabase, workspace activo y preferencias de UI.
-- Analítica propia en servidor (`product_events`) + Vercel Web Analytics sin cookies. Por eso **no hace falta un banner de consentimiento** en el MVP; si se añade una herramienta con cookies, se añadirá también el consentimiento previo.
+- Previsto: analítica propia en servidor (`product_events`, hoy sin escritores) y Vercel Web Analytics sin cookies (no instalado). Por eso **no hace falta un banner de consentimiento** en el MVP; si se añade una herramienta con cookies, se añadirá también el consentimiento previo.
 - Lista blanca de propiedades por evento; prohibido enviar `display_name`, notas, etiquetas o contenido.
 
 ## Centros (Fase 3)
