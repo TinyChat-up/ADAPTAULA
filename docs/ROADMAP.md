@@ -12,14 +12,13 @@ Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones au
 4. **Fase 8.2B.6 pendiente; PR #30 cerrada en alcance como endurecimiento (ADR-027):** eliminar el localizador scan experimental, verificar SHA/procedencia y rechazar metadatos incompletos o falta de ancla. Selección manual y localización anclada con texto conservadas. Recomendación MERGE técnico exclusivamente con ese alcance; no se ha comprobado la existencia de activos inseguros en producción. Ver [auditoría](qa/pr30/README.md).
 5. **PR #30 integrada en `f827001`** como endurecimiento de procedencia (ADR-027).
 6. **Fase 8.2B.7 en diseño:** OCR + propuesta multimodal solo producen candidatos geométricos; identidad e integridad pedagógica siguen sin verificarse. [Propuesta auditada](proposals/LOCALIZACION_FIGURAS_ESCANEOS.md) y prototipo aislado (`evals/visual-location/`); **no activado** en Hacer magia. Próximo paso: piloto local sin gasto API.
-   - **Recomendado:** la propuesta de ubicación sale del análisis inicial; las anclas, de un OCR local; y la aceptación, de un contrato de 11 comprobaciones sin puntuación.
-   - **Siguiente:** el experimento mínimo de la sección 9 de la propuesta (30 escaneos reales autorizados), primero sin modelo (OCR + propuestas oráculo) y después con una sola ejecución de pago con tope.
-   - **Criterio:** 0 falsos positivos con ≥ 60 aceptados y una cobertura ≥ 40 %. Si no se cumple, no se implementa.
+   - El contrato de #31 distingue once filtros de candidato de tres propiedades semánticas no verificables: toda aprobación sigue bloqueada.
+   - El siguiente experimento es local y sin gasto API; una prueba pagada exige autorización posterior y una fuente suficiente de identidad/integridad.
 7. **Piloto OCR local hecho (2026-10-14, [`evals/ocr-pilot`](../evals/ocr-pilot/README.md)); veredicto INVESTIGAR MÁS.**
    - Qué es: tesseract.js 7 (Tesseract 5 en WASM) como devDependency aislada, sin API ni OCR remoto, aplicado a los píxeles de los
      fixtures **sintéticos**. No es una validación real.
    - Qué recupera: la pasada de página pierde todas las etiquetas sueltas; una pasada por glifo recupera 135/135.
-   - Anclas de actividad: 109/115 exactas, 0 mal asignadas.
+   - Auditoría #32: asociación de etiquetas uno a uno; 135/135 se conserva en estos sintéticos, sin inferencia a fichas reales. Anclas exactas dentro de tolerancia geométrica: 108/115, frente a 109/115 con criterio solo vertical.
    - Candidatos con caja humana: 19/30, frente a 23/30 con la capa de referencia.
    - Dónde se rompe:
      - en páginas giradas, por la integración (hay que enderezar antes del prefiltro);
@@ -28,8 +27,8 @@ Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones au
      1. Ejecutar `pnpm eval:ocr -- --corpus` con 20–30 escaneos reales autorizados (fuera del repo).
      2. Enderezar antes del prefiltro.
      3. Hacer robusto el umbral de tinta.
-     4. Probar un despliegue en Vercel (2 GB y unos 5 s/página).
-   - Límites: no autoriza recortes automáticos ni se integra en producción.
+     4. Medir un despliegue experimental si el corpus aporta valor; memoria, tracing y tiempos Vercel siguen sin probarse.
+   - Límites: corpus fuera de Git, anotación humana de orden/anclas, rutas y recursos acotados, informes sin transcripciones. Son 11 documentos ×5 condiciones dependientes; no autoriza recortes automáticos ni se integra en producción.
 
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 

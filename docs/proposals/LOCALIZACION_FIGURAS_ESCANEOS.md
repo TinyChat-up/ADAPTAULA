@@ -235,10 +235,14 @@ salida; análisis **medido** de 0,043–0,058 USD por material (`COSTS.md`).
 | --- | --- | --- |
 | A · campos de ubicación en el análisis | ≈ +0,0008–0,0012 USD por visual de salida +0,0006 USD por material de instrucciones; para 2–4 figuras ≈0,0022–0,0054 USD/material | 80–120 tokens de salida por visual a 10 USD/M + ~300 tokens de entrada a 2 USD/M; sin reintentos ni imágenes de mayor resolución |
 | B · llamada de visión por página | ≈ 0,005–0,006 USD por página; ≤ 0,017 USD por material | ~1.300 tokens de imagen (página a 100 ppp) + 400 de texto + 200 de salida |
-| OCR local | 0 USD de API; 1,2–4,9 s por página **medido** en el piloto sobre fixtures (4 vCPU, no en Vercel) | tesseract.js, página a 150–300 ppp, más la pasada de etiquetas |
+| OCR local | 0 USD de API; 0,6–2,8 s por página **medido** en la auditoría del piloto sobre fixtures (contenedor local, no en Vercel) | tesseract.js, página a 150–300 ppp, más la pasada de etiquetas |
 | Verificador | Despreciable; < 1 s por página | Medido solo en el prototipo, sobre fixtures |
 | Experimento (fase 2) | ≈ 1,5–3 USD en total | 30 reanálisis de 0,05–0,10 USD |
 
 Estas cifras omiten reintentos, ampliación de imagen y costes de CPU; deben medirse contra el prompt anterior con el mismo corpus.
 La opción A no obliga a añadir una llamada en Hacer magia si el análisis y OCR terminan antes, pero puede aumentar su latencia
 inicial y la tasa de reintentos. No cambia el comportamiento de producción en esta PR.
+
+Auditoría PR #32: el piloto usa asociación uno a uno, anclas con criterio en X/Y y corpus real con referencia humana explícita.
+135/135 se mantiene sobre 11 documentos sintéticos ×5 condiciones dependientes, sin evidenciar precisión real. Ver [límites,
+privacidad y requisitos de corpus](../../evals/ocr-pilot/README.md). No se autoriza integrar OCR ni aprobar recortes.

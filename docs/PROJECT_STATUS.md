@@ -37,33 +37,26 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 Rama: `claude/piloto-ocr-local`, creada desde `main` en `bafae45`. Se comprobó con `git merge-base --is-ancestor` que la PR #31 está integrada.
 
-**Bloque: piloto OCR local sin API de pago** ([`evals/ocr-pilot`](../evals/ocr-pilot/README.md)). No cambia el comportamiento de
-producción.
+**Bloque: auditoría independiente de PR #32, piloto OCR local** ([README](../evals/ocr-pilot/README.md)).
+Producción intacta; rama remota inicial en `53ee15b`.
 
-- **Implementado:**
-  - **Motor:** tesseract.js 7.0.0 (Tesseract 5 en WASM, Apache-2.0), como devDependency exacta con `postinstall` bloqueado.
-  - **Modelo `spa`:** se descarga una vez a `.cache/` (ignorada por Git) con el sha-256 fijado.
-  - **Pasadas de lectura:** una de página con enderezado automático y otra para etiquetas sueltas, ambas sobre los píxeles del escaneo.
-  - **Métricas y runner:** métricas puras y un runner con tiempo, memoria y tamaño de dependencia.
-  - **Corpus real:** cargador para un corpus autorizado guardado fuera del repo.
-  - **Prueba de fronteras:** comprueba que ningún módulo de `src/` importa el piloto ni `tesseract.js`.
-- **Probado** (`pnpm eval:ocr`, 55 páginas: 11 fixtures **sintéticos** × 5 condiciones):
-  - Etiquetas: 135/135, sin confusiones ni espurias. Solo con la pasada de página se pierden todas.
-  - Anclas: 109/115 exactas, 0 mal asignadas.
-  - Candidatos con caja humana: 19/30, frente a 23/30 con la capa de referencia. 0 candidatos erróneos y 0 aceptados.
-  - Rendimiento: 1,2–4,9 s por página en 4 vCPU; pico de proceso ~1,1 GB.
-- **Límites encontrados:**
-  - En páginas giradas, el prefiltro agrupa líneas sin enderezar (integración).
-  - Con grano fuerte, el umbral de tinta del prefiltro falla incluso con la capa de referencia.
-- **Pendiente de validar:**
-  - escaneos reales (no hay corpus autorizado);
-  - Vercel (tamaño, memoria y tiempo);
-  - tipografías y tamaños de etiqueta distintos de Helvetica a 11 pt (los umbrales se fijaron con estos fixtures).
-- **No hay** llamadas a modelos, OCR remoto, SQL, migraciones, Stripe ni cambios de UI. No se tocan Hacer magia,
-  `MaterialAnalysis` ni los PDF. No se autorizan recortes.
+- **Fallos demostrados:** una detección recuperaba varias etiquetas verdaderas, errores cercanos desaparecían y duplicados se
+  contaban repetidamente. Anclas puntuadas solo por altura aceptaban la otra columna. El manifest admitía escapes de ruta/cajas
+  fuera de página. Ruido estructurado generaba más de mil grupos OCR sin presupuesto.
+- **Corregido:** asociación geométrica uno a uno; precisión con denominador de detecciones; CER Unicode; anclas en dos dimensiones,
+  y ancla humana explícita en corpus real. Carga acotada fuera de Git, symlinks/rutas validados, informes sin transcripción ni
+  caracteres de etiquetas, estado de ejecución y fallo sin reportes parciales. Presupuestos de glifos/componentes/llamadas/tiempo.
+- **Medido sobre los mismos 11 documentos sintéticos ×5 condiciones (no independientes):**
+  - Etiquetas: 135 correctas/135 detecciones/135 referencias; la cifra concreta no estaba inflada, aunque el algoritmo sí era defectuoso.
+  - Anclas: 108/115 exactas dentro de tolerancia (antes 109); tolerantes 111/115 (antes 113). Las cajas parciales/desplazadas también penalizan.
+  - Candidatos: 19/30, referencia 23/30, 0 erróneos en ensayos guionizados y 0 recortes aprobados.
+  - WER/CER global con etiquetas: 4,0 % /1,7 %. Pico RSS muestreado 1.089 MB; máximo 2.759 ms/página; 171 llamadas de etiquetas,
+    máximo 18 por página. Ejecución completa con red bloqueada. Sin comparación de velocidad entre contenedores.
+- **Límites:** los umbrales se ajustaron con estos mismos dibujos; no hay corpus real ni prueba Vercel/bundle tracing. Glifos unidos
+  a líneas o fuera de tamaño pueden perderse. PDF comprimido y código nativo requieren límites de proceso; los presupuestos internos
+  no son una garantía absoluta de memoria. Identidad, integridad y respuesta visual siguen sin comprobarse.
+- **Recomendación:** MERGE solo como piloto experimental; fases funcionales 8.2B.6/8.2B.7 pendientes.
 
-**Siguiente acción:**
-1. Reunir 20–30 escaneos reales con permiso de uso y sin datos del alumnado, y anotarlos con `corpus.template.json` fuera del repo.
-   Ejecutar `pnpm eval:ocr -- --corpus <dir>`, apartando fichas de reserva que no se usen para ajustar umbrales.
-2. Si las etiquetas y las consignas aguantan: enderezar la página antes del prefiltro y hacer robusto su umbral de tinta. Después,
-   un despliegue de prueba en Vercel. Si no aguantan, descartar el OCR local para escaneos.
+**Siguiente acción:** 20–30 fichas autorizadas sin datos personales, preferentemente imágenes saneadas, fuera de Git. Dos personas
+anotan `texts` en orden de lectura, `anchorTextIndex` e `instructionTextIndices`; apartar documentos de reserva por origen y ejecutar en un proceso local
+con límites de memoria/tiempo. Medir OCR y candidatos antes de invertir en integración o propuestas pagadas.

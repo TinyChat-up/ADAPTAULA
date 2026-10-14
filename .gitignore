@@ -75,3 +75,6 @@ next-env.d.ts
 
 # piloto OCR: modelo de idioma descargado localmente (sha-256 fijado en evals/ocr-pilot/engine.ts)
 /evals/ocr-pilot/.cache/
+# Protección adicional para copias accidentales; el loader rechaza corpus dentro de cualquier checkout.
+/evals/ocr-pilot/private/
+/evals/ocr-pilot/results/run-status.json

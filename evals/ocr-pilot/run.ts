@@ -7,30 +7,33 @@
  * No network call while recognising and no paid API. The report never contains page text of a real corpus: only counts,
  * label characters and confusions.
  */
-import { mkdirSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { TextBox } from "@/lib/materials/visuals/auto/page-model";
-import { CACHE_DIR, LANG_FILE, createOcr, type OcrWord } from "./engine";
+import { CACHE_DIR, LANG_FILE, createOcr, rotateBox, type OcrWord } from "./engine";
 import { candidateSummary, candidateTrials, instructionOutcomes, labelOutcomes, textErrors, type CandidateTrial, type InstructionOutcome, type LabelOutcome, type PilotPage } from "./metrics";
-import { CONDITIONS, corpusPages, fixturePages } from "./pages";
+import { CONDITIONS, corpusPages, corpusRoot, fixturePages } from "./pages";
 
 const ENGINES = ["pagina", "pagina+etiquetas"] as const;
 type Engine = (typeof ENGINES)[number];
 
-interface PageResult {
+export interface PageResult {
   id: string;
   docType: string;
   condition: string;
   dpi: number;
   pageMs: number;
   labelMs: number;
+  labelCalls: number;
   /** Skew estimated and corrected by Tesseract (degrees). */
   skewDeg: number;
   engines: Record<Engine, {
     text: ReturnType<typeof textErrors>;
     labels: LabelOutcome[];
     spurious: string[];
+    labelDetections: number;
     instructions: InstructionOutcome[];
     candidates: CandidateTrial[];
     meanConfidence: number;
@@ -72,6 +75,12 @@ function aggregate(results: readonly PageResult[], engine: Engine) {
   const ref = candidateSummary(results.flatMap((r) => r.referenceCandidates));
   return {
     pages: results.length,
+    wordReference: sum((x) => x.text.words),
+    wordErrors: sum((x) => x.text.wordErrors),
+    WER: pct(sum((x) => x.text.wordErrors), sum((x) => x.text.words)),
+    charReference: sum((x) => x.text.chars),
+    charErrors: sum((x) => x.text.charErrors),
+    CER: pct(sum((x) => x.text.charErrors), sum((x) => x.text.chars)),
     wordAccuracy: pct(sum((x) => x.text.words) - sum((x) => x.text.wordErrors), sum((x) => x.text.words)),
     charAccuracy: pct(sum((x) => x.text.chars) - sum((x) => x.text.charErrors), sum((x) => x.text.chars)),
     instructionsDetected: pct(instructions.filter((i) => i.anchor === "correct" && i.recall >= 0.9).length, instructions.length),
@@ -82,10 +91,13 @@ function aggregate(results: readonly PageResult[], engine: Engine) {
     labels: {
       of: labels.length,
       detected: pct(labels.filter((l) => l.status === "ok").length, labels.length),
-      confused: labels.filter((l) => l.status === "confused").map((l) => `${l.text}→${l.read}`),
+      correct: labels.filter((l) => l.status === "ok").length,
+      detections: sum((x) => x.labelDetections),
+      precision: pct(labels.filter((l) => l.status === "ok").length, sum((x) => x.labelDetections)),
+      confused: labels.filter((l) => l.status === "confused").length,
       lost: labels.filter((l) => l.status === "lost").length,
       duplicates: labels.reduce((n, l) => n + l.duplicates, 0),
-      spurious: e.flatMap((x) => x.spurious),
+      spurious: sum((x) => x.spurious.length),
       offsetMmMedian: quantile(labels.flatMap((l) => (l.status === "ok" && l.offsetMm !== null ? [l.offsetMm] : [])), 0.5),
       offsetMmP90: quantile(labels.flatMap((l) => (l.status === "ok" && l.offsetMm !== null ? [l.offsetMm] : [])), 0.9),
       iouMedian: quantile(labels.flatMap((l) => (l.status === "ok" && l.iou !== null ? [l.iou] : [])), 0.5),
@@ -100,16 +112,17 @@ const groupBy = <T>(xs: readonly T[], key: (x: T) => string) => xs.reduce<Record
 
 function markdown(report: ReturnType<typeof buildReport>, real: boolean) {
   const row = (name: string, a: ReturnType<typeof aggregate>) =>
-    `| ${name} | ${a.pages} | ${a.wordAccuracy ?? "—"} | ${a.charAccuracy ?? "—"} | ${a.instructionsDetected ?? "—"} | ${a.anchors.correct}/${a.anchors.wrong}/${a.anchors.missed} | ${a.tolerantAnchors.correct}/${a.tolerantAnchors.wrong}/${a.tolerantAnchors.missed} | ${a.labels.detected ?? "—"} (${a.labels.of}) | ${a.labels.lost} | ${a.labels.confused.length ? a.labels.confused.join(", ") : "—"} | ${a.labels.spurious.length} | ${a.labels.offsetMmP90 ?? "—"} | ${a.candidates.covered}/${a.candidates.eligible} (ref ${a.candidates.referenceCoverage ?? "—"} %) | ${a.candidates.wrongCandidates} | ${a.pageMsMedian} |`;
+    `| ${name} | ${a.pages} | ${a.wordAccuracy ?? "—"} | ${a.charAccuracy ?? "—"} | ${a.instructionsDetected ?? "—"} | ${a.anchors.correct}/${a.anchors.wrong}/${a.anchors.missed} | ${a.tolerantAnchors.correct}/${a.tolerantAnchors.wrong}/${a.tolerantAnchors.missed} | ${a.labels.detected ?? "—"} (${a.labels.of}) | ${a.labels.lost} | ${a.labels.confused} | ${a.labels.spurious} | ${a.labels.offsetMmP90 ?? "—"} | ${a.candidates.covered}/${a.candidates.eligible} (ref ${a.candidates.referenceCoverage ?? "—"} %) | ${a.candidates.wrongCandidates} | ${a.pageMsMedian} |`;
   const head = "| grupo | págs | palabras % | caracteres % | consignas % | anclas ok/mal/no | anclas tolerantes ok/mal/no | etiquetas % (n) | perdidas | confusiones | espurias | desvío etiqueta p90 mm | candidatos ok/elegibles | candidatos erróneos | ms/pág (mediana) |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
   const out = [
     `# Piloto OCR local — ${real ? "corpus real autorizado" : "fixtures SINTÉTICOS"}`,
     "",
-    real ? "Corpus real autorizado (fuera del repositorio)." : "**Fixtures sintéticos: no validan el comportamiento con documentos reales.** Las cajas de referencia se usan solo para puntuar.",
+    real ? "Corpus real autorizado (fuera del repositorio)." : "**55 condiciones-página de 11 documentos base: no son 55 observaciones independientes ni validan documentos reales.** Las cajas de referencia se usan solo para puntuar.",
     "",
     `Motor: ${report.engine}. Generado con \`pnpm eval:ocr\`. Memoria (RSS de todo el proceso, con pdf.js y canvas): ${report.memory.beforeEngineRssMb} MB antes de cargar el motor, ${report.memory.withEngineRssMb} MB con los dos workers cargados, pico ${report.memory.peakRssMb} MB. Dependencia: tesseract.js ${report.dependency.tesseractJsMb} MB + núcleo WASM ${report.dependency.coreMb} MB (${report.dependency.coreWasmVariants} variantes) + modelo spa ${report.dependency.spaModelGzMb} MB (gzip).`,
     "",
   ];
+  out.push("WER/CER y denominadores, precisión de etiquetas y detecciones están en report.json. Palabras/caracteres % = 100 menos tasa de edición: puede ser negativo por inserciones. Ancla correcta exige solapamiento y distancia de centros ≤3 mm en dos dimensiones. Orden de lectura: altura y luego izquierda a derecha; no valida columnas.", "");
   for (const engine of ENGINES) {
     out.push(`## Motor «${engine}»`, "", "### Por condición de escaneo", "", head);
     for (const [k, a] of Object.entries(report.byCondition[engine])) out.push(row(k, a));
@@ -121,46 +134,100 @@ function markdown(report: ReturnType<typeof buildReport>, real: boolean) {
   return out.join("\n") + "\n";
 }
 
-function buildReport(results: PageResult[], memory: { beforeEngineRssMb: number; withEngineRssMb: number; peakRssMb: number }, dependency: ReturnType<typeof dependencySize>) {
+export function buildReport(results: PageResult[], memory: { beforeEngineRssMb: number; withEngineRssMb: number; peakRssMb: number }, dependency: ReturnType<typeof dependencySize>, real = false) {
+  if (real) {
+    const types = new Map<string, string>();
+    results = results.map((r) => {
+      if (!types.has(r.docType)) types.set(r.docType, `type_${types.size + 1}`);
+      return { ...r, docType: types.get(r.docType)! };
+    });
+  }
   const by = (key: (r: PageResult) => string) => Object.fromEntries(ENGINES.map((e) => [e, Object.fromEntries(Object.entries(groupBy(results, key)).map(([k, rs]) => [k, aggregate(rs, e)]))])) as Record<Engine, Record<string, ReturnType<typeof aggregate>>>;
   return {
+    metricsVersion: "ocr_pilot@audit2",
+    complete: true,
+    corpus: { kind: real ? "authorized_real" : "synthetic", baseDocuments: real ? null : 11, pageConditions: results.length },
     engine: "tesseract.js 7.0.0 (Tesseract 5, WASM) · spa 4.0.0_best_int · PSM 3 + enderezado automático en página, PSM 8 en etiquetas",
     conditions: CONDITIONS.map(({ id, description, dpi }) => ({ id, description, dpi })),
     memory,
+    labelCalls: { total: results.reduce((n, r) => n + r.labelCalls, 0), maxPerPage: Math.max(0, ...results.map((r) => r.labelCalls)) },
     dependency,
     overall: Object.fromEntries(ENGINES.map((e) => [e, aggregate(results, e)])),
     byCondition: by((r) => r.condition),
     byDocType: by((r) => r.docType),
-    pages: results,
+    pages: results.map((r, i) => ({ ...r, id: real ? `page_${i + 1}` : r.id, docType: real ? "redacted" : r.docType,
+      engines: Object.fromEntries(ENGINES.map((e) => [e, { ...r.engines[e], labels: r.engines[e].labels.map(({ status, duplicates, offsetMm, iou }) => ({ status, duplicates, offsetMm, iou })), spurious: r.engines[e].spurious.length }])) })),
   };
+}
+
+export function prepareOutput(root: string): string {
+  const out = path.join(root, "results");
+  if (existsSync(out) && (lstatSync(out).isSymbolicLink() || !lstatSync(out).isDirectory())) throw new Error("report_path_invalid");
+  mkdirSync(out, { recursive: true });
+  for (const name of ["report.json", "report.md", "run-status.json", ".report.json.tmp", ".report.md.tmp"]) rmSync(path.join(out, name), { force: true });
+  writeFileSync(path.join(out, "run-status.json"), JSON.stringify({ status: "running" }) + "\n", { flag: "wx" });
+  return out;
+}
+
+export function finishOutput(out: string, report: ReturnType<typeof buildReport> | null, real: boolean) {
+  const temp = [".report.json.tmp", ".report.md.tmp"];
+  try {
+    if (!report) throw new Error("pilot_failed");
+    writeFileSync(path.join(out, temp[0]!), JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
+    writeFileSync(path.join(out, temp[1]!), markdown(report, real), { flag: "wx" });
+    renameSync(path.join(out, temp[0]!), path.join(out, "report.json"));
+    renameSync(path.join(out, temp[1]!), path.join(out, "report.md"));
+    writeFileSync(path.join(out, "run-status.json"), JSON.stringify({ status: "complete", pages: report.pages.length }) + "\n");
+  } catch {
+    for (const name of [...temp, "report.json", "report.md"]) rmSync(path.join(out, name), { force: true });
+    writeFileSync(path.join(out, "run-status.json"), JSON.stringify({ status: "failed" }) + "\n");
+    if (report) throw new Error("report_write_failed");
+  }
 }
 
 async function main() {
   const corpusFlag = process.argv.indexOf("--corpus");
   const corpus = corpusFlag >= 0 ? process.argv[corpusFlag + 1] : undefined;
+  if (corpusFlag >= 0 && (!corpus || corpus.startsWith("--"))) throw new Error("corpus_argument_missing");
+  const root = corpus ? corpusRoot(corpus) : import.meta.dirname;
+  const out = prepareOutput(root);
   let peak = process.memoryUsage().rss;
   const sampler = setInterval(() => (peak = Math.max(peak, process.memoryUsage().rss)), 25);
   const pages: AsyncGenerator<PilotPage> = corpus ? corpusPages(corpus) : fixturePages();
   const beforeEngine = process.memoryUsage().rss;
-  const ocr = await createOcr();
-  const withEngine = process.memoryUsage().rss;
+  let ocr: Awaited<ReturnType<typeof createOcr>> | undefined;
   const results: PageResult[] = [];
+  const started = performance.now();
   try {
+    ocr = await createOcr();
+    const withEngine = process.memoryUsage().rss;
     for await (const page of pages) {
+      if (performance.now() - started > 600_000) throw new Error("pilot_time_limit");
       const t0 = performance.now();
       const read = await ocr.page(page.model, page.dpi);
       const t1 = performance.now();
       const labels = await ocr.labels(page.model, page.dpi, read);
       const t2 = performance.now();
+      if (performance.now() - started > 600_000) throw new Error("pilot_time_limit");
+      // Use the SAME measured deskew frame on both sides, including partially corrected or real scans.
+      const referenceUpright = page.truth.map((t) => ({ text: t.text, ...rotateBox(page.model, t, read.skewDeg * Math.PI / 180) }));
+      const anchorReference = corpus ? referenceUpright : page.truthUpright.map((t) => ({ text: t.text,
+        ...rotateBox(page.model, t, ((page.scanRotationDeg ?? 0) + read.skewDeg) * Math.PI / 180) }));
+      const referenceBoxes = <T extends TextBox>(t: T) => ({ text: t.text, ...rotateBox(page.model, t, read.skewDeg * Math.PI / 180) });
       const score = (words: OcrWord[]) => {
         const boxes: TextBox[] = words.map(({ text, x0, y0, x1, y1 }) => ({ text, x0, y0, x1, y1 }));
         const upright: TextBox[] = words.map(({ text, upright: u }) => ({ text, ...u }));
         const l = labelOutcomes(page.model, page.truth, boxes);
         return {
-          text: textErrors(page.truthUpright, upright),
+          // Rotating an axis-aligned envelope a second time expands it and can merge reference lines. Reading order comes
+          // from the original upright reference (synthetic) or human annotation order (real), not reconstructed envelopes.
+          text: textErrors(page.truthUpright, upright, Boolean(corpus)),
           labels: l.outcomes,
           spurious: l.spurious,
-          instructions: instructionOutcomes(page.model, page.truthUpright, upright, page.activities),
+          labelDetections: l.detections,
+          instructions: instructionOutcomes(page.model, anchorReference, upright, page.activities,
+            page.anchorTruth ? new Map(Object.entries(page.anchorTruth).map(([id, t]) => [id, referenceBoxes(t)])) : undefined,
+            page.instructionTruth ? new Map(Object.entries(page.instructionTruth).map(([id, ts]) => [id, ts.map(referenceBoxes)])) : undefined),
           candidates: candidateTrials(page, boxes),
           meanConfidence: Math.round(words.reduce((n, w) => n + w.confidence, 0) / Math.max(1, words.length)),
         };
@@ -168,26 +235,26 @@ async function main() {
       results.push({
         id: page.id, docType: page.docType, condition: page.condition, dpi: page.dpi, pageMs: Math.round(t1 - t0), labelMs: Math.round(t2 - t1),
         skewDeg: Math.round(read.skewDeg * 100) / 100,
+        labelCalls: read.labelCalls ?? 0,
         engines: { pagina: score(read.words), "pagina+etiquetas": score([...read.words, ...labels]) },
         referenceCandidates: candidateTrials(page, page.truth),
       });
-      process.stdout.write(`${page.condition} ${page.id} ${Math.round(t1 - t0)}+${Math.round(t2 - t1)} ms\n`);
+      process.stdout.write(`${corpus ? `page_${results.length}` : `${page.condition} ${page.id}`} ${Math.round(t1 - t0)}+${Math.round(t2 - t1)} ms\n`);
     }
+    const mb = (n: number) => Math.round(n / 1e6);
+    const report = buildReport(results, { beforeEngineRssMb: mb(beforeEngine), withEngineRssMb: mb(withEngine), peakRssMb: mb(peak) }, dependencySize(), Boolean(corpus));
+    finishOutput(out, report, Boolean(corpus));
+    process.stdout.write("pilot_complete\n");
+  } catch {
+    finishOutput(out, null, Boolean(corpus));
+    throw new Error("pilot_failed_no_report");
   } finally {
-    await ocr.terminate();
     clearInterval(sampler);
+    await ocr?.terminate();
   }
-  const mb = (n: number) => Math.round(n / 1e6);
-  const report = buildReport(results, { beforeEngineRssMb: mb(beforeEngine), withEngineRssMb: mb(withEngine), peakRssMb: mb(peak) }, dependencySize());
-  const out = corpus ? path.join(corpus, "results") : path.join(import.meta.dirname, "results");
-  mkdirSync(out, { recursive: true });
-  // A real corpus report keeps counts and labels only: no page text leaves the corpus folder anyway, but the JSON stays lean.
-  writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2) + "\n");
-  writeFileSync(path.join(out, "report.md"), markdown(report, Boolean(corpus)));
-  process.stdout.write(`\n${path.join(out, "report.md")}\n`);
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch(() => {
+  process.stderr.write("pilot_failed: consulta run-status.json; no se registra contenido ni rutas del corpus\n");
   process.exit(1);
 });

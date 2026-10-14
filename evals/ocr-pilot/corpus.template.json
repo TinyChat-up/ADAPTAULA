@@ -7,7 +7,7 @@
       "docType": "esquema_numerado",
       "dpi": 300,
       "activities": [
-        { "id": "act_1", "label": "1", "instruction": "Texto exacto de la consigna tal como está impresa.", "expectedAnswer": null }
+        { "id": "act_1", "anchorTextIndex": 1, "instructionTextIndices": [1], "label": "1", "instruction": "Texto exacto de la consigna tal como está impresa.", "expectedAnswer": null }
       ],
       "texts": [
         { "text": "1.", "x": 0.1, "y": 0.15, "w": 0.02, "h": 0.015 },

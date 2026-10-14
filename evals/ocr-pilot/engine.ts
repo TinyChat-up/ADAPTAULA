@@ -33,6 +33,7 @@ export interface PageRead {
   words: OcrWord[];
   /** Skew Tesseract estimated and corrected (degrees; 0 when below its threshold or not detected). */
   skewDeg: number;
+  labelCalls?: number;
 }
 
 export interface OcrEngine {
@@ -45,6 +46,13 @@ export interface OcrEngine {
 const PAGE_MIN_CONFIDENCE = 40;
 const LABEL_MIN_CONFIDENCE = 50;
 const DARK = 160;
+export const OCR_LIMITS = { pixels: 12_000_000, components: 20_000, glyphs: 512, labelCalls: 64, pageMs: 30_000, labelsMs: 30_000 } as const;
+
+function assertRaster(model: PageModel) {
+  if (!Number.isInteger(model.width) || !Number.isInteger(model.height) || model.width < 1 || model.height < 1 ||
+    model.width * model.height > OCR_LIMITS.pixels || model.gray.length !== model.width * model.height ||
+    !Number.isFinite(model.mmPerPx) || model.mmPerPx < 25.4 / 600) throw new Error("ocr_raster_limit");
+}
 
 export function assertModel(dir = CACHE_DIR) {
   const file = path.join(dir, LANG_FILE);
@@ -78,36 +86,51 @@ type Blob = { x0: number; y0: number; x1: number; y1: number; pixels: number[] }
 
 /** 4-connected dark components outside the already-read words (8-connectivity would merge a label with a nearby leader). */
 function blobs(model: PageModel, read: readonly TextBox[], padPx: number): Blob[] {
+  assertRaster(model);
   const { width, height, gray } = model;
   const seen = new Uint8Array(width * height);
   for (const t of read) {
+    const x0 = Math.max(0, Math.floor(t.x0) - padPx);
+    const x1 = Math.min(width - 1, Math.ceil(t.x1) + padPx);
+    if (x1 < x0) continue;
     for (let y = Math.max(0, Math.floor(t.y0) - padPx); y <= Math.min(height - 1, Math.ceil(t.y1) + padPx); y++)
-      seen.fill(1, y * width + Math.max(0, Math.floor(t.x0) - padPx), y * width + Math.min(width - 1, Math.ceil(t.x1) + padPx) + 1);
+      seen.fill(1, y * width + x0, y * width + x1 + 1);
   }
   const out: Blob[] = [];
-  const stack: number[] = [];
+  const stack = new Uint32Array(width * height);
+  let top = 0;
+  let count = 0;
   for (let start = 0; start < gray.length; start++) {
     if (seen[start] || gray[start]! >= DARK) continue;
     const b: Blob = { x0: width, y0: height, x1: 0, y1: 0, pixels: [] };
+    if (++count > OCR_LIMITS.components) throw new Error("ocr_component_limit");
+    let oversized = false;
     seen[start] = 1;
-    stack.push(start);
-    while (stack.length) {
-      const i = stack.pop()!;
+    stack[top++] = start;
+    while (top) {
+      const i = stack[--top]!;
       const x = i % width;
       const y = (i - x) / width;
-      b.pixels.push(i);
+      if (!oversized) b.pixels.push(i);
       b.x0 = Math.min(b.x0, x);
       b.y0 = Math.min(b.y0, y);
       b.x1 = Math.max(b.x1, x + 1);
       b.y1 = Math.max(b.y1, y + 1);
+      if (!oversized && ((b.x1 - b.x0) * model.mmPerPx > 5 || (b.y1 - b.y0) * model.mmPerPx > 6)) {
+        oversized = true;
+        b.pixels = [];
+      }
       for (const j of [x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1, y > 0 ? i - width : -1, y < height - 1 ? i + width : -1]) {
         if (j >= 0 && !seen[j] && gray[j]! < DARK) {
           seen[j] = 1;
-          stack.push(j);
+          stack[top++] = j;
         }
       }
     }
-    out.push(b);
+    if (!oversized && (b.y1 - b.y0) * model.mmPerPx >= 1.8 && (b.x1 - b.x0) * model.mmPerPx >= .2 && b.pixels.length * model.mmPerPx ** 2 >= .25) {
+      out.push(b);
+      if (out.length > OCR_LIMITS.glyphs) throw new Error("ocr_glyph_limit");
+    }
   }
   return out;
 }
@@ -132,6 +155,7 @@ export function labelGroups(model: PageModel, read: readonly TextBox[]): Blob[] 
       near.pixels.push(...g.pixels);
     } else groups.push({ ...g, pixels: [...g.pixels] });
   }
+  if (groups.length > OCR_LIMITS.labelCalls) throw new Error("ocr_label_call_limit");
   return groups;
 }
 
@@ -141,15 +165,27 @@ function words(data: Awaited<ReturnType<Worker["recognize"]>>["data"]) {
 
 export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
   assertModel(dir);
-  const options = { langPath: dir, cachePath: dir, gzip: true, cacheMethod: "none" };
+  const options = { langPath: path.resolve(dir), cachePath: path.resolve(dir), gzip: true, cacheMethod: "none", errorHandler: () => {} };
   const pageWorker = await createWorker("spa", 1, options);
-  const labelWorker = await createWorker("spa", 1, options);
+  let labelWorker: Worker;
+  try { labelWorker = await createWorker("spa", 1, options); }
+  catch { await pageWorker.terminate(); throw new Error("ocr_initialization_failed"); }
   await pageWorker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
   await labelWorker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_WORD, tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz/" });
+  const bounded = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => {
+        void Promise.allSettled([pageWorker.terminate(), labelWorker.terminate()]);
+        reject(new Error("ocr_timeout"));
+      }, ms); })]);
+    } finally { clearTimeout(timer); }
+  };
   return {
     async page(model, dpi) {
+      assertRaster(model);
       await pageWorker.setParameters({ user_defined_dpi: String(dpi) });
-      const { data } = await pageWorker.recognize(png(model.width, model.height, (i) => model.gray[i]!), { rotateAuto: true }, { blocks: true });
+      const { data } = await bounded(pageWorker.recognize(png(model.width, model.height, (i) => model.gray[i]!), { rotateAuto: true }, { blocks: true }), OCR_LIMITS.pageMs);
       // Tesseract rotated the image by `rad` about its centre before reading; undo it to land on the page as shown.
       const rad = data.rotateRadians ?? 0;
       const read = words(data)
@@ -158,6 +194,9 @@ export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
       return { words: read, skewDeg: (rad * 180) / Math.PI };
     },
     async labels(model, dpi, read) {
+      assertRaster(model);
+      const deadline = performance.now() + OCR_LIMITS.labelsMs;
+      read.labelCalls = 0;
       const out: OcrWord[] = [];
       const rad = (read.skewDeg * Math.PI) / 180;
       for (const g of labelGroups(model, read.words)) {
@@ -172,10 +211,14 @@ export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
         const image = png(W, H, (i) => {
           const sx = g.x0 - pad + Math.floor((i % W) / scale);
           const sy = g.y0 - pad + Math.floor(Math.floor(i / W) / scale);
+          if (sx < 0 || sx >= model.width || sy < 0 || sy >= model.height) return 255;
           return own.get(sy * model.width + sx) ?? 255;
         });
         await labelWorker.setParameters({ user_defined_dpi: String(Math.round(dpi * scale)) });
-        const found = words((await labelWorker.recognize(image, {}, { blocks: true })).data);
+        const remaining = deadline - performance.now();
+        if (remaining <= 0) throw new Error("ocr_timeout");
+        read.labelCalls++;
+        const found = words((await bounded(labelWorker.recognize(image, {}, { blocks: true }), remaining)).data);
         const text = found.map((f) => f.text.trim()).join("");
         const confidence = Math.min(...found.map((f) => f.confidence));
         if (text && isLabel(text) && confidence >= LABEL_MIN_CONFIDENCE) out.push({ text, x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1, upright: rotateBox(model, g, rad), confidence, pass: "label" });

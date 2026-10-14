@@ -1,11 +1,45 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { constants, closeSync, existsSync, fstatSync, openSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { lumaOf, type PageModel, type Rect } from "@/lib/materials/visuals/auto/page-model";
-import { pageRgba, renderPage } from "@/lib/materials/visuals/raster";
+import { isLabel, lumaOf, type PageModel, type Rect } from "@/lib/materials/visuals/auto/page-model";
+import { pageBox, pageCount, pageRgba, renderPage } from "@/lib/materials/visuals/raster";
 import { CASES, scanCase, type FixtureCase } from "../visual-location/fixtures";
 import type { PilotPage } from "./metrics";
+import { OCR_LIMITS } from "./engine";
+
+export const CORPUS_LIMITS = { manifestBytes: 2_000_000, fileBytes: 20_000_000, pages: 150, documentPages: 30, dimension: 6000, rasterSide: 4000 } as const;
+const REPO = realpathSync(path.resolve(import.meta.dirname, "../.."));
+const within = (root: string, file: string) => file === root || (!path.relative(root, file).startsWith(`..${path.sep}`) && path.relative(root, file) !== ".." && !path.isAbsolute(path.relative(root, file)));
+
+export function corpusRoot(dir: string): string {
+  const root = realpathSync(dir);
+  if (!statSync(root).isDirectory() || within(REPO, root)) throw new Error("corpus_must_be_outside_repository");
+  for (let parent = root; ; parent = path.dirname(parent)) {
+    const git = path.join(parent, ".git");
+    if (existsSync(path.join(git, "HEAD")) || existsSync(git) && statSync(git).isFile()) throw new Error("corpus_must_be_outside_repository");
+    if (parent === path.dirname(parent)) break;
+  }
+  return root;
+}
+
+export function corpusFile(root: string, relative: string): string {
+  if (!RelativePath.safeParse(relative).success) throw new Error("corpus_path_invalid");
+  const resolved = realpathSync(path.join(root, relative));
+  if (!within(root, resolved) || within(REPO, resolved)) throw new Error("corpus_path_escape");
+  return resolved;
+}
+
+function boundedRead(file: string, limit: number): Buffer {
+  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const s = fstatSync(fd);
+    if (!s.isFile() || s.size < 1 || s.size > limit) throw new Error("corpus_file_limit");
+    const bytes = readFileSync(fd);
+    if (bytes.length > limit) throw new Error("corpus_file_limit");
+    return bytes;
+  } finally { closeSync(fd); }
+}
 
 /**
  * Pilot inputs. Every page reaches the OCR as pixels only (`model.texts` is empty); the reference transcription travels apart,
@@ -73,6 +107,7 @@ export async function* fixturePages(): AsyncGenerator<PilotPage> {
         model: { ...s.model, texts: [] },
         truth: s.model.texts,
         truthUpright: upright.model.texts,
+        scanRotationDeg: condition.scan(c).rotateDeg ?? 0,
         sha256: s.sha256,
         activities: c.activities,
         visuals: c.visuals.map((v) => ({ id: v.id, activityId: v.activityId, kind: v.kind, labels: v.labels, truth: v.truth ? toPx(s.model, s.toRegion(v.truth)) : null, acceptable: v.acceptable })),
@@ -82,7 +117,9 @@ export async function* fixturePages(): AsyncGenerator<PilotPage> {
   }
 }
 
-const Box = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1) });
+const RelativePath = z.string().min(1).max(240).refine((s) => !s.includes("\\") && !s.includes(":") && !s.includes("\0") && !path.posix.isAbsolute(s) && !s.split("/").some((v) => v === ".." || v === "." || v === ""));
+const Box = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().positive().max(1), h: z.number().positive().max(1) })
+  .refine((b) => b.x + b.w <= 1 && b.y + b.h <= 1);
 
 /** An authorised real corpus, kept OUTSIDE the repository. Boxes are normalised on the page as shown; transcription by a person. */
 export const CorpusManifestSchema = z.object({
@@ -90,34 +127,88 @@ export const CorpusManifestSchema = z.object({
     .array(
       z.object({
         id: z.string().regex(/^[a-z0-9_-]{1,40}$/),
-        file: z.string().min(1),
-        page: z.number().int().min(1).default(1),
+        file: RelativePath,
+        page: z.number().int().min(1).max(CORPUS_LIMITS.documentPages).default(1),
         docType: z.string().regex(/^[a-z0-9_]{1,40}$/),
         dpi: z.number().int().min(72).max(600),
-        activities: z.array(z.object({ id: z.string(), label: z.string().nullable(), instruction: z.string().min(1), expectedAnswer: z.string().nullable() })),
-        texts: z.array(Box.extend({ text: z.string().min(1) })),
-        visuals: z.array(z.object({ id: z.string().regex(/^vis_[0-9]{1,4}$/), activityId: z.string().regex(/^act_[0-9]{1,4}$/), kind: z.enum(["bar", "number_line", "figure"]), labels: z.array(z.string()), box: Box.nullable(), acceptable: z.boolean() })),
-        distractors: z.array(Box).default([]),
+        activities: z.array(z.object({ id: z.string().regex(/^act_[0-9]{1,4}$/), anchorTextIndex: z.number().int().min(0), instructionTextIndices: z.array(z.number().int().min(0)).min(1).max(40), label: z.string().max(20).nullable(), instruction: z.string().min(1).max(2000), expectedAnswer: z.string().max(2000).nullable() })).max(40),
+        texts: z.array(Box.safeExtend({ text: z.string().min(1).max(2000) })).max(2000),
+        visuals: z.array(z.object({ id: z.string().regex(/^vis_[0-9]{1,4}$/), activityId: z.string().regex(/^act_[0-9]{1,4}$/), kind: z.enum(["bar", "number_line", "figure"]), labels: z.array(z.string().max(20)).max(20), box: Box.nullable(), acceptable: z.boolean() })).max(40),
+        distractors: z.array(Box).max(80).default([]),
       }),
     )
-    .min(1),
+    .min(1).max(CORPUS_LIMITS.pages),
+}).superRefine((m, ctx) => {
+  if (new Set(m.pages.map((p) => p.id)).size !== m.pages.length) ctx.addIssue({ code: "custom", message: "duplicate_page_id" });
+  for (const p of m.pages) {
+    const ids = new Set(p.activities.map((a) => a.id));
+    if (ids.size !== p.activities.length || new Set(p.visuals.map((v) => v.id)).size !== p.visuals.length || p.visuals.some((v) => !ids.has(v.activityId)) || p.activities.some((a) => a.anchorTextIndex >= p.texts.length || !a.instructionTextIndices.includes(a.anchorTextIndex) || a.instructionTextIndices.some((i) => i >= p.texts.length) || new Set(a.instructionTextIndices).size !== a.instructionTextIndices.length)) ctx.addIssue({ code: "custom", message: "invalid_references" });
+    if (p.texts.reduce((n, t) => n + [...t.text].length, 0) > 10_000) ctx.addIssue({ code: "custom", message: "corpus_text_limit" });
+  }
 });
 
 const MIME: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pdf": "application/pdf" };
 
+function imageDimensions(b: Buffer, mime: string) {
+  if (mime === "image/png" && b.length >= 24 && b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && b.toString("ascii", 12, 16) === "IHDR")
+    return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+  if (mime === "image/jpeg" && b[0] === 255 && b[1] === 216) {
+    for (let i = 2; i + 8 < b.length;) {
+      if (b[i++] !== 255) break;
+      while (b[i] === 255) i++;
+      const marker = b[i++]!;
+      if (marker === 217 || marker === 218) break;
+      if (marker === 1 || marker >= 208 && marker <= 215) continue;
+      if (i + 2 > b.length) break;
+      const n = b.readUInt16BE(i);
+      if (n < 2 || i + n > b.length) break;
+      if ([192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207].includes(marker)) return { width: b.readUInt16BE(i + 5), height: b.readUInt16BE(i + 3) };
+      i += n;
+    }
+  }
+  throw new Error("corpus_image_invalid");
+}
+
+export function validateDimensions(width: number, height: number) {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > CORPUS_LIMITS.dimension || height > CORPUS_LIMITS.dimension || width * height > OCR_LIMITS.pixels) throw new Error("corpus_dimension_limit");
+}
+
 export async function* corpusPages(dir: string): AsyncGenerator<PilotPage> {
-  const manifest = CorpusManifestSchema.parse(JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")));
+  const root = corpusRoot(dir);
+  let manifest: z.infer<typeof CorpusManifestSchema>;
+  try { manifest = CorpusManifestSchema.parse(JSON.parse(boundedRead(corpusFile(root, "manifest.json"), CORPUS_LIMITS.manifestBytes).toString("utf8"))); }
+  catch { throw new Error("corpus_manifest_invalid"); }
   for (const p of manifest.pages) {
-    const bytes = readFileSync(path.join(dir, p.file));
+    const bytes = boundedRead(corpusFile(root, p.file), CORPUS_LIMITS.fileBytes);
     const mime = MIME[path.extname(p.file).toLowerCase()];
-    if (!mime) throw new Error(`Formato no admitido: ${p.file}`);
+    if (!mime) throw new Error("corpus_format_invalid");
+    const count = await pageCount(bytes, mime);
+    if (count > CORPUS_LIMITS.documentPages || p.page > count) throw new Error("corpus_page_limit");
+    if (mime !== "application/pdf") { const d = imageDimensions(bytes, mime); validateDimensions(d.width, d.height); }
+    else {
+      if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("corpus_pdf_invalid");
+      const box = await pageBox(bytes, mime, p.page);
+      if (box.kind !== "pdf" || box.width_pt <= 0 || box.height_pt <= 0 || box.width_pt > 14400 || box.height_pt > 14400) throw new Error("corpus_dimension_limit");
+      const scale = Math.min(p.dpi / 72, CORPUS_LIMITS.rasterSide / Math.max(box.width_pt, box.height_pt));
+      validateDimensions(Math.round(box.width_pt * scale), Math.round(box.height_pt * scale));
+    }
     // Pixels only: a PDF's own text layer, if any, is never read here.
-    const raster = await renderPage(bytes, mime, p.page, { dpi: p.dpi, maxPx: 5000 });
+    const raster = await renderPage(bytes, mime, p.page, { dpi: p.dpi, maxPx: CORPUS_LIMITS.rasterSide });
     const gray = lumaOf(pageRgba(raster), raster.width, raster.height);
     // `dpi` is the scan's own resolution: an image is never upsampled; a PDF scan is rendered at that resolution.
-    const mmPerPx = raster.box.kind === "image" ? (25.4 / p.dpi) * (raster.box.width_px / raster.width) : 25.4 / p.dpi;
+    const mmPerPx = raster.box.kind === "image" ? (25.4 / p.dpi) * (raster.box.width_px / raster.width) : raster.box.width_pt * 25.4 / 72 / raster.width;
     const model: PageModel = { width: raster.width, height: raster.height, gray, texts: [], mmPerPx };
     const truth = p.texts.map((t) => ({ text: t.text, ...toPx(model, t) }));
+    // A blank reference region is an annotation error, not an OCR miss. Ink presence does not establish glyph identity.
+    let checked = 0;
+    for (const t of truth.filter((t) => isLabel(t.text))) {
+      let ink = false;
+      for (let y = Math.floor(t.y0); y < Math.ceil(t.y1) && !ink; y++) for (let x = Math.floor(t.x0); x < Math.ceil(t.x1); x++) {
+        if (++checked > OCR_LIMITS.pixels * 2) throw new Error("corpus_annotation_limit");
+        if (gray[y * model.width + x]! < 230) { ink = true; break; }
+      }
+      if (!ink) throw new Error("corpus_reference_blank");
+    }
     yield {
       id: p.id,
       docType: p.docType,
@@ -129,6 +220,8 @@ export async function* corpusPages(dir: string): AsyncGenerator<PilotPage> {
       // A transcription is boxed line by line on the page as shown: for scans within ~1° that is also the deskewed order.
       truthUpright: truth,
       activities: p.activities,
+      anchorTruth: Object.fromEntries(p.activities.map((a) => [a.id, truth[a.anchorTextIndex]!])),
+      instructionTruth: Object.fromEntries(p.activities.map((a) => [a.id, a.instructionTextIndices.map((i) => truth[i]!)])),
       visuals: p.visuals.map((v) => ({ id: v.id, activityId: v.activityId, kind: v.kind, labels: v.labels, truth: v.box ? toPx(model, v.box) : null, acceptable: v.acceptable })),
       distractors: p.distractors.map((d) => toPx(model, d)),
     };

@@ -30,7 +30,12 @@ export interface PilotPage {
   truth: TextBox[];
   /** The same transcription on the deskewed page: reading order and anchors are compared there. */
   truthUpright: TextBox[];
+  /** Known imposed synthetic rotation; unavailable/unused for a real corpus. */
+  scanRotationDeg?: number;
   activities: PageActivity[];
+  /** Human-designated first instruction box for a real corpus, independent of the locator's matcher. */
+  anchorTruth?: Record<string, TextBox>;
+  instructionTruth?: Record<string, TextBox[]>;
   visuals: PilotVisual[];
   /** Wrong places a proposal could point at (px). */
   distractors: Rect[];
@@ -59,12 +64,13 @@ export const readingText = (boxes: readonly TextBox[]) =>
     .join(" ");
 
 /** Word and character edit distance between reference and OCR, both in reading order (deskewed boxes). */
-export function textErrors(truthUpright: readonly TextBox[], ocrUpright: readonly TextBox[]) {
-  const t = readingText(truthUpright);
+export function textErrors(truthUpright: readonly TextBox[], ocrUpright: readonly TextBox[], annotatedOrder = false) {
+  const t = annotatedOrder ? truthUpright.map((b) => b.text.normalize("NFC")).join(" ").split(/\s+/).filter((w) => w && !/^_+$/.test(w)).join(" ") : readingText(truthUpright);
   const o = readingText(ocrUpright);
   const tw = t ? t.split(" ") : [];
   const ow = o ? o.split(" ") : [];
-  return { words: tw.length, wordErrors: levenshtein(tw, ow), chars: t.length, charErrors: levenshtein([...t], [...o]) };
+  if ([...t].length > 10_000 || [...o].length > 10_000 || tw.length > 2000 || ow.length > 2000) throw new Error("ocr_text_limit");
+  return { words: tw.length, wordErrors: levenshtein(tw, ow), chars: [...t].length, charErrors: levenshtein([...t], [...o]) };
 }
 
 const centre = (r: Rect) => ({ x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 });
@@ -82,24 +88,40 @@ export interface LabelOutcome {
   iou: number | null;
 }
 
-/** Each printed label (one or two characters) against what the OCR read within `radiusMm` of it; plus labels read on blank paper. */
+/** Greedy geometry-only one-to-one assignment: distance, then reference/OCR input index breaks ties. Never prefer matching text. */
 export function labelOutcomes(model: PageModel, truth: readonly TextBox[], ocr: readonly TextBox[], radiusMm = 3) {
   const truthLabels = truth.filter((t) => isLabel(t.text));
-  const outcomes: LabelOutcome[] = truthLabels.map((t) => {
-    const near = ocr.filter((o) => distMm(model, o, t) <= radiusMm).sort((a, b) => distMm(model, a, t) - distMm(model, b, t));
-    const same = near.filter((o) => o.text.trim() === t.text.trim());
-    const first = same[0] ?? near[0];
+  // Inline single-character words within a reference sentence are outside the isolated-label task, not blank-paper detections.
+  const detections = ocr.filter((o) => isLabel(o.text) && (truthLabels.some((t) => distMm(model, o, t) <= radiusMm) ||
+    !truth.some((t) => !isLabel(t.text) && overlaps(o, t))));
+  const edges = truthLabels.flatMap((t, ti) => detections.map((o, oi) => ({ ti, oi, d: distMm(model, o, t) })).filter((e) => e.d <= radiusMm))
+    .sort((a, b) => a.d - b.d || a.ti - b.ti || a.oi - b.oi);
+  const matched = new Map<number, number>();
+  const used = new Set<number>();
+  for (const e of edges) if (!matched.has(e.ti) && !used.has(e.oi)) { matched.set(e.ti, e.oi); used.add(e.oi); }
+  const duplicates = new Map<number, number>();
+  const spurious: string[] = [];
+  detections.forEach((o, oi) => {
+    if (used.has(oi)) return;
+    const nearest = edges.find((e) => e.oi === oi);
+    const first = nearest ? matched.get(nearest.ti) : undefined;
+    if (nearest && first !== undefined && detections[first]!.text.trim() === o.text.trim())
+      duplicates.set(nearest.ti, (duplicates.get(nearest.ti) ?? 0) + 1);
+    else spurious.push(o.text.trim());
+  });
+  const outcomes: LabelOutcome[] = truthLabels.map((t, ti) => {
+    const oi = matched.get(ti);
+    const first = oi === undefined ? undefined : detections[oi];
     return {
       text: t.text.trim(),
-      status: same.length ? "ok" : near.length ? "confused" : "lost",
+      status: !first ? "lost" : first.text.trim() === t.text.trim() ? "ok" : "confused",
       read: first ? first.text.trim() : null,
-      duplicates: Math.max(0, same.length - 1),
+      duplicates: duplicates.get(ti) ?? 0,
       offsetMm: first ? distMm(model, first, t) : null,
       iou: first ? iou(first, t) : null,
     };
   });
-  const spurious = ocr.filter((o) => isLabel(o.text) && !truth.some((t) => overlaps(o, t) || distMm(model, o, t) <= radiusMm)).map((o) => o.text.trim());
-  return { outcomes, spurious };
+  return { outcomes, spurious, detections: detections.length };
 }
 
 export type AnchorStatus = "correct" | "wrong" | "missed";
@@ -111,7 +133,7 @@ export interface InstructionOutcome {
   tolerant: AnchorStatus;
   /** Words of the printed instruction recovered at its place (share of truth words, order ignored). */
   recall: number;
-  /** Vertical offset of the OCR anchor line against the reference anchor line (mm). */
+  /** Two-dimensional offset of the OCR anchor line centre against reference (mm). */
   offsetMm: number | null;
 }
 
@@ -151,19 +173,19 @@ export function tolerantAnchors(lines: readonly TextLine[], activities: readonly
 const tokens = (s: string) => s.normalize("NFC").split(/\s+/).filter(Boolean);
 
 /** Anchors found on the OCR text vs on the reference text, with the locator's own matcher; pass deskewed boxes for both. */
-export function instructionOutcomes(model: PageModel, truth: readonly TextBox[], ocr: readonly TextBox[], activities: readonly PageActivity[]): InstructionOutcome[] {
-  const reference = activityAnchors(textLines(truth), activities);
+export function instructionOutcomes(model: PageModel, truth: readonly TextBox[], ocr: readonly TextBox[], activities: readonly PageActivity[], anchorTruth?: ReadonlyMap<string, TextBox>, instructionTruth?: ReadonlyMap<string, readonly TextBox[]>): InstructionOutcome[] {
+  const reference = anchorTruth ?? activityAnchors(textLines(truth), activities);
   const ocrLines = textLines(ocr);
   const read = activityAnchors(ocrLines, activities);
   const tolerant = tolerantAnchors(ocrLines, activities);
   const status = (ref: TextLine | undefined, got: TextLine | undefined): AnchorStatus =>
-    !got ? "missed" : ref && Math.abs(centre(ref).y - centre(got).y) * model.mmPerPx <= 3 ? "correct" : "wrong";
+    !got ? "missed" : ref && distMm(model, ref, got) <= 3 && overlaps(ref, got) ? "correct" : "wrong";
   return activities.map((a) => {
     const ref = reference.get(a.id);
     const got = read.get(a.id);
-    const offsetMm = ref && got ? Math.abs(centre(ref).y - centre(got).y) * model.mmPerPx : null;
+    const offsetMm = ref && got ? distMm(model, ref, got) : null;
     const anchor = status(ref, got);
-    const printed = truth.filter((t) => t.text.trim().length >= 8 && a.instruction.includes(t.text.trim()));
+    const printed = instructionTruth?.get(a.id) ?? truth.filter((t) => t.text.trim().length >= 8 && a.instruction.includes(t.text.trim()));
     const want = printed.flatMap((t) => tokens(t.text));
     const there = ocr.filter((o) => printed.some((t) => overlaps(o, { x0: t.x0 - 2, y0: t.y0 - 2, x1: t.x1 + 2, y1: t.y1 + 2 }))).flatMap((o) => tokens(o.text));
     const pool = [...there];
@@ -222,7 +244,8 @@ export function candidateTrials(page: PilotPage, texts: readonly TextBox[]): Can
       eligible: role === "oracle" && v.acceptable,
       candidate: Boolean(cand),
       matchesTruth: Boolean(candRect && v.truth && iou(candRect, v.truth) >= 0.6),
-      blockedBy: cand ? null : blocked ? `${blocked[0]}: ${blocked[1].detail}` : null,
+      // Details can contain transcription/answer fragments; reports retain only the check name.
+      blockedBy: cand ? null : blocked ? blocked[0] : null,
       decision: report.decision,
     };
   });
@@ -231,6 +254,9 @@ export function candidateTrials(page: PilotPage, texts: readonly TextBox[]): Can
 export function candidateSummary(trials: readonly CandidateTrial[]) {
   const eligible = trials.filter((t) => t.eligible);
   return {
+    trials: trials.length,
+    candidates: trials.filter((t) => t.candidate).length,
+    negativeTrials: trials.filter((t) => !t.eligible).length,
     eligible: eligible.length,
     covered: eligible.filter((t) => t.candidate && t.matchesTruth).length,
     wrongCandidates: trials.filter((t) => t.candidate && !(t.eligible && t.matchesTruth)).length,
