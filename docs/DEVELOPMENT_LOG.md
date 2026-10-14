@@ -2,6 +2,15 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-14 — Auditoría independiente de PR #31: propuesta y prototipo
+
+- **Base/rama:** `origin/main` en `f827001`, rama de PR #31 `claude/fase-8-2b7-identificacion-figuras` en `1cee7ca` al empezar; árbol limpio. Se inspeccionaron AGENTS/CLAUDE, documentos compartidos, QA de PR #30, contrato, verificador, fixtures y arnés. La producción no se modifica.
+- **Fallos reproducidos antes de corregir:** cuatro pruebas nuevas fallaron porque el verificador respondía `accepted`: núcleo borrado con etiquetas presentes, barra cuya tinta pasa de 3/8 a 5/8, figura de otra actividad tras omitir OCR de la segunda consigna, etiqueta borrada en píxeles que persiste como caja OCR. Se añaden pruebas de parte interna sin etiqueta y OCR confuso (`1/I`), duplicado y desplazado. Los originales recibían cajas derivadas del vector, no OCR real.
+- **Corrección:** `candidate` expone solo el prefiltro geométrico; `crop` y `accepted` permanecen bloqueados al marcar identidad semántica, contenido completo y respuesta visual como no verificables. Se versiona el prototipo como `proto2`. Las métricas distinguen propuestas de figuras oráculo, candidatos y recortes aprobados; 0 aceptados implica cobertura 0, no precisión observada. No se cambia `src/`, análisis v3 ni la procedencia de PR #30.
+- **Revisión de diseño:** propuesta y estado rebajan la independencia de análisis/OCR/píxeles, reconocen zonas amplias por anclas perdidas, OCR idealizado, SHA solo comparado en el prototipo, reintentos reales del analizador y límites léxicos de respuesta. Corrigen el denominador del experimento: ≥60 aceptados a ≥40 % exige ≥150 figuras elegibles; con 0/60 errores el límite binomial unilateral 95 % es 4,87 % solo bajo independencia. El siguiente piloto es OCR local y cajas humanas en 20–30 escaneos, sin llamadas API.
+- **Verificación:** `pnpm exec vitest run tests/unit/visual-location-prototype.test.ts tests/unit/visual-location-adversarial.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts` → **39/39 PASS**; `pnpm typecheck` PASS; `pnpm lint` sin errores y con un aviso previo en `analysis-run-auth.test.ts`; `git diff --check` PASS. No se ejecutan suite completa, compilación, modelos, OCR remoto, SQL, Stripe ni migraciones.
+- **Límite y recomendación:** la propuesta multimodal + OCR puede servir para localizar candidatos, pero no tiene señal suficiente para aprobar dibujos o evitar respuestas visuales. PR #31 es mergeable solo como prototipo bloqueado y documentación de un experimento; fase 8.2B.6/8.2B.7 funcionales siguen pendientes. Priorizar piloto OCR sin gasto antes de más infraestructura.
+
 ## 2026-10-14 — Fase 8.2B.7: diseño de la identificación fiable de figuras en escaneos
 
 - **Base verificada:** `git fetch origin main` → `f827001`. El HEAD de la PR #30 (`ccfbf3e`) y sus commits de auditoría (`d9f61a0`, `6ed59e8`) son ancestros de `main`. Rama nueva: `claude/fase-8-2b7-identificacion-figuras`.

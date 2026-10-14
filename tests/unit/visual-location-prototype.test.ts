@@ -6,7 +6,7 @@ import { instructionLabels, verifyProposal } from "../../evals/visual-location/v
 /**
  * Phase 8.2B.7 prototype (evals/visual-location, NOT wired to production): the verifier of figure-location proposals on synthetic
  * scans with known truth. Scripted proposals stand for a model (no model is called). These numbers are regression checks of the
- * acceptance CONTRACT on fixtures the verifier was tuned on; they are not an estimate of real precision or coverage.
+ * geometric PREFILTER on fixtures the verifier was tuned on; they are not an estimate of real precision or coverage.
  */
 
 let perfect: Trial[];
@@ -18,17 +18,19 @@ beforeAll(async () => {
 
 const oracle = (trials: Trial[], caseId: string, visualId = "vis_1") => trials.find((t) => t.caseId === caseId && t.role === "oracle" && t.visualId === visualId)!;
 
-describe("a correct proposal is accepted only when every claim is checked against something the model did not produce", () => {
-  it.each(["cell_labels", "decorative", "big_text", "rotated_noisy"])("%s: accepted, the crop is the server's region on the true figure", (id) => {
+describe("a plausible proposal yields a geometric candidate, never an approved crop", () => {
+  it.each(["cell_labels", "decorative", "big_text", "rotated_noisy"])("%s: geometric candidate only", (id) => {
     const t = oracle(perfect, id);
-    expect(t.report.decision).toBe("accepted");
+    expect(t.report.decision).toBe("blocked");
+    expect(t.report.crop).toBeNull();
+    expect(t.report.candidate).not.toBeNull();
     expect(t.cropMatchesTruth).toBe(true);
-    expect(Object.values(t.report.checks).every((c) => c.status === "verified")).toBe(true);
+    expect(t.report.checks.semantic_identity.status).toBe("unverifiable");
   });
 
   it("several activities and figures: the bar (pixel signature) and the cell (labels A and B named by its instruction)", () => {
-    expect(oracle(perfect, "multi", "vis_1").report.decision).toBe("accepted");
-    expect(oracle(perfect, "multi", "vis_2").report.decision).toBe("accepted");
+    expect(oracle(perfect, "multi", "vis_1").report.candidate).not.toBeNull();
+    expect(oracle(perfect, "multi", "vis_2").report.candidate).not.toBeNull();
   });
 
   it.each([
@@ -51,15 +53,17 @@ describe("a wrong proposal never gets through", () => {
     for (const t of wrong) expect(t.report.decision, `${t.caseId} ${t.role} ${t.label}`).toBe("blocked");
   });
 
-  it("perfect text layer: 0 false positives, 0 false negatives on these fixtures", () => {
-    expect(metrics(perfect)).toMatchObject({ falsePositives: 0, falseNegatives: 0, coverage: 1 });
+  it("perfect text layer: candidate recall is exploratory; strict acceptance remains zero", () => {
+    expect(metrics(perfect)).toMatchObject({ accepted: 0, falsePositives: 0, falseNegatives: 6,
+      coverage: 0, eligibleOracle: 6, candidateCoverage: 1 });
   });
 
-  it("a weak OCR (half of the short boxes lost) blocks more, and still accepts nothing wrong", () => {
+  it("a weak simulated OCR reduces candidate coverage and keeps acceptance blocked", () => {
     const m = metrics(lossy);
     expect(m.falsePositives).toBe(0);
-    expect(m.falseNegatives).toBeGreaterThan(0);
-    for (const t of lossy.filter((x) => x.shouldAccept && x.report.decision === "blocked")) {
+    expect(m.falseNegatives).toBe(6);
+    expect(m.candidateCoverage).toBeLessThan(1);
+    for (const t of lossy.filter((x) => x.shouldAccept && !x.report.candidate)) {
       expect(Object.values(t.report.checks).some((c) => c.status === "unverifiable")).toBe(true);
     }
   });

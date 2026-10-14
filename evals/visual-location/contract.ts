@@ -6,8 +6,8 @@ import { z } from "zod";
  *
  * A proposal is what a multimodal model would return (during the initial analysis, approach A): where the figure of an activity
  * is and what it must contain. Everything in it is a CLAIM. The report says, claim by claim, whether the server could check it
- * against something the model did not produce (pixels, a text layer, the analysis's own activity text, the original's hash), and
- * the decision follows from rules, never from a score: one mandatory check not verified → blocked.
+ * against pixels or text. These sources can share errors and do not establish semantic identity. A geometric candidate is
+ * diagnostic only; no crop is accepted without independent evidence for the complete figure and answer safety.
  */
 
 const Unit = z.number().finite().min(0).max(1);
@@ -32,33 +32,35 @@ export const FigureProposalSchema = z.object({
 });
 export type FigureProposal = z.infer<typeof FigureProposalSchema>;
 
-/** Whether a claim could be checked independently of the model. `unverifiable` blocks exactly like `failed`. */
+/** Status of a limited check; `verified` is scoped to the check's detail, not semantic correctness. */
 export type CheckStatus = "verified" | "failed" | "unverifiable";
 
-export const CHECKS = [
-  /** The proposal refers to this material version (sha-256 of the original) and a page that exists; region inside the page. */
+export const CANDIDATE_CHECKS = [
+  /** Caller-supplied hashes agree; this prototype does not hash stored bytes itself. */
   "provenance",
   /** The page has a text layer (the PDF's, or a local OCR's) to anchor anything. Without it nothing below is checkable. */
   "text_layer",
-  /** The activity's own instruction (from the analysis) is found printed on that page: its zone exists. */
+  /** The analyzed instruction matches OCR text on that page: an inferred zone exists. */
   "activity_anchor",
-  /** The proposed region lies in that activity's zone, and in no other activity's zone. */
+  /** The proposed region lies in the zone inferred from the OCR anchors found. Missing anchors may enlarge a zone. */
   "placement",
-  /** The proposal lands on a drawing the server found by itself (IoU ≥ 0.5); the crop is the SERVER's region, not the box. */
+  /** The proposal lands on a server-detected region (IoU ≥ 0.5); a candidate uses that region, not the model's box. */
   "snap",
   /** It is the only drawing of comparable size in the zone (no second candidate the model could have meant). */
   "uniqueness",
-  /** No stroke crosses the crop border and the drawing does not touch the page edge: nothing is cut off. */
+  /** No detected stroke crosses the crop border; unlabelled missing parts cannot be detected. */
   "integrity",
-  /** Every label the proposal claims, and every number/letter the instruction says the figure shows, is printed inside the crop. */
+  /** OCR boxes for claimed/instruction labels lie inside the candidate; the ink itself is not corroborated. */
   "labels",
-  /** No running text (instruction, another activity, student fields) inside the crop. */
+  /** OCR did not find running text inside the candidate. */
   "foreign_text",
-  /** No word of the activity's expected answer is printed inside the crop (the figure would give the solution away). */
+  /** Lexical screen against the analysis's expected answer; does not detect drawn or numeric answers. */
   "answer_leak",
-  /** Content evidence beyond position: the shape's pixel signature (bar, number line) or the instruction's labels found inside. */
+  /** Shape or label evidence only; does not establish that the depicted content is correct. */
   "identity_evidence",
 ] as const;
+export const SAFETY_CHECKS = ["semantic_identity", "complete_content", "visual_answer_safety"] as const;
+export const CHECKS = [...CANDIDATE_CHECKS, ...SAFETY_CHECKS] as const;
 export type CheckName = (typeof CHECKS)[number];
 
 export interface VerificationReport {
@@ -66,6 +68,8 @@ export interface VerificationReport {
   decision: "accepted" | "blocked";
   /** The server's crop when accepted (normalised), otherwise null. */
   crop: { x: number; y: number; w: number; h: number } | null;
+  /** Geometric prefilter output only. Never serve this region as an approved crop. */
+  candidate: { x: number; y: number; w: number; h: number } | null;
   checks: Record<CheckName, { status: CheckStatus; detail: string }>;
   /** Version of these rules: part of any cache key, with the proposal's prompt version, analysis fingerprint and source sha. */
   verifier: string;

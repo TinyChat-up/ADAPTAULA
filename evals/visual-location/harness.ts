@@ -12,9 +12,8 @@ import { verifyProposal } from "./verify";
  *   page        the whole page
  *   swapped     the right box with the other visual's id (multi-figure sheets)
  *
- * and the verifier decides. What this measures is the VERIFIER: whether a wrong proposal can get through (false positive) and
- * whether a right one is blocked (false negative), given a perfect or lossy text layer. It says nothing about how often a real
- * model proposes the right box: that needs the real experiment (docs/proposals/LOCALIZACION_FIGURAS_ESCANEOS.md).
+ * and the verifier decides. Candidate metrics describe only a geometric prefilter on these tuned fixtures. Acceptance is
+ * separately gated on semantic evidence unavailable in this prototype. No metric here estimates performance on real scans.
  */
 
 export type Role = "oracle" | "shifted" | "distractor" | "page" | "swapped";
@@ -25,9 +24,9 @@ export interface Trial {
   label: string;
   visualId: string;
   report: VerificationReport;
-  /** Should a correct verifier accept this proposal? Only an oracle proposal of an acceptable visual. */
+  /** Ground-truth eligible oracle visual, used as a denominator; not permission to accept automatically. */
   shouldAccept: boolean;
-  /** When accepted: does the server's crop overlap the true figure (IoU ≥ 0.6)? */
+  /** When a candidate exists: does its box overlap the true figure (IoU ≥ 0.6)? This does not test its content. */
   cropMatchesTruth: boolean | null;
 }
 
@@ -80,19 +79,26 @@ export async function runCase(c: FixtureCase, options: { ocrLoss?: number } = {}
     const siblings = all.filter((o) => o.role === "oracle" && o.proposal.visual_id !== p.visual_id).map((o) => o.proposal);
     const report = verifyProposal({ page: s.model, pageCount: 1, sourceSha256: s.sha256, proposalSourceSha256: s.sha256, activities: c.activities, proposal: p, siblings });
     const shouldAccept = role === "oracle" && truth.acceptable;
-    const cropMatchesTruth = report.crop && truth.truth ? iou(asRect(report.crop), asRect(s.toRegion(truth.truth))) >= 0.6 : report.crop ? false : null;
+    const cropMatchesTruth = report.candidate && truth.truth ? iou(asRect(report.candidate), asRect(s.toRegion(truth.truth))) >= 0.6 : report.candidate ? false : null;
     return { caseId: c.id, role, label, visualId: p.visual_id, report, shouldAccept, cropMatchesTruth };
   });
 }
 
 export interface Metrics {
   trials: number;
+  eligibleOracle: number;
+  accepted: number;
   /** Accepted although it should not have been, or accepted with a crop that is not the true figure. */
   falsePositives: number;
   /** Oracle proposals of acceptable visuals that were blocked. */
   falseNegatives: number;
   /** Acceptable visuals accepted with the right crop / acceptable visuals. */
   coverage: number;
+  candidates: number;
+  /** Wrong scripted proposals that pass the geometric prefilter; does not imply safe acceptance. */
+  candidateFalsePositives: number;
+  /** Correct scripted proposals whose geometric candidate overlaps ground truth / eligible oracles. */
+  candidateCoverage: number;
 }
 
 export function metrics(trials: readonly Trial[]): Metrics {
@@ -101,7 +107,12 @@ export function metrics(trials: readonly Trial[]): Metrics {
   const should = trials.filter((t) => t.shouldAccept);
   const falseNegatives = should.filter((t) => t.report.decision !== "accepted").length;
   const covered = should.filter((t) => t.report.decision === "accepted" && t.cropMatchesTruth === true).length;
-  return { trials: trials.length, falsePositives, falseNegatives, coverage: should.length ? covered / should.length : 0 };
+  const candidates = trials.filter((t) => t.report.candidate);
+  const candidateFalsePositives = candidates.filter((t) => !t.shouldAccept || t.cropMatchesTruth !== true).length;
+  const candidateCovered = should.filter((t) => t.report.candidate && t.cropMatchesTruth === true).length;
+  return { trials: trials.length, eligibleOracle: should.length, accepted: accepted.length, falsePositives, falseNegatives,
+    coverage: should.length ? covered / should.length : 0, candidates: candidates.length, candidateFalsePositives,
+    candidateCoverage: should.length ? candidateCovered / should.length : 0 };
 }
 
 export async function runAll(options: { ocrLoss?: number } = {}): Promise<Trial[]> {

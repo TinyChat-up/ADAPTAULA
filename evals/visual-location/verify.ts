@@ -2,19 +2,19 @@ import { MIN_SIDE, NormalizedBoundsSchema } from "@/lib/materials/visuals/geomet
 import { activityAnchors, activityZones, candidates, toBounds, type ActivityText } from "@/lib/materials/visuals/auto/locate";
 import { area, components, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, type PageModel, type Rect } from "@/lib/materials/visuals/auto/page-model";
 import { barShape, numberLineShape } from "@/lib/materials/visuals/auto/shapes";
-import { CHECKS, type CheckName, type CheckStatus, type FigureProposal, type VerificationReport } from "./contract";
+import { CANDIDATE_CHECKS, CHECKS, type CheckName, type CheckStatus, type FigureProposal, type VerificationReport } from "./contract";
 
 /**
- * Prototype verifier (NOT wired to production). Every check uses something the proposing model did not produce:
+ * Prototype geometric prefilter (NOT wired to production). Its checks combine:
  *
- *   pixels of the original page · its text layer (the PDF's own, or a local OCR's: independent of the multimodal model) · the
- *   activity text and expected answer already in the analysis · the original's sha-256.
+ *   pixels of the original page · its text layer (the PDF's own, or a local OCR's: separate implementation from the model) · the
+ *   activity text and expected answer from the same analysis · caller-supplied sha-256 values.
  *
  * It reuses the anchored locator's own pieces (`activityAnchors`, `activityZones`, `candidates`, shape signatures), so a scan with
- * a text layer is judged exactly like a born-digital PDF. The model's box is only used to say WHICH server-found region it means.
+ * a text layer is judged like a born-digital PDF. OCR/pixels can be wrong together, and neither proves semantic identity.
  */
 
-export const VERIFIER_VERSION = "figure_proposal_verifier@proto1";
+export const VERIFIER_VERSION = "figure_proposal_verifier@proto2";
 
 export interface PageActivity extends ActivityText {
   /** The analysis's expected answer, if any (never shown to the student). */
@@ -63,11 +63,12 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   const checks = Object.fromEntries(CHECKS.map((c) => [c, { status: "unverifiable" as CheckStatus, detail: "sin comprobar" }])) as VerificationReport["checks"];
   const set = (name: CheckName, status: CheckStatus, detail: string) => (checks[name] = { status, detail });
   const finish = (crop: Rect | null): VerificationReport => {
+    const candidate = crop && CANDIDATE_CHECKS.every((c) => checks[c].status === "verified") ? toBounds(model, crop) : null;
     const ok = CHECKS.every((c) => checks[c].status === "verified");
-    return { visualId: proposal.visual_id, decision: ok && crop ? "accepted" : "blocked", crop: ok && crop ? toBounds(model, crop) : null, checks, verifier: VERIFIER_VERSION };
+    return { visualId: proposal.visual_id, decision: ok && candidate ? "accepted" : "blocked", crop: ok ? candidate : null, candidate, checks, verifier: VERIFIER_VERSION };
   };
 
-  // 1 · Provenance: right material version, a page that exists, a region inside it.
+  // 1 · Compare caller-supplied hashes, and check page/region. No stored bytes are hashed here.
   const region = NormalizedBoundsSchema.safeParse(proposal.region);
   if (input.proposalSourceSha256 !== input.sourceSha256) set("provenance", "failed", "la propuesta se hizo sobre otra versión del original");
   else if (proposal.page < 1 || proposal.page > input.pageCount) set("provenance", "failed", "página inexistente");
@@ -75,7 +76,7 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   else set("provenance", "verified", "sha y página coinciden");
   if (checks.provenance.status !== "verified") return finish(null);
 
-  // 2 · Text layer: the only independent anchor of «which activity».
+  // 2 · A text layer is needed to infer activity zones; OCR output is not ground truth.
   if (model.texts.length === 0) {
     set("text_layer", "unverifiable", "página sin capa de texto (ni PDF ni OCR local)");
     return finish(null);
@@ -105,7 +106,7 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   const crop = best.c.crop;
   set("snap", "verified", `IoU ${best.overlap.toFixed(2)} con un dibujo encontrado por el servidor`);
 
-  // 5 · Placement: in its activity's zone and in no other.
+  // 5 · Placement in the inferred zone. A missed anchor can expand this zone over another activity.
   const c = centre(crop);
   const inZone = (z: Rect) => c.y >= z.y0 && c.y <= z.y1;
   const elsewhere = [...zones.entries()].filter(([id, z]) => id !== proposal.activity_id && inZone(z)).map(([id]) => id);
@@ -124,14 +125,14 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   else if (claimed.length > 0) set("uniqueness", "failed", `otra propuesta (${claimed.map((s) => s.visual_id).join(", ")}) reclama el mismo dibujo`);
   else set("uniqueness", "verified", "único dibujo de su tamaño en la zona");
 
-  // 7 · Integrity: nothing cut by the crop, not cut by the page.
+  // 7 · Detected strokes do not cross the crop and crop does not touch the page edge.
   const edge = px(model, 2);
   const cut = components(model, mask).filter((k) => area(intersection(k, crop)) > 0 && !contains(crop, k, 0.999));
   if (crop.x0 <= edge || crop.y0 <= edge || crop.x1 >= model.width - edge || crop.y1 >= model.height - edge) set("integrity", "failed", "el dibujo toca el borde de la página: puede estar incompleto");
   else if (cut.length > 0) set("integrity", "failed", `${cut.length} trazo(s) cruzan el borde del recorte`);
   else set("integrity", "verified", "ningún trazo cortado");
 
-  // 8 · Labels: claimed by the proposal + named by the instruction, all printed inside the crop.
+  // 8 · OCR boxes for claimed/instruction labels fall inside; this does not inspect their ink.
   const fromInstruction = instructionLabels(activity.instruction);
   const required = [...new Set([...proposal.labels, ...fromInstruction])];
   const labelBoxes = model.texts.filter((t) => isLabel(t.text));
@@ -146,7 +147,7 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   if (foreign.length > 0) set("foreign_text", "failed", `${foreign.length} línea(s) de texto corrido dentro`);
   else set("foreign_text", "verified", "sin texto corrido");
 
-  // 10 · Answer leak: a word of the expected answer printed inside the crop OR attached to it (within 10 mm: the figure's own
+  // 10 · Lexical answer screen: a word of the expected answer in/near the candidate (within 10 mm: the figure's own
   // captions, which a correct crop would have to include).
   const near = { x0: crop.x0 - px(model, 10), y0: crop.y0 - px(model, 10), x1: crop.x1 + px(model, 10), y1: crop.y1 + px(model, 10) };
   const inside = model.texts.filter((t) => contains(near, t, 0.5)).map((t) => t.text).join(" ");
@@ -155,11 +156,15 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
   if (leaked.length > 0) set("answer_leak", "failed", `la figura muestra parte de la respuesta: ${leaked.join(", ")}`);
   else set("answer_leak", "verified", activity.expectedAnswer ? "ninguna palabra de la respuesta dentro" : "sin respuesta registrada que proteger");
 
-  // 11 · Identity evidence beyond position.
+  // 11 · Shape/label evidence beyond position. Neither verifies the drawing's meaning.
   if (proposal.kind === "bar") set("identity_evidence", barShape(model, best.c, mask) ? "verified" : "failed", "firma de barra en los píxeles");
   else if (proposal.kind === "number_line") set("identity_evidence", numberLineShape(model, best.c, mask) ? "verified" : "failed", "firma de recta numérica en los píxeles");
   else if (fromInstruction.length > 0 && checks.labels.status === "verified") set("identity_evidence", "verified", "las etiquetas que nombra la consigna están en el dibujo");
   else set("identity_evidence", "unverifiable", "figura genérica sin etiquetas nombradas por la consigna: solo la posición la respalda");
 
+  // The prototype has no independent source for these claims. Keep the crop blocked even if geometry is convincing.
+  set("semantic_identity", "unverifiable", "forma y etiquetas no verifican contenido, sombreado ni actividad correcta");
+  set("complete_content", "unverifiable", "no se puede detectar una parte sin etiqueta borrada o ausente");
+  set("visual_answer_safety", "unverifiable", "la búsqueda léxica no detecta respuestas dibujadas o numéricas");
   return finish(crop);
 }

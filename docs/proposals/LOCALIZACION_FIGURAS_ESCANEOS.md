@@ -1,8 +1,9 @@
-# Propuesta · Identificación fiable de figuras en escaneos (Fase 8.2B.7)
+# Propuesta auditada · Ubicación de figuras en escaneos (Fase 8.2B.7)
 
 Estado: **propuesta con prototipo aislado; no activada en producción.** Fecha: 2026-10-14. Base: `main` en `f827001`, con la PR #30
 integrada. Prototipo y pruebas: `evals/visual-location/` y `tests/unit/visual-location-prototype.test.ts`. No se ha llamado a ningún
-modelo real. Todas las cifras de precisión, coste y latencia que no digan «medido» son **estimaciones**.
+modelo real. Auditoría de PR #31: el prototipo original aceptaba recortes semánticamente incorrectos. El prototipo corregido solo
+emite candidatos diagnósticos y **no aprueba recortes**. Todas las cifras de coste y latencia que no digan «medido» son estimaciones.
 
 ## 1. Punto de partida
 
@@ -21,13 +22,14 @@ Lo que hay hoy (contrato `auto_visuals@v5`, ADR-027):
 - **Procedencia (PR #30).** Cada recorte exige un localizador completo, el SHA del original, un motor conocido, ancla y zona, y una
   relación íntegra entre el activo, el localizador, la receta y la ruta. Esta propuesta **conserva todas esas garantías**.
 
-**Diagnóstico.** Al escaneo no le falta un detector de manchas mejor. Le falta **una evidencia de «qué actividad» que no venga del
-modelo que propone**. En un PDF nativo esa evidencia es la capa de texto. En un escaneo puede serlo una capa de texto obtenida por
-**OCR local**: un algoritmo distinto, determinista y sin coste por llamada.
+**Diagnóstico.** OCR local puede aportar anclas de ubicación independientes en implementación del modelo, pero su salida procede
+de los mismos píxeles, puede perder consignas o desplazar cajas y no demuestra que el dibujo sea la figura requerida. El análisis
+que propone la caja y transcribe la consigna es una sola fuente correlacionada.
 
 ## 2. Arquitectura recomendada
 
-**Proponer en el análisis, anclar con OCR local y aceptar por contrato:**
+**Proponer en el análisis y generar candidatos con OCR local; mantener la aprobación bloqueada hasta disponer de evidencia
+semántica suficiente:**
 
 1. **Propuesta (enfoque A).** El análisis inicial, que ya ve todas las páginas, devuelve para cada visual imprescindible:
    - su página y una región candidata;
@@ -37,20 +39,20 @@ modelo que propone**. En un PDF nativo esa evidencia es la capa de texto. En un 
    - los elementos internos (texto libre);
    - sus propias dudas.
 
-   No añade ninguna llamada. Todo es una afirmación del modelo.
+   No añadiría una llamada explícita si la ampliación del análisis funcionase en el intento existente. Sí añade tokens de entrada y
+   salida, puede cambiar reintentos y latencia; hay que medirlo. Todo es una afirmación del modelo.
 2. **Capa de texto.** El PDF nativo usa la suya. Un escaneo o una foto pasa por OCR local (por ejemplo Tesseract en WASM; por
    decidir), con el texto normalizado y la página enderezada. Se cachea por (`source_sha256`, página, versión del OCR).
-3. **Verificación determinista.** Reutiliza `activityAnchors`, `activityZones`, `candidates` y las firmas de `shapes.ts`. Acepta
-   solo si **todas** las comprobaciones de la sección 4 se verifican. **No hay puntuación**: una comprobación fallida o no
-   verificable bloquea.
-4. **Recorte.** Siempre la **región del servidor**, nunca la caja del modelo. Se guarda con la receta `visual_crop@v1`, el
-   localizador `auto` y la evidencia por comprobación. Las garantías de la PR #30 siguen vigentes, y la clave de caché añade la
-   versión del prompt y del verificador.
+3. **Prefiltro determinista.** Reutiliza `activityAnchors`, `activityZones`, `candidates` y `shapes.ts`. Puede producir una región
+   geométrica del servidor para revisión o análisis, pero **no autoriza su uso**. Forma, ancla y etiquetas no verifican identidad,
+   partes ausentes ni respuestas dibujadas. Una comprobación no verificable bloquea el recorte.
+4. **Recorte futuro.** Exigir la región del servidor y todas las garantías de procedencia de PR #30. La clave de caché debe incluir
+   versión del original, análisis, prompt, OCR y verificador. El prototipo solo compara dos hashes suministrados por el llamador;
+   no calcula ni valida el SHA de los bytes persistidos.
 5. **Hacer magia** no cambia de flujo. Consume recortes ya verificados. Si falta uno imprescindible, la parada honesta sigue igual.
 
-No es una segunda arquitectura. Cambian dos cosas del motor existente:
-- hay una capa de texto más, la del OCR;
-- la propuesta pasa a estar disponible desde el análisis, en lugar de aparecer solo como hipótesis de visión tardía.
+Esto es una hipótesis para evaluar, no una arquitectura aprobada. La selección humana existente sigue siendo el camino viable
+cuando la comprobación automática no puede identificar con seguridad la figura.
 
 ## 3. Alternativas comparadas
 
@@ -61,13 +63,12 @@ No es una segunda arquitectura. Cambian dos cosas del motor existente:
 | Latencia en Hacer magia | 0 (se calcula al analizar) | +3–8 s por página (estimado), en el camino crítico | ≈ 1–3 s de CPU | +3–8 s |
 | Reutilización | Por versión del material, para todas las adaptaciones | Por versión del material (caché de la ejecución) | Total | — |
 | Contexto del modelo | Documento completo y su propio análisis: coherencia entre visual y actividad | Una página y descripciones resumidas | Ninguno | — |
-| Trazabilidad | `ai_runs` del análisis + evidencia por comprobación | `ai_runs` propio + evidencia | Evidencia de píxeles | Circular |
+| Trazabilidad | `ai_runs` del análisis + evidencia de propuesta (no certificación) | `ai_runs` propio + evidencia | Evidencia de píxeles | Circular |
 | Riesgo principal | Coordenadas imprecisas de un modelo que ve el PDF a baja resolución | Coste y latencia en cada adaptación; más superficie de llamada | Falsos positivos demostrados (A–J) | **No es verificación independiente** |
-| Decisión | **Recomendado** como fuente de propuestas | Se conserva solo el *fallback* de visión existente para PDF nativos | Descartado | Descartado |
+| Decisión | Probar sin activarlo como fuente de recortes | Se conserva solo el *fallback* existente para PDF nativos | Descartado | Descartado |
 
-**Por qué no B como vía principal.** Añade coste y latencia a cada adaptación. Además ve menos contexto que el análisis, que ya
-relacionó cada visual con su actividad. La ventaja de B (una resolución de página controlada) también se consigue en A si se le
-envían las imágenes de página a la resolución adecuada. Esto es una decisión pendiente; ver la sección 7.
+**Por qué A es solo hipótesis.** Aprovecha el análisis existente, pero una caja de baja resolución puede fallar. Aumentar la
+resolución también aumenta coste y latencia, y el análisis que afirma la relación visual-actividad puede estar equivocado.
 
 **Por qué no C.** La PR #30 demostró que «la única mancha grande» no identifica nada.
 
@@ -75,34 +76,37 @@ envían las imágenes de página a la resolución adecuada. Esto es una decisió
 
 ## 4. Contrato de aceptación
 
-Contrato tipado: `evals/visual-location/contract.ts` (`FigureProposalSchema`, `VerificationReport`). Cada comprobación termina en
-`verified`, `failed` o `unverifiable`, y solo `verified` en **todas** acepta.
+Contrato tipado: `evals/visual-location/contract.ts`. `candidate` solo significa que pasaron las once comprobaciones geométricas
+y léxicas. `crop` permanece nulo y la decisión es `blocked` mientras `semantic_identity`, `complete_content` o
+`visual_answer_safety` sean `unverifiable`. No existe evidencia para cambiar estos tres estados en este prototipo.
 
 | Comprobación | Qué se exige | Evidencia independiente del modelo |
 | --- | --- | --- |
-| `provenance` | SHA del original de la propuesta = SHA almacenado; la página existe; la región es válida | Hash de los bytes; recuento de páginas |
+| `provenance` | Dos SHA recibidos coinciden; la página y región son válidas | Solo igualdad de argumentos en el prototipo; la producción debe comprobar bytes persistidos |
 | `text_layer` | La página tiene capa de texto (PDF u OCR local) | Algoritmo distinto del modelo |
-| `activity_anchor` | La consigna de la actividad (según el análisis) aparece impresa en esa página | Coincidencia entre la transcripción del modelo y el OCR: dos fuentes |
-| `placement` | La región del servidor está en la zona de su actividad y no en la de otra | Geometría del texto |
+| `activity_anchor` | La consigna transcrita por el análisis coincide con una caja OCR | Corroboración parcial; si falta otra consigna OCR, la zona se expande |
+| `placement` | El centro está en la zona inferida de esa actividad | Geometría condicionada por la integridad del OCR; no prueba pertenencia |
 | `snap` | La caja propuesta cae sobre un dibujo que encontró el servidor (IoU ≥ 0,5); el recorte es del servidor | Píxeles |
 | `uniqueness` | No hay otro dibujo de tamaño comparable en la zona, ni otra propuesta sobre el mismo dibujo | Píxeles; reglas y grupos de reglas excluidos |
-| `integrity` | Ningún trazo cruza el borde del recorte y el dibujo no toca el borde de la página | Píxeles |
-| `labels` | Las etiquetas que afirma la propuesta **y** las que nombra la consigna («números 1, 2 y 3») están impresas dentro del recorte | OCR + texto del análisis |
+| `integrity` | Ningún trazo detectado cruza el borde y el candidato no toca la página | Píxeles; no detecta partes borradas o ausentes |
+| `labels` | Las etiquetas declaradas o nombradas tienen cajas OCR dentro | OCR; no prueba que el glifo esté visible ni sea correcto |
 | `foreign_text` | No hay texto corrido dentro (consigna, otra actividad, campos del alumno) | OCR |
-| `answer_leak` | Ninguna palabra de la respuesta esperada aparece en el recorte ni en sus rótulos (a 10 mm o menos) | OCR + respuesta del análisis |
-| `identity_evidence` | Firma de forma (barra, recta numérica) **o** las etiquetas que nombra la consigna dentro del dibujo | Píxeles u OCR |
+| `answer_leak` | No coincide una palabra de ≥4 letras de la respuesta esperada con texto cercano | Cribado léxico parcial; respuesta del propio análisis |
+| `identity_evidence` | Firma de forma o etiquetas nombradas dentro | Solo morfología; no contenido semántico |
+| `semantic_identity` | Contenido correcto y figura de esta actividad | **No verificable** con estas fuentes |
+| `complete_content` | Todas las partes necesarias sobreviven | **No verificable** para partes ausentes sin etiqueta |
+| `visual_answer_safety` | No revela la solución mediante dibujo, número o marca | **No verificable** con cribado léxico |
 
-**Lo que sigue siendo hipótesis.**
-- Que una figura genérica «sea una célula».
-- Los `required_elements` sin etiqueta.
-- Que un dibujo sin etiquetas esté completo en lo que no se ve.
-
-Por eso una figura genérica **sin etiquetas nombradas por la consigna queda bloqueada** (`identity_evidence: unverifiable`). Su
-única prueba sería su posición, y eso no basta.
+Las cinco propiedades son distintas: **ubicación** puede tener un candidato; **pertenencia** queda condicionada a todos los
+anclajes; **identidad semántica**, **integridad pedagógica** y **ausencia de respuesta visual** siguen sin comprobarse. Los
+`required_elements` son texto libre del mismo modelo y no se verifican. Por ello, también se bloquean barras y células con
+etiquetas, aunque la geometría pase.
 
 **Versionado y caché.** La clave es (`material_id`, `source_sha256`, `analysis_fingerprint`, versión del prompt, versión del OCR,
 `VERIFIER_VERSION`). Si cambia cualquiera, se revalida. Un recorte anterior que el verificador vigente no vuelve a aceptar no se usa
-(mismo criterio que `auto_not_revalidated`).
+(mismo criterio que `auto_not_revalidated`). No se modifica `MaterialAnalysis` v3: un experimento futuro usaría un sidecar versionado
+ligado a material y SHA, o un esquema nuevo con lector de v3 y ausencia de propuesta = bloqueo. Nunca interpretar datos v3 como
+ubicaciones verificadas.
 
 ## 5. Prototipo aislado y pruebas
 
@@ -118,23 +122,25 @@ Hacer magia. Contiene:
 
 | Caso | Propuesta correcta | Motivo |
 | --- | --- | --- |
-| Célula con etiquetas 1, 2 y 3 | Aceptada | Todas las comprobaciones verificadas |
+| Célula con etiquetas 1, 2 y 3 | Candidato, recorte bloqueado | Etiquetas no prueban identidad ni partes internas |
 | Dos figuras similares en la misma zona | Bloqueada | `uniqueness` |
-| Figura decorativa grande en la cabecera | Célula aceptada; la flor, bloqueada | `placement`, `uniqueness` |
-| Rótulo enorme junto a la figura | Célula aceptada; el rótulo, bloqueado | `snap`: el texto está enmascarado |
+| Figura decorativa grande en la cabecera | Célula candidata; la flor sin candidato | `placement`, `uniqueness` |
+| Rótulo enorme junto a la figura | Célula candidata; el rótulo sin candidato | `snap`: el texto está enmascarado |
 | Figura que se sale del borde | Bloqueada | `integrity` |
 | Etiquetas a más de 1 cm | Bloqueada | `labels`: quedarían fuera |
 | Figura en la zona de otra actividad | Bloqueada | `placement` |
-| Escaneo con ruido, sombra y rotación de 1,5° | Aceptada | Las líneas de respuesta torcidas no cuentan como rival |
-| Tres actividades y dos figuras | Las dos aceptadas; las cajas cruzadas, bloqueadas | Firma de barra; etiquetas A y B |
+| Escaneo con ruido, sombra y rotación de 1,5° | Candidato, recorte bloqueado | Simulación OCR derivada del vector; no prueba OCR real |
+| Tres actividades y dos figuras | Dos candidatas; las cajas cruzadas sin candidato | Firma de barra; etiquetas A y B |
 | Documento sin la figura | Bloqueada | `snap` |
 | Rótulo que da la respuesta («núcleo») | Bloqueada | `answer_leak` |
 
-Resultados (`pnpm exec vitest run tests/unit/visual-location-prototype.test.ts`, 15 pruebas PASS):
-
-- **OCR perfecto:** 42 propuestas, 0 falsos positivos, 0 falsos negativos, cobertura 6/6 visuales aceptables.
-- **OCR que pierde la mitad de las cajas cortas:** 0 falsos positivos y 5 falsos negativos (cobertura 1/6). El sistema se degrada
-  bloqueando, no aceptando de más.
+Resultados de los fixtures originales: 42 propuestas guionizadas, 6 visuales oráculo elegibles. El prototipo anterior aceptaba
+6/6 de esos visuales, sin errores *en el conjunto con el que se ajustó*. Cuatro contraejemplos nuevos demostraron aceptación
+indebida: núcleo borrado, barra 5/8 en vez de 3/8, figura de otra actividad tras perder su ancla OCR y etiqueta ausente en píxeles
+pero presente en OCR. El prototipo corregido emite candidatos diagnósticos cuando pasan sus 11 filtros, pero **0 recortes
+aceptados** y cobertura automática **0/6** por los tres controles no verificables. Cero falsos positivos por bloquear todo no es
+una estimación de precisión. La degradación `ocrLoss` solo elimina cajas cortas; no representa las confusiones y desplazamientos
+de un OCR real. Las pruebas nuevas incluyen confusión `1/I`, duplicación y desplazamiento de cajas OCR.
 
 **Advertencia.** El verificador se ajustó con estos mismos fixtures, en tres correcciones:
 - una caja de verdad mal escrita;
@@ -150,24 +156,29 @@ bien.
   - Dígitos sueltos y letras de etiqueta: el OCR los lee peor que el texto corrido, y cada etiqueta perdida bloquea (falso
     negativo).
   - Letra manuscrita: fuera de alcance.
-  - Rotaciones mayores de 2–3° sin enderezar.
+  - Confusión `1/I` o `0/O`, cajas duplicadas, desplazadas o contradictorias; el OCR sintético actual recibe cajas perfectas
+    transformadas junto a los píxeles, por lo que no prueba estas garantías. Una caja errónea puede simular una etiqueta existente.
+  - Rotaciones mayores de 2–3° sin enderezar y variaciones de escala; solo existe un caso sintético de 1,5°.
   - Tamaño y memoria del motor en Vercel. Nada de esto está medido.
-- **Maquetación.** Las zonas van de una consigna a la siguiente, a todo lo ancho. Dos columnas, figuras compartidas entre
-  actividades o una figura antes de su consigna fallan, y bloquean.
-- **Identidad semántica.** Una figura genérica sin etiquetas nombradas no se puede aceptar. Es una limitación deliberada, no un
-  error que vaya a desaparecer.
+- **Maquetación.** Las zonas van de una consigna reconocida a la siguiente, a todo lo ancho. En dos columnas, consignas próximas,
+  figuras antes de la consigna, gráfico y texto mezclados, o un ancla OCR omitida, la zona puede incluir figuras ajenas; no siempre
+  se produce un rechazo geométrico. No hay garantía de asociación visual-actividad.
+- **Identidad semántica.** Dos dibujos distintos con los mismos números, un adorno dentro de la zona o una barra con sombreado
+  incorrecto pueden pasar el prefiltro. Etiquetas y firma de forma no demuestran contenido.
 - **Calidad de las coordenadas del modelo** viendo el PDF dentro del análisis. Si sus cajas no caen con IoU ≥ 0,5, el enfoque A no
   aporta y habría que valorar B. Desconocido.
-- **Fugas de respuesta.** La comprobación es léxica: no detecta una solución dibujada (una flecha, una casilla marcada).
+- **Fugas de respuesta.** La comprobación es léxica y se apoya en la respuesta esperada del mismo análisis: no detecta una
+  solución dibujada, un número, una flecha o una casilla marcada.
 - **Coste de revalidar** al cambiar la versión del OCR o del verificador: se repite el trabajo de CPU, no llamadas.
 
 ## 7. Decisiones pendientes (sin ADR todavía)
 
 1. **Motor de OCR local.** Licencia, tamaño, memoria y latencia en Vercel. Medirlo antes de elegir.
-2. **Contrato del análisis.** Cómo ampliar `MaterialAnalysis` (v4, campo opcional `location` por visual) sin romper el v3
-   almacenado, y con qué resolución se envían las páginas al analizador.
-3. **Alcance del contrato.** Si sustituye también a la puntuación del localizador en PDF nativos, o solo se aplica a páginas sin
-   texto.
+2. **Contrato del análisis.** Sidecar versionado o v4 con lector de v3, sin convertir propuestas anteriores en recortes válidos;
+   medir tokens, latencia, errores y resolución. El análisis actual registra llamadas e intentos; una extensión no garantiza que
+   se mantenga una sola llamada efectiva.
+3. **Alcance del contrato.** Mantener intacto el localizador de PDF nativos mientras no exista una verificación independiente
+   suficiente para los escaneos.
 4. **Qué hacer con un bloqueo.** Mantener la parada (recomendado) o pedir al docente que confirme la propuesta. Esto último sería
    una decisión de producto, no técnica.
 
@@ -175,28 +186,32 @@ Solo se escribirá un ADR cuando el experimento de la sección 9 dé un resultad
 
 ## 8. Medición
 
-- **Verdad:** caja y etiquetas de cada figura imprescindible, anotadas por una persona con el localizador humano existente.
-- **Falso positivo:** recorte aceptado que no es la figura verdadera (IoU < 0,6), que pierde una etiqueta o que contiene una
-  respuesta. **Objetivo: 0.** Con 0 errores en *n* aceptados, el límite superior al 95 % es ≈ 3/*n* (regla del tres), así que
-  hacen falta ≥ 60 aceptados para afirmar «< 5 %».
-- **Falso negativo:** figura verificable a mano que se bloquea. Se desglosa por comprobación (`labels`, `text_layer`, `snap`…) para
-  saber si falla el OCR, el modelo o la maquetación.
-- **Cobertura:** figuras imprescindibles aceptadas / figuras imprescindibles de escaneos que hoy paran Hacer magia.
+- **Verdad humana:** por figura imprescindible, anotar actividad, página, caja, partes y etiquetas necesarias, legibilidad,
+  respuestas visibles y posible contaminación del recorte. Dos revisores resuelven desacuerdos antes de evaluar; incluir negativos
+  (adornos y figuras de otra actividad). El umbral IoU de 0,6 solo comprueba caja, no integridad.
+- **Unidades y denominadores:** los intentos son *propuestas* (puede haber varias por figura); la cobertura se mide por *figura
+  imprescindible*; los incidentes de entrega también por *material*. Informar numerador y denominador por separado: candidatos,
+  recortes aceptados, aceptados incorrectos, figuras elegibles bloqueadas y materiales con algún error. Etiquetas: integridad por
+  figura con todas las etiquetas presentes en el raster, no solo cajas OCR.
+- **Incertidumbre:** 0 errores entre 60 aceptados da límite superior binomial unilateral 95 %
+  `1 - 0,05^(1/60) = 4,87 %`, bajo independencia. Fichas de un mismo origen no son independientes; estratificar por tipo y
+  reportar también intervalo por material. Una muestra pequeña con 0 errores no prueba seguridad absoluta.
 
 ## 9. Experimento real mínimo
 
-Requiere autorización: llamadas de pago y material real sin datos del alumnado.
+El siguiente experimento **no requiere gasto API**: reunir, con permiso para su uso, un piloto de 20–30 escaneos reales sin datos
+del alumnado de distinta maquetación; fijar anotaciones humanas de figuras, actividad, etiquetas, partes y respuestas; instalar
+un OCR local fuera de producción y ejecutar solo el prefiltro con cajas oráculo, sin generar ni servir recortes automáticos. Medir
+recuerdo de candidatos, errores de anclaje/OCR, tiempo y memoria por página, por tipo de ficha. Mantener aparte fichas que no se
+utilicen para ajustar reglas. Si el OCR y las zonas fallan mucho, parar aquí. Esta fase no puede medir precisión de propuestas de
+un modelo ni tasa de recortes seguros.
 
-1. **Corpus.** 30 fichas escaneadas reales, de Primaria a Bachillerato, con unas 60 figuras imprescindibles. Anotación humana con el
-   localizador existente: unas 2–3 horas.
-2. **Fase 1, sin modelo.** OCR local + verificador con **propuestas oráculo** (las cajas anotadas). Mide el techo: cuántas figuras
-   verificables bloquean el OCR o la maquetación. Coste API: 0.
-3. **Fase 2, con modelo.** Reanálisis con un prompt de análisis v4 en borrador, que devuelve `location`, sobre esas 30 fichas. Una
-   sola ejecución, con tope de gasto. Mide el acierto de las propuestas y los falsos positivos y negativos del conjunto.
-4. **Criterio de decisión.**
-   - Implementar solo si hay **0 falsos positivos con ≥ 60 aceptados** (o el límite superior < 5 %) y una cobertura ≥ 40 % de las
-     figuras que hoy paran.
-   - Si la fase 1 ya bloquea más del 50 %, el problema es el OCR o la maquetación, y no compensa pagar la fase 2.
+Una eventual prueba pagada requeriría autorización aparte y un mecanismo justificable para verificar identidad, integridad y
+fuga visual. Para un objetivo ilustrativo de ≥60 aceptados y cobertura ≥40 %, hacen falta **al menos 150 figuras elegibles**;
+30 fichas/60 figuras no bastan. Predefinir un conjunto de evaluación independiente con diversidad de fuentes y materiales,
+congelar reglas antes de usarlo, y exigir 0 errores observados en ≥60 aceptados, cota superior unilateral <5 % solo bajo el
+supuesto de independencia, cobertura ≥40 % con intervalo y cero incidentes por material en esa muestra. Estos son filtros para
+decidir si ampliar investigación, **no autorización automática para producción**.
 
 ## 10. Coste estimado por material
 
@@ -205,11 +220,12 @@ salida; análisis **medido** de 0,043–0,058 USD por material (`COSTS.md`).
 
 | Componente | Estimación | Supuesto |
 | --- | --- | --- |
-| A · campos de ubicación en el análisis | ≈ +0,001 USD por visual; ≈ 0,003–0,005 USD por material | 80–120 tokens de salida por visual + ~300 de instrucciones |
+| A · campos de ubicación en el análisis | ≈ +0,0008–0,0012 USD por visual de salida +0,0006 USD por material de instrucciones; para 2–4 figuras ≈0,0022–0,0054 USD/material | 80–120 tokens de salida por visual a 10 USD/M + ~300 tokens de entrada a 2 USD/M; sin reintentos ni imágenes de mayor resolución |
 | B · llamada de visión por página | ≈ 0,005–0,006 USD por página; ≤ 0,017 USD por material | ~1.300 tokens de imagen (página a 100 ppp) + 400 de texto + 200 de salida |
 | OCR local | 0 USD de API; ≈ 1–4 s de CPU por página (estimado) | Motor WASM, página a 200–300 ppp |
 | Verificador | Despreciable; < 1 s por página | Medido solo en el prototipo, sobre fixtures |
 | Experimento (fase 2) | ≈ 1,5–3 USD en total | 30 reanálisis de 0,05–0,10 USD |
 
-Latencia en Hacer magia con A: ninguna llamada nueva. El OCR y la verificación se hacen al analizar o la primera vez, y se cachean
-por versión del material.
+Estas cifras omiten reintentos, ampliación de imagen y costes de CPU; deben medirse contra el prompt anterior con el mismo corpus.
+La opción A no obliga a añadir una llamada en Hacer magia si el análisis y OCR terminan antes, pero puede aumentar su latencia
+inicial y la tasa de reintentos. No cambia el comportamiento de producción en esta PR.
