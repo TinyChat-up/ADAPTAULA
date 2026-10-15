@@ -57,7 +57,7 @@ test("editar, deshacer, guardar, recuperar y descargar la misma ficha sin cambia
   const a11y = await new AxeBuilder({ page }).exclude(".ms-root").analyze();
   expect(a11y.violations.filter((v) => v.impact === "critical" || v.impact === "serious")).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: info.outputPath("editor.png"), fullPage: true });
+  await page.screenshot({ path: info.outputPath("editor.png"), fullPage: true, style: "nextjs-portal { display: none; }" });
   const downloaded = page.waitForEvent("download", { timeout: 60000 });
   await page.getByRole("button", { name: "Descargar PDF", exact: true }).click();
   const download = await downloaded;

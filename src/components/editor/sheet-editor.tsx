@@ -6,6 +6,7 @@ import { Undo2, Redo2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
+import { ActionBar } from "@/components/ui/action-bar";
 import { PdfDownload } from "@/components/material/pdf-download";
 import { applyEditorChanges, emptyChanges, type EditorChanges, type SavedDraft } from "@/lib/editor/changes";
 import { historyOf, changeHistory, undoHistory, redoHistory } from "@/lib/editor/history";
@@ -67,11 +68,11 @@ export function SheetEditor({ adaptationId, baseVersion, input, saved }: {
       <Link className="text-sm font-medium text-primary underline" href={`/app/adaptaciones/${adaptationId}/vista`}
         onClick={(e) => { if (dirty && !window.confirm("Tienes cambios sin guardar. ¿Salir sin guardarlos?")) e.preventDefault(); }}>Ver ficha generada</Link>
       <PageHeader title="Editar ficha" description="Ajusta tu copia y comprueba cómo la verá el alumnado. El original se conserva." />
-      <div className="flex flex-wrap items-center gap-2" aria-label="Acciones de edición">
+      <ActionBar label="Acciones de edición" className="w-fit max-w-full">
         <Button variant="secondary" disabled={saving || !history.past.length} onClick={() => { setHistory(undoHistory); setAcknowledged(false); setMessage(""); }}> <Undo2 aria-hidden className="size-4" />Deshacer</Button>
         <Button variant="secondary" disabled={saving || !history.future.length} onClick={() => { setHistory(redoHistory); setAcknowledged(false); setMessage(""); }}> <Redo2 aria-hidden className="size-4" />Rehacer</Button>
         <Button disabled={saving || !dirty || !preview.valid || (preview.contentBlocks.length > 0 && !acknowledged)} onClick={save}><Save aria-hidden className="size-4" />{saving ? "Guardando…" : "Guardar borrador"}</Button>
-      </div>
+      </ActionBar>
       <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{saving ? "Guardando tus cambios…" : message || (dirty ? "Tienes cambios sin guardar." : lastSaved ? `Borrador guardado · revisión ${lastSaved.revision}` : "Estás viendo la ficha generada. Aún no hay borrador.")}</p>
       {error ? <Alert tone="danger" title="No se ha guardado el borrador.">{error} <Link href={`/app/adaptaciones/${adaptationId}/editar`} className="underline" onClick={(e) => { if (!window.confirm("Recargar descartará los cambios sin guardar. ¿Continuar?")) e.preventDefault(); }}>Recargar borrador guardado</Link></Alert> : null}
       {!preview.valid ? <Alert tone="warning" title="Revisa el enunciado.">No puede quedar vacío. Mientras lo corriges, la vista muestra la ficha generada.</Alert> : null}
