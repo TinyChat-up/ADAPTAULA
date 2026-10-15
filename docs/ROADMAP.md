@@ -2,7 +2,13 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
-## Prioridad actual — editor docente de fichas adaptadas (2026-10-15)
+## Prioridad actual — Adaptaula 2.0, etapa 1 (2026-10-15)
+
+Dirección del usuario y alcance completo en [ADAPTAULA_2.md](ADAPTAULA_2.md). El documento pasa a ser el centro del producto, conservando pipeline, CLARO y permisos. **Primera entrega:** tokens, primitivas, navegación plegable y móvil, preferencias de accesibilidad; rama `codex/adaptaula-2-fundamentos` desde `origin/main` / `7e5ef52`, que ya integra #38. Evidencia en [QA](qa/adaptaula-2-etapa-1/README.md).
+
+Siguiente entrega tras revisión: workspace documental sobre el editor existente. Después, pantallas de trabajo/cuenta y landing/onboarding/precios. La política comercial nueva se registra como objetivo de etapa 4, **no aplicada aún**; requiere migración segura y pruebas, sin cobros ni SQL remoto. Modo oscuro pendiente hasta asegurar contraste completo. Las referencias web y la creación de PR dependen del acceso efectivo del entorno; no inferir éxito por haber guardado un borrador de red.
+
+## Antecedente — editor docente de fichas adaptadas (2026-10-15)
 
 Primera entrega operativa en `codex/editor-docente-claro`: enunciados, presentación, espacio de respuesta, vista A4, deshacer/rehacer, borradores separados y PDF de revisión concreta. [Alcance y pruebas](qa/editor-docente/README.md). Reutiliza CLARO; migración 025 solo probada localmente.
 

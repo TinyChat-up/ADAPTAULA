@@ -2,6 +2,17 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Adaptaula 2.0, etapa 1: fundamentos y navegación
+
+- **Base:** `origin/main` / `7e5ef52`, PR #38 integrada y confirmada también por API. Rama nueva `codex/adaptaula-2-fundamentos`. #20 era la única PR abierta antes de esta entrega; no se modifica. Lectura de AGENTS/CLAUDE, estado, roadmap, producto, UX, arquitectura y guías locales Next 16.3.
+- **Implementado:** tokens semánticos y superficies propias, componentes base renovados, lateral plegable con texto y preferencia SSR, ubicación por sección, navegación móvil flotante, diálogo accesible y cierre al pasar a escritorio. `ActionBar` en el editor CLARO existente, sin cambios de datos/renderer. Foco, contraste, reduced-motion/reduced-transparency, forced-colors, alto contraste y reflujo. Sin dependencia nueva.
+- **Referencias:** navegador Chromium sobre Bencho y Apple. Red bloqueada inicialmente; tras guardar dominios preservando la configuración existente y aplicarse el acceso, las páginas se pudieron estudiar. `/blocks` de Bencho devuelve 404; catálogo en `/`, ejemplos concretos disponibles. Principios y decisiones en QA, ningún código/asset externo importado. API de GitHub también recuperada.
+- **Pruebas:** 129/129 focalizadas (17 nuevas de componentes, contexto y contraste), 9/9 PDF Chromium, 8/8 E2E escritorio/móvil. Typecheck, lint y build PASS; solo aviso previo `_id`. Axe en recorridos existentes y preferencias, 320 px/texto 200 %, foco móvil no tapado, editor guarda/recupera/exporta y conserva original. Modelos simulados/fixtures sintéticos; ninguna validación pedagógica de Hacer magia real.
+- **Correcciones de verificación:** resumen lateral visible al plegar por cascada CSS, corregido. Nombre accesible de Perfiles conservado en texto sr-only para no coincidir con selector amplio de campo de pruebas. Indicador local Next interceptaba el clic inferior de un test: botón verificado por teclado, indicador oculto solo en capturas. Tipos temporales generados por Next y caché aislada retirados antes del check final; dos llamadas React.createElement del test corregidas para lint. No se debilitan aserciones de permisos, cuotas o PDF.
+- **Evidencias:** [QA, capturas y comandos](qa/adaptaula-2-etapa-1/README.md). Dirección integral en [ADAPTAULA_2.md](ADAPTAULA_2.md); ADR-030. Se actualizan producto, UX, roadmap y estado con alcance implementado/pending separado.
+- **Límites:** modo claro; contexto del shell es de sección, no título/estado inventado de un job. Workspace completo, comparación, reorganización específica de pantallas y precios/cuotas nuevos quedan para etapas posteriores. Sin migraciones, prompts/modelos, consumo de APIs pagadas, Stripe, Supabase remoto, entrenamiento ni cambios de CSS/renderer de CLARO.
+- **Siguiente:** revisión humana de esta primera PR; etapa 2 desde main actualizado tras integración, concentrada en documento y herramientas contextuales. Sin merge automático.
+
 ## 2026-10-15 — Editor docente mínimo operativo
 
 - **Base y rama:** `origin/main` / `b192735`, nueva `codex/editor-docente-claro`. El remoto ya incluía el merge de #37 al iniciar; no se modificó ni fusionó esa PR. Leídos AGENTS/CLAUDE, estado, roadmap, arquitectura, adaptación, UX y seguridad.

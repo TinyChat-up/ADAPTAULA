@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-15. Base revisada: `origin/main` en `b192735` (**PR #37 ya integrada al comenzar**, por historial Git; sin merge realizado en esta sesión), comprobada por Git.
+Actualizado: 2026-10-15. Base de la entrega actual: `origin/main` en `7e5ef52`, **PR #38 integrada** (editor CLARO); #37 también está integrada por historial Git. Sin merge realizado en esta sesión. Consulta final por API disponible: #38 MERGED, #20 es la única PR abierta antes de publicar esta entrega; no se modifica.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -21,7 +21,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
 | Sustitución pedagógica | PR #26: equivalencia y corrección acotada. PR #27: selección única de fracciones. PR #28: consulta literal de celdas de tablas corroboradas contra PDF | Alcance acotado por ADR-023: cuadrícula, texto verificable y consigna explícita. Sin escaneos, inferencias, equivalencias numéricas ni unidades separadas. Calidad de prompts v2/v3/v4 con modelos reales pendiente |
 | Presentación y PDF | CLARO, apoyos junto a actividades, render compartido, validación y descarga PDF | Calidad de cada imagen real y runtime PDF en Vercel pendientes de comprobación; no se promete soporte universal |
-| Interfaz y navegación | ADR-024 + ADR-025: navegación simplificada, redirecciones, filtros y cuenta conservados; identidad editorial, demo A4 rotulada y mesa de trabajo con cuotas secundarias; filas, controles contrastados y movimiento funcional con `prefers-reduced-motion` | Revisión manual con teclado y lector de pantalla (Fase 7). Cinco E2E anteriores a este bloque están desactualizados (ver registro) |
+| Interfaz y navegación | ADR-030: fundamentos Adaptaula 2.0, tokens, navegación plegable/móvil, contexto por ruta y preferencias de accesibilidad; conserva filas, filtros, cuenta y CLARO | Workspace documental unificado, comparación real, rediseño específico de pantallas y modo oscuro en siguientes entregas. Pruebas automáticas no equivalen a auditoría WCAG completa |
 | Datos, legal y corpus | Buckets privados con RLS por workspace, validación de bytes, logger sin contenido, `ai_runs` sin contenido. Contrato y reglas de admisión al corpus de mejora (ADR-028), registro sintético y borradores de `/privacidad` y `/terminos` | Sin registro de aceptación ni autorizaciones, sin limpieza de metadatos de originales, sin borrado de cuenta, exportación ni job de retenciones, y garantías de proveedores sin verificar ([auditoría](legal/AUDITORIA_DATOS.md)). Revisión jurídica pendiente ([lista](legal/REVISION_ESPECIALISTA.md)) |
 | Planes y consumo | Plan efectivo y cuotas en servidor; gate de imágenes y registro de costes | Integración Stripe completa es trabajo propuesto, no completado por existir tablas; pricing y propuesta de beta no son decisiones aprobadas |
 
@@ -30,11 +30,17 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 - El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que esté desplegada en todos los entornos. Esta fase no añade migraciones.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
 - En la sesión anterior de PR #29, `pnpm build` PASS sin modificar fuentes, configuración de red ni dependencias. Este cierre no repite el build.
-- La API de GitHub responde `Forbidden` desde este entorno; Git HTTPS permite leer y publicar ramas. El merge de #27 está verificado por historial y ascendencia Git; no se infiere el estado de otras PR abiertas.
+- La API de GitHub estuvo bloqueada inicialmente, pero en la etapa 1 de Adaptaula 2.0 responde tras actualizar la red. #38 confirmada MERGED; #20 era la única PR abierta antes de publicar esta entrega. Git HTTPS también disponible.
 - Sesión de Claude Code (bloque UI/UX, 2026-10-13): ese entorno sí descarga Google Fonts, y `pnpm build` se ejecutó una vez sobre el bloque (resultado en el registro). También ve la API de GitHub: allí la PR #25 figura como integrada.
 - **Aparcado por el usuario:** Max temporal, SQL de siete días, Stripe de prueba y llamadas pagadas. No son requisitos para continuar el producto.
 
 ## Trabajo actual y continuidad
+
+**Adaptaula 2.0, etapa 1**, rama nueva `codex/adaptaula-2-fundamentos`, desde `7e5ef52`. Se reutiliza el editor de #38. Tokens semánticos, componentes base, superficies sólidas/translúcidas acotadas, navegación lateral plegable con etiquetas, preferencia conservada entre recargas, ubicación por sección, barra móvil y diálogo accesible. La barra de acciones del editor y la cabecera pública adoptan las primitivas. [Dirección integral, etapas y política comercial pendiente](ADAPTAULA_2.md); [alcance, pruebas y capturas](qa/adaptaula-2-etapa-1/README.md).
+
+No se implementa todavía el workspace/comparador completo, rediseño específico de cada pantalla, modo oscuro ni nueva migración comercial. Planes/cuotas efectivos permanecen en BD. No APIs pagadas, cambios remotos, Stripe, prompts/modelos ni segundo renderer. Próximo paso: revisar esta base y continuar etapa 2 sobre main actualizado cuando se integre.
+
+## Antecedente — entrega del editor de #38 (ya integrada)
 
 Rama: `codex/editor-docente-claro`, nueva desde `origin/main` / `b192735`. El usuario indicó #37 abierta, pero el remoto ya contiene su merge; esta sesión no la modifica ni la fusiona.
 

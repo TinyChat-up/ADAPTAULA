@@ -1,5 +1,7 @@
 # Adaptaula — Producto
 
+**Dirección vigente (2026-10-15): [Adaptaula 2.0](ADAPTAULA_2.md).** Desarrollo incremental centrado en el documento. Etapa 1 implementa fundamentos visuales y navegación sobre el editor CLARO de #38; workspace, comparación real, reorganización de pantallas y nueva política comercial se entregan después. Las capacidades propuestas abajo no son una lista de funciones disponibles.
+
 ## Propuesta de valor
 
 > Sube el material que ya utilizas y conviértelo en una versión adaptada para cada alumno en minutos.
@@ -36,6 +38,8 @@ Entrar → subir material → elegir alumno/necesidades → **Adaptar** → ver 
 North Star: **adaptaciones descargadas por profesor activo semanal.**
 
 ## Planes
+
+**Nueva decisión provisional para la etapa 4:** Free 0 €, Pro 24,90 €/mes, Max 49,90 €/mes, IVA incluido; cuotas y condiciones en [Adaptaula 2.0](ADAPTAULA_2.md#política-comercial-aprobada-como-objetivo-provisional-etapa-4). **Todavía no aplicada en etapa 1.** Las cifras de la tabla siguiente describen la configuración heredada, no la nueva política. Su cambio requiere migración, pruebas y comprobación previa de condiciones de suscripciones activas; no basta con editar esta documentación o seed. Max debe quedar «En preparación» en esa entrega, sin contratación ni imágenes activas. Sin nuevos precios anuales ni descuentos.
 
 Los valores viven en la tabla `plans` (sembrada por `supabase/seed.sql`) y se pueden cambiar sin desplegar: es la **única fuente**. El control de cuota (`adaptation_entitlement_limit`, `consume_quota`), la pantalla de uso (`workspace_usage`) y `/precios` la leen; ningún componente lleva números de planes. Estos son los valores iniciales.
 
