@@ -35,7 +35,7 @@ export function ConfirmDialog({
         ref={ref}
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-desc`}
-        className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card border border-border bg-surface p-6 shadow-card backdrop:bg-foreground/40"
+        className="sheet m-auto w-[calc(100%-2rem)] max-h-[85dvh] max-w-md overflow-y-auto rounded-panel border border-border bg-surface p-6 text-foreground shadow-dialog backdrop:bg-foreground/40"
       >
         <h2 id={`${id}-title`} className="text-lg font-semibold">
           {title}
@@ -43,7 +43,7 @@ export function ConfirmDialog({
         <p id={`${id}-desc`} className="mt-2 text-muted-foreground">
           {description}
         </p>
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
           <Button variant="ghost" onClick={() => ref.current?.close()}>
             Cancelar
           </Button>

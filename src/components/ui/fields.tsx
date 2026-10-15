@@ -9,7 +9,7 @@ interface FieldShellProps {
 }
 
 const controlClasses =
-  "block w-full rounded-control border border-control-border bg-surface px-3 min-h-11 text-base text-foreground placeholder:text-muted-foreground/70 aria-[invalid=true]:border-danger";
+  "ui-control block w-full rounded-control border border-control-border bg-surface px-3 min-h-11 text-base text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-danger";
 
 export function TextareaField({ label, hint, error, optional, className, ...props }: FieldShellProps & ComponentProps<"textarea">) {
   const generated = useId();

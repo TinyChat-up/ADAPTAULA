@@ -18,10 +18,10 @@ export function PageHeader({
   icon?: LucideIcon;
 }) {
   return (
-    <div className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-5 pb-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <div className="space-y-3">
-          <h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+          <h1 className="break-words text-page font-semibold">{title}</h1>
           {description ? <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{description}</p> : null}
         </div>
       </div>
@@ -41,7 +41,7 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="border-y border-border py-12 sm:py-16">
+    <div className="rounded-panel border border-dashed border-control-border bg-surface px-6 py-10 sm:p-10">
       <h2 className="text-xl font-semibold">{title}</h2>
       {description ? <p className="mt-3 max-w-lg text-muted-foreground">{description}</p> : null}
       {children ? <div className="mt-6 flex flex-wrap gap-3">{children}</div> : null}
