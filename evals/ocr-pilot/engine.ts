@@ -4,6 +4,7 @@ import path from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
 import { createWorker, PSM, type Worker } from "tesseract.js";
 import { isLabel, type PageModel, type Rect, type TextBox } from "@/lib/materials/visuals/auto/page-model";
+import { caseByHeight, detachStrokes, digitLetterByRow, dropRepeatedMarks, isStraightStroke, keepLowConfidenceWord, loneLabelWords, resolveGlyphReading } from "./recognition";
 
 /**
  * Local OCR for the pilot (NOT wired to production): Tesseract 5 compiled to WebAssembly (tesseract.js), run in this process on
@@ -15,6 +16,11 @@ import { isLabel, type PageModel, type Rect, type TextBox } from "@/lib/material
  *   label pass  glyph-sized ink blobs that the page pass left unread, each re-read alone (PSM 8, alphanumeric whitelist). The
  *               page pass drops isolated one- or two-character labels next to drawings; this pass exists only to measure whether
  *               they can be recovered. It reads text; it never proposes a figure.
+ *
+ * Phase I (`ocr_pilot@phase1`, rules in `recognition.ts`): low-confidence words kept only inside confident lines; lone label-like
+ * page words re-read by the label pass; labels touching straight ticks detached; straight strokes rejected; one component = one
+ * character (PSM 10 fallback); case of c/o/s/… by height; O/0-type pairs by row; repeated identical marks dropped; reading lines
+ * from Tesseract's own line structure.
  */
 
 export const LANG_FILE = "spa.traineddata.gz";
@@ -27,6 +33,10 @@ export interface OcrWord extends TextBox {
   upright: Rect;
   confidence: number;
   pass: "page" | "label";
+  /** Tesseract line (page pass) or a line of its own (label pass): reading lines come from this structure. */
+  line: number;
+  /** Lone label-like page word handed to the label pass; the combined reading uses the label pass's result instead. */
+  rerouted?: boolean;
 }
 
 export interface PageRead {
@@ -43,7 +53,6 @@ export interface OcrEngine {
   terminate(): Promise<void>;
 }
 
-const PAGE_MIN_CONFIDENCE = 40;
 const LABEL_MIN_CONFIDENCE = 50;
 const DARK = 160;
 export const OCR_LIMITS = { pixels: 12_000_000, components: 20_000, glyphs: 512, labelCalls: 64, pageMs: 30_000, labelsMs: 30_000 } as const;
@@ -82,7 +91,20 @@ export function rotateBox(model: Pick<PageModel, "width" | "height">, r: Rect, r
   return { x0: Math.min(...pts.map((p) => p[0])), y0: Math.min(...pts.map((p) => p[1])), x1: Math.max(...pts.map((p) => p[0])), y1: Math.max(...pts.map((p) => p[1])) };
 }
 
-type Blob = { x0: number; y0: number; x1: number; y1: number; pixels: number[] };
+export type Blob = { x0: number; y0: number; x1: number; y1: number; pixels: number[]; components?: number };
+
+const GLYPH = { minH: 1.8, maxH: 6, minW: 0.2, maxW: 5, minArea: 0.25 } as const;
+/** Up to this size a too-big component may be a glyph touching a tick or leader; its pixels are kept for `detachStrokes`. */
+const ATTACHED = { maxW: 14, maxH: 8 } as const;
+const bounds = (pixels: readonly number[], width: number): Blob => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const i of pixels) { const x = i % width, y = (i - x) / width; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1); }
+  return { x0, y0, x1, y1, pixels: [...pixels] };
+};
+const glyphSized = (b: Blob, mmPerPx: number) => {
+  const h = (b.y1 - b.y0) * mmPerPx, w = (b.x1 - b.x0) * mmPerPx;
+  return h >= GLYPH.minH && h <= GLYPH.maxH && w >= GLYPH.minW && w <= GLYPH.maxW && b.pixels.length * mmPerPx ** 2 >= GLYPH.minArea;
+};
 
 /** 4-connected dark components outside the already-read words (8-connectivity would merge a label with a nearby leader). */
 function blobs(model: PageModel, read: readonly TextBox[], padPx: number): Blob[] {
@@ -116,7 +138,7 @@ function blobs(model: PageModel, read: readonly TextBox[], padPx: number): Blob[
       b.y0 = Math.min(b.y0, y);
       b.x1 = Math.max(b.x1, x + 1);
       b.y1 = Math.max(b.y1, y + 1);
-      if (!oversized && ((b.x1 - b.x0) * model.mmPerPx > 5 || (b.y1 - b.y0) * model.mmPerPx > 6)) {
+      if (!oversized && ((b.x1 - b.x0) * model.mmPerPx > ATTACHED.maxW || (b.y1 - b.y0) * model.mmPerPx > ATTACHED.maxH)) {
         oversized = true;
         b.pixels = [];
       }
@@ -127,22 +149,30 @@ function blobs(model: PageModel, read: readonly TextBox[], padPx: number): Blob[
         }
       }
     }
-    if (!oversized && (b.y1 - b.y0) * model.mmPerPx >= 1.8 && (b.x1 - b.x0) * model.mmPerPx >= .2 && b.pixels.length * model.mmPerPx ** 2 >= .25) {
+    if (!oversized && (b.y1 - b.y0) * model.mmPerPx >= GLYPH.minH && b.pixels.length * model.mmPerPx ** 2 >= GLYPH.minArea) {
       out.push(b);
       if (out.length > OCR_LIMITS.glyphs) throw new Error("ocr_glyph_limit");
     }
   }
-  return out;
+  // A glyph touching a straight tick/leader: remove long horizontal/vertical runs and keep glyph-sized pieces.
+  const glyphs = out.filter((b) => glyphSized(b, model.mmPerPx));
+  const heights = glyphs.map((b) => (b.y1 - b.y0) * model.mmPerPx).sort((a, b) => a - b);
+  const runMm = Math.max(2.4, 1.2 * (heights[Math.floor(heights.length / 2)] ?? 2.5));
+  for (const b of out) {
+    if (glyphSized(b, model.mmPerPx)) continue;
+    for (const part of detachStrokes(b.pixels, width, model.mmPerPx, runMm)) {
+      const piece = bounds(part, width);
+      if (glyphSized(piece, model.mmPerPx)) glyphs.push(piece);
+    }
+    if (glyphs.length > OCR_LIMITS.glyphs) throw new Error("ocr_glyph_limit");
+  }
+  return glyphs;
 }
 
 /** Glyph-sized blobs, grouped when they sit side by side on one line (`12`, `1/4`). Thresholds are physical. */
 export function labelGroups(model: PageModel, read: readonly TextBox[]): Blob[] {
   const mm = (v: number) => v * model.mmPerPx;
-  const glyphs = blobs(model, read, Math.round(0.5 / model.mmPerPx)).filter((b) => {
-    const h = mm(b.y1 - b.y0);
-    const w = mm(b.x1 - b.x0);
-    return h >= 1.8 && h <= 6 && w >= 0.2 && w <= 5 && b.pixels.length * model.mmPerPx ** 2 >= 0.25;
-  });
+  const glyphs = blobs(model, read, Math.round(0.5 / model.mmPerPx));
   glyphs.sort((a, b) => a.x0 - b.x0);
   const groups: Blob[] = [];
   for (const g of glyphs) {
@@ -153,15 +183,61 @@ export function labelGroups(model: PageModel, read: readonly TextBox[]): Blob[] 
       near.x1 = Math.max(near.x1, g.x1);
       near.y1 = Math.max(near.y1, g.y1);
       near.pixels.push(...g.pixels);
-    } else groups.push({ ...g, pixels: [...g.pixels] });
+      near.components = (near.components ?? 1) + 1;
+    } else groups.push({ ...g, pixels: [...g.pixels], components: 1 });
   }
   if (groups.length > OCR_LIMITS.labelCalls) throw new Error("ocr_label_call_limit");
   return groups;
 }
 
-function words(data: Awaited<ReturnType<Worker["recognize"]>>["data"]) {
+/**
+ * Only the group's own pixels (plus their light anti-aliased rim, never another dark stroke), on white, scaled smoothly to a ~64 px
+ * glyph with a margin of 60 % of its height: neighbouring strokes are not read.
+ */
+export function glyphImage(model: PageModel, g: Blob): { image: Buffer; scale: number } {
+  const own = new Map(g.pixels.map((i) => [i, model.gray[i]!]));
+  for (const i of g.pixels) {
+    const x = i % model.width;
+    for (const d of [-1, 1, -model.width, model.width, -model.width - 1, -model.width + 1, model.width - 1, model.width + 1]) {
+      const j = i + d;
+      if (j < 0 || j >= model.gray.length || Math.abs((j % model.width) - x) > 1 || own.has(j)) continue;
+      if (model.gray[j]! >= DARK && model.gray[j]! < 235) own.set(j, model.gray[j]!);
+    }
+  }
+  const scale = Math.max(1, Math.min(6, 64 / (g.y1 - g.y0)));
+  const pad = Math.max(4, Math.round(0.6 * (g.y1 - g.y0)));
+  const sw = g.x1 - g.x0 + 2 * pad;
+  const sh = g.y1 - g.y0 + 2 * pad;
+  const src = createCanvas(sw, sh);
+  const sctx = src.getContext("2d");
+  const img = sctx.createImageData(sw, sh);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+    const v = own.get((g.y0 - pad + y) * model.width + (g.x0 - pad + x)) ?? 255;
+    const k = (y * sw + x) * 4;
+    img.data[k] = img.data[k + 1] = img.data[k + 2] = v;
+    img.data[k + 3] = 255;
+  }
+  sctx.putImageData(img, 0, 0);
+  const W = Math.round(sw * scale);
+  const H = Math.round(sh * scale);
+  const dst = createCanvas(W, H);
+  const ctx = dst.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(src, 0, 0, W, H);
+  return { image: dst.toBuffer("image/png"), scale };
+}
+
+type TessData = Awaited<ReturnType<Worker["recognize"]>>["data"];
+function words(data: TessData) {
   return (data.blocks ?? []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines.flatMap((l) => l.words)));
 }
+function lines(data: TessData) {
+  return (data.blocks ?? []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines));
+}
+const symbolsOf = (data: TessData) => words(data).flatMap((w) => (w.symbols?.length ? w.symbols : [w]).map((s) => ({ text: s.text, confidence: s.confidence })));
+
 
 export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
   assertModel(dir);
@@ -188,9 +264,14 @@ export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
       const { data } = await bounded(pageWorker.recognize(png(model.width, model.height, (i) => model.gray[i]!), { rotateAuto: true }, { blocks: true }), OCR_LIMITS.pageMs);
       // Tesseract rotated the image by `rad` about its centre before reading; undo it to land on the page as shown.
       const rad = data.rotateRadians ?? 0;
-      const read = words(data)
-        .filter((w) => w.text.trim() !== "" && w.confidence >= PAGE_MIN_CONFIDENCE)
-        .map((w) => ({ text: w.text.trim(), ...rotateBox(model, w.bbox, -rad), upright: { ...w.bbox }, confidence: w.confidence, pass: "page" as const }));
+      const toWord = (text: string, box: Rect, confidence: number, line: number): OcrWord =>
+        ({ text, ...rotateBox(model, box, -rad), upright: { ...box }, confidence, pass: "page", line });
+      const read: OcrWord[] = [];
+      lines(data).forEach((l, line) => {
+        const all = l.words.filter((w) => w.text.trim() !== "").map((w) => toWord(w.text.trim(), w.bbox, w.confidence, line));
+        read.push(...all.filter((w) => keepLowConfidenceWord(w, all)));
+      });
+      for (const w of loneLabelWords(read)) w.rerouted = true;
       return { words: read, skewDeg: (rad * 180) / Math.PI };
     },
     async labels(model, dpi, read) {
@@ -199,31 +280,37 @@ export async function createOcr(dir = CACHE_DIR): Promise<OcrEngine> {
       read.labelCalls = 0;
       const out: OcrWord[] = [];
       const rad = (read.skewDeg * Math.PI) / 180;
-      for (const g of labelGroups(model, read.words)) {
-        // Only the group's own pixels, on white, scaled to a ~40 px glyph: neighbouring strokes are not read.
-        const scale = Math.max(1, Math.min(4, 40 / (g.y1 - g.y0)));
-        const pad = Math.round(20 / scale);
-        const w = g.x1 - g.x0 + 2 * pad;
-        const h = g.y1 - g.y0 + 2 * pad;
-        const own = new Map(g.pixels.map((i) => [i, model.gray[i]!]));
-        const W = Math.round(w * scale);
-        const H = Math.round(h * scale);
-        const image = png(W, H, (i) => {
-          const sx = g.x0 - pad + Math.floor((i % W) / scale);
-          const sy = g.y0 - pad + Math.floor(Math.floor(i / W) / scale);
-          if (sx < 0 || sx >= model.width || sy < 0 || sy >= model.height) return 255;
-          return own.get(sy * model.width + sx) ?? 255;
-        });
-        await labelWorker.setParameters({ user_defined_dpi: String(Math.round(dpi * scale)) });
+      // Rerouted lone page words are re-read here, so their ink is not excluded.
+      const groups = labelGroups(model, read.words.filter((w) => !w.rerouted));
+      const recognise = async (image: Buffer, psm: PSM) => {
         const remaining = deadline - performance.now();
         if (remaining <= 0) throw new Error("ocr_timeout");
-        read.labelCalls++;
-        const found = words((await bounded(labelWorker.recognize(image, {}, { blocks: true }), remaining)).data);
-        const text = found.map((f) => f.text.trim()).join("");
-        const confidence = Math.min(...found.map((f) => f.confidence));
-        if (text && isLabel(text) && confidence >= LABEL_MIN_CONFIDENCE) out.push({ text, x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1, upright: rotateBox(model, g, rad), confidence, pass: "label" });
+        read.labelCalls!++;
+        await labelWorker.setParameters({ tessedit_pageseg_mode: psm });
+        return (await bounded(labelWorker.recognize(image, {}, { blocks: true }), remaining)).data;
+      };
+      let line = -1;
+      for (const [index, g] of groups.entries()) {
+        const components = g.components ?? 1;
+        // A single straight stroke (tick, ray, leader stub) is not a character.
+        if (components === 1 && isStraightStroke(g.pixels, model.width, model.mmPerPx)) continue;
+        const { image, scale } = glyphImage(model, g);
+        await labelWorker.setParameters({ user_defined_dpi: String(Math.round(dpi * scale)) });
+        const first = await recognise(image, PSM.SINGLE_WORD);
+        let confidence = Math.min(...words(first).map((w) => w.confidence));
+        let text = resolveGlyphReading(symbolsOf(first), components, LABEL_MIN_CONFIDENCE, confidence);
+        // One component read as several letters: ask again as a single character, within the same call budget.
+        // Fallback only while every remaining group still fits in the same 64-call budget.
+        if (text === null && components === 1 && read.labelCalls! + (groups.length - index - 1) < OCR_LIMITS.labelCalls) {
+          const again = await recognise(image, PSM.SINGLE_CHAR);
+          confidence = Math.min(...words(again).map((w) => w.confidence));
+          text = resolveGlyphReading(symbolsOf(again), 1, LABEL_MIN_CONFIDENCE, confidence);
+        }
+        if (text && isLabel(text)) out.push({ text, x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1, upright: rotateBox(model, g, rad), confidence, pass: "label", line: line-- });
       }
-      return out;
+      // Page-level choices among readings: case by height, digit/letter by row, textures of identical marks dropped.
+      const chosen = dropRepeatedMarks(digitLetterByRow(caseByHeight(out.map((w) => ({ ...w, h: (w.y1 - w.y0) * model.mmPerPx })))));
+      return chosen.map((w) => { const { h, ...word } = w; void h; return word; });
     },
     async terminate() {
       await Promise.all([pageWorker.terminate(), labelWorker.terminate()]);

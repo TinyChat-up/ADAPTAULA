@@ -85,6 +85,26 @@ pueda verificarse.
     desaprendizaje documentado.
   - **Restricciones:** nunca con corpus privados cedidos a terceros, ni con preferencias de docentes recogidas automáticamente.
 
+10. **Fase I de reconocimiento hecha (2026-10-15, [QA](qa/ocr-fase1/README.md)), solo en el piloto.**
+    - **Corpus de diez fichas sintéticas:**
+      - etiquetas 36/44 → 43/44, con precisión 100 % y 0 espurias;
+      - consignas bien asociadas 15/20 → 19/20, con 0 incorrectas;
+      - WER 11,6 → 9,4 % y CER 3,8 → 2,6 %.
+    - **Reserva adversarial independiente:** etiquetas 17/24 → 22/24.
+    - **Fixtures históricos:** sin regresiones.
+    - **Siguiente, Fase II · reconocimiento geométrico,** sobre fichas propias, con desarrollo y reserva, y sin aprobar recortes:
+      1. Enderezar la página antes del prefiltro, para que zonas y candidatos trabajen en el mismo marco que el OCR.
+      2. Zonas de actividad por columna, a partir de los segmentos de línea del OCR. Hoy cada zona ocupa todo el ancho de la página
+         y en 05 bloquea por `uniqueness` / `activity_anchor`.
+      3. Asociar etiquetas a su figura mediante las líneas guía y ampliar el recorte para incluirlas. Es el bloqueo `labels` de 01,
+         04 y 09; hoy el recorte se calcula sin las etiquetas que detecta la segunda pasada.
+      4. Firmas de barra, recta numérica y reloj más robustas al grosor y al giro (`identity_evidence` en 02, 03 y 08).
+      5. Umbral de tinta adaptativo para fondos grises y fotocopias degradadas.
+      6. Separación de líneas guía diagonales que cruzan una etiqueta (B de 09).
+      7. Ampliar la reserva con columnas cuya primera línea supere la evidencia del matcher.
+    - **Criterio de Fase II:** más candidatas correctas en desarrollo y en reserva, 0 candidatos erróneos y 0 recortes aprobados.
+      Identidad, contenido completo y respuesta visual siguen sin verificarse.
+
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 
 ## Fase 0 — Cimientos y documentación ✅

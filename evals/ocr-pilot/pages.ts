@@ -77,7 +77,7 @@ export const CONDITIONS: Condition[] = [
 ];
 
 /** Low contrast, heavy grain and dust specks (deterministic): a worn photocopy, not a model of any real scanner. */
-function degrade(model: PageModel) {
+export function degrade(model: PageModel) {
   let seed = 12345;
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   const g = model.gray;

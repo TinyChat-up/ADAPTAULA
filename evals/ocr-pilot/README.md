@@ -1,4 +1,13 @@
-# Piloto OCR local — auditado en PR #32
+# Piloto OCR local — auditado en PR #32, mejorado en la Fase I
+
+> **Fase I (`ocr_pilot@phase1`).** Mismas diez fichas sintéticas, sin segundo motor:
+> - etiquetas: 36/44 → **43/44**, con precisión 81,8 % → **100 %** y espurias 7 → **0**;
+> - consignas bien asociadas: 15/20 → **19/20**, con 0 incorrectas;
+> - WER 11,6 % → **9,4 %** y CER 3,8 % → **2,6 %**.
+>
+> En la reserva adversarial independiente, las etiquetas pasan de 17/24 a **22/24** y las espurias de 7 a **1**. Los fixtures
+> históricos no tienen regresiones. Geometría sin cambios (1/10 candidatas) y ningún recorte aprobado. Detalle en
+> [docs/qa/ocr-fase1](../../docs/qa/ocr-fase1/README.md).
 
 Prototipo experimental aislado. `src/` no importa el piloto ni Tesseract (prueba de fronteras, incluidos subpaths). Tesseract
 es una devDependency exacta; no se ha ejecutado un build/file tracing nuevo para certificar el bundle de Vercel. No cambia
@@ -6,7 +15,10 @@ Hacer magia, análisis v3, localizador de producción, PDF, UI, Supabase ni Stri
 
 | Archivo | Función |
 | --- | --- |
-| `engine.ts` | Página con PSM 3 y deskew; glifos con PSM 8; presupuestos de píxeles, componentes, grupos y tiempo |
+| `engine.ts` | Página con PSM 3 y deskew; glifos con PSM 8 (respaldo PSM 10 si un componente se lee como varias letras); presupuestos de píxeles, componentes, grupos, llamadas y tiempo |
+| `recognition.ts` | Reglas puras de la Fase I: líneas de Tesseract, palabras de baja confianza con contexto, un componente = un carácter, caja por altura, O/0 por fila, trazos rectos, separación de marcas, texturas repetidas |
+| `adversarial.ts` | Fichas sintéticas adversariales: desarrollo (8) y reserva (7), disjuntas; `pnpm eval:ocr -- --adversarial dev\|holdout` |
+| `results-adversarial-*/` | Informes del motor de la Fase I sobre esos conjuntos |
 | `pages.ts` | 11 documentos sintéticos × 5 condiciones; corpus autorizado externo con rutas y límites validados |
 | `metrics.ts` | Métricas de texto, anclas, etiquetas y candidatos; emparejamiento uno a uno |
 | `run.ts` | Runner, informes sin transcripciones, estado de ejecución y publicación tras completar todas las páginas |

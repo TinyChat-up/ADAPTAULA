@@ -2,6 +2,53 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Fase I: mejora real del reconocimiento de fichas (piloto OCR)
+
+- **Base y rama:** `origin/main` en `153721a`; la PR #34 está integrada. Rama nueva: `claude/fase-1-reconocimiento-ocr`.
+- **Corpus:**
+  - ZIP de diez fichas sintéticas adjuntado por el usuario y extraído fuera del repositorio;
+  - originales en solo lectura, evaluación sobre copias y SHA-256 de los 35 ficheros verificado al terminar.
+  - **Línea base reproducida exactamente:** 36/44 etiquetas, 7 perdidas, 1 confundida y 7 espurias; WER 11,6 % y CER 3,8 %;
+    16/20 consignas encontradas, 15 asociadas, 1 sin verificar; 1/10 candidatas.
+- **Diagnóstico con evidencia:**
+  - PSM 8 inventa «Los» o «Lol» a partir de una C;
+  - los 3 y 9 del reloj tocan sus marcas;
+  - rayos y marcas del reloj se leen como N, A, 1 o 7;
+  - Tesseract separa las columnas en bloques, pero el piloto las reagrupaba por altura;
+  - «¿Cuántos» (30) y «Observa el» (0) se descartaban por confianza;
+  - «Mirael» se lee unido incluso al releer.
+- **Cambios** (`recognition.ts` con 15 pruebas, escritas antes de cada regla y vistas fallar, salvo la de la regresión, añadida con su corrección; `engine.ts`; `metrics.ts` y `run.ts` usan líneas de
+  Tesseract): un componente equivale a un carácter (respaldo PSM 10), caja por altura, O/0 por fila, separación de marcas, rechazo
+  de trazos rectos, texturas repetidas, relectura de letras sueltas, glifo con borde y escalado suave, líneas de Tesseract con orden
+  por filas y palabras de baja confianza con contexto.
+- **Descartado:** releer líneas con PSM 7. No mejoraba (WER 9,5 frente a 9,4 %) y añadía 16 llamadas y un worker.
+- **Regresión detectada y corregida:** una «E» con confianza de palabra 9 en el fixture histórico degradado `answer_leak`. Ahora se
+  exige confianza de palabra.
+- **Resultados:**
+  - **Corpus:**
+    - etiquetas 43/44, con precisión 100 % y 0 espurias;
+    - consignas 19/20 encontradas y asociadas, 0 incorrectas y 0 sin verificar (tolerante 20/20);
+    - WER 9,4 % y CER 2,6 %;
+    - llamadas 82 → 59;
+    - pico RSS 565 → 558 MB;
+    - mediana 1.991 → 2.094 ms.
+  - **Adversariales de desarrollo:** etiquetas 15/25 → 24/25.
+  - **Reserva** (ejecutada una sola vez): etiquetas 17/24 → 22/24, espurias 7 → 1, WER 11,4 → 4,5 %.
+  - **Fixtures históricos (55):** sin regresiones en etiquetas, anclas ni WER; CER 1,6 → 1,5 %.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/ocr-*.test.ts tests/unit/visual-location-*.test.ts tests/unit/boundaries.test.ts` →
+    **121/121 PASS**;
+  - `pnpm typecheck` PASS;
+  - `pnpm lint`: 0 errores (sigue el aviso previo `_id`);
+  - `pnpm eval:ocr` sobre el corpus, los adversariales y los fixtures, todos `complete`.
+  - No se ejecutaron suite completa, build, SQL, migraciones, modelos de pago ni Stripe.
+- **Riesgos:**
+  - Las reglas se diseñaron viendo las diez fichas, que no son independientes.
+  - La evidencia independiente es una reserva pequeña y sintética.
+  - Se rechazan «I» y «l» de palo.
+  - Los tiempos y la memoria no se han medido en Vercel.
+- **Siguiente acción:** Fase II de reconocimiento geométrico (ROADMAP §10).
+
 ## 2026-10-15 — Políticas legales y corpus de mejora autorizado (preparación, sin recolección)
 
 - **Base y rama:** `origin/main` en `1d4d07c`; la PR #33 es ancestro. Rama nueva: `claude/politicas-legales-corpus`.
