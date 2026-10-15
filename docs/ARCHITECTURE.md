@@ -282,3 +282,43 @@ La propuesta de `auto_visuals@v3` en PR #30 sustituyó un ancla de actividad por
 **Lectura/producción:** validar positivamente metadatos y geometría del localizador; humano con evidencia null, automático con evidencia completa de un motor conocido, ancla/zona y sin propiedad scan. La ausencia de datos no autoriza. El pin carga el localizador completo con RLS y comprueba id, SHA, receta, identidad, relación y ruta privada (incluido el formato pre-017). Los lectores y el productor comparten el control. Se contrasta además la fuente precargada con el SHA de la revisión realmente devuelta por la RPC.
 
 **Consecuencias:** los recortes automáticos históricos sin ancla/evidencia suficiente dejan de entregarse y requieren corrección humana. Se conservan revisiones/objetos. No se garantiza identidad universal, no se revoca acceso del propietario a objetos históricos en Storage y no se recuperan documentos ya descargados. El motor conserva una sola página en la caché de alta resolución; sin benchmark Vercel. Sin OCR, modelos nuevos, cambios comerciales o de renderer. [Alcance, pruebas y recomendación MERGE técnico](qa/pr30/README.md).
+
+### ADR-028 · Finalidades separadas y corpus de mejora con admisión cerrada (2026-10-15)
+
+**Contexto:** queremos mejorar el análisis y las adaptaciones con fichas reales, pero hoy no existe:
+- registro de aceptación de condiciones;
+- autorización opcional;
+- plazo de conservación aprobado;
+- acuerdo con centros.
+
+Además, las garantías de los proveedores no están verificadas ([auditoría](legal/AUDITORIA_DATOS.md)).
+
+**Decisión:**
+
+1. Tres finalidades que nunca se derivan entre sí:
+   - **A**, servicio;
+   - **B**, evaluación interna y mejora;
+   - **C**, entrenamiento o ajuste fino.
+
+   Aceptar los términos o subir un fichero solo cubre A.
+2. **B** requiere una autorización explícita por material con:
+   - finalidad;
+   - SHA de los bytes;
+   - versión y hash del aviso;
+   - caducidad;
+   - retirada.
+
+   B también requiere una licencia verificada de derechos de autor y una revisión de privacidad sin hallazgos.
+3. La seudonimización no cuenta como anonimización: cualquier dato de alumnado o de terceros excluye la ficha.
+4. **C** está desactivado como literal de tipo (`trainingEnabled: false`).
+5. Admisión manual y determinista (`src/lib/corpus/admission.ts`), que falla de forma cerrada:
+   - la política vigente tiene mecanismo, aviso y plazo **pendientes**, así que solo admite fichas propias;
+   - nada es retroactivo;
+   - no hay copia automática desde producción;
+   - las particiones `development`, `evaluation` y `holdout` no comparten bytes ni familia.
+
+**Consecuencias:**
+- Los contratos existen sin ningún llamador de producción.
+- No hay casilla en la interfaz ni tabla hasta que el servidor pueda registrar la evidencia. El esquema y la RLS están
+  propuestos, no aplicados ([propuesta §8](legal/FINALIDADES_Y_CORPUS.md#8-esquema-propuesto-en-supabase-no-aplicado)).
+- Los textos legales son borradores sujetos a [revisión especializada](legal/REVISION_ESPECIALISTA.md).
