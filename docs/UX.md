@@ -172,3 +172,10 @@ loading (skeletons con la forma real) · empty (explica y ofrece la siguiente ac
 Navegación completa por teclado y orden lógico · foco visible (anillo de 2 px `primary` + offset) · enlace "Saltar al contenido" · labels en todos los controles · errores con `aria-describedby` + `aria-invalid` y un resumen al enviar · diálogos con foco atrapado y Escape · objetivos táctiles ≥ 24×24 px (44 px en móvil) · `prefers-reduced-motion` · responsive y zoom al 200 % sin scroll horizontal · `lang="es"` · tests automáticos con axe en E2E.
 
 El material generado también es accesible: encabezados semánticos, orden de lectura correcto, texto alternativo, nada solo por color y tablas con cabeceras.
+
+
+## Editar una ficha entregada — primera entrega
+
+Acceso desde «Ver la ficha» → «Editar ficha». Barra simple con Deshacer, Rehacer y Guardar borrador; estado de cambios visible. A4 ajustada al ancho y opción de tamaño real; controles de presentación y selector de actividad con enunciado y espacio de respuesta. En móvil los controles se apilan y la hoja puede ampliarse/desplazarse, sin toolbar de escritorio comprimida.
+
+Cambiar un enunciado muestra el aviso pedagógico y exige reconocer que se comprobará antes de usarlo; nunca muestra una aprobación automática. Guardar conserva la ficha generada y crea una revisión del borrador. Un conflicto entre pestañas no sobrescribe: informa y permite recargar. Los errores de conexión conservan la edición local. Recuperar último guardado restaura ese borrador y se puede deshacer. La descarga se habilita tras guardar y siempre es del alumno. V1 no ofrece edición de tablas/figuras, claves, estructura ni autosave.

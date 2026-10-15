@@ -857,3 +857,12 @@ Sigue sin validarse en una Function **real** de Vercel: la comprobación final e
 ## Evals
 
 `evals/adaptation/` (ver su README): tres materiales sintéticos modelados sobre los validados en la Fase 3 (Primaria fracciones, ESO geografía, Bachillerato argumentación) y perfiles funcionales de lectura, funciones ejecutivas, lenguaje, carga visual, reducción de escritura, conflicto apoyo/objetivo y ampliación. `pnpm eval:adaptation:mock` ejecuta el pipeline completo con los mocks (coste 0). No se evalúa si la ficha «queda bonita»: se evalúa que conserve el objetivo y aplique los apoyos.
+
+
+## Editor docente — primera entrega (ADR-029)
+
+Desde la vista de una ficha entregada, «Editar ficha» abre el borrador más reciente de esa versión. El original sigue accesible. Se editan los enunciados de actividades y ajustes de presentación/espacio admitidos por CLARO. Pasos, requisitos, opciones, tablas, figuras y clave se conservan. Las líneas nunca eluden el mínimo del renderer para una consigna con extensión explícita.
+
+Deshacer/rehacer funciona durante la sesión; guardar crea una revisión independiente. Recuperar restaura el último guardado y sigue siendo deshacible. Recargar abre esa última revisión. Sin autosave ni selección de revisiones antiguas en V1. El PDF del editor fija su número de revisión; queda desactivado mientras hay cambios sin guardar. La vista normal y su PDF continúan mostrando la ficha generada.
+
+Todos los cambios de enunciado requieren reconocer que se comprobarán datos, unidades, relaciones y ausencia de respuestas. El reconocimiento no es una revisión pedagógica ni cambia el veredicto original. La vista A4 usa `sheetModel`/`MaterialSheet` compartidos; muestra páginas lógicas, mientras Chromium decide los saltos físicos finales. No se llama a IA ni se consume cuota al editar o exportar.

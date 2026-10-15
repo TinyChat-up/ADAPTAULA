@@ -322,3 +322,16 @@ Además, las garantías de los proveedores no están verificadas ([auditoría](l
 - No hay casilla en la interfaz ni tabla hasta que el servidor pueda registrar la evidencia. El esquema y la RLS están
   propuestos, no aplicados ([propuesta §8](legal/FINALIDADES_Y_CORPUS.md#8-esquema-propuesto-en-supabase-no-aplicado)).
 - Los textos legales son borradores sujetos a [revisión especializada](legal/REVISION_ESPECIALISTA.md).
+
+
+### ADR-029 · Editor docente: borradores separados y CLARO compartido (2026-10-15)
+
+**Decisión:** editar mediante un parche cerrado sobre la versión entregada, sin aceptar documentos arbitrarios del navegador. V1 permite `activity.prompt`, líneas/caja del mismo formato de respuesta y cuatro ajustes de presentación ya soportados. Todo lo demás procede de la versión base: identidad/orden de bloques, recursos, figuras, tablas, opciones, requisitos y clave.
+
+`adaptation_drafts` (025) guarda revisiones append-only con base, autor, fecha, cambios y constancia del aviso de contenido. Es un borrador compartido del espacio, no una validación ni una fuente de entrenamiento. RLS permite leer a miembros; solo la RPC autenticada y con rol de escritura inserta. Bloquea la adaptación mientras comprueba base y última revisión, evitando sobrescribir desde una pestaña desactualizada. El endpoint valida Zod y el parche; toda lectura para renderizar vuelve a validarlo, incluido un registro insertado directamente mediante RPC. No se toca la versión entregada ni el original.
+
+`sheetModel` se extrae de `load.ts` a un módulo puro, reexportado por el loader, para que editor, vista y PDF usen exactamente la misma proyección y `MaterialSheet`. El cliente solo recibe el documento sin clave/notas y las rutas de recursos ya autorizadas. La escala de la vista vive fuera del renderer y no altera la impresión. El PDF con `?borrador=N` requiere esa revisión persistida y la base actual, nunca sustituye silenciosamente por el original/otra revisión; revalida cambios, reconocimiento del aviso, procedencia, recursos esenciales y las guardas PDF existentes. La descarga normal continúa siendo la ficha generada.
+
+**Seguridad pedagógica:** cualquier cambio de enunciado requiere reconocer el aviso de comprobación. No se registra como aprobado y no modifica el veredicto original. Las claves no pasan a la proyección del alumno. No se promete detectar respuestas o errores semánticos que un docente escriba en un enunciado.
+
+**Entrega pequeña:** guardado explícito, historial local acotado, recuperación del último borrador y sin editor de estructura. No requiere rediseñar `MaterialDocument` ni cambiar prompts/modelos. Migración solo local en esta sesión; despliegue pendiente del proceso habitual.

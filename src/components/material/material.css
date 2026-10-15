@@ -215,6 +215,8 @@ ul.ms-list { list-style: disc; }
    dónde respondo (blanco con líneas). Las ayudas llevan un filo verde petróleo. Nada depende del color.
    ====================================================================================================================== */
 [data-design="claro"] { --claro-gutter: 11mm; --claro-num: 1.05em; }
+/* Enlarging the text must not split an activity number across two lines. */
+[data-design="claro"] .ms-num[data-numeric] { white-space: nowrap; }
 [data-design="claro"][data-stage="primaria"] { --claro-gutter: 13mm; --claro-num: 1.3em; }
 [data-design="claro"][data-stage="bachillerato"] { --claro-gutter: 10mm; --claro-num: .95em; }
 

@@ -2,6 +2,18 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Editor docente mínimo operativo
+
+- **Base y rama:** `origin/main` / `b192735`, nueva `codex/editor-docente-claro`. El remoto ya incluía el merge de #37 al iniciar; no se modificó ni fusionó esa PR. Leídos AGENTS/CLAUDE, estado, roadmap, arquitectura, adaptación, UX y seguridad.
+- **Reutilizado:** MaterialDocument, roles/workspace, loader de recursos privados, CLARO, exportación Chromium y guardas del PDF. Existían versiones/vista/PDF y edición del plan, pero no editor de la ficha entregada. `sheetModel` pasa a un módulo puro compartido/reexportado: sigue habiendo una única llamada de producción a `buildRenderModel`.
+- **Implementado:** ruta `/app/adaptaciones/[id]/editar`, acceso desde vista, enunciados, cuatro ajustes de presentación, líneas/caja, vista A4 ajustable, undo/redo acotado, guardado/revisión, recuperación y PDF de esa revisión. Estado de cambios, errores conservando edición y rechazo de conflictos entre pestañas. La ficha generada y su PDF no cambian.
+- **Persistencia:** migración 025, solo PGlite local: revisiones append-only separadas, base/autor/fecha/aviso, RLS de miembros, RPC autenticada con rol de escritura y bloqueo/versión optimista. Parches Zod cerrados, validados antes de guardar y de renderizar. Sin acceso admin nuevo ni cambios de cuota/AI runs.
+- **Seguridad pedagógica:** todo enunciado cambiado requiere aviso/reconocimiento explícito de comprobación; nunca validado automáticamente. Sin edición de tablas, figuras, opciones, pasos, requisitos ni claves. La clave/notas se excluyen del cliente y del modelo de alumno. No se promete detectar errores/respuestas escritos manualmente. La numeración de CLARO permanece en una línea al ampliar texto.
+- **Pruebas:** 94 focalizadas en ocho archivos; 9 PDF con Chromium real en dos archivos; 2 E2E desktop/mobile con guardado, recuperación, descarga y original intacto; controles sin incidencias graves/críticas de axe. Typecheck, lint y build PASS (aviso previo `_id` en lint). No suite completa ni validación pedagógica del generador real. Lint inicial incluyó la caché temporal de Next; retirada la salida generada, el comando normal pasó. Ajustes de tsconfig generados por Next retirados del diff.
+- **Evidencia:** [alcance, comandos y capturas sintéticas](qa/editor-docente/README.md); PDFs y capturas adicionales en `/workspace/artifacts/editor-docente/`.
+- **Límites:** sin autosave, historial navegable o publicación como versión canónica; páginas lógicas en pantalla y paginación física al exportar. Migración remota/despliegue pendientes. No APIs pagadas, Supabase remoto, Stripe, entrenamiento, prompts/modelos ni cambios de producción desplegada.
+- **Publicación:** rama/PR pendientes del cierre; la consulta de PR mediante GraphQL devolvió `Forbidden`. Siguiente acción: revisar esta primera entrega y probarla con docentes antes de ampliar la edición.
+
 ## 2026-10-15 — Fase III: calidad pedagógica y referencias docentes (experimental)
 
 - **Base y rama:** `origin/main` en `370a9d8`; la PR #36 está integrada. Rama nueva: `claude/fase-3-calidad-pedagogica`.

@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-15. Base revisada: `main` en `370a9d8` (**PR #36 integrada**, Fase II de geometría; #27–#35 también), comprobada por Git.
+Actualizado: 2026-10-15. Base revisada: `origin/main` en `b192735` (**PR #37 ya integrada al comenzar**, por historial Git; sin merge realizado en esta sesión), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -36,32 +36,18 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama: `claude/fase-3-calidad-pedagogica`, desde `main` en `370a9d8` (PR #36 integrada).
+Rama: `codex/editor-docente-claro`, nueva desde `origin/main` / `b192735`. El usuario indicó #37 abierta, pero el remoto ya contiene su merge; esta sesión no la modifica ni la fusiona.
 
-**Bloque: Fase III · calidad pedagógica y referencias docentes (experimental).** Solo `evals/pedagogical-quality`, sus pruebas,
-una prueba de fronteras y la documentación. Informe en [docs/qa/calidad-pedagogica-fase3](qa/calidad-pedagogica-fase3/README.md).
+**Bloque: editor docente mínimo operativo**, sin otra fase experimental ni llamadas de pago.
 
-- **Implementado:**
-  - contrato de referencia pedagógica con estado de validación docente: provisional, revisada o aprobada; las dos últimas exigen
-    el registro de la revisión ligado al sha-256 de la referencia;
-  - evaluador A–E determinista, sin PASS global: FAIL o «pendiente de revisión docente»;
-  - adaptador controlado que no ve la clave;
-  - 16 tipos de error deliberado;
-  - contrato de revisión humana de figuras ligado a material, página, región y recorte visto;
-  - `pnpm eval:pedagogy`, con reserva protegida por hash de reglas.
-- **Probado** (8 fichas originales fuera de Git, referencias **sintéticas provisionales**; ninguna validada por un docente):
-  - **Desarrollo (5 fichas):** 52/52 errores verificables detectados y 0/15 falsos bloqueos, tras un único ajuste (3/15 antes).
-  - **Reserva (3 fichas, una ejecución):** 28/29 detectados, 0/9 falsos bloqueos y 8/8 fugas.
-  - **Errores no verificables:** 0/9 detectados; todos llegan como pendientes, nunca PASS.
-  - **Fichas propias de CI:** 37/37.
-  - **Pruebas focalizadas:** 96/96; typecheck y lint correctos.
-- **Pendiente:**
-  - revisión del docente con el paquete entregado fuera de Git: ficha de evaluación por ficha y estado de cada referencia;
-  - adaptaciones de un modelo real (no probadas);
-  - criterios falsos enseñados en apoyos, inferencias escritas en el texto y preguntas reescritas con las mismas palabras clave.
-- **No se hizo:** cambios en `src/`, Hacer magia, bloqueos semánticos, PDF, Supabase, Stripe, páginas legales o UI; llamadas de
-  pago; entrenamiento; subida de las fichas originales a Git.
+- Desde la ficha entregada: «Editar ficha». Enunciados de actividades, letra, separación, contraste y líneas/tamaño de caja de respuesta.
+- Vista A4 en directo con CLARO, ajustable al ancho o a tamaño real. Misma proyección pura `sheetModel`, mismos componentes y CSS para vista y PDF.
+- Deshacer/rehacer (50 cambios), guardar borrador, recuperar el último guardado y descargar exactamente esa revisión. Se bloquea la descarga de cambios sin guardar.
+- Los borradores son revisiones inmutables separadas, compartidas dentro del espacio autorizado. Nunca sustituyen `adaptation_versions`, el documento generado, su revisión ni el PDF original.
+- Todo cambio de enunciado se trata como contenido pedagógico: aviso y reconocimiento explícito de que debe comprobarse. No equivale a revisión/validación docente ni automática. Tablas, imágenes, opciones, claves, pasos, requisitos y vínculos quedan fuera de la edición.
+- Migración **025** incluida, probada solo en PGlite local; no aplicada en Supabase remoto. RLS, escritura mediante RPC de sesión con rol de escritura, revisión/base optimistas y trazabilidad por autor/fecha. Sin clientes admin nuevos.
+- Pruebas con documentos sintéticos: persistencia, conflictos, RLS, undo/redo, integridad, PDF Chromium y flujo de navegador en ordenador/móvil; detalle y capturas en [editor docente](qa/editor-docente/README.md).
 
-**Siguiente acción:** incorporar la revisión del docente. Pasar a `revisada_docente` o `aprobada_docente` solo las referencias
-que el docente marque, con el sha-256 de la versión revisada. Después, medir el generador real (mock primero) contra esas
-referencias.
+**Límites:** sin autosave, edición de pasos/tablas/figuras, reordenación ni publicación del borrador como nueva versión generada. Se recupera el último guardado; la exploración de todo el historial queda pendiente. La vista muestra páginas lógicas A4; el PDF determina la paginación física final. Se mantiene el mínimo de espacio exigido por una consigna de escritura. No se garantiza detectar respuestas o cambios semánticos introducidos manualmente: el docente debe comprobarlos.
+
+**Siguiente acción:** revisar esta primera entrega y, tras integrarla y aplicar 025 por el procedimiento habitual, probar el editor con docentes antes de ampliar los campos editables. Las pruebas pagadas y los experimentos de evaluación quedan pospuestos. Sin cambios en prompts/modelos, Stripe, producción desplegada, Supabase remoto ni recopilación de correcciones.

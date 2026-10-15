@@ -116,7 +116,7 @@ describe("Sistema CLARO (pilot, behind a render option)", () => {
     const out = html(claro(pilotPrimary()).model);
     expect(out).toContain('data-design="claro"');
     expect(visible(out)).toMatch(/Ciencias de la Naturaleza · 4\.º Primaria Adaptaula/);
-    expect(out).toMatch(/class="ms-num">01<\/span>[\s\S]*class="ms-num">02<\/span>/);
+    expect(out).toMatch(/class="ms-num"[^>]*>01<\/span>[\s\S]*class="ms-num"[^>]*>02<\/span>/);
     expect(visible(out)).toContain("Lee");
   });
 
