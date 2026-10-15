@@ -8,6 +8,9 @@
 > En la reserva adversarial independiente, las etiquetas pasan de 17/24 a **22/24** y las espurias de 7 a **1**. Los fixtures
 > históricos no tienen regresiones. Geometría sin cambios (1/10 candidatas) y ningún recorte aprobado. Detalle en
 > [docs/qa/ocr-fase1](../../docs/qa/ocr-fase1/README.md).
+>
+> **Fase II:** la geometría (`evals/visual-location/locate-v2.ts`) consume este OCR sin modificarlo. Usa sus cajas enderezadas y
+> sus líneas de Tesseract. Ver [docs/qa/geometria-fase2](../../docs/qa/geometria-fase2/README.md).
 
 Prototipo experimental aislado. `src/` no importa el piloto ni Tesseract (prueba de fronteras, incluidos subpaths). Tesseract
 es una devDependency exacta; no se ha ejecutado un build/file tracing nuevo para certificar el bundle de Vercel. No cambia

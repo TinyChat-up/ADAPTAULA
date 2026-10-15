@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-15. Base revisada: `main` en `153721a` (**PR #34 integrada**, preparación legal; #27–#33 también), comprobada por Git.
+Actualizado: 2026-10-15. Base revisada: `main` en `ae603e6` (**PR #35 integrada**, Fase I de OCR; #27–#34 también), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -15,7 +15,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Módulo | Implementado | Pendiente o límite |
 | --- | --- | --- |
 | Auth, workspace y perfiles | Supabase, workspace personal, permisos y perfiles funcionales | Revalidar integraciones contra el entorno real; las pruebas locales no certifican la configuración remota |
-| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: aceptación automática retirada tras falsos positivos (ADR-027). La auditoría de 8.2B.7 muestra que propuesta + OCR + geometría solo generan candidatos, sin demostrar identidad. Piloto OCR local (`evals/ocr-pilot`), Fase I sobre diez fichas sintéticas: etiquetas 43/44 sin espurias y consignas 19/20 sin asociaciones incorrectas; geometría 1/10 y ningún recorte aprobado; falta corpus real autorizado |
+| Materiales y análisis | Subida privada, análisis versionado, jobs y corrección de contexto | Escaneos: aceptación automática retirada tras falsos positivos (ADR-027). La auditoría de 8.2B.7 muestra que propuesta + OCR + geometría solo generan candidatos, sin demostrar identidad. Piloto OCR local (`evals/ocr-pilot`), Fase I sobre diez fichas sintéticas: etiquetas 43/44 sin espurias y consignas 19/20 sin asociaciones incorrectas; Fase II de geometría (prototipo): 9/10 candidatas correctas en desarrollo y 2/6 en la reserva independiente; ningún recorte aprobado; falta corpus real autorizado |
 | Hacer magia | Plan automático, ensamblado, revisión y autocorrección, entrega o parada explicada | Algunos formatos cerrados, simplificación y reorganización aún carecen de ejecutores automáticos; no añadir aprobación intermedia como solución |
 | Visuales originales | Recortes, localización automática acotada, reconstrucción determinista de figuras compatibles y selección humana sobre escaneos; bloqueo de recortes scan inseguros heredados | La fase 8.2B.6 NO está completada: páginas sin texto se rechazan automáticamente; no ampliar cobertura sin contrato de evidencia |
 | Ilustraciones IA | PR #25: brief, generación, revisión, activo privado, contrato visual, gate y presupuesto | Generación real de imágenes aún sin validar; pruebas existentes usan proveedores simulados |
@@ -36,43 +36,29 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama: `claude/fase-1-reconocimiento-ocr`, desde `main` en `153721a` (PR #34 integrada; verificado con `git merge-base`).
+Rama: `claude/fase-2-geometria-figuras`, desde `main` en `ae603e6` (PR #35 integrada; verificado con `git merge-base`).
 
-**Bloque: Fase I · mejora real del reconocimiento en el piloto OCR.** Solo `evals/ocr-pilot`, sus pruebas y la documentación.
-Detalle y tablas en [docs/qa/ocr-fase1](qa/ocr-fase1/README.md).
+**Bloque: Fase II · recuperación geométrica de figuras.** Solo `evals/visual-location`, sus pruebas y la documentación.
+Informe en [docs/qa/geometria-fase2](qa/geometria-fase2/README.md).
 
-- **Implementado** (`evals/ocr-pilot/recognition.ts` y `engine.ts`), mismo motor (tesseract.js 7):
-  - **Etiquetas:**
-    - un componente equivale a un carácter, con respaldo PSM 10;
-    - la caja de c/o/s… se decide por la altura;
-    - O/0, B/8, S/5 y Z/2 se resuelven por la fila;
-    - las marcas que tocan un glifo se separan y los trazos rectos se rechazan;
-    - las texturas repetidas se descartan;
-    - las letras sueltas de la pasada de página se releen;
-    - el glifo se muestra con borde antialiasado y escalado suave.
-  - **Consignas:**
-    - líneas de la estructura propia de Tesseract, con las columnas separadas y orden por filas;
-    - palabras de baja confianza conservadas solo con contexto confiado en su línea.
-  - **Adversariales:** conjuntos de desarrollo (8) y reserva (7) independientes en `adversarial.ts`.
+- **Implementado:** `geometry.ts`, `locate-v2.ts` (`figure_geometry@v2`), `geometry-cases.ts` y `geometry-eval.ts`
+  (`pnpm eval:geometry`). Es un localizador autónomo **sin región de entrada** que:
+  - endereza con el giro del OCR y devuelve las regiones al original;
+  - usa zonas por columna y ancla exacta o tolerante;
+  - agrupa la figura con sus partes y etiquetas;
+  - excluye reglas verticales y sombras de escáner;
+  - aplica firmas robustas: barra (rechaza tablas), recta (rechaza barras), esfera, polígono y cuadrícula.
 - **Probado:**
-  - corpus de diez fichas sintéticas, en copias externas y con los originales verificados por SHA:
-    - etiquetas 36/44 → 43/44, con precisión 81,8 → 100 % y espurias 7 → 0;
-    - consignas bien asociadas 15/20 → 19/20, con 0 incorrectas y 0 sin verificar;
-    - WER 11,6 → 9,4 % y CER 3,8 → 2,6 %;
-    - llamadas OCR 82 → 59;
-  - reserva adversarial: etiquetas 17/24 → 22/24 y espurias 7 → 1;
-  - 55 fixtures históricos sin regresiones;
-  - pruebas focalizadas, typecheck y lint.
-- **Descartado:** releer líneas con PSM 7. No mejoraba nada.
-- **Pendiente:**
-  - B cruzada por una línea diagonal (09);
-  - «Mirael» con el matcher exacto (10);
-  - 0/O sin contexto;
-  - consignas con la primera línea corta;
-  - geometría (1/10 candidatas);
-  - escaneos físicos reales y prueba en Vercel.
-- **No se hizo:** OCR en Hacer magia, recortes aprobados, SQL, Supabase, Stripe, UI, entrenamiento, llamadas de pago ni subida del
-  corpus a Git.
+  - **Corpus de diez fichas sintéticas (desarrollo):** candidatas correctas 1/10 → **9/10**, con 0 erróneas y 0 incompletas; 09
+    queda bloqueada por OCR.
+  - **Desarrollo geométrico:** 5/6 correctas y 5/5 negativas rechazadas.
+  - **Reserva geométrica**, ejecutada una vez: 0/6 → **2/6**, con 1 candidata en una negativa (respuesta dibujada).
+  - **Recortes aprobados:** 0 en todas las ejecuciones.
+  - **Pruebas focalizadas:** 144/144; typecheck y lint correctos.
+- **Pendiente:** grano y fotocopia muy degradada, ejes partidos, contornos vacíos sin forma nombrada, figuras genéricas (semántica),
+  respuestas dibujadas, escaneos físicos reales y Vercel.
+- **No se hizo:** cambios en `src/`, Hacer magia, MaterialAnalysis, PDF, Supabase, Stripe, páginas legales o UI; llamadas de pago;
+  entrenamiento; subida del corpus a Git.
 
-**Siguiente acción:** Fase II de reconocimiento geométrico (ROADMAP §10), sobre fichas propias y con la misma separación entre
-desarrollo y reserva.
+**Siguiente acción:** fase de calidad pedagógica (ROADMAP §11). Las candidatas siguen bloqueadas: ninguna entrega automática sin
+una verificación semántica independiente.
