@@ -105,6 +105,21 @@ pueda verificarse.
     - **Criterio de Fase II:** más candidatas correctas en desarrollo y en reserva, 0 candidatos erróneos y 0 recortes aprobados.
       Identidad, contenido completo y respuesta visual siguen sin verificarse.
 
+11. **Fase II de geometría hecha (2026-10-15, [QA](qa/geometria-fase2/README.md)), solo en el prototipo.**
+    - `figure_geometry@v2` localiza sin caja.
+    - Candidatas correctas: 1/10 → 9/10 en desarrollo y 0/6 → 2/6 en la reserva independiente.
+    - Una candidata en una negativa (respuesta dibujada); 0 recortes aprobados.
+    - **Siguiente, fase de calidad pedagógica:**
+      1. **Revisión humana asistida de candidatas.** El docente ve la región propuesta y confirma o corrige. Es el único camino
+         seguro de entrega mientras la verificación semántica no exista.
+      2. **Referencias pedagógicas validadas por un docente.** Para cada ficha propia: figura imprescindible, partes, etiquetas y
+         respuestas que no deben verse. Con ellas se miden integridad y fuga de respuesta, no solo IoU.
+      3. **Detector de respuesta visual.** Texto o marcas junto a la figura que coinciden con la respuesta esperada, como la fracción
+         escrita junto a la barra. Es el caso que la reserva demuestra que la geometría no ve.
+      4. **Robustez:** grano (umbral local y apertura morfológica), ejes partidos y contornos vacíos, medidos en una reserva nueva.
+    - **Criterio:** ningún recorte se entrega sin revisión humana mientras `semantic_identity`, `complete_content` y
+      `visual_answer_safety` no tengan una fuente de evidencia independiente.
+
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 
 ## Fase 0 — Cimientos y documentación ✅

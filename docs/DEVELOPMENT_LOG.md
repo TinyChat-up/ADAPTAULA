@@ -2,6 +2,53 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Fase II: recuperación geométrica de figuras (prototipo)
+
+- **Base y rama:** `origin/main` en `ae603e6`; la PR #35 está integrada. Rama nueva: `claude/fase-2-geometria-figuras`.
+- **Corpus:** las diez fichas sintéticas externas, en copias y fuera de Git. Línea base Fase I reproducida: 1/10 candidatas y 0
+  recortes.
+- **Causas medidas en el marco enderezado:**
+  - zonas a todo el ancho que colapsan con dos columnas (05);
+  - etiquetas a más de 4 mm (01);
+  - partes separadas (04);
+  - firma de barra rota por una mota (02);
+  - recta en la página sin enderezar (03);
+  - sin evidencia para el reloj (08);
+  - «Mirael» (10);
+  - B sin leer por el OCR (09).
+- **Cambios** (`evals/visual-location/geometry.ts`, `locate-v2.ts`, `geometry-cases.ts`, `geometry-eval.ts`):
+  - localizador autónomo `figure_geometry@v2` (sin caja humana) con enderezado y coordenadas de vuelta al original;
+  - zonas por columna y ancla tolerante de respaldo;
+  - figura con sus partes y etiquetas, sin contar las letras de la consigna;
+  - exclusión de reglas verticales y sombras de escáner;
+  - recuadros vacíos solo si la consigna nombra un rectángulo;
+  - firmas: barra (rechaza tablas y partes desiguales), recta (rechaza barras), esfera, polígono y cuadrícula.
+- **Ajustes durante el desarrollo:**
+  - métrica de etiquetas por centro de caja (la caja tipográfica es mayor que la tinta);
+  - exigencia de todas las etiquetas para «correcta»;
+  - restos OCR («|», «x=») no cuentan como texto corrido;
+  - umbral de tinta central de la esfera (la prueba sintética lo detectó).
+- **Resultados:**
+  - **Corpus:** 9/10 correctas, 0 erróneas; 09 queda por OCR.
+  - **Desarrollo geométrico:** 5/6 correctas, 5/5 negativas rechazadas.
+  - **Reserva** (una vez, sin ajustar después): 2/6 correctas, 1 candidata en la negativa de respuesta dibujada, 4/5 negativas
+    rechazadas.
+  - **Recortes aprobados:** 0 en todas las ejecuciones.
+  - **Rendimiento:** geometría 153 ms/página (mediana) en el corpus; pico RSS 509 MB.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/ocr-*.test.ts tests/unit/visual-location-*.test.ts tests/unit/figure-geometry-v2.test.ts tests/unit/boundaries.test.ts tests/unit/visual-boundaries.test.ts`
+    → **144/144 PASS**;
+  - `pnpm typecheck` PASS;
+  - `pnpm lint`: 0 errores (sigue el aviso previo `_id`);
+  - `pnpm eval:geometry` sobre el corpus, el desarrollo y la reserva.
+  - No se ejecutaron suite completa, build, SQL, modelos de pago ni Stripe.
+- **Riesgos:**
+  - Las diez fichas y el desarrollo geométrico sirvieron para ajustar.
+  - La reserva es pequeña y sintética.
+  - La geometría no detecta respuestas dibujadas, por lo que el bloqueo semántico es imprescindible.
+  - El reconocimiento de formas depende de palabras de la consigna.
+- **Siguiente acción:** fase de calidad pedagógica (ROADMAP §11).
+
 ## 2026-10-15 — Fase I: mejora real del reconocimiento de fichas (piloto OCR)
 
 - **Base y rama:** `origin/main` en `153721a`; la PR #34 está integrada. Rama nueva: `claude/fase-1-reconocimiento-ocr`.

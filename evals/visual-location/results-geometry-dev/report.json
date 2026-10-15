@@ -1,0 +1,343 @@
+{
+  "summary": {
+    "locator": "figure_geometry@v2",
+    "corpus": "geometry_dev",
+    "pages": 10,
+    "visuals": 11,
+    "eligible": 6,
+    "negatives": 5,
+    "baseline": {
+      "candidates": 0,
+      "correct": 0,
+      "wrong": 0
+    },
+    "v2": {
+      "candidates": 5,
+      "correct": 5,
+      "wrong": 0,
+      "incompleteCandidates": 0,
+      "incomplete": 0,
+      "semanticBlock": 0,
+      "unverifiable": 1,
+      "notFound": 0,
+      "negativesRejected": 5,
+      "distractorsAccepted": 0,
+      "accepted": 0
+    },
+    "geometryMsPerPage": {
+      "median": 64,
+      "max": 208
+    },
+    "peakRssMb": 909
+  },
+  "results": [
+    {
+      "page": "d_barra_seis",
+      "visualId": "vis_1",
+      "kind": "bar",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": true,
+        "regionIoU": 0.75,
+        "candidateIoU": 0.75,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "bar",
+        "blockedBy": null,
+        "category": null,
+        "outcome": "correcta",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "d_recta_letra",
+      "visualId": "vis_1",
+      "kind": "number_line",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "snap"
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": 0.62,
+        "candidateIoU": null,
+        "referenceLabelsInside": "7/7",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "number_line",
+        "blockedBy": "labels:unverifiable",
+        "category": "ocr",
+        "outcome": "sin_verificar",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "d_reloj",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": true,
+        "regionIoU": 0.83,
+        "candidateIoU": 0.83,
+        "referenceLabelsInside": "4/4",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "dial",
+        "blockedBy": null,
+        "category": null,
+        "outcome": "correcta",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "d_columnas",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": true,
+        "regionIoU": 0.81,
+        "candidateIoU": 0.81,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–97 mm",
+        "columns": true,
+        "anchor": "exact",
+        "shape": "triangle",
+        "blockedBy": null,
+        "category": null,
+        "outcome": "correcta",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "d_columnas",
+      "visualId": "vis_2",
+      "kind": "figure",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "activity_anchor"
+      },
+      "v2": {
+        "candidate": true,
+        "regionIoU": 0.8,
+        "candidateIoU": 0.8,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "97–210 mm",
+        "columns": true,
+        "anchor": "exact",
+        "shape": "rectangle",
+        "blockedBy": null,
+        "category": null,
+        "outcome": "correcta",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "d_esquema",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": true,
+      "negative": false,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": true,
+        "regionIoU": 0.78,
+        "candidateIoU": 0.78,
+        "referenceLabelsInside": "3/3",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "instruction_labels",
+        "blockedBy": null,
+        "category": null,
+        "outcome": "correcta",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "dn_sin_figura",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": false,
+      "negative": true,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": null
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": null,
+        "candidateIoU": null,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": null,
+        "blockedBy": "snap:failed",
+        "category": "geometria",
+        "outcome": "rechazada",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "dn_tabla_barra",
+      "visualId": "vis_1",
+      "kind": "bar",
+      "eligible": false,
+      "negative": true,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": null
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": null,
+        "candidateIoU": null,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": null,
+        "blockedBy": "identity_evidence:failed",
+        "category": "geometria",
+        "outcome": "rechazada",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "dn_dos_figuras",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": false,
+      "negative": true,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": 0.81,
+        "candidateIoU": null,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "triangle",
+        "blockedBy": "uniqueness:failed",
+        "category": "geometria",
+        "outcome": "rechazada",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "dn_cortada",
+      "visualId": "vis_1",
+      "kind": "bar",
+      "eligible": false,
+      "negative": true,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": 0.77,
+        "candidateIoU": null,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–210 mm",
+        "columns": false,
+        "anchor": "exact",
+        "shape": "bar",
+        "blockedBy": "integrity:failed",
+        "category": "geometria",
+        "outcome": "rechazada",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    },
+    {
+      "page": "dn_cruza_columnas",
+      "visualId": "vis_1",
+      "kind": "figure",
+      "eligible": false,
+      "negative": true,
+      "baseline": {
+        "candidate": false,
+        "correct": false,
+        "blockedBy": "uniqueness"
+      },
+      "v2": {
+        "candidate": false,
+        "regionIoU": null,
+        "candidateIoU": null,
+        "referenceLabelsInside": "0/0",
+        "cut": 0,
+        "zone": "0–97 mm",
+        "columns": true,
+        "anchor": "exact",
+        "shape": null,
+        "blockedBy": "snap:failed",
+        "category": "geometria",
+        "outcome": "rechazada",
+        "distractor": false,
+        "decision": "blocked"
+      }
+    }
+  ]
+}
