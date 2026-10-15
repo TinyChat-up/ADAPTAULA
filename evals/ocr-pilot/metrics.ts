@@ -65,9 +65,10 @@ export const readingText = (boxes: readonly TextBox[]) =>
     .join(" ");
 
 /** Word and character edit distance between reference and OCR, both in reading order (deskewed boxes). */
-export function textErrors(truthUpright: readonly TextBox[], ocrUpright: readonly TextBox[], annotatedOrder = false) {
+export function textErrors(truthUpright: readonly TextBox[], ocrUpright: readonly TextBox[], annotatedOrder = false, ocrLines?: readonly TextLine[]) {
   const t = annotatedOrder ? truthUpright.map((b) => b.text.normalize("NFC")).join(" ").split(/\s+/).filter((w) => w && !/^_+$/.test(w)).join(" ") : readingText(truthUpright);
-  const o = readingText(ocrUpright);
+  // OCR lines, when given, come from Tesseract's own line structure (columns stay apart); otherwise regrouped by height.
+  const o = ocrLines ? ocrLines.map((l) => l.text.normalize("NFC")).join(" ").split(/\s+/).filter((w) => w && !/^_+$/.test(w)).join(" ") : readingText(ocrUpright);
   const tw = t ? t.split(" ") : [];
   const ow = o ? o.split(" ") : [];
   if ([...t].length > 10_000 || [...o].length > 10_000 || tw.length > 2000 || ow.length > 2000) throw new Error("ocr_text_limit");
@@ -171,9 +172,9 @@ export function tolerantAnchors(lines: readonly TextLine[], activities: readonly
 const tokens = (s: string) => s.normalize("NFC").split(/\s+/).filter(Boolean);
 
 /** Anchors found on the OCR text vs on the reference text, with the locator's own matcher; pass deskewed boxes for both. */
-export function instructionOutcomes(model: PageModel, truth: readonly TextBox[], ocr: readonly TextBox[], activities: readonly PageActivity[], anchorTruth?: ReadonlyMap<string, TextBox>, instructionTruth?: ReadonlyMap<string, readonly TextBox[]>): InstructionOutcome[] {
+export function instructionOutcomes(model: PageModel, truth: readonly TextBox[], ocr: readonly TextBox[], activities: readonly PageActivity[], anchorTruth?: ReadonlyMap<string, TextBox>, instructionTruth?: ReadonlyMap<string, readonly TextBox[]>, lines?: readonly TextLine[]): InstructionOutcome[] {
   const reference = anchorTruth ?? activityAnchors(textLines(truth), activities);
-  const ocrLines = textLines(ocr);
+  const ocrLines = lines ?? textLines(ocr);
   const read = activityAnchors(ocrLines, activities);
   const tolerant = tolerantAnchors(ocrLines, activities);
   return activities.map((a) => {

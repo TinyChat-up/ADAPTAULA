@@ -1,0 +1,2128 @@
+{
+  "metricsVersion": "ocr_pilot@audit3",
+  "complete": true,
+  "corpus": {
+    "kind": "synthetic",
+    "baseDocuments": 11,
+    "pageConditions": 8
+  },
+  "engine": "ocr_pilot@phase1 · tesseract.js 7.0.0 (Tesseract 5, WASM) · spa 4.0.0_best_int · PSM 3 + enderezado; etiquetas PSM 8 con respaldo PSM 10 (reglas de recognition.ts)",
+  "conditions": [
+    {
+      "id": "limpio_300",
+      "description": "300 ppp, sin grano ni giro",
+      "dpi": 300
+    },
+    {
+      "id": "escaner_300",
+      "description": "300 ppp, grano y sombra de escáner; rotated_noisy girado 1,5°",
+      "dpi": 300
+    },
+    {
+      "id": "escaner_150",
+      "description": "150 ppp, grano y sombra de escáner; rotated_noisy girado 1,5°",
+      "dpi": 150
+    },
+    {
+      "id": "girado_200",
+      "description": "200 ppp, grano y sombra, todo girado 3° más (rotated_noisy 4,5°)",
+      "dpi": 200
+    },
+    {
+      "id": "degradado_200",
+      "description": "200 ppp, contraste bajo, grano fuerte y motas; sin giro añadido",
+      "dpi": 200
+    }
+  ],
+  "memory": {
+    "beforeEngineRssMb": 139,
+    "withEngineRssMb": 248,
+    "peakRssMb": 925
+  },
+  "labelCalls": {
+    "total": 36,
+    "maxPerPage": 8
+  },
+  "ocrCalls": {
+    "total": 44,
+    "maxPerPage": 9
+  },
+  "dependency": {
+    "tesseractJsMb": 1.4,
+    "coreMb": 45.3,
+    "coreWasmVariants": 6,
+    "spaModelGzMb": 2.1
+  },
+  "overall": {
+    "pagina": {
+      "pages": 8,
+      "wordReference": 141,
+      "wordErrors": 31,
+      "WER": 22,
+      "charReference": 639,
+      "charErrors": 66,
+      "CER": 10.3,
+      "wordAccuracy": 78,
+      "charAccuracy": 89.7,
+      "instructionsDetected": 88.9,
+      "instructionsAssociated": 88.9,
+      "instructionsReadAndAssociated": 77.8,
+      "instructionWordRecall": 97.4,
+      "anchors": {
+        "found": 8,
+        "correct": 8,
+        "wrong": 0,
+        "unverifiable": 0,
+        "missed": 1,
+        "of": 9
+      },
+      "tolerantAnchors": {
+        "found": 9,
+        "correct": 8,
+        "wrong": 0,
+        "unverifiable": 1,
+        "missed": 0,
+        "of": 9
+      },
+      "anchorOffsetMmP90": 0.79,
+      "labels": {
+        "of": 25,
+        "detected": 0,
+        "correct": 0,
+        "detections": 1,
+        "precision": 0,
+        "confused": 0,
+        "lost": 25,
+        "duplicates": 0,
+        "spurious": 1,
+        "offsetMmMedian": null,
+        "offsetMmP90": null,
+        "iouMedian": null
+      },
+      "candidates": {
+        "trials": 0,
+        "candidates": 0,
+        "negativeTrials": 0,
+        "eligible": 0,
+        "covered": 0,
+        "wrongCandidates": 0,
+        "accepted": 0,
+        "coverage": null,
+        "referenceCoverage": null,
+        "referenceWrongCandidates": 0
+      },
+      "pageMsMedian": 1643,
+      "pageMsMax": 2352
+    },
+    "pagina+etiquetas": {
+      "pages": 8,
+      "wordReference": 141,
+      "wordErrors": 7,
+      "WER": 5,
+      "charReference": 639,
+      "charErrors": 15,
+      "CER": 2.3,
+      "wordAccuracy": 95,
+      "charAccuracy": 97.7,
+      "instructionsDetected": 88.9,
+      "instructionsAssociated": 88.9,
+      "instructionsReadAndAssociated": 77.8,
+      "instructionWordRecall": 97.4,
+      "anchors": {
+        "found": 8,
+        "correct": 8,
+        "wrong": 0,
+        "unverifiable": 0,
+        "missed": 1,
+        "of": 9
+      },
+      "tolerantAnchors": {
+        "found": 9,
+        "correct": 8,
+        "wrong": 0,
+        "unverifiable": 1,
+        "missed": 0,
+        "of": 9
+      },
+      "anchorOffsetMmP90": 0.79,
+      "labels": {
+        "of": 25,
+        "detected": 96,
+        "correct": 24,
+        "detections": 25,
+        "precision": 96,
+        "confused": 1,
+        "lost": 0,
+        "duplicates": 0,
+        "spurious": 0,
+        "offsetMmMedian": 0.05,
+        "offsetMmP90": 0.08,
+        "iouMedian": 0.52
+      },
+      "candidates": {
+        "trials": 0,
+        "candidates": 0,
+        "negativeTrials": 0,
+        "eligible": 0,
+        "covered": 0,
+        "wrongCandidates": 0,
+        "accepted": 0,
+        "coverage": null,
+        "referenceCoverage": null,
+        "referenceWrongCandidates": 0
+      },
+      "pageMsMedian": 1714,
+      "pageMsMax": 2476
+    }
+  },
+  "byCondition": {
+    "pagina": {
+      "dev": {
+        "pages": 8,
+        "wordReference": 141,
+        "wordErrors": 31,
+        "WER": 22,
+        "charReference": 639,
+        "charErrors": 66,
+        "CER": 10.3,
+        "wordAccuracy": 78,
+        "charAccuracy": 89.7,
+        "instructionsDetected": 88.9,
+        "instructionsAssociated": 88.9,
+        "instructionsReadAndAssociated": 77.8,
+        "instructionWordRecall": 97.4,
+        "anchors": {
+          "found": 8,
+          "correct": 8,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 1,
+          "of": 9
+        },
+        "tolerantAnchors": {
+          "found": 9,
+          "correct": 8,
+          "wrong": 0,
+          "unverifiable": 1,
+          "missed": 0,
+          "of": 9
+        },
+        "anchorOffsetMmP90": 0.79,
+        "labels": {
+          "of": 25,
+          "detected": 0,
+          "correct": 0,
+          "detections": 1,
+          "precision": 0,
+          "confused": 0,
+          "lost": 25,
+          "duplicates": 0,
+          "spurious": 1,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1643,
+        "pageMsMax": 2352
+      }
+    },
+    "pagina+etiquetas": {
+      "dev": {
+        "pages": 8,
+        "wordReference": 141,
+        "wordErrors": 7,
+        "WER": 5,
+        "charReference": 639,
+        "charErrors": 15,
+        "CER": 2.3,
+        "wordAccuracy": 95,
+        "charAccuracy": 97.7,
+        "instructionsDetected": 88.9,
+        "instructionsAssociated": 88.9,
+        "instructionsReadAndAssociated": 77.8,
+        "instructionWordRecall": 97.4,
+        "anchors": {
+          "found": 8,
+          "correct": 8,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 1,
+          "of": 9
+        },
+        "tolerantAnchors": {
+          "found": 9,
+          "correct": 8,
+          "wrong": 0,
+          "unverifiable": 1,
+          "missed": 0,
+          "of": 9
+        },
+        "anchorOffsetMmP90": 0.79,
+        "labels": {
+          "of": 25,
+          "detected": 96,
+          "correct": 24,
+          "detections": 25,
+          "precision": 96,
+          "confused": 1,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.05,
+          "offsetMmP90": 0.08,
+          "iouMedian": 0.52
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1714,
+        "pageMsMax": 2476
+      }
+    }
+  },
+  "byDocType": {
+    "pagina": {
+      "letras_cg": {
+        "pages": 1,
+        "wordReference": 19,
+        "wordErrors": 4,
+        "WER": 21.1,
+        "charReference": 80,
+        "charErrors": 8,
+        "CER": 10,
+        "wordAccuracy": 78.9,
+        "charAccuracy": 90,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 4,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1824,
+        "pageMsMax": 1824
+      },
+      "1i_0o": {
+        "pages": 1,
+        "wordReference": 14,
+        "wordErrors": 4,
+        "WER": 28.6,
+        "charReference": 68,
+        "charErrors": 9,
+        "CER": 13.2,
+        "wordAccuracy": 71.4,
+        "charAccuracy": 86.8,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 4,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1422,
+        "pageMsMax": 1422
+      },
+      "b8": {
+        "pages": 1,
+        "wordReference": 17,
+        "wordErrors": 4,
+        "WER": 23.5,
+        "charReference": 68,
+        "charErrors": 7,
+        "CER": 10.3,
+        "wordAccuracy": 76.5,
+        "charAccuracy": 89.7,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 0,
+          "correct": 0,
+          "detections": 1,
+          "precision": 0,
+          "confused": 0,
+          "lost": 4,
+          "duplicates": 0,
+          "spurious": 1,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1576,
+        "pageMsMax": 1576
+      },
+      "numeros_marcas": {
+        "pages": 1,
+        "wordReference": 18,
+        "wordErrors": 6,
+        "WER": 33.3,
+        "charReference": 73,
+        "charErrors": 12,
+        "CER": 16.4,
+        "wordAccuracy": 66.7,
+        "charAccuracy": 83.6,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 6,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 6,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1714,
+        "pageMsMax": 1714
+      },
+      "dos_columnas": {
+        "pages": 1,
+        "wordReference": 21,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 117,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 2,
+          "correct": 2,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 2
+        },
+        "tolerantAnchors": {
+          "found": 2,
+          "correct": 2,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 2
+        },
+        "anchorOffsetMmP90": 0.35,
+        "labels": {
+          "of": 0,
+          "detected": null,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1643,
+        "pageMsMax": 1643
+      },
+      "marcas": {
+        "pages": 1,
+        "wordReference": 12,
+        "wordErrors": 1,
+        "WER": 8.3,
+        "charReference": 62,
+        "charErrors": 2,
+        "CER": 3.2,
+        "wordAccuracy": 91.7,
+        "charAccuracy": 96.8,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.48,
+        "labels": {
+          "of": 1,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 1,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1520,
+        "pageMsMax": 1520
+      },
+      "girado_degradado": {
+        "pages": 1,
+        "wordReference": 19,
+        "wordErrors": 9,
+        "WER": 47.4,
+        "charReference": 80,
+        "charErrors": 19,
+        "CER": 23.8,
+        "wordAccuracy": 52.6,
+        "charAccuracy": 76.3,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 0,
+        "instructionWordRecall": 76.9,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.79,
+        "labels": {
+          "of": 4,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 4,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 2352,
+        "pageMsMax": 2352
+      },
+      "consigna_cortada": {
+        "pages": 1,
+        "wordReference": 21,
+        "wordErrors": 3,
+        "WER": 14.3,
+        "charReference": 91,
+        "charErrors": 9,
+        "CER": 9.9,
+        "wordAccuracy": 85.7,
+        "charAccuracy": 90.1,
+        "instructionsDetected": 0,
+        "instructionsAssociated": 0,
+        "instructionsReadAndAssociated": 0,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 0,
+          "correct": 0,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 1,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 0,
+          "wrong": 0,
+          "unverifiable": 1,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": null,
+        "labels": {
+          "of": 2,
+          "detected": 0,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 2,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1404,
+        "pageMsMax": 1404
+      }
+    },
+    "pagina+etiquetas": {
+      "letras_cg": {
+        "pages": 1,
+        "wordReference": 19,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 80,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 100,
+          "correct": 4,
+          "detections": 4,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.08,
+          "offsetMmP90": 0.08,
+          "iouMedian": 0.53
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1941,
+        "pageMsMax": 1941
+      },
+      "1i_0o": {
+        "pages": 1,
+        "wordReference": 14,
+        "wordErrors": 1,
+        "WER": 7.1,
+        "charReference": 68,
+        "charErrors": 1,
+        "CER": 1.5,
+        "wordAccuracy": 92.9,
+        "charAccuracy": 98.5,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 75,
+          "correct": 3,
+          "detections": 4,
+          "precision": 75,
+          "confused": 1,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.05,
+          "offsetMmP90": 0.09,
+          "iouMedian": 0.51
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1583,
+        "pageMsMax": 1583
+      },
+      "b8": {
+        "pages": 1,
+        "wordReference": 17,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 68,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 4,
+          "detected": 100,
+          "correct": 4,
+          "detections": 4,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.07,
+          "offsetMmP90": 0.07,
+          "iouMedian": 0.54
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1693,
+        "pageMsMax": 1693
+      },
+      "numeros_marcas": {
+        "pages": 1,
+        "wordReference": 18,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 73,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.36,
+        "labels": {
+          "of": 6,
+          "detected": 100,
+          "correct": 6,
+          "detections": 6,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.05,
+          "offsetMmP90": 0.07,
+          "iouMedian": 0.52
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1893,
+        "pageMsMax": 1893
+      },
+      "dos_columnas": {
+        "pages": 1,
+        "wordReference": 21,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 117,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 2,
+          "correct": 2,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 2
+        },
+        "tolerantAnchors": {
+          "found": 2,
+          "correct": 2,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 2
+        },
+        "anchorOffsetMmP90": 0.35,
+        "labels": {
+          "of": 0,
+          "detected": null,
+          "correct": 0,
+          "detections": 0,
+          "precision": null,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": null,
+          "offsetMmP90": null,
+          "iouMedian": null
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1714,
+        "pageMsMax": 1714
+      },
+      "marcas": {
+        "pages": 1,
+        "wordReference": 12,
+        "wordErrors": 0,
+        "WER": 0,
+        "charReference": 62,
+        "charErrors": 0,
+        "CER": 0,
+        "wordAccuracy": 100,
+        "charAccuracy": 100,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 100,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.48,
+        "labels": {
+          "of": 1,
+          "detected": 100,
+          "correct": 1,
+          "detections": 1,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.1,
+          "offsetMmP90": 0.1,
+          "iouMedian": 0.53
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1641,
+        "pageMsMax": 1641
+      },
+      "girado_degradado": {
+        "pages": 1,
+        "wordReference": 19,
+        "wordErrors": 5,
+        "WER": 26.3,
+        "charReference": 80,
+        "charErrors": 10,
+        "CER": 12.5,
+        "wordAccuracy": 73.7,
+        "charAccuracy": 87.5,
+        "instructionsDetected": 100,
+        "instructionsAssociated": 100,
+        "instructionsReadAndAssociated": 0,
+        "instructionWordRecall": 76.9,
+        "anchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 1,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": 0.79,
+        "labels": {
+          "of": 4,
+          "detected": 100,
+          "correct": 4,
+          "detections": 4,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.07,
+          "offsetMmP90": 0.08,
+          "iouMedian": 0.47
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 2476,
+        "pageMsMax": 2476
+      },
+      "consigna_cortada": {
+        "pages": 1,
+        "wordReference": 21,
+        "wordErrors": 1,
+        "WER": 4.8,
+        "charReference": 91,
+        "charErrors": 4,
+        "CER": 4.4,
+        "wordAccuracy": 95.2,
+        "charAccuracy": 95.6,
+        "instructionsDetected": 0,
+        "instructionsAssociated": 0,
+        "instructionsReadAndAssociated": 0,
+        "instructionWordRecall": 100,
+        "anchors": {
+          "found": 0,
+          "correct": 0,
+          "wrong": 0,
+          "unverifiable": 0,
+          "missed": 1,
+          "of": 1
+        },
+        "tolerantAnchors": {
+          "found": 1,
+          "correct": 0,
+          "wrong": 0,
+          "unverifiable": 1,
+          "missed": 0,
+          "of": 1
+        },
+        "anchorOffsetMmP90": null,
+        "labels": {
+          "of": 2,
+          "detected": 100,
+          "correct": 2,
+          "detections": 2,
+          "precision": 100,
+          "confused": 0,
+          "lost": 0,
+          "duplicates": 0,
+          "spurious": 0,
+          "offsetMmMedian": 0.05,
+          "offsetMmP90": 0.05,
+          "iouMedian": 0.53
+        },
+        "candidates": {
+          "trials": 0,
+          "candidates": 0,
+          "negativeTrials": 0,
+          "eligible": 0,
+          "covered": 0,
+          "wrongCandidates": 0,
+          "accepted": 0,
+          "coverage": null,
+          "referenceCoverage": null,
+          "referenceWrongCandidates": 0
+        },
+        "pageMsMedian": 1497,
+        "pageMsMax": 1497
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "dev_letras_cg",
+      "docType": "letras_cg",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1824,
+      "labelMs": 117,
+      "skewDeg": 0,
+      "labelCalls": 4,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 19,
+            "wordErrors": 4,
+            "chars": 80,
+            "charErrors": 8
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 19,
+            "wordErrors": 0,
+            "chars": 80,
+            "charErrors": 0
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.03632516772877165,
+              "iou": 0.529062465228227
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.07618675665304714,
+              "iou": 0.5123278415935392
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.03259396359082354,
+              "iou": 0.5336748349932677
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.08116024253223039,
+              "iou": 0.5477888141376186
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 4,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 92
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_1i_0o",
+      "docType": "1i_0o",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1422,
+      "labelMs": 161,
+      "skewDeg": 0,
+      "labelCalls": 4,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 14,
+            "wordErrors": 4,
+            "chars": 68,
+            "charErrors": 9
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 96
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 14,
+            "wordErrors": 1,
+            "chars": 68,
+            "charErrors": 1
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.08655762652629251,
+              "iou": 0.4882666967086979
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.04570725286454723,
+              "iou": 0.5313490523006432
+            },
+            {
+              "status": "confused",
+              "duplicates": 0,
+              "offsetMm": 0.049219172629582655,
+              "iou": 0.5169882671033256
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.023243175548936845,
+              "iou": 0.5131488798012211
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 4,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 94
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_b8",
+      "docType": "b8",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1576,
+      "labelMs": 117,
+      "skewDeg": 0,
+      "labelCalls": 4,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 17,
+            "wordErrors": 4,
+            "chars": 68,
+            "charErrors": 7
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 1,
+          "labelDetections": 1,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 91
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 17,
+            "wordErrors": 0,
+            "chars": 68,
+            "charErrors": 0
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.017359361753505505,
+              "iou": 0.5087139088732938
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.06939356901171755,
+              "iou": 0.5376677977874617
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.07441766388494568,
+              "iou": 0.5376677977874617
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.05678356767689178,
+              "iou": 0.4788363759944206
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 4,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_numeros_marcas",
+      "docType": "numeros_marcas",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1714,
+      "labelMs": 179,
+      "skewDeg": 0,
+      "labelCalls": 6,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 18,
+            "wordErrors": 6,
+            "chars": 73,
+            "charErrors": 12
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 96
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 18,
+            "wordErrors": 0,
+            "chars": 73,
+            "charErrors": 0
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.04758753134396923,
+              "iou": 0.5177541756471855
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.05265067300439148,
+              "iou": 0.4961810849952194
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.030680850700838334,
+              "iou": 0.5177541756471855
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.06575078670319344,
+              "iou": 0.5177541756471823
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.03902963273199507,
+              "iou": 0.5582037206196219
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.046118075447373494,
+              "iou": 0.4961810849952194
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 6,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.35596223491099377
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_dos_columnas",
+      "docType": "dos_columnas",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1643,
+      "labelMs": 71,
+      "skewDeg": 0,
+      "labelCalls": 0,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 21,
+            "wordErrors": 0,
+            "chars": 117,
+            "charErrors": 0
+          },
+          "labels": [],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.34765188241813794
+            },
+            {
+              "activityId": "act_2",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.34765188241813794
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 21,
+            "wordErrors": 0,
+            "chars": 117,
+            "charErrors": 0
+          },
+          "labels": [],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.34765188241813794
+            },
+            {
+              "activityId": "act_2",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.34765188241813794
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_marcas",
+      "docType": "marcas",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1520,
+      "labelMs": 121,
+      "skewDeg": 0,
+      "labelCalls": 6,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 12,
+            "wordErrors": 1,
+            "chars": 62,
+            "charErrors": 2
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.4829271684055524
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 96
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 12,
+            "wordErrors": 0,
+            "chars": 62,
+            "charErrors": 0
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.0960186560971635,
+              "iou": 0.5308319049112608
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 1,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 1,
+              "offsetMm": 0.4829271684055524
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 96
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_girado_degradado",
+      "docType": "girado_degradado",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 2352,
+      "labelMs": 124,
+      "skewDeg": -2.53,
+      "labelCalls": 8,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 19,
+            "wordErrors": 9,
+            "chars": 80,
+            "charErrors": 19
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 0.7692307692307693,
+              "offsetMm": 0.7874404700579507
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 87
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 19,
+            "wordErrors": 5,
+            "chars": 80,
+            "charErrors": 10
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.039704436103010006,
+              "iou": 0.46303632564226466
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.07732021958354852,
+              "iou": 0.44969166521076626
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.06583525119319222,
+              "iou": 0.4871659706449943
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.053658514136808805,
+              "iou": 0.4742231223884597
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 4,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": true,
+              "tolerantFound": true,
+              "anchor": "correct",
+              "tolerant": "correct",
+              "associationReason": "matched_support",
+              "tolerantAssociationReason": "matched_support",
+              "recall": 0.7692307692307693,
+              "offsetMm": 0.7874404700579507
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 83
+        }
+      },
+      "referenceCandidates": []
+    },
+    {
+      "id": "dev_consigna_cortada",
+      "docType": "consigna_cortada",
+      "condition": "dev",
+      "dpi": 200,
+      "pageMs": 1404,
+      "labelMs": 93,
+      "skewDeg": 0,
+      "labelCalls": 4,
+      "engines": {
+        "pagina": {
+          "text": {
+            "words": 21,
+            "wordErrors": 3,
+            "chars": 91,
+            "charErrors": 9
+          },
+          "labels": [
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            },
+            {
+              "status": "lost",
+              "duplicates": 0,
+              "offsetMm": null,
+              "iou": null
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 0,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": false,
+              "tolerantFound": true,
+              "anchor": "missed",
+              "tolerant": "unverifiable",
+              "associationReason": "not_found",
+              "tolerantAssociationReason": "reference_unverified",
+              "recall": 1,
+              "offsetMm": null
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 95
+        },
+        "pagina+etiquetas": {
+          "text": {
+            "words": 21,
+            "wordErrors": 1,
+            "chars": 91,
+            "charErrors": 4
+          },
+          "labels": [
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.05183219742396427,
+              "iou": 0.5308319049112645
+            },
+            {
+              "status": "ok",
+              "duplicates": 0,
+              "offsetMm": 0.04372793276224382,
+              "iou": 0.5087139088732895
+            }
+          ],
+          "spurious": 0,
+          "labelDetections": 2,
+          "instructions": [
+            {
+              "activityId": "act_1",
+              "found": false,
+              "tolerantFound": true,
+              "anchor": "missed",
+              "tolerant": "unverifiable",
+              "associationReason": "not_found",
+              "tolerantAssociationReason": "reference_unverified",
+              "recall": 1,
+              "offsetMm": null
+            }
+          ],
+          "candidates": [],
+          "meanConfidence": 93
+        }
+      },
+      "referenceCandidates": []
+    }
+  ]
+}

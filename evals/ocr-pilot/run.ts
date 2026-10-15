@@ -13,7 +13,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { TextBox } from "@/lib/materials/visuals/auto/page-model";
 import { CACHE_DIR, LANG_FILE, createOcr, rotateBox, type OcrWord } from "./engine";
+import { ocrLines } from "./recognition";
 import { candidateSummary, candidateTrials, instructionOutcomes, labelOutcomes, textErrors, type CandidateTrial, type InstructionOutcome, type LabelOutcome, type PilotPage } from "./metrics";
+import { adversarialPages } from "./adversarial";
 import { CONDITIONS, corpusPages, corpusRoot, fixturePages } from "./pages";
 
 const ENGINES = ["pagina", "pagina+etiquetas"] as const;
@@ -157,10 +159,12 @@ export function buildReport(results: PageResult[], memory: { beforeEngineRssMb: 
     metricsVersion: "ocr_pilot@audit3",
     complete: true,
     corpus: { kind: real ? "authorized_real" : "synthetic", baseDocuments: real ? null : 11, pageConditions: results.length },
-    engine: "tesseract.js 7.0.0 (Tesseract 5, WASM) · spa 4.0.0_best_int · PSM 3 + enderezado automático en página, PSM 8 en etiquetas",
+    engine: "ocr_pilot@phase1 · tesseract.js 7.0.0 (Tesseract 5, WASM) · spa 4.0.0_best_int · PSM 3 + enderezado; etiquetas PSM 8 con respaldo PSM 10 (reglas de recognition.ts)",
     conditions: CONDITIONS.map(({ id, description, dpi }) => ({ id, description, dpi })),
     memory,
     labelCalls: { total: results.reduce((n, r) => n + r.labelCalls, 0), maxPerPage: Math.max(0, ...results.map((r) => r.labelCalls)) },
+    /** Tesseract calls: one page pass plus the label reads of each page. */
+    ocrCalls: { total: results.reduce((n, r) => n + 1 + r.labelCalls, 0), maxPerPage: Math.max(0, ...results.map((r) => 1 + r.labelCalls)) },
     dependency,
     overall: Object.fromEntries(ENGINES.map((e) => [e, aggregate(results, e)])),
     byCondition: by((r) => r.condition),
@@ -170,8 +174,8 @@ export function buildReport(results: PageResult[], memory: { beforeEngineRssMb: 
   };
 }
 
-export function prepareOutput(root: string): string {
-  const out = path.join(root, "results");
+export function prepareOutput(root: string, name = "results"): string {
+  const out = path.join(root, name);
   if (existsSync(out) && (lstatSync(out).isSymbolicLink() || !lstatSync(out).isDirectory())) throw new Error("report_path_invalid");
   mkdirSync(out, { recursive: true });
   for (const name of ["report.json", "report.md", "run-status.json", ".report.json.tmp", ".report.md.tmp"]) rmSync(path.join(out, name), { force: true });
@@ -199,11 +203,15 @@ async function main() {
   const corpusFlag = process.argv.indexOf("--corpus");
   const corpus = corpusFlag >= 0 ? process.argv[corpusFlag + 1] : undefined;
   if (corpusFlag >= 0 && (!corpus || corpus.startsWith("--"))) throw new Error("corpus_argument_missing");
+  const adversarialFlag = process.argv.indexOf("--adversarial");
+  const requested = adversarialFlag >= 0 ? process.argv[adversarialFlag + 1] : undefined;
+  if (adversarialFlag >= 0 && requested !== "dev" && requested !== "holdout") throw new Error("adversarial_split_invalid");
+  const split = requested as "dev" | "holdout" | undefined;
   const root = corpus ? corpusRoot(corpus) : import.meta.dirname;
-  const out = prepareOutput(root);
+  const out = prepareOutput(root, split ? `results-adversarial-${split}` : "results");
   let peak = process.memoryUsage().rss;
   const sampler = setInterval(() => (peak = Math.max(peak, process.memoryUsage().rss)), 25);
-  const pages: AsyncGenerator<PilotPage> = corpus ? corpusPages(corpus) : fixturePages();
+  const pages: AsyncGenerator<PilotPage> = corpus ? corpusPages(corpus) : split ? adversarialPages(split) : fixturePages();
   const beforeEngine = process.memoryUsage().rss;
   let ocr: Awaited<ReturnType<typeof createOcr>> | undefined;
   const results: PageResult[] = [];
@@ -227,17 +235,19 @@ async function main() {
       const score = (words: OcrWord[]) => {
         const boxes: TextBox[] = words.map(({ text, x0, y0, x1, y1 }) => ({ text, x0, y0, x1, y1 }));
         const upright: TextBox[] = words.map(({ text, upright: u }) => ({ text, ...u }));
+        // Reading lines follow Tesseract's line structure in the deskewed frame (columns are not merged by height).
+        const lines = ocrLines(words.map(({ text, upright: u, line, confidence }) => ({ text, ...u, line, confidence })), page.model.mmPerPx);
         const l = labelOutcomes(page.model, page.truth, boxes);
         return {
           // Rotating an axis-aligned envelope a second time expands it and can merge reference lines. Reading order comes
           // from the original upright reference (synthetic) or human annotation order (real), not reconstructed envelopes.
-          text: textErrors(page.truthUpright, upright, Boolean(corpus)),
+          text: textErrors(page.truthUpright, upright, Boolean(corpus), lines),
           labels: l.outcomes,
           spurious: l.spurious,
           labelDetections: l.detections,
           instructions: instructionOutcomes(page.model, anchorReference, upright, page.activities,
             page.anchorTruth ? new Map(Object.entries(page.anchorTruth).map(([id, t]) => [id, referenceBoxes(t)])) : undefined,
-            page.instructionTruth ? new Map(Object.entries(page.instructionTruth).map(([id, ts]) => [id, ts.map(referenceBoxes)])) : undefined),
+            page.instructionTruth ? new Map(Object.entries(page.instructionTruth).map(([id, ts]) => [id, ts.map(referenceBoxes)])) : undefined, lines),
           candidates: candidateTrials(page, boxes),
           meanConfidence: Math.round(words.reduce((n, w) => n + w.confidence, 0) / Math.max(1, words.length)),
         };
@@ -246,7 +256,8 @@ async function main() {
         id: page.id, docType: page.docType, condition: page.condition, dpi: page.dpi, pageMs: Math.round(t1 - t0), labelMs: Math.round(t2 - t1),
         skewDeg: Math.round(read.skewDeg * 100) / 100,
         labelCalls: read.labelCalls ?? 0,
-        engines: { pagina: score(read.words), "pagina+etiquetas": score([...read.words, ...labels]) },
+        // The page-only engine keeps every page word; the combined one replaces rerouted lone words by the label pass.
+        engines: { pagina: score(read.words), "pagina+etiquetas": score([...read.words.filter((w) => !w.rerouted), ...labels]) },
         referenceCandidates: candidateTrials(page, page.truth),
       });
       process.stdout.write(`${corpus ? `page_${results.length}` : `${page.condition} ${page.id}`} ${Math.round(t1 - t0)}+${Math.round(t2 - t1)} ms\n`);
