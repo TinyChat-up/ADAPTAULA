@@ -2,6 +2,52 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-15 — Fase III: calidad pedagógica y referencias docentes (experimental)
+
+- **Base y rama:** `origin/main` en `370a9d8`; la PR #36 está integrada. Rama nueva: `claude/fase-3-calidad-pedagogica`.
+- **Material:**
+  - 8 fichas originales y una guía docente enviadas por el usuario, extraídas en modo solo lectura **fuera de Git**, con sha-256
+    registrados.
+  - División fijada antes de leerlas en detalle: desarrollo 01, 02, 04, 06 y 08; reserva 03, 05 y 07.
+  - La guía solo alimenta la clave de corrección.
+  - Sin datos de alumnado.
+- **Cambios** (`evals/pedagogical-quality/`):
+  - `contract.ts`: referencia, original, adaptación, estado docente y resultado;
+  - `evaluate.ts`: criterios A–E sobre `src/lib/adaptation/text.ts`;
+  - `adapter.ts`: adaptador controlado, sin acceso a la clave;
+  - `mutations.ts`: 16 tipos de error;
+  - `figure-review.ts`: revisión humana de figuras ligada a material, página, región y recorte visto;
+  - `cases.ts`, `fixtures.ts` (6 fichas propias), `metrics.ts` y `run.ts` (`pnpm eval:pedagogy`);
+  - `tests/unit/pedagogical-quality.test.ts` y una prueba nueva en `tests/unit/boundaries.test.ts`.
+- **Ajuste durante el desarrollo:**
+  - El control de copia literal del plano fallaba porque la frase de una respuesta ya estaba impresa en otra pregunta.
+  - Las frases impresas en el original pasan a ser datos, como los números.
+  - Falsos bloqueos en desarrollo: 3/15 → 0/15.
+- **Resultados** (referencias sintéticas provisionales; ninguna validada por un docente):
+  - **Propias:** 37/37 errores verificables y 0/18 falsos bloqueos.
+  - **Desarrollo:** 52/52, 0/15, fugas 12/12 y figuras 13/13.
+  - **Reserva**, ejecutada una vez con la reserva congelada por sha-256: 28/29, 0/9, fugas 8/8 y figuras 7/7.
+    - No detectado: tabla de gramática sin la petición de rasgos, porque la cabecera seguía impresa.
+  - **Errores no verificables:** 0/14 detectados en total; todos llegan como pendientes para el docente.
+- **Entregado al usuario fuera de Git:**
+  - paquete de revisión `revision-docente-fase3.html`, con la referencia, la adaptación de referencia, la candidata puntuada y
+    ejemplos incorrectos de cada ficha;
+  - `ficha-evaluacion.csv`.
+- **Verificación:**
+  - `pnpm exec vitest run tests/unit/pedagogical-quality.test.ts tests/unit/boundaries.test.ts tests/unit/figure-geometry-v2.test.ts tests/unit/adaptation-review.test.ts tests/unit/pedagogical-equivalence.test.ts`
+    → **96/96 PASS**;
+  - `pnpm typecheck` PASS;
+  - `pnpm lint`: 0 errores (sigue el aviso previo `_id`);
+  - `pnpm eval:pedagogy` sobre las propias, el desarrollo y la reserva.
+  - No se ejecutaron suite completa, build, SQL, modelos de pago ni Stripe.
+- **Riesgos:**
+  - El mismo autor escribió referencias, adaptaciones, errores y reglas.
+  - La reserva es pequeña.
+  - Los patrones de fuga son manuales.
+  - D y E siguen siendo humanos.
+  - No se ha probado el generador real.
+- **Siguiente acción:** registrar la revisión del docente (ROADMAP §12) y medir el generador contra las referencias revisadas.
+
 ## 2026-10-15 — Fase II: recuperación geométrica de figuras (prototipo)
 
 - **Base y rama:** `origin/main` en `ae603e6`; la PR #35 está integrada. Rama nueva: `claude/fase-2-geometria-figuras`.

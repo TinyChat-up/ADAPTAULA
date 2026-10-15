@@ -104,4 +104,9 @@ describe("client/server boundaries", () => {
     const offenders = files.filter((f) => /["']tesseract\.js(?:-core)?(?:\/[^"']*)?["']|evals\/ocr-pilot/.test(source.get(f)!)).map(rel);
     expect(offenders).toEqual([]);
   });
+
+  it("the pedagogical-quality evaluator (evals/pedagogical-quality, Phase III) is never imported by the app", () => {
+    const offenders = files.filter((f) => /evals\/pedagogical-quality/.test(source.get(f)!)).map(rel);
+    expect(offenders).toEqual([]);
+  });
 });

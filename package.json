@@ -23,6 +23,7 @@
     "eval:analysis": "node --env-file-if-exists=.env.local --import tsx evals/material-analysis/run.ts",
     "eval:ocr": "node --conditions=react-server --import tsx evals/ocr-pilot/run.ts",
     "eval:geometry": "node --conditions=react-server --import tsx evals/visual-location/geometry-eval.ts",
+    "eval:pedagogy": "node --import tsx evals/pedagogical-quality/run.ts",
     "eval:analysis:mock": "node --import tsx evals/material-analysis/run.ts --mock",
     "eval:illustrations": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx evals/illustrations/run.ts",
     "eval:illustrations:mock": "node --conditions=react-server --import tsx evals/illustrations/run.ts --mock",
