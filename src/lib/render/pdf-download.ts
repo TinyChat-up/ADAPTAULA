@@ -23,10 +23,10 @@ export function filenameFromDisposition(header: string | null): string {
 
 export type PdfFetchResult = { ok: true; blob: Blob; filename: string } | { ok: false; message: string; code?: string };
 
-export async function fetchAdaptationPdf(adaptationId: string, fetcher: typeof fetch = fetch): Promise<PdfFetchResult> {
+export async function fetchAdaptationPdf(adaptationId: string, fetcher: typeof fetch = fetch, draftRevision?: number): Promise<PdfFetchResult> {
   let response: Response;
   try {
-    response = await fetcher(`/api/adaptations/${encodeURIComponent(adaptationId)}/pdf`, { method: "GET", credentials: "same-origin", cache: "no-store" });
+    response = await fetcher(`/api/adaptations/${encodeURIComponent(adaptationId)}/pdf${draftRevision === undefined ? "" : `?borrador=${draftRevision}`}`, { method: "GET", credentials: "same-origin", cache: "no-store" });
   } catch {
     return { ok: false, message: "No hemos podido conectar. Comprueba tu conexión y vuelve a intentarlo." };
   }

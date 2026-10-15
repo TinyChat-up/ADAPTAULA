@@ -327,3 +327,8 @@ Ver `docs/VISUAL_RESOURCES.md` § Ilustraciones generadas y revisadas.
 ## Tests de base de datos (`tests/db`, dentro de `pnpm test`)
 
 Se ejecutan sobre PGlite (Postgres embebido) con un stub mínimo de Supabase (roles con sus permisos por defecto, `auth.users`, `auth.uid()` y `storage`). Cubren: RLS activado en todas las tablas; el usuario A no lee ni escribe nada del workspace de B (tablas, funciones y Storage); `anon` solo lee el catálogo y los planes; las tablas internas no son accesibles; permisos por columna; `viewer` no escribe; coherencia de workspace entre filas; límites de perfiles y clases; cuotas (límite, idempotencia, devolución, cambio de plan); periodos (Free en Madrid, anual anclado). El stub aproxima Supabase: antes de producción, un E2E contra un proyecto real.
+
+
+## Borradores docentes (025, ADR-029)
+
+`adaptation_drafts`: revisiones inmutables por adaptación y versión base, parche de cambios permitido, autor/fecha y reconocimiento del aviso de contenido. FK a la versión base y workspace heredado del padre; RLS de lectura para miembros. Sin INSERT/UPDATE/DELETE directo para `authenticated`. `save_adaptation_draft` autentica por `auth.uid()`, comprueba pertenencia/rol, base entregada y revisión esperada bajo bloqueo del padre, y solo añade una revisión. El servidor valida el parche antes de guardar y al renderizar. No guarda un veredicto de aprobación ni actualiza `adaptations.current_version`. Probada con migraciones reales en PGlite; no ejecutada en Supabase remoto durante esta entrega.

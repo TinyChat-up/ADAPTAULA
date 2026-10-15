@@ -16,8 +16,10 @@ const rel = (f: string) => path.relative(SRC, f).split(path.sep).join("/");
 const importing = (re: RegExp) => files.filter((f) => re.test(readFileSync(f, "utf8"))).map(rel).sort();
 
 describe("single renderer for screen and PDF", () => {
-  it("buildRenderModel is called only by the shared loader (sheetModel); the viewer and the export both use it", () => {
-    expect(importing(/\bbuildRenderModel\(/)).toEqual(["lib/render/load.ts", "lib/render/model.ts"]);
+  it("buildRenderModel is called only by the shared projection (sheetModel); editor, viewer and export use it", () => {
+    expect(importing(/\bbuildRenderModel\(/)).toEqual(["lib/render/model.ts", "lib/render/sheet-model.ts"]);
+    expect(read("lib/render/load.ts")).toContain('export { sheetModel, PRODUCT_DESIGN } from "./sheet-model"');
+    expect(read("components/editor/sheet-editor.tsx")).toContain('from "@/lib/render/sheet-model"');
     expect(read("app/app/(shell)/adaptaciones/[id]/vista/page.tsx")).toMatch(/sheetModel\(loaded, /);
     const exporter = read("lib/render/pdf-export.ts");
     expect(exporter).toMatch(/sheetModel\(loaded, "student"\)/);

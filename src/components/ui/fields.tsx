@@ -11,6 +11,14 @@ interface FieldShellProps {
 const controlClasses =
   "block w-full rounded-control border border-control-border bg-surface px-3 min-h-11 text-base text-foreground placeholder:text-muted-foreground/70 aria-[invalid=true]:border-danger";
 
+export function TextareaField({ label, hint, error, optional, className, ...props }: FieldShellProps & ComponentProps<"textarea">) {
+  const generated = useId();
+  const id = props.id ?? generated;
+  return <Shell id={id} label={label} hint={hint} error={error} optional={optional}>
+    {(describedBy) => <textarea {...props} id={id} aria-describedby={describedBy} aria-invalid={error ? true : undefined} className={cn(controlClasses, "py-2", className)} />}
+  </Shell>;
+}
+
 function Shell({
   id,
   label,

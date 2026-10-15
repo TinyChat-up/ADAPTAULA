@@ -2,7 +2,13 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
-## Prioridad actual — continuidad de Hacer magia (2026-10-13)
+## Prioridad actual — editor docente de fichas adaptadas (2026-10-15)
+
+Primera entrega operativa en `codex/editor-docente-claro`: enunciados, presentación, espacio de respuesta, vista A4, deshacer/rehacer, borradores separados y PDF de revisión concreta. [Alcance y pruebas](qa/editor-docente/README.md). Reutiliza CLARO; migración 025 solo probada localmente.
+
+El usuario pospone las pruebas con APIs de pago y nuevas fases experimentales. Priorizar la revisión de este editor y su uso por docentes. No activar entrenamiento ni recogida de correcciones. #37 ya aparece integrada en `origin/main` al iniciar; no se ha fusionado en esta sesión.
+
+## Antecedentes — continuidad de Hacer magia (2026-10-13)
 
 Estado vivo: [PROJECT_STATUS.md](PROJECT_STATUS.md). Evidencias y excepciones autorizadas de verificación: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md). Las secciones históricas de abajo mezclan hitos y propuestas; un título de fase no certifica despliegue.
 

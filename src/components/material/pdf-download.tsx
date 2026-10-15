@@ -9,16 +9,16 @@ import { fetchAdaptationPdf } from "@/lib/render/pdf-download";
 type State = { kind: "idle" } | { kind: "generating" } | { kind: "started"; filename: string } | { kind: "error"; message: string; pending: boolean };
 
 /** "Descargar PDF": the sheet as the student sees it, generated now. One request at a time (a second click while it runs does nothing). */
-export function PdfDownload({ adaptationId }: { adaptationId: string }) {
+export function PdfDownload({ adaptationId, draftRevision, disabled = false }: { adaptationId: string; draftRevision?: number; disabled?: boolean }) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const running = useRef(false);
 
   async function download() {
-    if (running.current) return;
+    if (running.current || disabled) return;
     running.current = true;
     setState({ kind: "generating" });
     try {
-      const result = await fetchAdaptationPdf(adaptationId);
+      const result = await fetchAdaptationPdf(adaptationId, fetch, draftRevision);
       if (!result.ok) {
         setState({ kind: "error", message: result.message, pending: result.code === "resource_pending" });
         return;
@@ -44,7 +44,7 @@ export function PdfDownload({ adaptationId }: { adaptationId: string }) {
   const generating = state.kind === "generating";
   return (
     <div className="space-y-3">
-      <Button variant="secondary" onClick={download} disabled={generating} aria-disabled={generating}>
+      <Button variant="secondary" onClick={download} disabled={generating || disabled} aria-disabled={generating || disabled}>
         {generating ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : <Download aria-hidden className="size-4" />}
         {generating ? "Preparando el PDF…" : "Descargar PDF"}
       </Button>

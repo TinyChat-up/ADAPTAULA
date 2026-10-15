@@ -35,7 +35,7 @@ function Activity({ node, mode, design }: Props<"activity">) {
       ) : null}
       <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}>
         <div className="ms-activity-head">
-          {node.label ? <span className="ms-num">{guideLabel(node.label, design)}</span> : null}
+          {node.label ? <span className="ms-num" data-numeric={/^\d{1,2}$/.test(node.label) || undefined}>{guideLabel(node.label, design)}</span> : null}
           <div className="ms-prompt">
             <Paragraphs paragraphs={node.prompt} />
             {node.steps.length > 0 ? (

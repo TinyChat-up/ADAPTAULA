@@ -11,6 +11,8 @@ import { PdfEngineError } from "./print/engine";
 import { pdfContentDisposition } from "./pdf-filename";
 import { renderPrintHtml } from "./print/html";
 import { validatePdf } from "./print/validation";
+import { applyEditorChanges } from "@/lib/editor/changes";
+import type { DraftReader } from "@/lib/editor/store";
 
 /**
  * On-demand PDF of an adaptation's CURRENT, DELIVERED version, for whoever may read it. The one chain, nothing parallel:
@@ -34,14 +36,27 @@ export interface PdfExportDeps {
   resources?: ResourceDeps;
   generated?: GeneratedDeps;
   engine: PdfEngine;
+  drafts?: DraftReader;
 }
 
-export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, adaptationId: string): Promise<PdfExportResult> {
+export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, adaptationId: string, draftRevision?: number): Promise<PdfExportResult> {
   const started = performance.now();
   const loaded = await loadRenderInputWith(deps.service, actor, adaptationId, deps.visuals, { pin: true, ...(deps.resources ? { resources: deps.resources } : {}), ...(deps.generated ? { generated: deps.generated } : {}) });
   if (loaded.kind === "not_found") return { ok: false, code: "not_found" };
   if (loaded.kind === "not_ready") return { ok: false, code: "not_ready" };
   if (loaded.kind === "invalid_document") return { ok: false, code: "not_renderable" };
+
+  // Explicit saved revision only: never silently substitute the generated sheet or a newer draft.
+  if (draftRevision !== undefined) {
+    if (!Number.isInteger(draftRevision) || draftRevision < 1 || !deps.drafts) return { ok: false, code: "not_found" };
+    try {
+      const draft = await deps.drafts.read(adaptationId, loaded.version.version, draftRevision);
+      if (!draft) return { ok: false, code: "not_found" };
+      const applied = applyEditorChanges(loaded.document, draft.changes);
+      if (applied.contentBlocks.length && !draft.contentAcknowledged) return { ok: false, code: "not_renderable" };
+      loaded.document = applied.document;
+    } catch { return { ok: false, code: "not_renderable" }; }
+  }
 
   // Exactly what the student view refuses to show, the PDF refuses to print; a missing essential visual is said as such.
   const readiness = readinessOf(loaded);

@@ -10,6 +10,7 @@ import { resourceDeps } from "@/lib/adaptation/resources/server";
 import { generatedDeps } from "@/lib/render/generated";
 import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/pdf-export";
 import { pdfEngine } from "@/lib/render/print/server";
+import { draftStore } from "@/lib/editor/store";
 
 // The first PDF of a new instance unpacks Chromium (≈2–3 s); a render is well under a second after that.
 export const maxDuration = 60;
@@ -35,8 +36,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
   if (!z.uuid().safeParse(id).success) return apiError(404, "not_found", ERRORS.not_found.message);
 
   const supabase = await getSupabase();
+  const rawDraft = new URL(request.url).searchParams.get("borrador");
+  const draftRevision = rawDraft === null ? undefined : Number(rawDraft);
+  if (draftRevision !== undefined && (!Number.isInteger(draftRevision) || draftRevision < 1)) return apiError(404, "not_found", ERRORS.not_found.message);
   const actor: Actor = { userId: auth.ctx.user.id, workspaceId: auth.ctx.workspace.id, canWrite: hasRole(auth.ctx.role, WRITE_ROLES) };
-  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine() }, actor, id);
+  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision);
   if (!result.ok) return apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message);
 
   return new Response(Buffer.from(result.pdf), {

@@ -13,7 +13,7 @@ import { requestedVisuals, resolveResources, type RequestedVisual, type Resource
 import { resourceDeps } from "@/lib/adaptation/resources/server";
 import { generatedDeps, generatedSourcesOf, generatedWidthMm, resolveGenerated, type GeneratedDeps } from "./generated";
 import type { DeferredInput } from "./deferred";
-import { buildRenderModel, type RenderMode, type RenderModel, type RenderValidation } from "./model";
+export { sheetModel, PRODUCT_DESIGN } from "./sheet-model";
 import { assetRef, type PinnedAsset } from "./print/pinned-assets";
 import { failureOfState, type VisualAssetFailure, type VisualState } from "./visual-assets";
 import type { VisualSpec } from "@/lib/visuals/spec";
@@ -182,12 +182,4 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     teacherImages,
     generated,
   };
-}
-
-/** The product's design (Phase 8, approved): Sistema CLARO, the same for the screen and the PDF. The one switch. */
-export const PRODUCT_DESIGN = "claro" as const;
-
-/** The one way a loaded sheet becomes a `RenderModel`: the viewer (both modes) and the PDF export both go through here. */
-export function sheetModel(loaded: Extract<RenderLoad, { kind: "ok" }>, mode: RenderMode): { model: RenderModel; validation: RenderValidation } {
-  return buildRenderModel(loaded.document, { mode, design: PRODUCT_DESIGN, requiredVisuals: loaded.requiredVisuals, assets: loaded.assets, figures: loaded.figures, assetFailures: loaded.assetFailures, resources: loaded.resources, generated: loaded.generated, deferred: loaded.deferred, subjectLabel: loaded.subjectName });
 }
