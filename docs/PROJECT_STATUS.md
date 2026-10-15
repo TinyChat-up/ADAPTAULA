@@ -36,7 +36,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Adaptaula 2.0, etapa 1**, rama nueva `codex/adaptaula-2-fundamentos`, desde `7e5ef52`. Se reutiliza el editor de #38. Tokens semánticos, componentes base, superficies sólidas/translúcidas acotadas, navegación lateral plegable con etiquetas, preferencia conservada entre recargas, ubicación por sección, barra móvil y diálogo accesible. La barra de acciones del editor y la cabecera pública adoptan las primitivas. [Dirección integral, etapas y política comercial pendiente](ADAPTAULA_2.md); [alcance, pruebas y capturas](qa/adaptaula-2-etapa-1/README.md).
+**Adaptaula 2.0, etapa 1**, [PR #39](https://github.com/TinyChat-up/ADAPTAULA/pull/39) abierta, sin merge. Rama nueva `codex/adaptaula-2-fundamentos`, desde `7e5ef52`. Se reutiliza el editor de #38. Tokens semánticos, componentes base, superficies sólidas/translúcidas acotadas, navegación lateral plegable con etiquetas, preferencia conservada entre recargas, ubicación por sección, barra móvil y diálogo accesible. La barra de acciones del editor y la cabecera pública adoptan las primitivas. [Dirección integral, etapas y política comercial pendiente](ADAPTAULA_2.md); [alcance, pruebas y capturas](qa/adaptaula-2-etapa-1/README.md).
 
 No se implementa todavía el workspace/comparador completo, rediseño específico de cada pantalla, modo oscuro ni nueva migración comercial. Planes/cuotas efectivos permanecen en BD. No APIs pagadas, cambios remotos, Stripe, prompts/modelos ni segundo renderer. Próximo paso: revisar esta base y continuar etapa 2 sobre main actualizado cuando se integre.
 

@@ -1,6 +1,6 @@
 # Adaptaula 2.0 — etapa 1
 
-Base `origin/main` / `7e5ef52` (PR #38, editor CLARO, integrada). Rama nueva `codex/adaptaula-2-fundamentos`. La API confirmó #38 MERGED y solo #20 abierta antes de esta entrega. Sin merge automático ni cambios en esa rama.
+Base `origin/main` / `7e5ef52` (PR #38, editor CLARO, integrada). Rama nueva `codex/adaptaula-2-fundamentos`. La API confirmó #38 MERGED y solo #20 abierta antes de esta entrega. Entrega publicada en [PR #39](https://github.com/TinyChat-up/ADAPTAULA/pull/39), abierta y sin merge. Sin cambios en esa otra rama.
 
 ## Entrega funcional
 
