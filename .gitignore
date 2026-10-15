@@ -81,3 +81,5 @@ next-env.d.ts
 /evals/ocr-pilot/results-adversarial-*/run-status.json
 /evals/visual-location/private/
 /evals/visual-location/results-geometry-*/run-status.json
+/evals/pedagogical-quality/results-*/report.json
+/evals/pedagogical-quality/results-*/rules.sha256

@@ -120,6 +120,23 @@ pueda verificarse.
     - **Criterio:** ningún recorte se entrega sin revisión humana mientras `semantic_identity`, `complete_content` y
       `visual_answer_safety` no tengan una fuente de evidencia independiente.
 
+12. **Fase III de calidad pedagógica hecha (2026-10-15, [QA](qa/calidad-pedagogica-fase3/README.md)), solo experimental.**
+    - Referencias por ficha, evaluador A–E sin PASS global, adaptador controlado, 16 tipos de error y contrato de revisión humana
+      de figuras.
+    - Errores verificables detectados: 52/52 en desarrollo y 28/29 en la reserva. Falsos bloqueos: 0/15 y 0/9.
+    - Errores no verificables: ninguno detectado, todos pendientes para el docente.
+    - **Ninguna referencia está validada por un docente.**
+    - **Siguiente:**
+      1. **Revisión docente.** Aplicar el paquete de revisión entregado y registrar `revisada_docente` o `aprobada_docente`, con
+         el sha-256 de la referencia, solo en las fichas que el docente marque.
+      2. **Generador real contra referencias.** Primero mock y después, con autorización, modelo real. Medir las mismas métricas
+         sin ajustar con la reserva.
+      3. **Criterios falsos en apoyos.** Lista de concepciones erróneas por tema, revisada por el docente («mismo número de
+         partes», «quedaron = restar»…), como comprobación C/E.
+      4. **Revisión humana de figuras en producto.** Solo después de un diseño de UX aprobado y sin conectarla a Hacer magia hasta
+         entonces.
+    - **Criterio:** ninguna adaptación ni referencia cuenta como validada sin el registro de revisión del docente.
+
 Max temporal, SQL de siete días, Stripe de prueba, pricing y pruebas pagadas quedan aparcados por instrucción del usuario; no bloquean estos bloques. Esta sesión usa verificaciones focalizadas autorizadas, sin repetir toda la batería ni el build, innecesario para este cierre focalizado.
 
 ## Fase 0 — Cimientos y documentación ✅

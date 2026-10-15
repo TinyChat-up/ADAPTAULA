@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-15. Base revisada: `main` en `ae603e6` (**PR #35 integrada**, Fase I de OCR; #27–#34 también), comprobada por Git.
+Actualizado: 2026-10-15. Base revisada: `main` en `370a9d8` (**PR #36 integrada**, Fase II de geometría; #27–#35 también), comprobada por Git.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -36,29 +36,32 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-Rama: `claude/fase-2-geometria-figuras`, desde `main` en `ae603e6` (PR #35 integrada; verificado con `git merge-base`).
+Rama: `claude/fase-3-calidad-pedagogica`, desde `main` en `370a9d8` (PR #36 integrada).
 
-**Bloque: Fase II · recuperación geométrica de figuras.** Solo `evals/visual-location`, sus pruebas y la documentación.
-Informe en [docs/qa/geometria-fase2](qa/geometria-fase2/README.md).
+**Bloque: Fase III · calidad pedagógica y referencias docentes (experimental).** Solo `evals/pedagogical-quality`, sus pruebas,
+una prueba de fronteras y la documentación. Informe en [docs/qa/calidad-pedagogica-fase3](qa/calidad-pedagogica-fase3/README.md).
 
-- **Implementado:** `geometry.ts`, `locate-v2.ts` (`figure_geometry@v2`), `geometry-cases.ts` y `geometry-eval.ts`
-  (`pnpm eval:geometry`). Es un localizador autónomo **sin región de entrada** que:
-  - endereza con el giro del OCR y devuelve las regiones al original;
-  - usa zonas por columna y ancla exacta o tolerante;
-  - agrupa la figura con sus partes y etiquetas;
-  - excluye reglas verticales y sombras de escáner;
-  - aplica firmas robustas: barra (rechaza tablas), recta (rechaza barras), esfera, polígono y cuadrícula.
-- **Probado:**
-  - **Corpus de diez fichas sintéticas (desarrollo):** candidatas correctas 1/10 → **9/10**, con 0 erróneas y 0 incompletas; 09
-    queda bloqueada por OCR.
-  - **Desarrollo geométrico:** 5/6 correctas y 5/5 negativas rechazadas.
-  - **Reserva geométrica**, ejecutada una vez: 0/6 → **2/6**, con 1 candidata en una negativa (respuesta dibujada).
-  - **Recortes aprobados:** 0 en todas las ejecuciones.
-  - **Pruebas focalizadas:** 144/144; typecheck y lint correctos.
-- **Pendiente:** grano y fotocopia muy degradada, ejes partidos, contornos vacíos sin forma nombrada, figuras genéricas (semántica),
-  respuestas dibujadas, escaneos físicos reales y Vercel.
-- **No se hizo:** cambios en `src/`, Hacer magia, MaterialAnalysis, PDF, Supabase, Stripe, páginas legales o UI; llamadas de pago;
-  entrenamiento; subida del corpus a Git.
+- **Implementado:**
+  - contrato de referencia pedagógica con estado de validación docente: provisional, revisada o aprobada; las dos últimas exigen
+    el registro de la revisión ligado al sha-256 de la referencia;
+  - evaluador A–E determinista, sin PASS global: FAIL o «pendiente de revisión docente»;
+  - adaptador controlado que no ve la clave;
+  - 16 tipos de error deliberado;
+  - contrato de revisión humana de figuras ligado a material, página, región y recorte visto;
+  - `pnpm eval:pedagogy`, con reserva protegida por hash de reglas.
+- **Probado** (8 fichas originales fuera de Git, referencias **sintéticas provisionales**; ninguna validada por un docente):
+  - **Desarrollo (5 fichas):** 52/52 errores verificables detectados y 0/15 falsos bloqueos, tras un único ajuste (3/15 antes).
+  - **Reserva (3 fichas, una ejecución):** 28/29 detectados, 0/9 falsos bloqueos y 8/8 fugas.
+  - **Errores no verificables:** 0/9 detectados; todos llegan como pendientes, nunca PASS.
+  - **Fichas propias de CI:** 37/37.
+  - **Pruebas focalizadas:** 96/96; typecheck y lint correctos.
+- **Pendiente:**
+  - revisión del docente con el paquete entregado fuera de Git: ficha de evaluación por ficha y estado de cada referencia;
+  - adaptaciones de un modelo real (no probadas);
+  - criterios falsos enseñados en apoyos, inferencias escritas en el texto y preguntas reescritas con las mismas palabras clave.
+- **No se hizo:** cambios en `src/`, Hacer magia, bloqueos semánticos, PDF, Supabase, Stripe, páginas legales o UI; llamadas de
+  pago; entrenamiento; subida de las fichas originales a Git.
 
-**Siguiente acción:** fase de calidad pedagógica (ROADMAP §11). Las candidatas siguen bloqueadas: ninguna entrega automática sin
-una verificación semántica independiente.
+**Siguiente acción:** incorporar la revisión del docente. Pasar a `revisada_docente` o `aprobada_docente` solo las referencias
+que el docente marque, con el sha-256 de la versión revisada. Después, medir el generador real (mock primero) contra esas
+referencias.
