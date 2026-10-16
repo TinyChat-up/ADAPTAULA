@@ -65,7 +65,7 @@ test("mesa de trabajo: subida, perfiles, estados, filtros, navegación y resulta
   await page.goto("/app");
   await accessible(page);
   await page.screenshot({ path: info.outputPath("mesa-de-trabajo.png"), fullPage: true, style: "nextjs-portal { display: none; }" });
-  expect(await page.locator("main h2").allTextContents()).toEqual(["Necesitan tu atención", "En curso", "Materiales recientes", "Fichas preparadas"]);
+  expect(await page.locator("main h2").allTextContents()).toEqual(["Necesitan tu atención", "Adaptar un nuevo material", "En curso", "Fichas preparadas", "Materiales recientes"]);
   await expect(page.getByRole("main").getByRole("link", { name: "Adaptar material", exact: true })).toHaveCount(1);
   if (info.project.name === "mobile") {
     await page.getByRole("button", { name: "Más", exact: true }).click();
@@ -83,6 +83,13 @@ test("mesa de trabajo: subida, perfiles, estados, filtros, navegación y resulta
   await expect(page.getByRole("main").getByText("Esperando tu revisión", { exact: true })).toHaveCount(1);
   await expect(page.getByRole("main").getByText("Ficha preparada", { exact: true })).toHaveCount(0);
   await accessible(page);
+  await filters.getByRole("link", { name: /Preparadas/ }).click();
+  await expect(page.getByRole("main").getByText("Ficha preparada", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("main").getByRole("link", { name: "Ver original", exact: true })).toHaveAttribute("href", material);
+  await expect(page.getByRole("main").getByRole("link", { name: "Comparar versiones" })).toHaveAttribute("href", `/app/adaptaciones/${result}/comparar`);
+  await expect(page.getByRole("main").getByRole("link", { name: "Editar", exact: true })).toHaveAttribute("href", `/app/adaptaciones/${result}/editar`);
+  await expect(page.getByRole("main").getByRole("button", { name: "Descargar PDF" })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("historial.png"), fullPage: true, style: "nextjs-portal { display: none; }" });
 
   for (const path of ["/app/materiales", "/app/alumnos", "/app/adaptar", "/app/uso", `/app/adaptaciones/${result}/vista`]) {
     await page.goto(path);

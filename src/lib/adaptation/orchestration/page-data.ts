@@ -89,6 +89,7 @@ async function profileNameOf(supabase: Awaited<ReturnType<typeof getSupabase>>, 
 
 export interface AdaptationListItem {
   id: string;
+  materialId: string;
   materialTitle: string;
   /** The teacher's own alias for the profile (shown only to the workspace, never sent anywhere). Null when it was deleted. */
   profileName: string | null;
@@ -107,7 +108,8 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
   let query = supabase.from("adaptations").select("id, status, created_at, updated_at, material_id, learner_profile_id, creation_mode");
   if (filter.materialId) query = query.eq("material_id", filter.materialId);
   if (filter.profileId) query = query.eq("learner_profile_id", filter.profileId);
-  const { data: rows } = await query.order("updated_at", { ascending: false }).limit(filter.limit ?? 50);
+  const { data: rows, error } = await query.order("updated_at", { ascending: false }).limit(filter.limit ?? 50);
+  if (error) throw new Error("No se han podido cargar las adaptaciones.");
   if (!rows?.length) return [];
 
   const ids = rows.map((r) => r.id as string);
@@ -136,6 +138,7 @@ export async function listAdaptations(filter: { materialId?: string; profileId?:
   const names = new Map((profiles.data ?? []).map((p) => [p.id as string, p.display_name as string]));
   return rows.map((r) => ({
     id: r.id as string,
+    materialId: r.material_id as string,
     materialTitle: titles.get(r.material_id as string) ?? "Material",
     profileName: r.learner_profile_id ? (names.get(r.learner_profile_id as string) ?? null) : null,
     createdAt: r.created_at as string,

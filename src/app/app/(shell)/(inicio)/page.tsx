@@ -54,16 +54,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-9 sm:space-y-10">
-      <section aria-labelledby="saludo" className="border-b border-foreground pb-8">
+      <section aria-labelledby="saludo" className="border-b border-foreground pb-6">
         <p className="eyebrow mb-5 text-muted-foreground">Tu mesa de trabajo</p>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-3">
             <h1 id="saludo" className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
             <p className="max-w-xl text-muted-foreground">{subtitle}</p>
-          </div>
-          <div className="flex shrink-0 flex-col items-start gap-2">
-            <LinkButton href="/app/adaptar" size="lg">Adaptar material<ArrowRight aria-hidden className="size-4" /></LinkButton>
-            {profiles === 0 ? <Link href="/app/alumnos/nuevo" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">Crear un perfil</Link> : null}
           </div>
         </div>
       </section>
@@ -74,10 +70,24 @@ export default async function DashboardPage() {
           <AdaptationList items={attention} />
         </section>
       ) : null}
+      <section aria-labelledby="nuevo-material" className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+        <div><h2 id="nuevo-material" className="text-lg font-semibold">Adaptar un nuevo material</h2><p className="mt-1 text-sm text-muted-foreground">Empieza con una ficha que ya utilizas.</p></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <LinkButton href="/app/adaptar">Adaptar material<ArrowRight aria-hidden className="size-4" /></LinkButton>
+          {profiles === 0 ? <Link href="/app/alumnos/nuevo" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">Crear un perfil</Link> : null}
+        </div>
+      </section>
       {working.length > 0 ? (
         <section aria-labelledby="en-curso" className="space-y-3">
           <SectionHeading id="en-curso" title="En curso" />
           <AdaptationList items={working} />
+        </section>
+      ) : null}
+
+      {done.length > 0 ? (
+        <section aria-labelledby="preparadas" className="space-y-3">
+          <SectionHeading id="preparadas" title="Fichas preparadas" href="/app/historial" linkText="Ver todas" linkDetail="las adaptaciones" />
+          <AdaptationList items={done} />
         </section>
       ) : null}
 
@@ -119,13 +129,6 @@ export default async function DashboardPage() {
           </ul>
         </section>
       )}
-
-      {done.length > 0 ? (
-        <section aria-labelledby="preparadas" className="space-y-3">
-          <SectionHeading id="preparadas" title="Fichas preparadas" href="/app/historial" linkText="Ver todas" linkDetail="las adaptaciones" />
-          <AdaptationList items={done} />
-        </section>
-      ) : null}
 
       <footer aria-label="Resumen de uso" className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-5 text-xs text-muted-foreground">
         <span>Plan {usage.plan.name} · {usage.adaptations.used} de {usage.adaptations.limit} adaptaciones</span>

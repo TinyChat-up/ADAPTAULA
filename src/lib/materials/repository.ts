@@ -26,18 +26,25 @@ const JobRowSchema = z.object({ status: z.string(), step: z.string().nullable(),
 
 export interface MaterialFilters {
   stage?: string | undefined;
+  grade?: string | undefined;
   subject?: string | undefined;
   status?: MaterialStatus | undefined;
+  search?: string | undefined;
+  sort?: "recent" | "oldest" | "title" | undefined;
 }
 
 export async function listMaterials(workspaceId: string, filters: MaterialFilters = {}): Promise<MaterialRow[]> {
   const supabase = await getSupabase();
   let query = supabase.from("materials").select(MATERIAL_COLUMNS).eq("workspace_id", workspaceId);
   // Half-uploaded rows are plumbing, not materials: they are not listed.
-  query = filters.status ? query.eq("status", filters.status) : query.neq("status", "uploading");
+  query = query.neq("status", "uploading");
+  if (filters.status) query = query.eq("status", filters.status);
   if (filters.stage) query = query.eq("stage_slug", filters.stage);
+  if (filters.grade) query = query.eq("grade_slug", filters.grade);
   if (filters.subject) query = query.eq("subject_slug", filters.subject);
-  const { data, error } = await query.order("created_at", { ascending: false }).limit(200);
+  if (filters.search) query = query.ilike("title", `%${filters.search.replace(/[\\%_]/g, "\\$&")}%`);
+  const order = filters.sort === "title" ? "title" : "created_at";
+  const { data, error } = await query.order(order, { ascending: filters.sort === "oldest" || filters.sort === "title" }).limit(200);
   if (error) throw new Error("No se han podido cargar los materiales.");
   return z.array(MaterialRowSchema).parse(data);
 }
