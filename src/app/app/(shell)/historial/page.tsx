@@ -6,7 +6,8 @@ import { LinkButton } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
 import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 import type { ListGroup } from "@/lib/adaptation/presentation/list";
-import { requireWorkspace } from "@/lib/auth/workspace";
+import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
+import { hasRole } from "@/lib/auth/workspace-select";
 import { cn } from "@/lib/utils/cn";
 
 export const metadata: Metadata = { title: "Adaptaciones" };
@@ -22,7 +23,7 @@ const FILTERS: Array<{ key: string; label: string; groups: ListGroup[] | null }>
 ];
 
 export default async function HistoryPage({ searchParams }: PageProps<"/app/historial">) {
-  await requireWorkspace();
+  const ctx = await requireWorkspace();
   const query = await searchParams;
   const items = await listAdaptations({ limit: 100 });
   const chosen = FILTERS.find((f) => f.key === query.estado) ?? FILTERS[0]!;
@@ -36,7 +37,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/app/hist
       <PageHeader
         icon={FileCheck2}
         title="Adaptaciones"
-        description="Todas tus fichas adaptadas, de la más reciente a la más antigua."
+        description="Retoma una ficha, consulta su original o descarga la versión preparada. Se muestran las 100 más recientes."
         actions={
           items.length > 0 ? (
             <LinkButton href="/app/adaptar">
@@ -75,7 +76,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/app/hist
             </ul>
           </nav>
           {shown.length > 0 ? (
-            <AdaptationList items={shown} />
+            <AdaptationList items={shown} history canWrite={hasRole(ctx.role, WRITE_ROLES)} />
           ) : (
             <EmptyState title="No hay adaptaciones en este estado" description="Prueba con otro filtro o mira todas tus adaptaciones.">
               <LinkButton href="/app/historial" variant="secondary">
