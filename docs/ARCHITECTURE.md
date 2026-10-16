@@ -355,3 +355,14 @@ Etapa 2A parte de PR #39 integrada (`a6474a7`). `DocumentWorkspace` compone slot
 Ocultar el inspector usa `hidden`, conservando formularios/selección y seguimiento; abrir el siguiente paso enfoca su contenido. El resumen funcional es el existente `summarizeProfile`, sin mutar el perfil. La UI de solo lectura no ofrece acciones de material ni despacha el trabajo de análisis, aunque sigue observándolo. Autorización y RLS de servidor permanecen intactas.
 
 CLARO, borradores, documentos generados, PDF, cuotas, prompts/modelos y contratos no cambian. Comparación y reorganización del editor pertenecen a 2B. Ver [QA](qa/adaptaula-2-etapa-2a/README.md); las pruebas sintéticas con proveedores simulados no certifican Hacer magia real.
+
+
+### ADR-032 · Comparación privada y selección contextual sobre CLARO (2026-10-16)
+
+Etapa 2B parte de #40 integrada (`330cb4f`). La ruta `/comparar` autoriza con `requireWorkspace` y el loader existente; proyecta la versión del alumno y revalida el último parche persistido, su base y reconocimiento pedagógico. No serializa claves, notas docentes ni rutas de almacenamiento. Un borrador inválido no aparece como versión disponible. Lectores comparan/descargan lo permitido sin herramientas de edición; servidor y RLS siguen aplicando los permisos existentes.
+
+`DocumentComparison` compone `OriginalDocument` y `SheetPreview`: mantiene ambos montados al alternar en móvil y no sincroniza páginas. El PDF usa el endpoint existente y `?borrador=N` para la revisión concreta. No acepta cambios transitorios del cliente. `DocumentWorkspace` admite controlar la apertura del panel para enfocar los ajustes al seleccionar una actividad.
+
+`SheetPreview` navega por páginas lógicas del RenderModel completo. `MaterialSheet`/`NodeView` reciben props opcionales de visibilidad/selección para pantalla. Su invocación por PDF sigue sin estas props: conserva todas las páginas y no incluye interacción. La proyección académica, CSS de impresión y motor PDF no cambian. `activityLocations` comprueba cantidad, orden, etiqueta y enunciado contra la proyección antes de asociar IDs de actividad y nodos. Si divergen, no habilita selección sobre el papel; permanece el selector explícito del editor. No se empareja por similitud textual ni se añaden IDs al contrato académico.
+
+El editor conserva parche cerrado, historial local, guardado explícito append-only y control de conflictos. Se corrige la recuperación tras conflicto: un Link a la misma ruta retenía estado local; recargar mediante navegación completa recupera la revisión persistida. Sin schema, endpoints, prompts ni dependencias nuevos. Límites: último borrador de la base actual, sin autosave/historial visual completo, páginas lógicas distintas de posibles saltos físicos. [QA y capturas](qa/adaptaula-2-etapa-2b/README.md).

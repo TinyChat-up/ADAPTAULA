@@ -2,11 +2,11 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
-## Prioridad actual — Adaptaula 2.0, etapa 2A (2026-10-16)
+## Prioridad actual — Adaptaula 2.0, etapa 2B (2026-10-16)
 
-Etapa 1 integrada mediante PR #39 (`a6474a7`). La entrega actual implementa el workspace del original, subida, apoyos y estados sobre el sistema visual existente. Base y detalles en [PROJECT_STATUS.md](PROJECT_STATUS.md), dirección completa en [ADAPTAULA_2.md](ADAPTAULA_2.md) y [QA](qa/adaptaula-2-etapa-2a/README.md).
+Etapa 2A integrada mediante PR #40 (`330cb4f`). Esta entrega completa comparación original/generada/borrador guardado y edición contextual con CLARO. [Estado](PROJECT_STATUS.md), [dirección](ADAPTAULA_2.md) y [QA](qa/adaptaula-2-etapa-2b/README.md). Se aplican pruebas focalizadas, integración, PDF y E2E según el alcance autorizado; no se repite la suite completa.
 
-Revisar esta PR antes de 2B: mejorar selección/edición contextual de CLARO y comparar originales/adaptados reales, con controles independientes y sin correspondencias inventadas. Sin ampliar el backend, planes ni pipeline. Los experimentos y pruebas pagadas siguen pospuestos.
+Revisar e integrar 2B antes de empezar la etapa 3 (mesa docente, biblioteca, perfiles, historial y cuenta), manteniendo el documento como centro. Sin merge automático. Los experimentos y pruebas pagadas siguen pospuestos. No ampliar geometría, pipeline, cuotas ni modelo de borradores en esta entrega.
 
 ## Antecedente — editor docente de fichas adaptadas (2026-10-15)
 
