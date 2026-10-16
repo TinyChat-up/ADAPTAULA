@@ -9,7 +9,7 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 | 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
 | 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Integrada mediante [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) en `330cb4f`. [QA](qa/adaptaula-2-etapa-2a/README.md) |
 | 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Integrada mediante [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41) en `740e2db`; [QA y capturas](qa/adaptaula-2-etapa-2b/README.md) |
-| 3A | Mesa docente, biblioteca e historial | Implementada en `codex/adaptaula-2-mesa-biblioteca-historial`, en revisión; [QA](qa/adaptaula-2-etapa-3a/README.md) |
+| 3A | Mesa docente, biblioteca e historial | Implementada en [PR #42](https://github.com/TinyChat-up/ADAPTAULA/pull/42), abierta y sin merge; [QA](qa/adaptaula-2-etapa-3a/README.md) |
 | 3B | Perfiles funcionales y Plan y cuenta | Pendiente tras integrar 3A |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |
 | 5 | Consistencia final, responsive, accesibilidad y microinteracciones | Verificación incremental en cada entrega; cierre global pendiente |

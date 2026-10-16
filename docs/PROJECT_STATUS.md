@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-16. Base actual: `origin/main` en `740e2db`, **PR #41 integrada** (comprobado en GitHub). Rama nueva `codex/adaptaula-2-mesa-biblioteca-historial` para la etapa 3A; sin merge en esta sesión.
+Actualizado: 2026-10-16. Base actual: `origin/main` en `740e2db`, **PR #41 integrada** (comprobado en GitHub). Rama nueva `codex/adaptaula-2-mesa-biblioteca-historial` para la etapa 3A; [PR #42](https://github.com/TinyChat-up/ADAPTAULA/pull/42) abierta, sin merge en esta sesión.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar

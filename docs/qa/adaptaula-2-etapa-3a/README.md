@@ -1,6 +1,6 @@
 # Adaptaula 2.0 · Etapa 3A: mesa, biblioteca e historial
 
-2026-10-16. Base `740e2db` (`main`, PR #41 integrada); rama `codex/adaptaula-2-mesa-biblioteca-historial`. Primera entrega de la Etapa 3, para revisión sin merge automático. Perfiles y Plan y cuenta corresponden a 3B.
+2026-10-16. Base `740e2db` (`main`, PR #41 integrada); rama `codex/adaptaula-2-mesa-biblioteca-historial`. Primera entrega de la Etapa 3 en [PR #42](https://github.com/TinyChat-up/ADAPTAULA/pull/42), para revisión sin merge. Perfiles y Plan y cuenta corresponden a 3B.
 
 ## Comportamiento entregado
 
