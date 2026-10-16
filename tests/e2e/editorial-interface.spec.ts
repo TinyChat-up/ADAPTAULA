@@ -64,6 +64,7 @@ test("mesa de trabajo: subida, perfiles, estados, filtros, navegación y resulta
 
   await page.goto("/app");
   await accessible(page);
+  await page.screenshot({ path: info.outputPath("mesa-de-trabajo.png"), fullPage: true, style: "nextjs-portal { display: none; }" });
   expect(await page.locator("main h2").allTextContents()).toEqual(["Necesitan tu atención", "En curso", "Materiales recientes", "Fichas preparadas"]);
   await expect(page.getByRole("main").getByRole("link", { name: "Adaptar material", exact: true })).toHaveCount(1);
   if (info.project.name === "mobile") {
@@ -86,6 +87,7 @@ test("mesa de trabajo: subida, perfiles, estados, filtros, navegación y resulta
   for (const path of ["/app/materiales", "/app/alumnos", "/app/adaptar", "/app/uso", `/app/adaptaciones/${result}/vista`]) {
     await page.goto(path);
     await accessible(page);
+    if (path === "/app/materiales") await page.screenshot({ path: info.outputPath("biblioteca.png"), fullPage: true, style: "nextjs-portal { display: none; }" });
   }
   await expect(page.locator(".ms-sheet")).toBeVisible();
   await expect(page.getByRole("button", { name: "Descargar PDF" })).toBeVisible();

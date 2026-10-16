@@ -11,7 +11,7 @@ function NavList({ items, label }: { items: AppNavItem[]; label: string }) {
     <nav aria-label={label}>
       <ul className="space-y-1">
         {items.map((item) => {
-          const { href, label: text } = item;
+          const { href, label: text, icon: Icon } = item;
           const active = isItemActive(pathname, item);
           const cta = href === "/app/adaptar";
           return (
@@ -19,21 +19,12 @@ function NavList({ items, label }: { items: AppNavItem[]; label: string }) {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={cn(
-                  "group relative flex min-h-11 items-center gap-3 rounded-none px-3 text-sm font-medium transition-colors duration-150",
-                  cta && !active && "text-primary",
-                  active ? "bg-primary-soft font-semibold text-foreground" : "text-foreground/80 hover:bg-foreground/5 hover:text-foreground",
-                )}
+                className={cn("nav-link", cta && "nav-link--create")}
               >
-                {/* The active entry carries a bar as well as its colour and `aria-current` (never colour alone). */}
-                <span
-                  aria-hidden
-                  className={cn(
-                    "absolute inset-y-0 left-0 w-0.5 origin-center bg-primary transition-transform duration-200 ease-out",
-                    active ? "scale-y-100" : "scale-y-0",
-                  )}
-                />
-                <span className="flex-1">{text}</span>
+                <Icon aria-hidden className="size-[1.125rem] shrink-0" strokeWidth={1.7} />
+                <span className="sr-only">{text}</span>
+                <span aria-hidden className="nav-label-long">{text}</span>
+                <span aria-hidden className="nav-label-short">{item.compactLabel ?? text}</span>
               </Link>
             </li>
           );

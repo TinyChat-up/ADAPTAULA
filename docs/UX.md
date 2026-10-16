@@ -40,13 +40,15 @@ Un **estudio pedagógico digital**: papel, tinta, materiales y composición tipo
 ### API
 `/api/uploads` · `/api/uploads/[id]/complete` · `/api/jobs` · `/api/jobs/[id]` · `/api/adaptations/[id]/export` · `/api/stripe/create-checkout` · `/api/stripe/portal` · `/api/stripe/webhook` · `/api/cron/jobs` · `/api/cron/retention`.
 
-## Navegación de la app
+## Navegación de la app — Adaptaula 2.0, etapa 1
 
-**Escritorio — sidebar izquierda**: logo · Inicio · Adaptar material · Materiales · Perfiles · Adaptaciones — abajo: Plan y cuenta, resumen discreto del plan con barra de uso (enlaza a Plan y cuenta), identidad y cerrar sesión. «Adaptar material» lleva el color primario. La entrada activa lleva fondo, barra lateral y `aria-current` (nunca solo color); «Adaptaciones» también queda activa dentro de `/app/adaptaciones/[id]`.
+Escritorio: barra lateral de 240 px con las rutas existentes y sus etiquetas. «Plegar barra» la reduce a 112 px conservando iconos **y texto**; «Ampliar» recupera el ancho. La preferencia se guarda solo al pulsar, en `adaptaula_nav` (un año, `/app`, SameSite=Lax, sin identidad); el servidor la lee para evitar saltos al recargar. Cuotas e identidad se muestran en la barra ampliada y siempre están disponibles en Plan y cuenta. Cerrar sesión se mantiene también al plegar.
 
-**Móvil — cabecera fija** con el logo y el plan (`Plan Free · 1/5`, enlaza a Plan y cuenta) **y barra inferior**: Inicio · Materiales · Adaptar (botón central plano, con texto visible) · Perfiles · Más (hoja inferior con Adaptaciones, Plan y cuenta y Cerrar sesión).
+Una cabecera translúcida muestra la sección y el tipo de pantalla (Material, Perfil funcional, Preparar ficha, Ficha adaptada o Editar ficha). Este contexto deriva de la ruta: **no representa el título ni un estado del job**. Ambos siguen en las pantallas existentes con sus datos reales; unificar su contexto documental persistente es etapa 2.
 
-En la navegación solo hay pantallas con contenido real: nada de entradas «Próximamente». Cuando una sección exista y dependa de un flag o un plan (p. ej. Clases en Free), se mostrará con su estado bloqueado y una explicación, no se ocultará sin más.
+Móvil: cabecera con logo y consumo real, ubicación y barra inferior flotante con Inicio · Materiales · Adaptar · Perfiles · Más. Márgenes seguros y espacio inferior reservado. «Más» conserva Adaptaciones, Plan y cuenta y Cerrar sesión en un diálogo nativo con Escape/retorno de foco; se cierra al navegar y al cambiar a escritorio para no dejar la pantalla inerte. Sin acciones exclusivas de hover.
+
+No se eliminan rutas, funciones ni permisos. El acceso directo a las pantallas continúa validándose en servidor. Las redirecciones y los grupos de carga de ADR-024 permanecen; no se añade Suspense/loading por encima de los 404 privados.
 
 ## Flujos clave
 
@@ -72,58 +74,32 @@ Optimización del camino rápido: con un perfil guardado y el contexto autodetec
 
 **Editor de perfil `/app/alumnos/[id]`:** información básica (alias con aviso de privacidad, etapa y curso; no se piden notas) → punto de partida opcional (preset: atajo con nombre funcional, p. ej. «Lectura y decodificación»; precarga dimensiones, no es ni guarda un diagnóstico) → 11 áreas seleccionables, y solo las elegidas muestran sus controles (Sin adaptación / Algo / Bastante / Mucho) → ajustes avanzados plegados → panel derecho fijo **"Así se aplicará"** con un resumen en lenguaje natural (p. ej. "Instrucciones breves · Máximo 3 tareas visibles · Ejemplo antes de ejercicios nuevos · Carga visual baja"). Los presets se aplican desde un selector y todo sigue siendo editable. Nunca se muestra JSON.
 
-## Sistema de diseño
+## Sistema de diseño — fundamentos 2.0
 
-### Paleta y contraste
+Fuente: `src/styles/tokens.css`, importada por `globals.css`; composición de la navegación en `src/styles/chrome.css`. Dirección integral y entregas pendientes: [ADAPTAULA_2.md](ADAPTAULA_2.md). Sustituye la paleta/radios de ADR-025, conservando sus filas editoriales y el aislamiento de CLARO.
 
 | Token | Valor | Uso |
-|---|---|---|
-| `background` | `#F5F3EE` | papel cálido, fondo general |
-| `surface` | `#FFFFFF` | hojas y paneles de trabajo |
-| `foreground` | `#192B40` | tinta, texto, acción principal |
-| `muted-foreground` | `#526171` | metadatos y explicación secundaria |
-| `primary` / `accent` | `#315A86` | enlaces, foco, selección y progreso |
-| `primary-soft` / `accent-soft` | `#E7EEF4` | selección y apoyos suaves |
-| selección de texto | `#C9D8E7` | selección nativa con texto tinta |
-| `border` | `#D5D7D5` | separadores de contenido |
-| `control-border` | `#7C8790` | perímetro identificable de controles |
-| `success` / `success-strong` | `#24623E` / `#1C5132` | éxito y texto de insignias |
-| `warning` / `danger` | `#925015` / `#B12828` | advertencia y error |
+| --- | --- | --- |
+| background | #F7F8FA | espacio de trabajo |
+| surface | #FFFFFF | documentos, campos y paneles |
+| surface-muted / surface-inset | #F0F3F6 / #E8EDF2 | navegación, capas secundarias |
+| foreground / muted-foreground | #1E2E43 / #536379 | texto y metadatos |
+| primary / primary-strong | #285782 / #1E4164 | foco, enlaces, acción principal |
+| primary-soft | #E6EEF6 | selección |
+| border / control-border | #DCE2E8 / #7D8B9C | separadores / controles identificables |
+| success / warning / danger | #24623E / #925015 / #B12828 | estados acompañados de texto |
 
-Color siempre funcional; estados con texto y, cuando ayuda, icono. Texto principal, secundario y enlaces superan 4,5:1 tanto sobre blanco como sobre papel; el borde de controles supera 3:1 en ambos fondos. Los separadores decorativos no se usan para identificar campos. Tokens en `globals.css` (`@theme` de Tailwind 4), compartidos por las primitivas. Sin degradados, halos, cuadrículas de fondo ni sombras teñidas. No se implementa modo oscuro.
+Inter existente: texto 16 px, metadatos 12–14, secciones 18, títulos fluidos 26–32; Georgia del sistema permanece en titulares públicos hasta su entrega específica. Sin nuevas fuentes ni dependencias. Base de espaciado Tailwind de 4 px; control 12, panel 24, sección 32. Radios control 12, tarjeta 20, panel 24. Sombras neutras leves para paneles, mayores solo en controles flotantes y diálogos. Capas explícitas para navegación, overlays y salto al contenido.
 
-### Tipografía
+**Materiales de interfaz:** `surface-glass` nace sólido; solo con soporte aplica fondo 90 % opaco y blur de 12 px en cabeceras, barra móvil y `ActionBar` del editor existente. No hay cristales en filas, fichas, PDF ni tarjetas ordinarias. `ActionBar` usa un grupo etiquetado con Tab nativo, no un role toolbar sin su comportamiento de flechas.
 
-- **UI:** Inter existente mediante `next/font`, base 16 px / 1,5. Metadatos 12–14, subtítulos 18–20, títulos de app 30/36. No se añade descarga de fuentes.
-- **Titulares públicos:** Georgia del sistema, 44 px móvil y 60–68 px escritorio, interlineado 1,06–1,2. Contraste serif/sans para distinguir discurso editorial de controles. Antetítulos 11 px, mayúsculas espaciadas, solo información secundaria.
-- **Fichas del alumnado:** conservan íntegros CLARO, sus estilos, fuentes, geometría y renderer. El sistema web no se traslada al PDF. Las muestras de portada tienen clases `sample-*` propias; son HTML ilustrativo, no una captura ni una ejecución del renderer.
+Se reutilizan Button/LinkButton, campos, Card, PageHeader, EmptyState, Alert, Badge, UsageMeter, Skeleton, ChoiceCards y ConfirmDialog. Estados de campo/error asociados, desactivación nativa, foco con separación, botones pequeños ≥44 px en móvil y navegación ≥44 px. Confirmaciones siguen siendo diálogos nativos; errores permanecen en pantalla. Los contadores son de servidor; no se añade progreso inventado.
 
-### Espacio, composición y contenedores
+**Preferencias de accesibilidad:** `prefers-reduced-motion` elimina animación y casi toda transición; `prefers-reduced-transparency` y `prefers-contrast: more` usan superficies sólidas sin filtro/sombra. Alto contraste refuerza textos y bordes; forced-colors utiliza colores de sistema sin desactivar el ajuste del navegador. La hoja CLARO mantiene su blanco y contraste propio. **Modo oscuro pendiente**: esta entrega conserva modo claro deliberadamente, sin un selector que prometa una cobertura que todavía no existe en todas las pantallas.
 
-Base de 4 px: 8/12 para relaciones cercanas, 16/20/24 para controles y filas, 32/40 entre grupos, 48/64/80 entre secciones públicas. Portada hasta 1280 px, app hasta 1152 px, adaptación/subida hasta 768 px. Márgenes móviles de 20 px, mayores en escritorio. Sidebar de 224 px, cabeceras con filete y sin icono ornamental. Radios de 4 px; `shadow-card: none`.
+**Responsive:** lateral desde 768 px, navegación inferior por debajo; los nombres de las funciones continúan visibles en el modo compacto. Contenido hasta 1408 px para dejar crecer el documento, con márgenes de 20 px en móvil y fluidos en escritorio. Sin animación de ancho al plegar: evita escalado/reflujo animado de la ficha. Texto al 200 %, 320 px y foco se verifican en navegador; detalle en [QA](qa/adaptaula-2-etapa-1/README.md). No equivale a certificación WCAG completa.
 
-Listas de materiales, perfiles y adaptaciones: filas sobre papel, separadores, títulos legibles y metadatos en texto; estado y siguiente acción se distinguen de la identidad del material. En móvil pasan a bloques verticales sin esconder la acción. Se reservan superficies blancas para documentos, subida, formularios y decisiones acotadas. Una tarjeta no es el contenedor por defecto de una sección.
-
-### Controles y componentes
-
-Acción principal: botón sólido tinta, azul al interactuar. Secundario: fondo blanco y borde visible. Enlaces editoriales subrayados; acciones táctiles principales ≥44 px; foco de 2 px con separación de 3 px. No hay escalado ni elevación al pulsar. Inputs con label, borde de control, error asociado y estados desactivados existentes.
-
-Se reutilizan Button, campos, Alert, Card, Badge, UsageMeter, Skeleton, EmptyState, PageHeader, ChoiceCards y ConfirmDialog nativo. Se retira `IconBadge`; cabeceras y vacíos se reconocen por su texto. `Card interactive` responde con borde/fondo, sin desplazarse. Cuotas en barras finas de un solo color. `PageSkeleton` conserva la estructura de carga por sección.
-
-### Portada: original → adaptado
-
-El hero combina la propuesta y dos páginas de proporción A4 con **contenido real de demostración**: tabla de animales, alimentación y hábitat, pregunta de consulta literal y tres alternativas. Ambas conservan tabla, consigna y opciones; la adaptada separa las respuestas con círculos vacíos y amplía el espaciado. Ninguna señala la solución. Rótulo explícito: «Demostración preparada por nosotros», no una generación en directo ni una garantía sobre cualquier archivo. La propuesta coincide con selección única tabular de ADR-023; no promete simplificación arbitraria.
-
-Hacer magia prepara y comprueba automáticamente; Revisar antes de crear permite ajustar primero la propuesta. Se invita a revisar el resultado y descargar cuando esté listo, y se explica que puede no completarse. Los precios y límites siguen viniendo del sistema existente.
-
-### Movimiento y responsive
-
-Solo movimiento que comunica interacción, carga o estado: colores 150–160 ms, progreso 200 ms, entrada de hoja modal 180 ms y pulso de carga. Se retiran entradas de página, escalonados, animaciones por scroll, flotación y llenado inicial de cuotas. `prefers-reduced-motion` reduce animaciones y transiciones a prácticamente cero.
-
-- Sidebar desde 768 px; por debajo, cabecera y barra inferior con etiquetas. «Más» conserva `<dialog>`, Escape y retorno de foco. Cabecera y acciones se redistribuyen al ampliar texto.
-- Hero en dos columnas desde 1280 px; antes, texto seguido de las hojas. Hojas en pareja desde 640 px y apiladas en móvil. `aspect-ratio` A4 permite crecer si el texto ampliado lo necesita, sin recortar contenido.
-- Formularios y filtros pasan a una columna cuando hace falta; las filas envuelven acciones y metadatos. Verificado a 390 px y con texto al 200 % a 320 px en la biblioteca; no equivale a una auditoría manual completa.
-- Ningún `loading.tsx` envuelve `/app/adaptaciones/[id]` ni `/vista`: se preservan los grupos `(inicio)` y `(lista)` de ADR-024 para no convertir 404 de otra cuenta en 200.
+**Referencias externas:** consultadas con Chromium tras resolver el bloqueo inicial de red. Apple Materials/Liquid Glass: separar la capa de controles del contenido, aplicar material con moderación y sostener legibilidad. Bencho: controles y selección visibles, herramientas agrupadas, transiciones de estado y memoria de elección. Se vieron glass controls/paint, upload, comparación, toolbar y reordering; `/blocks` devuelve 404, pero el catálogo actual está en `/` y los ejemplos cargan. No se copian refracciones, rebotes ni gestos de reordenación: no aportan a esta entrega ni a sus capacidades reales. No se incorpora código ni assets de terceros nuevos. Detalle en [QA](qa/adaptaula-2-etapa-1/README.md).
 
 ## Análisis del material (fase 3)
 

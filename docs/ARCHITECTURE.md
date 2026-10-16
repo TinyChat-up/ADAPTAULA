@@ -335,3 +335,13 @@ Además, las garantías de los proveedores no están verificadas ([auditoría](l
 **Seguridad pedagógica:** cualquier cambio de enunciado requiere reconocer el aviso de comprobación. No se registra como aprobado y no modifica el veredicto original. Las claves no pasan a la proyección del alumno. No se promete detectar respuestas o errores semánticos que un docente escriba en un enunciado.
 
 **Entrega pequeña:** guardado explícito, historial local acotado, recuperación del último borrador y sin editor de estructura. No requiere rediseñar `MaterialDocument` ni cambiar prompts/modelos. Migración solo local en esta sesión; despliegue pendiente del proceso habitual.
+
+### ADR-030 · Fundamentos de Adaptaula 2.0 alrededor de CLARO (2026-10-15)
+
+**Decisión:** rediseño incremental, sin otro pipeline ni renderer. Etapa 1 extrae los tokens de interfaz a `src/styles/tokens.css` y composición a `chrome.css`; sigue Tailwind 4, Inter, Lucide y primitivas propias. Transparencia al 90 % y blur de 12 px solo en navegación/acciones; fallback sólido por soporte y preferencias. Modo claro hasta validar un oscuro completo. CLARO mantiene CSS, fuentes, geometría, proyección y exportación.
+
+`AppShell` sigue recibiendo identidad/consumo autorizado desde servidor; `ShellFrame` solo gestiona la preferencia de plegado. Los hijos y el pie de sesión llegan como slots para no importar módulos de servidor desde cliente. Cookie de presentación `adaptaula_nav` (`compact`/`expanded`, `/app`, SameSite=Lax, un año), leída en SSR para evitar salto al recargar. No es autorización ni contiene identidad. La navegación compacta mantiene texto, no solo iconos. `AppLocation` describe la sección/ruta, no inventa título/estado documental ni consulta otro workspace. Los grupos de loading y los 404 de ADR-024 quedan intactos.
+
+Móvil conserva diálogo nativo y cierra al pasar a escritorio para no dejar un modal invisible bloqueando la app. Foco, salto a main enfocable, etiquetas, preferencias visuales, reflujo y acceso a las mismas rutas se prueban con Playwright. `ActionBar` es un grupo con Tab nativo; no simula el contrato de teclado de una toolbar ARIA. No hay dependencia de animación ni código de las referencias externas.
+
+**Alcance:** sustituye tokens y radios de ADR-025, no su aislamiento del PDF ni sus flujos. Cuenta, landing, comparación y precios tienen entregas específicas posteriores. Sin migraciones ni cambios de cuotas en etapa 1; política futura en [ADAPTAULA_2.md](ADAPTAULA_2.md). Referencias Bencho/Apple consultadas en Chromium tras resolver el bloqueo inicial de red; principios y alcance registrados en QA. [Pruebas y limitaciones](qa/adaptaula-2-etapa-1/README.md).

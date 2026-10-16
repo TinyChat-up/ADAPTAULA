@@ -39,7 +39,7 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
         tone === "accent" ? "bg-accent-soft text-accent" : "bg-foreground/5 text-muted-foreground",
       )}
     >
@@ -58,7 +58,7 @@ export function UsageMeter({ used, limit, label }: { used: number; limit: number
       aria-valuemax={limit}
       aria-valuenow={Math.min(used, limit)}
       aria-valuetext={`${used} de ${limit}`}
-      className="h-1 w-full overflow-hidden bg-border"
+      className="h-1 w-full overflow-hidden rounded-full bg-border"
     >
       <div className={cn("h-full transition-[width] duration-200", percent >= 100 ? "bg-warning" : "bg-primary")} style={{ width: `${percent}%` }} />
     </div>

@@ -1,0 +1,74 @@
+/* Adaptaula 2.0 · interfaz docente. El papel y el PDF conservan los tokens --ms-* de CLARO. */
+@theme {
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f3f6;
+  --color-surface-inset: #e8edf2;
+  --color-border: #dce2e8;
+  --color-control-border: #7d8b9c;
+  --color-foreground: #1e2e43;
+  --color-muted-foreground: #536379;
+  --color-primary: #285782;
+  --color-primary-strong: #1e4164;
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: #e6eef6;
+  --color-accent: #285782;
+  --color-accent-soft: #e6eef6;
+  --color-success: #24623e;
+  --color-success-strong: #1c5132;
+  --color-warning: #925015;
+  --color-danger: #b12828;
+  --color-focus: #285782;
+  --radius-control: 0.75rem;
+  --radius-card: 1.25rem;
+  --radius-panel: 1.5rem;
+  --shadow-card: 0 2px 8px -4px rgb(30 46 67 / 0.12);
+  --shadow-floating: 0 8px 24px -12px rgb(30 46 67 / 0.24), 0 1px 3px rgb(30 46 67 / 0.06);
+  --shadow-dialog: 0 24px 80px -24px rgb(30 46 67 / 0.3);
+  --text-page: clamp(1.625rem, 1.3rem + 0.8vw, 2rem);
+  --text-page--line-height: 1.2;
+  --text-page--letter-spacing: -0.035em;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.4;
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --font-editorial: Georgia, "Times New Roman", serif;
+}
+
+:root {
+  color-scheme: light;
+  --space-control: 0.75rem;
+  --space-panel: 1.5rem;
+  --space-section: 2rem;
+  --duration-control: 140ms;
+  --duration-panel: 180ms;
+  --layer-navigation: 30;
+  --layer-overlay: 50;
+  --layer-skip: 100;
+  --surface-glass: rgb(250 252 255 / 0.9);
+}
+
+/* Solid first: browsers without backdrop-filter keep identical legibility. */
+@layer components {
+  .surface-glass { background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-floating); }
+  @supports (backdrop-filter: blur(12px)) {
+    .surface-glass { background: var(--surface-glass); backdrop-filter: blur(12px); }
+  }
+  .action-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem; border-radius: 1rem; }
+  .ui-control { transition: border-color var(--duration-control), box-shadow var(--duration-control), background-color var(--duration-control); }
+  .ui-control:hover:not(:disabled) { border-color: var(--color-primary); }
+  .ui-control:focus-visible { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-soft); }
+  .ui-control:disabled { background: var(--color-surface-muted); cursor: not-allowed; }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .surface-glass { background: var(--color-surface); backdrop-filter: none; box-shadow: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --color-border: #67758a; --color-control-border: #35465c; --color-muted-foreground: #35465c; }
+}
+@media (forced-colors: active) {
+  .surface-glass { background: Canvas; color: CanvasText; backdrop-filter: none; box-shadow: none; border-color: ButtonText; }
+  :focus-visible { outline-color: Highlight; }
+  [aria-current="page"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  button, input, select, textarea { border-color: ButtonText; }
+}
