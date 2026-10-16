@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-16. Base de la entrega actual: `origin/main` en `330cb4f`, **PR #40 integrada**, confirmado por API e historial Git. Rama nueva `codex/adaptaula-2-comparacion-editor`. No se ha hecho merge en esta sesión.
+Actualizado: 2026-10-16. Base de la entrega actual: `origin/main` en `330cb4f`, **PR #40 integrada**, confirmado por API e historial Git. Rama nueva `codex/adaptaula-2-comparacion-editor`; [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41) abierta, sin merge. No se ha hecho merge en esta sesión.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar

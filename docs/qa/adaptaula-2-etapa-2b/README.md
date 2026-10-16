@@ -1,6 +1,6 @@
 # Adaptaula 2.0 — Etapa 2B: comparación y edición contextual
 
-2026-10-16. Base `330cb4f` (`main`, PR #40 integrada); rama `codex/adaptaula-2-comparacion-editor`. Entrega para revisión, sin merge automático. No se han utilizado APIs pagadas, datos reales de alumnos, Supabase remoto ni Stripe.
+2026-10-16. Base `330cb4f` (`main`, PR #40 integrada); rama `codex/adaptaula-2-comparacion-editor`. [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41) abierta para revisión, sin merge. No se han utilizado APIs pagadas, datos reales de alumnos, Supabase remoto ni Stripe.
 
 ## Qué se puede utilizar
 
