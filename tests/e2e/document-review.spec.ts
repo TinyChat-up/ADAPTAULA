@@ -1,0 +1,197 @@
+import { createHash } from "node:crypto";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { createReviewedAdaptation, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { requireVisuals, seedReadyDocument } from "./adaptation-seed";
+import { reviewDocument, reviewOriginal } from "../support/review-documents";
+
+const fake = `http://127.0.0.1:${process.env.FAKE_SUPABASE_PORT ?? 54399}`;
+const key = process.env.FAKE_SERVICE_KEY ?? "sb_secret_fakefakefakefakefake";
+const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
+const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+const originalPrompt = "Compara 25 cm y 40 cm. Explica tu elección.";
+const editedPrompt = "Observa las medidas de 25 cm y 40 cm. Justifica tu elección.";
+const changes = { presentation: {}, activities: [{ blockId: "blk_task1", prompt: editedPrompt }] };
+async function fixture(page: Page) {
+  const email = uniqueEmail();
+  await signUpAndOnboard(page, email);
+  await page.getByLabel("Alias o iniciales").fill("Perfil sintético");
+  await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
+  await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
+  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/alumnos/);
+  const bytes = await reviewOriginal(email);
+  const materialId = await uploadAndOpen(page, { name: "Medidas y decisiones.pdf", mimeType: "application/pdf", buffer: bytes });
+  await waitForAnalysis(page);
+  const id = await createReviewedAdaptation(page, `/app/materiales/${materialId}`, "Perfil sintético");
+  const workspace = await workspaceOf(page, email);
+  const document = reviewDocument();
+  await seedReadyDocument(page, workspace, id, document);
+  await requireVisuals(page, id, []);
+  return { id, materialId, workspace, bytes, document };
+}
+async function show(page: Page, name: "Original" | "Adaptación") {
+  const button = page.getByRole("group", { name: "Documento que quieres ver" }).getByRole("button", { name, exact: true });
+  if (await button.isVisible()) await button.click();
+}
+async function capture(page: Page, info: TestInfo, name: string) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, style: "nextjs-portal { display: none; }" });
+}
+async function accessible(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect((await new AxeBuilder({ page }).analyze()).violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
+}
+
+test("comparación independiente, edición contextual y PDF de la revisión guardada", async ({ page }, info) => {
+  test.setTimeout(240000);
+  const w = await fixture(page);
+  await page.goto(`/app/adaptaciones/${w.id}/vista`);
+  await page.getByRole("link", { name: "Comparar con original", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Comparar documentos", exact: true })).toBeVisible();
+  expect(await (await page.request.get(page.url())).text()).not.toMatch(/storage_path|CLAVE_RESERVADA_DOCENTE|NOTA_RESERVADA_DOCENTE/);
+  const original = page.getByRole("region", { name: "Documento original", exact: true });
+  const adapted = page.getByRole("region", { name: "Documento adaptado", exact: true });
+  if (info.project.name === "desktop") {
+    await expect(original).toBeVisible();
+    await expect(adapted).toBeVisible();
+    await expect(page.getByRole("group", { name: "Documento que quieres ver" })).toBeHidden();
+  }
+  await show(page, "Original");
+  if (info.project.name === "mobile") await expect(adapted).toBeHidden();
+  await original.getByRole("button", { name: "Página siguiente", exact: true }).click();
+  await expect(original.getByRole("status").filter({ hasText: "Página 2 visible" })).toBeVisible();
+  await original.getByRole("button", { name: "Ampliar original", exact: true }).click();
+  await show(page, "Adaptación");
+  if (info.project.name === "mobile") await expect(original).toBeHidden();
+  await expect(adapted.getByLabel("Página de la adaptación", { exact: true })).toHaveValue("1");
+  await adapted.getByRole("button", { name: "Página siguiente de la adaptación", exact: true }).click();
+  await adapted.getByRole("button", { name: "Ampliar adaptación", exact: true }).click();
+  await adapted.getByRole("button", { name: "Ampliar adaptación", exact: true }).click();
+  await show(page, "Original");
+  await expect(original.getByLabel("Página del original", { exact: true })).toHaveValue("2");
+  await expect(original.getByLabel("Zoom del original")).toHaveText("125 %");
+  await original.getByLabel("Página del original", { exact: true }).selectOption("1");
+  await original.getByRole("button", { name: "Ajustar al ancho", exact: true }).click();
+  await expect(original.getByRole("status").filter({ hasText: "Página 1 visible" })).toBeVisible();
+  await capture(page, info, "original");
+  await show(page, "Adaptación");
+  await expect(adapted.getByLabel("Página de la adaptación", { exact: true })).toHaveValue("2");
+  await expect(adapted.getByLabel("Zoom de la adaptación")).toHaveText("150 %");
+  await adapted.getByLabel("Página de la adaptación", { exact: true }).selectOption("1");
+  await adapted.getByRole("button", { name: "Ajustar al ancho", exact: true }).click();
+  await accessible(page);
+  await capture(page, info, "comparacion");
+  await page.getByRole("link", { name: "Editar ficha", exact: true }).click();
+  await page.getByLabel("Elegir actividad", { exact: true }).selectOption("blk_task2");
+  await expect(page.getByLabel("Página de la adaptación", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue("Elige una medida.");
+  await expect(page.getByLabel("Líneas para responder", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Página anterior de la adaptación", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar panel", exact: true }).click();
+  await page.getByRole("button", { name: "Seleccionar actividad 1", exact: true }).press("Enter");
+  await expect(page.getByRole("region", { name: "Ajustes de la ficha", exact: true })).toBeFocused();
+  const prompt = page.getByLabel("Enunciado", { exact: true });
+  await prompt.fill(editedPrompt);
+  await expect(page.getByRole("button", { name: "Guardar borrador", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+  await expect(prompt).toHaveValue(originalPrompt);
+  await page.getByRole("button", { name: "Rehacer", exact: true }).click();
+  await expect(prompt).toHaveValue(editedPrompt);
+  await page.getByLabel("Líneas para responder", { exact: true }).selectOption("8");
+  await page.getByText("Presentación de toda la ficha", { exact: true }).click();
+  await page.getByLabel("Tamaño de letra", { exact: true }).selectOption("1.15");
+  await page.getByRole("checkbox", { name: /Entiendo que debo comprobar/ }).check();
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+  await expect(page.getByText("Borrador guardado. La ficha generada sigue intacta.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(prompt).toHaveValue(editedPrompt);
+  await prompt.fill("Cambio temporal sin guardar.");
+  await expect(page.getByRole("button", { name: "Descargar PDF", exact: true })).toBeDisabled();
+  page.once("dialog", (d) => d.dismiss());
+  await page.getByRole("link", { name: "Comparar con original", exact: true }).click();
+  await expect(page).toHaveURL(/\/editar$/);
+  await page.getByRole("button", { name: "Recuperar último guardado", exact: true }).click();
+  await expect(prompt).toHaveValue(editedPrompt);
+  await accessible(page);
+  await capture(page, info, "editor");
+  await page.getByRole("link", { name: "Comparar con original", exact: true }).click();
+  await page.getByLabel("Versión de la adaptación", { exact: true }).selectOption("draft");
+  await show(page, "Adaptación");
+  await expect(adapted.getByText(editedPrompt, { exact: true })).toBeVisible();
+  await expect(adapted.getByText("PDF: borrador guardado · revisión 1", { exact: true })).toBeVisible();
+  await capture(page, info, "borrador");
+  const request = page.waitForRequest((r) => r.url().endsWith(`/api/adaptations/${w.id}/pdf?borrador=1`));
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Descargar PDF", exact: true }).click();
+  await request;
+  const file = await download;
+  expect(await file.failure()).toBeNull();
+  await file.saveAs(info.outputPath("revision-1.pdf"));
+  await page.getByLabel("Versión de la adaptación", { exact: true }).selectOption("generated");
+  await expect(adapted.getByText(originalPrompt, { exact: true })).toBeVisible();
+  expect(hash(await (await page.request.get(`/api/materials/${w.materialId}/file`)).body())).toBe(hash(w.bytes));
+  const persisted = await (await page.request.get(`${fake}/rest/v1/adaptation_versions?adaptation_id=eq.${w.id}&select=document`, { headers })).json();
+  expect(persisted[0].document).toEqual(w.document);
+  await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
+  await accessible(page);
+  await page.emulateMedia({ forcedColors: "none" });
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.goto(`/app/adaptaciones/${w.id}/editar`);
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue(editedPrompt);
+  await accessible(page);
+});
+
+test("comparador privado: otro usuario, lector y borrador inválido", async ({ page, browser }) => {
+  test.setTimeout(180000);
+  const w = await fixture(page);
+  expect((await page.request.put(`/api/adaptations/${w.id}/draft`, { headers: { origin: new URL(page.url()).origin }, data: { baseVersion: 1, revision: 0, changes, acknowledged: true } })).ok()).toBe(true);
+  const context = await browser.newContext({ viewport: page.viewportSize()! });
+  const visitor = await context.newPage();
+  const email = uniqueEmail();
+  await signUpAndOnboard(visitor, email);
+  await visitor.goto(`/app/adaptaciones/${w.id}/comparar`);
+  await expect(visitor.getByText("No encontramos lo que buscas")).toBeVisible();
+  expect((await visitor.request.get(`/api/adaptations/${w.id}/pdf?borrador=1`)).status()).toBe(404);
+  const { users } = await (await page.request.get(`${fake}/auth/v1/admin/users`, { headers })).json() as { users: Array<{ id: string; email: string }> };
+  const user = users.find((u) => u.email === email)!;
+  expect((await page.request.post(`${fake}/rest/v1/workspace_members`, { headers, data: { workspace_id: w.workspace, user_id: user.id, role: "viewer" } })).ok()).toBe(true);
+  await context.addCookies([{ name: "aw", value: w.workspace, url: new URL(page.url()).origin }]);
+  await visitor.goto(`/app/adaptaciones/${w.id}/comparar`);
+  await expect(visitor.getByRole("link", { name: /Editar ficha|Continuar editando/ })).toHaveCount(0);
+  await visitor.getByLabel("Versión de la adaptación", { exact: true }).selectOption("draft");
+  await show(visitor, "Adaptación");
+  await expect(visitor.getByText(editedPrompt, { exact: true })).toBeVisible();
+  await expect(visitor.getByRole("button", { name: /Seleccionar actividad/ })).toHaveCount(0);
+  expect((await visitor.request.put(`/api/adaptations/${w.id}/draft`, { headers: { origin: new URL(visitor.url()).origin }, data: { baseVersion: 1, revision: 1, changes, acknowledged: true } })).status()).toBe(403);
+  await visitor.goto(`/app/adaptaciones/${w.id}/editar`);
+  await expect(visitor.getByText("Esta ficha no se puede editar.", { exact: true })).toBeVisible();
+  await context.close();
+  // Corruption is injected only into the local fixture; it must not become a downloadable saved version.
+  expect((await page.request.patch(`${fake}/rest/v1/adaptation_drafts?adaptation_id=eq.${w.id}`, { headers, data: { content_acknowledged: false } })).ok()).toBe(true);
+  await page.goto(`/app/adaptaciones/${w.id}/comparar`);
+  await expect(page.getByText("No se puede mostrar el borrador guardado.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Versión de la adaptación").locator('option[value="draft"]')).toHaveCount(0);
+  expect((await page.request.get(`/api/adaptations/${w.id}/pdf?borrador=1`)).status()).toBe(409);
+});
+
+test("dos pestañas conservan el conflicto de revisión sin sobrescribir", async ({ page }) => {
+  test.setTimeout(180000);
+  const w = await fixture(page);
+  await page.goto(`/app/adaptaciones/${w.id}/editar`);
+  await page.getByLabel("Enunciado", { exact: true }).fill("Edición local pendiente de otra pestaña.");
+  await page.getByRole("checkbox", { name: /Entiendo que debo comprobar/ }).check();
+  expect((await page.request.put(`/api/adaptations/${w.id}/draft`, { headers: { origin: new URL(page.url()).origin }, data: { baseVersion: 1, revision: 0, changes, acknowledged: true } })).ok()).toBe(true);
+  const response = page.waitForResponse((r) => r.url().endsWith(`/api/adaptations/${w.id}/draft`) && r.request().method() === "PUT");
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+  expect((await response).status()).toBe(409);
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue("Edición local pendiente de otra pestaña.");
+  await expect(page.getByText(/Hay una versión guardada más reciente/)).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Recargar borrador guardado", exact: true }).click();
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue(editedPrompt);
+});

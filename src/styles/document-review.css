@@ -1,0 +1,19 @@
+@layer components {
+  .comparison-workspace { container-type: inline-size; }
+  .comparison-switch { display: flex; flex-wrap: wrap; }
+  .comparison-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  .comparison-side[data-active="false"] { display: none; }
+  .sheet-viewport { overflow: auto; height: 72dvh; min-height: 18rem; background: var(--color-surface-inset); border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: .75rem; overscroll-behavior: contain; }
+  @container (min-width: 54rem) {
+    .comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .comparison-side[data-active="false"] { display: block; }
+    .comparison-switch { display: none; }
+    .comparison-grid :is(.sheet-viewport, .original-viewport) { height: 70dvh; }
+  }
+}
+@media screen {
+  .sheet-preview .ms-sheet[hidden] { display: none; }
+  .sheet-preview .ms-activity[role="button"] { cursor: pointer; outline: 1px dashed var(--color-control-border); outline-offset: 5px; }
+  .sheet-preview .ms-activity[data-editor-selected="true"] { outline: 3px solid var(--color-primary); }
+  .sheet-preview .ms-activity[role="button"]:focus-visible { outline: 4px double var(--color-primary); outline-offset: 7px; }
+}

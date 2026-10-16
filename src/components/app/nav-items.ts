@@ -34,7 +34,7 @@ export function locationOf(pathname: string): { href: string; label: string; det
   if (!section) return { href: "/app", label: "Mi espacio" };
   let detail: string | undefined;
   if (pathname !== section.href) {
-    if (pathname.startsWith("/app/adaptaciones/")) detail = pathname.endsWith("/editar") ? "Editar ficha" : pathname.endsWith("/vista") ? "Ficha adaptada" : "Preparar ficha";
+    if (pathname.startsWith("/app/adaptaciones/")) detail = pathname.endsWith("/comparar") ? "Comparar documentos" : pathname.endsWith("/editar") ? "Editar ficha" : pathname.endsWith("/vista") ? "Ficha adaptada" : "Preparar ficha";
     else if (pathname.startsWith("/app/materiales/")) detail = pathname.includes("/visuales/") ? "Revisar figura" : "Material";
     else if (pathname.startsWith("/app/alumnos/")) detail = pathname.endsWith("/nuevo") ? "Crear perfil" : "Perfil funcional";
   }

@@ -10,6 +10,14 @@ interface Props<K extends RenderNode["kind"]> {
   node: Of<K>;
   mode: RenderMode;
   design?: RenderDesign;
+  selection?: ActivitySelection | undefined;
+}
+
+/** Screen-only interaction. Absent in the viewer and in every PDF render. */
+export interface ActivitySelection {
+  targets: Record<string, { id: string; label: string }>;
+  selected: string;
+  onSelect: (id: string) => void;
 }
 
 /** Sistema CLARO's guide column numbers activities with two digits (`01`); a non-numeric label (`A`, `4b`) stays as it is. */
@@ -22,7 +30,9 @@ function Heading({ node }: Props<"heading">) {
   return <Tag className={`ms-h ms-h${node.level}`}>{node.text}</Tag>;
 }
 
-function Activity({ node, mode, design }: Props<"activity">) {
+function Activity({ node, mode, design, selection }: Props<"activity">) {
+  const target = selection?.targets[node.key];
+  const select = () => { if (target) selection?.onSelect(target.id); };
   return (
     <>
       {node.leads.length > 0 ? (
@@ -33,7 +43,13 @@ function Activity({ node, mode, design }: Props<"activity">) {
           ))}
         </div>
       ) : null}
-      <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}>
+      <section className="ms-activity" data-keep={node.keepTogether || undefined} data-isolate={node.isolate || undefined} data-numbered={node.label ? true : undefined} data-table-answer={node.response.kind === "table_cells" && node.response.inTable ? true : undefined}
+        role={target ? "button" : undefined} tabIndex={target ? 0 : undefined}
+        aria-label={target ? `Seleccionar ${target.label.toLocaleLowerCase("es")}` : undefined}
+        aria-pressed={target ? selection?.selected === target.id : undefined}
+        data-editor-selected={target ? selection?.selected === target.id : undefined}
+        onClick={target ? select : undefined}
+        onKeyDown={target ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } } : undefined}>
         <div className="ms-activity-head">
           {node.label ? <span className="ms-num" data-numeric={/^\d{1,2}$/.test(node.label) || undefined}>{guideLabel(node.label, design)}</span> : null}
           <div className="ms-prompt">
@@ -256,7 +272,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
   unknown: Unknown,
 };
 
-export function NodeView({ node, mode, design }: { node: RenderNode; mode: RenderMode; design?: RenderDesign }) {
-  const render = NODE_RENDERERS[node.kind] as (props: { node: RenderNode; mode: RenderMode; design?: RenderDesign }) => ReactNode;
-  return <>{render({ node, mode, ...(design ? { design } : {}) })}</>;
+export function NodeView({ node, mode, design, selection }: { node: RenderNode; mode: RenderMode; design?: RenderDesign; selection?: ActivitySelection | undefined }) {
+  const render = NODE_RENDERERS[node.kind] as (props: { node: RenderNode; mode: RenderMode; design?: RenderDesign; selection?: ActivitySelection | undefined }) => ReactNode;
+  return <>{render({ node, mode, selection, ...(design ? { design } : {}) })}</>;
 }

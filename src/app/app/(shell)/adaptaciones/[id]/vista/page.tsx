@@ -62,6 +62,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
       <div className="ms-chrome space-y-4">
         <PageHeader title="Ficha adaptada" description={student ? "Así la verá el alumnado." : "Vista docente de la ficha, con avisos."} />
         <nav aria-label="Modo de vista" className="flex flex-wrap gap-2">
+          <LinkButton href={`/app/adaptaciones/${id}/comparar`} variant="secondary">Comparar con original</LinkButton>
           {canWrite ? <LinkButton href={`/app/adaptaciones/${id}/editar`} variant="secondary">Editar ficha</LinkButton> : null}
           <LinkButton href={`/app/adaptaciones/${id}/vista`} variant={student ? "secondary" : "primary"} aria-current={student ? undefined : "page"}>
             Vista docente

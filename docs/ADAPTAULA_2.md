@@ -7,8 +7,8 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 | Etapa | Alcance | Estado |
 | --- | --- | --- |
 | 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
-| 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Implementado en [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40), desde `a6474a7`; abierta, sin merge. [QA](qa/adaptaula-2-etapa-2a/README.md) |
-| 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Pendiente; reutilizar renderer y borradores existentes |
+| 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Integrada mediante [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) en `330cb4f`. [QA](qa/adaptaula-2-etapa-2a/README.md) |
+| 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Implementada en [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41), abierta y sin merge; [QA y capturas](qa/adaptaula-2-etapa-2b/README.md) |
 | 3 | Mesa docente, biblioteca, perfiles, historial y cuenta | Heredan tokens en etapa 1; reorganización específica pendiente |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |
 | 5 | Consistencia final, responsive, accesibilidad y microinteracciones | Verificación incremental en cada entrega; cierre global pendiente |
@@ -27,7 +27,7 @@ Referencias solicitadas: [Bencho finds](https://bencho.dev/finds), [blocks](http
 
 **Entrega 2A:** original central con navegación por páginas, zoom relativo al ancho y panel opcional. Subida por arrastre/explorador con tamaño, validación y estados reales; al terminar continúa en el material. La misma composición acompaña la preparación de la adaptación. Resumen determinista del perfil y detalles progresivos, sin dimensiones nuevas. Los estados, acciones, bloqueos, rutas y redirección final siguen siendo los del producto. No se añade una máquina de estados paralela. [Alcance y límites](qa/adaptaula-2-etapa-2a/README.md).
 
-**Pendiente para 2B:** comparación, navegación del documento generado y reorganización contextual de CLARO. El editor, recuperación y PDF existentes permanecen operativos. El original rasterizado conserva su proporción; no se fuerza A4 sobre un original horizontal ni se reconstruye a mano.
+**Entrega 2B:** comparación privada en paralelo o alternancia móvil, páginas/zoom independientes y elección explícita entre generada y último borrador guardado. CLARO permite seleccionar actividades con ratón/teclado, abre su inspector, navega por páginas y mantiene deshacer/rehacer, guardado, recuperación y descarga de revisión concreta. Las páginas lógicas de la vista no prometen coincidir con la paginación física final del PDF. No hay sincronización inventada ni otro renderer. El original rasterizado conserva su proporción; no se fuerza A4 sobre un original horizontal ni se reconstruye a mano.
 
 Dirección completa:
 
