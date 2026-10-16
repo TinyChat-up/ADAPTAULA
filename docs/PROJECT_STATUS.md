@@ -36,7 +36,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Adaptaula 2.0, etapa 2A: workspace documental**, rama `codex/adaptaula-2-workspace`, desde `a6474a7`. PR pendiente de publicación.
+**Adaptaula 2.0, etapa 2A: workspace documental**, rama `codex/adaptaula-2-workspace`, desde `a6474a7`. [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) abierta, sin merge.
 
 - Original central en las rutas de material y preparación de adaptación, sin duplicar operaciones ni estados. Visor con una página privada cada vez, zoom, ajustar al ancho, descarga/apertura del original y recuperación ante error.
 - Panel opcional que conserva formularios y seguimiento al ocultarse; acceso directo a apoyos/estado, adaptación al ancho disponible y controles táctiles.

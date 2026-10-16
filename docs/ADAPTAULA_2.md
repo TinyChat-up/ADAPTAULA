@@ -7,7 +7,7 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 | Etapa | Alcance | Estado |
 | --- | --- | --- |
 | 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
-| 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Implementado en `codex/adaptaula-2-workspace`, desde `a6474a7`; revisión pendiente. [QA](qa/adaptaula-2-etapa-2a/README.md) |
+| 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Implementado en [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40), desde `a6474a7`; abierta, sin merge. [QA](qa/adaptaula-2-etapa-2a/README.md) |
 | 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Pendiente; reutilizar renderer y borradores existentes |
 | 3 | Mesa docente, biblioteca, perfiles, historial y cuenta | Heredan tokens en etapa 1; reorganización específica pendiente |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |

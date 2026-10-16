@@ -1,6 +1,6 @@
 # Adaptaula 2.0 · etapa 2A · workspace documental
 
-Base: `a6474a7`, PR #39 integrada. Rama: `codex/adaptaula-2-workspace`. PR pendiente de publicación, sin merge. Fecha: 2026-10-16.
+Base: `a6474a7`, PR #39 integrada. Rama: `codex/adaptaula-2-workspace`. [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) abierta, sin merge. Fecha: 2026-10-16.
 
 ## Entrega
 
