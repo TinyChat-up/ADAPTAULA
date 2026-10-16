@@ -8,8 +8,9 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 | --- | --- | --- |
 | 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
 | 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Integrada mediante [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) en `330cb4f`. [QA](qa/adaptaula-2-etapa-2a/README.md) |
-| 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Implementada en [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41), abierta y sin merge; [QA y capturas](qa/adaptaula-2-etapa-2b/README.md) |
-| 3 | Mesa docente, biblioteca, perfiles, historial y cuenta | Heredan tokens en etapa 1; reorganización específica pendiente |
+| 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Integrada mediante [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41) en `740e2db`; [QA y capturas](qa/adaptaula-2-etapa-2b/README.md) |
+| 3A | Mesa docente, biblioteca e historial | Implementada en `codex/adaptaula-2-mesa-biblioteca-historial`, en revisión; [QA](qa/adaptaula-2-etapa-3a/README.md) |
+| 3B | Perfiles funcionales y Plan y cuenta | Pendiente tras integrar 3A |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |
 | 5 | Consistencia final, responsive, accesibilidad y microinteracciones | Verificación incremental en cada entrega; cierre global pendiente |
 
@@ -61,3 +62,9 @@ Los límites permanecen exclusivamente en BD: migración nueva y segura, no solo
 Typecheck, lint, build, pruebas focalizadas, permisos/cuotas y E2E con capturas escritorio/móvil, teclado, desbordamientos y preferencias visuales. PDF determinista cuando no requiera modelos de pago. Ensayos sintéticos con proveedor simulado **no validan la calidad real de Hacer magia**.
 
 No APIs de IA pagadas, Supabase remoto sin autorización, cobros/Stripe, entrenamiento/recopilación automática, cambios de prompts/modelos ni código ajeno sin licencia revisada. Conservar RLS, originales, recursos privados, borradores, estados/contratos pedagógicos y trazabilidad.
+
+## Etapa 3: organización de la actividad docente
+
+**3A:** la mesa presenta primero adaptaciones que exigen intervención, después la entrada a un material nuevo, trabajos en curso, fichas preparadas y materiales recientes; uso real del plan en el pie. La biblioteca deja la búsqueda visible y pliega filtros/orden secundarios; busca títulos en la consulta del workspace antes del límite de 200, filtra por etapa/curso/asignatura/estado y ordena. El historial conserva estados derivados del trabajo real y añade acceso al original, comparación, edición autorizada y PDF de la ficha entregada. El selector de versiones y último borrador válido sigue en el comparador de 2B. [Alcance y pruebas](qa/adaptaula-2-etapa-3a/README.md).
+
+**3B pendiente:** perfiles funcionales, edición permitida y Plan y cuenta. La política Free/Pro/Max siguiente sigue siendo **objetivo de etapa 4**, no un límite vigente.

@@ -2,6 +2,15 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-16 — Adaptaula 2.0, etapa 3A: mesa, biblioteca e historial
+
+- **Base:** PR #41 MERGED comprobada en GitHub (`740e2db`), rama `codex/adaptaula-2-mesa-biblioteca-historial` desde main limpio. Leídos AGENTS/CLAUDE, estado, roadmap, producto, arquitectura y UX. #41 y otras PR no modificadas.
+- **Implementación:** mesa reordenada por atención, nuevo material, trabajo, preparado y reciente, con uso real discreto. Biblioteca con búsqueda SQL por título, curso, filtros existentes y orden; controles secundarios en desplegable nativo, sin desbordamiento a 320 px/texto 200 %. Historial muestra origen, fechas, versión generada y accesos a comparar/editar/descargar según estado y rol. La ficha de material conserva su propia lista de adaptaciones. Fallo de consulta de adaptaciones ya no equivale a vacío.
+- **Integridad:** materiales aún en subida excluidos siempre, incluso con URL manipulada; consultas scoped al workspace y RLS existente. Sin backend de adaptación nuevo, pipeline, CLARO, borradores, cuotas, RLS, migraciones, Stripe ni APIs de pago. Políticas Free/Pro/Max objetivo siguen para etapa 4; 3B queda pendiente.
+- **Defectos reproducidos:** campos selectores y botones desbordaban en lectura ampliada; un enlace a una ancla de adaptaciones inexistente se retiró; título y acciones del historial se comprimían en una sola línea. El primer control nativo de filtros se cerraba durante la elección del curso por controlar React su estado `open`; se dejó bajo control nativo. Un ensayo de análisis simulado agotó una espera, luego el mismo escenario pasó sin cambios de pipeline.
+- **Verificación:** 92 pruebas focalizadas/PGlite + 2 pruebas de acciones del historial, seis E2E escritorio/móvil distintos y dos repeticiones focalizadas de biblioteca tras ajustar el desplegable. Typecheck, lint, build y escaneo de secretos PASS; aviso previo `_id` de lint. Capturas inspeccionadas, axe, teclado/foco, colores forzados, reduced motion y 320 px/texto 200 %. Ver [QA y seis capturas](qa/adaptaula-2-etapa-3a/README.md). Los documentos y cuentas son sintéticos y la adaptación preparada, determinista; no validan modelos reales.
+- **Límites/siguiente:** biblioteca limitada a 200 resultados, historial a 100 recientes y ambos lo dicen. Falta paginación completa y explorador de todas las revisiones. Revisar 3A antes de 3B (perfiles y Plan y cuenta); etapa 4 comercial solo después. Sin merge automático.
+
 ## 2026-10-16 — Adaptaula 2.0, etapa 2B: comparación y edición contextual
 
 - **Base:** `origin/main` / `330cb4f`, #40 MERGED confirmada. Rama nueva `codex/adaptaula-2-comparacion-editor`; no se modifica otra PR ni se hace merge. Continuidad, arquitectura, UX, QA anterior e instrucciones leídas; entorno existente reutilizado con la skill de setup, sin dependencias nuevas.

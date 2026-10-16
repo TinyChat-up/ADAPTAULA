@@ -178,3 +178,12 @@ El selector distingue «Generada · versión N» de «Borrador guardado · revis
 En el editor, seleccionar una actividad en el papel (clic, Enter o Espacio) abre y enfoca sus ajustes. El selector del panel también navega a su página; el cambio de página elige su primera actividad si existe. El panel se puede plegar. En móvil los ajustes aparecen debajo del papel y reciben el foco, sin superposición. Deshacer, Rehacer, Guardar y feedback están junto a los controles. «Presentación de toda la ficha» se despliega aparte y expresa su alcance global. No se ofrecen herramientas de figura, tabla, opciones o estructura.
 
 Todo cambio de enunciado exige reconocer la comprobación pedagógica pendiente. Recuperar último guardado restaura la copia cargada/guardada en esta sesión y puede deshacerse. Ante conflicto de otra pestaña, «Recargar borrador guardado» recarga realmente la última revisión del servidor, con confirmación nativa si hay cambios pendientes. El PDF del editor permanece deshabilitado hasta guardar; original y generada siguen intactos. No hay autosave ni aprobación pedagógica automática. [Evidencias](qa/adaptaula-2-etapa-2b/README.md).
+
+
+## Mesa, biblioteca e historial — etapa 3A (2026-10-16)
+
+La mesa ordena por acción: fichas que necesitan atención, nuevo material, fichas en proceso, preparadas y materiales recientes. Los renglones usan estados derivados del servidor y llevan a la siguiente acción; el consumo real permanece discreto. Sin indicadores estadísticos inventados.
+
+La biblioteca mantiene una sola lista legible en móvil: búsqueda siempre visible y etapa, curso, asignatura, estado y orden en un desplegable nativo con contador de filtros activos. Busca por título en el workspace, filtra los campos disponibles y ordena por fecha o título. Los filtros se aplican antes de devolver hasta 200 resultados; la interfaz declara ese límite cuando se alcanza. Cada fila abre el original o lleva a sus adaptaciones. Búsqueda sin resultados ofrece limpiar los filtros.
+
+El historial muestra hasta 100 adaptaciones recientes y lo dice expresamente. Mantiene filtros por estado real; desde una ficha preparada se puede abrir original, comparador, editor con rol de escritura y descargar el PDF generado. El comparador existente distingue generada y último borrador guardado. El historial no presenta cambios sin guardar como documentos.
