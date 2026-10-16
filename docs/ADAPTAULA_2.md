@@ -6,8 +6,9 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 
 | Etapa | Alcance | Estado |
 | --- | --- | --- |
-| 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Implementación en `codex/adaptaula-2-fundamentos`; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
-| 2 | Workspace documental: subida, estados reales, perfiles, A4 central, herramientas contextuales, comparación real y descarga | Pendiente; reutilizar editor y operaciones existentes |
+| 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
+| 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Implementado en `codex/adaptaula-2-workspace`, desde `a6474a7`; revisión pendiente. [QA](qa/adaptaula-2-etapa-2a/README.md) |
+| 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Pendiente; reutilizar renderer y borradores existentes |
 | 3 | Mesa docente, biblioteca, perfiles, historial y cuenta | Heredan tokens en etapa 1; reorganización específica pendiente |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |
 | 5 | Consistencia final, responsive, accesibilidad y microinteracciones | Verificación incremental en cada entrega; cierre global pendiente |
@@ -22,7 +23,13 @@ Modo oscuro solo al mantener contraste y calidad en todas las pantallas afectada
 
 Referencias solicitadas: [Bencho finds](https://bencho.dev/finds), [blocks](https://bencho.dev/blocks), [glass controls](https://bencho.dev/finds/chan-glass-controls), [glass over paint](https://bencho.dev/finds/moiz-glass-paint), [upload](https://bencho.dev/blocks/upload-dropzone), [compare](https://bencho.dev/blocks/image-compare), [toolbar](https://bencho.dev/blocks/toolbar), [reordering](https://bencho.dev/blocks/liq-arrange), [Apple materials](https://developer.apple.com/design/human-interface-guidelines/materials), [Liquid Glass](https://developer.apple.com/documentation/TechnologyOverviews/liquid-glass). Consultadas con Chromium después de resolver el bloqueo inicial del proxy. `/blocks` devuelve 404; el catálogo está en `/` y los ejemplos concretos sí cargan. Guías de Apple leídas, con su contenido dinámico cargado. Ningún código externo copiado; principios y decisiones en la documentación de QA.
 
-## Workspace pendiente (etapa 2)
+## Workspace documental (etapa 2)
+
+**Entrega 2A:** original central con navegación por páginas, zoom relativo al ancho y panel opcional. Subida por arrastre/explorador con tamaño, validación y estados reales; al terminar continúa en el material. La misma composición acompaña la preparación de la adaptación. Resumen determinista del perfil y detalles progresivos, sin dimensiones nuevas. Los estados, acciones, bloqueos, rutas y redirección final siguen siendo los del producto. No se añade una máquina de estados paralela. [Alcance y límites](qa/adaptaula-2-etapa-2a/README.md).
+
+**Pendiente para 2B:** comparación, navegación del documento generado y reorganización contextual de CLARO. El editor, recuperación y PDF existentes permanecen operativos. El original rasterizado conserva su proporción; no se fuerza A4 sobre un original horizontal ni se reconstruye a mano.
+
+Dirección completa:
 
 - Subida por arrastre/selección con nombre, peso y estados, reutilizando validación de bytes, límites y almacenamiento privado. Progreso solo si está medido; en caso contrario, pasos con estados reales y bloqueo explicado.
 - Apoyos mediante perfiles funcionales reales; opciones avanzadas progresivas y sin identidad personal enviada a IA.

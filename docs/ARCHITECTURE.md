@@ -345,3 +345,13 @@ Además, las garantías de los proveedores no están verificadas ([auditoría](l
 Móvil conserva diálogo nativo y cierra al pasar a escritorio para no dejar un modal invisible bloqueando la app. Foco, salto a main enfocable, etiquetas, preferencias visuales, reflujo y acceso a las mismas rutas se prueban con Playwright. `ActionBar` es un grupo con Tab nativo; no simula el contrato de teclado de una toolbar ARIA. No hay dependencia de animación ni código de las referencias externas.
 
 **Alcance:** sustituye tokens y radios de ADR-025, no su aislamiento del PDF ni sus flujos. Cuenta, landing, comparación y precios tienen entregas específicas posteriores. Sin migraciones ni cambios de cuotas en etapa 1; política futura en [ADAPTAULA_2.md](ADAPTAULA_2.md). Referencias Bencho/Apple consultadas en Chromium tras resolver el bloqueo inicial de red; principios y alcance registrados en QA. [Pruebas y limitaciones](qa/adaptaula-2-etapa-1/README.md).
+
+### ADR-031 · Workspace documental sobre las operaciones existentes (2026-10-16)
+
+Etapa 2A parte de PR #39 integrada (`a6474a7`). `DocumentWorkspace` compone slots de documento/panel; las páginas siguen autorizando/cargando en servidor y solo entregan metadatos públicos del archivo (no `storage_path`) al visor. La adaptación mantiene `AdaptationView`, su DTO, acciones, polling y redirección final. No hay nuevo endpoint, máquina de estados ni renderer académico.
+
+`OriginalDocument` sustituye `OriginalPreview` y usa exclusivamente el raster privado existente de la selección visual, una página por petición. Navegar repite la autorización de sesión/RLS; escalar solo cambia el ancho del visor. No cache compartida ni precarga de todas las páginas. La ruta mantiene sus límites, `private, no-store` y rechazo cerrado. El coste de descarga/rasterizado por cambio de página y la densidad de 110 ppp son límites existentes, no garantías de rendimiento en Vercel.
+
+Ocultar el inspector usa `hidden`, conservando formularios/selección y seguimiento; abrir el siguiente paso enfoca su contenido. El resumen funcional es el existente `summarizeProfile`, sin mutar el perfil. La UI de solo lectura no ofrece acciones de material ni despacha el trabajo de análisis, aunque sigue observándolo. Autorización y RLS de servidor permanecen intactas.
+
+CLARO, borradores, documentos generados, PDF, cuotas, prompts/modelos y contratos no cambian. Comparación y reorganización del editor pertenecen a 2B. Ver [QA](qa/adaptaula-2-etapa-2a/README.md); las pruebas sintéticas con proveedores simulados no certifican Hacer magia real.
