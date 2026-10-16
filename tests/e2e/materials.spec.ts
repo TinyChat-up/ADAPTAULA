@@ -35,6 +35,7 @@ test("subir una ficha → progreso → material analizado → el resultado persi
   await expect(page.getByText("Matemáticas").first()).toBeVisible();
   await expect(page.getByText("Educación Primaria").first()).toBeVisible();
   await expect(page.getByText("5.º de Primaria").first()).toBeVisible();
+  await page.getByText("Actividades y elementos a conservar", { exact: true }).click();
   await expect(page.getByRole("heading", { name: "Actividades detectadas" })).toBeVisible();
   await expect(page.getByText("Calcula 2/3 + 1/6.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Lo que conviene conservar" })).toBeVisible();
@@ -123,9 +124,11 @@ test("cada análisis nuevo consume una unidad de la cuota mensual; reutilizar un
   expect(await analysisUnits(page, workspace)).toBe(9);
 
   // Volver a analizar es una petición explícita de saltarse la caché: gasta la última unidad.
+  await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Volver a analizar" }).click();
+  // The previous analysis remains readable while the explicit reanalysis is starting.
+  await expect.poll(() => analysisUnits(page, workspace)).toBe(10);
   await waitForAnalysis(page);
-  expect(await analysisUnits(page, workspace)).toBe(10);
 
   // Cuota agotada: el archivo es válido y queda guardado, pero no se analiza.
   await uploadAndOpen(page, await pdf("cuota-b"));
@@ -136,6 +139,7 @@ test("cada análisis nuevo consume una unidad de la cuota mensual; reutilizar un
   await expect(page.getByRole("heading", { name: "Estamos preparando tu material" })).toHaveCount(0);
   expect(await analysisUnits(page, workspace)).toBe(10);
 
+  await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Analizar" }).click();
   await expect(alertOf(page)).toContainText("Has utilizado los 10 análisis incluidos este mes. Se renuevan el");
   await expect(page.getByText(/quota|límite excedido|403|402|429|analysis_quota/i)).toHaveCount(0);
@@ -205,6 +209,7 @@ test("el docente corrige el contexto y su corrección prevalece, también tras v
   await uploadAndOpen(page, await pdf());
   await waitForAnalysis(page);
 
+  await page.getByText("Datos del material", { exact: true }).click();
   await expect(page.getByText("Detectado automáticamente").first()).toBeVisible();
   await page.getByLabel(/^Etapa/).selectOption({ label: "ESO" });
   await page.getByLabel(/^Curso/).selectOption({ label: "1.º de ESO" });
@@ -213,9 +218,11 @@ test("el docente corrige el contexto y su corrección prevalece, también tras v
   await expect(page.getByText("Datos guardados.")).toBeVisible();
 
   await page.reload();
+  await page.getByText("Datos del material", { exact: true }).click();
   await expect(page.getByLabel(/^Etapa/)).toHaveValue("eso");
   await expect(page.getByText("Confirmado por ti").first()).toBeVisible();
 
+  await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Volver a analizar" }).click();
   await waitForAnalysis(page);
   await expect(page.getByLabel(/^Etapa/)).toHaveValue("eso");

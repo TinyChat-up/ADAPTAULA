@@ -9,11 +9,13 @@ import { SelectField } from "@/components/ui/fields";
 import { Alert } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
+import type { ProfileSummary } from "@/lib/profiles/summary";
 import { CREATION_COPY, actionErrorCopy } from "@/lib/adaptation/presentation/copy";
 
 export interface ProfileOption {
   id: string;
   name: string;
+  summary?: ProfileSummary;
 }
 
 export type CreationModeChoice = "automatic" | "review";
@@ -71,8 +73,10 @@ export function StartAdaptationCard({
     setPending(null);
   }
 
+  const selected = profiles.find((p) => p.id === profileId);
+
   return (
-    <Card className="space-y-5 border-t-2 border-t-primary sm:p-7">
+    <Card className="space-y-5 border-t-2 border-t-primary">
       <h2 className="text-lg font-semibold">Adaptar este material</h2>
       {!canWrite ? (
         <p className="text-sm text-muted-foreground">Tienes acceso de solo lectura en este espacio de trabajo: puedes ver las adaptaciones, pero no crear nuevas.</p>
@@ -92,11 +96,22 @@ export function StartAdaptationCard({
             ))}
           </SelectField>
 
+          {selected?.summary ? (
+            <div role="status" className="space-y-2 text-sm">
+              <p className="font-medium">Apoyos de este perfil</p>
+              <p className="text-muted-foreground">{selected.summary.intro}</p>
+              <ul className="list-disc space-y-1 pl-5">
+                {selected.summary.lines.slice(0, 3).map((line) => <li key={line.text}>{line.text}{line.level ? ` (${line.level})` : ""}</li>)}
+              </ul>
+              {selected.summary.lines.length > 3 ? <details><summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">Ver todos los apoyos</summary><ul className="list-disc space-y-1 pl-5">{selected.summary.lines.slice(3).map((line) => <li key={line.text}>{line.text}{line.level ? ` (${line.level})` : ""}</li>)}</ul></details> : null}
+            </div>
+          ) : null}
+
           <section aria-labelledby={`${uid}-how`} className="space-y-3">
             <h3 id={`${uid}-how`} className="text-base font-semibold">
               {CREATION_COPY.question}
             </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <div className="flex flex-col gap-3 border-t border-primary py-4">
                 <Button size="lg" onClick={() => void start("automatic")} disabled={pending !== null} aria-describedby={`${uid}-magic`}>
                   {pending === "automatic" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}

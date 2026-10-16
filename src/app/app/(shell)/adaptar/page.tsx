@@ -14,7 +14,8 @@ export default async function AdaptPage() {
   const ctx = await requireWorkspace();
   const [usage, analyzed] = await Promise.all([getWorkspaceUsage(ctx.workspace.id), listMaterials(ctx.workspace.id, { status: "analyzed" })]);
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8">
+      <p className="eyebrow text-muted-foreground">Tu próxima ficha · Empezar por el original</p>
       <PageHeader icon={FilePlus2} title="Adapta un material" description="Sube una ficha que ya utilizas y prepararemos una versión adaptada." />
       <MaterialUploader limits={effectiveLimits(usage.features)} />
       {analyzed.length > 0 ? (

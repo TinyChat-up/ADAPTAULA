@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { DocumentWorkspace } from "@/components/workspace/document-workspace";
 import { Button } from "@/components/ui/button";
 import { Alert, Badge } from "@/components/ui/feedback";
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
@@ -45,7 +46,9 @@ export function AdaptationView({
   actions,
   canWrite,
   editing = false,
+  original,
 }: {
+  original?: ReactNode;
   initial: AdaptationStatusDto;
   plan: AdaptationPlanDto | null;
   context: AdaptationContextView;
@@ -185,7 +188,7 @@ export function AdaptationView({
         : undefined;
   const needs = plan ? needLabels(plan.decisions.flatMap((d) => d.needs)).slice(0, MAX_NEEDS_SHOWN) : [];
 
-  return (
+  const content = (
     <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
@@ -241,4 +244,5 @@ export function AdaptationView({
       {screen === "cancelled" ? <CancelledPanel materialId={context.materialId} /> : null}
     </div>
   );
+  return original ? <DocumentWorkspace document={original} nextLabel={screen === "review" ? "Revisar propuesta" : "Ver estado"}>{content}</DocumentWorkspace> : content;
 }

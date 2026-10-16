@@ -1,0 +1,25 @@
+@layer components {
+  .document-workspace { container-type: inline-size; }
+  .document-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; padding-top: 1.25rem; align-items: start; }
+  .document-workspace-paper, .document-workspace-inspector { min-width: 0; }
+  .document-workspace-inspector { scroll-margin-top: 7rem; }
+  .document-workspace-inspector > * + * { margin-top: 1.25rem; }
+  .document-workspace-inspector > :first-child { margin-top: 0; }
+  .original-tools { gap: 0.25rem; justify-content: space-between; border-radius: var(--radius-card); }
+  .original-viewport { overflow: auto; height: 72dvh; min-height: 18rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface-inset); padding: 0.75rem; overscroll-behavior: contain; }
+  .original-scale { margin-inline: auto; min-height: 18rem; }
+  .original-page { display: block; width: 100%; max-width: none; height: auto; background: white; box-shadow: 0 2px 10px rgb(30 46 67 / 0.08); }
+  .workspace-disclosure { border-block-start: 1px solid var(--color-border); }
+  .workspace-disclosure > summary { min-height: 3rem; padding-block: 0.75rem; cursor: pointer; font-size: 0.875rem; font-weight: 600; }
+  @container (min-width: 54rem) {
+    .document-workspace-grid[data-panel-open="true"] { grid-template-columns: minmax(0, 1fr) minmax(21rem, 0.8fr); }
+    @media (min-height: 700px) {
+      .document-workspace-paper { position: sticky; top: 5.5rem; }
+      .original-viewport { height: calc(100dvh - 22rem); }
+    }
+  }
+}
+
+/* Keep hidden slots mounted (polling/form state), without utility classes overriding visibility. */
+.document-workspace-inspector[hidden] { display: none; }
+@media (prefers-contrast: more) { .original-page { box-shadow: none; outline: 1px solid currentColor; } }

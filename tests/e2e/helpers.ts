@@ -18,6 +18,8 @@ export async function signUpAndOnboard(page: Page, email: string, start: RegExp 
   await page.getByRole("button", { name: "Siguiente" }).click();
   await expect(page.getByText("Puedes utilizar iniciales o alias")).toBeVisible();
   await page.getByRole("button", { name: "Entrar en Adaptaula" }).click();
+  // Wait for the server-action redirect before a spec navigates to a different screen.
+  await expect(page).toHaveURL(/\/app(?:\/alumnos\/nuevo|\/adaptar)?$/);
 }
 
 /** A real, valid PDF. `marker` makes the content unique (distinct hash) or drives the mock provider (MOCK_*). */

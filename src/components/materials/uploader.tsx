@@ -1,20 +1,14 @@
 "use client";
 
-import { FileText, ImageIcon, Info, Upload, X } from "lucide-react";
+import { Info } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
-import { ACCEPT_ATTRIBUTE, FILE_TYPES, FORMATS_LABEL, SOURCE_BUCKET, type MaterialLimits } from "@/lib/materials/config";
+import { ACCEPT_ATTRIBUTE, FILE_TYPES, SOURCE_BUCKET, type MaterialLimits } from "@/lib/materials/config";
 import { describeValidationError, validateDeclaredFile } from "@/lib/materials/file-validation";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils/cn";
-
-const MIB = 1024 * 1024;
-
-function formatSize(bytes: number): string {
-  return bytes >= MIB ? `${(bytes / MIB).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
+import { UploadSurface } from "./upload-surface";
 
 type Phase = "idle" | "preparing" | "uploading" | "checking";
 const PHASE_TEXT: Record<Exclude<Phase, "idle">, string> = {
@@ -25,12 +19,13 @@ const PHASE_TEXT: Record<Exclude<Phase, "idle">, string> = {
 
 export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
   const router = useRouter();
+  const errorId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [format, setFormat] = useState<keyof typeof FILE_TYPES | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
 
   const previewUrl = useMemo(() => (file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null), [file]);
@@ -39,6 +34,7 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
   const busy = phase !== "idle";
 
   function accept(files: FileList | null) {
+    if (busy) return;
     setNotice(null);
     const first = files?.[0];
     if (!first) return;
@@ -53,6 +49,7 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
     setError(null);
     setFile(first);
     setFormat(result.format);
+    requestAnimationFrame(() => submitRef.current?.focus());
   }
 
   function clear() {
@@ -102,84 +99,23 @@ export function MaterialUploader({ limits }: { limits: MaterialLimits }) {
     }
   }
 
-  const Icon = file && FILE_TYPES[format ?? "pdf"].kind === "image" ? ImageIcon : FileText;
-
   return (
-    <div className="space-y-5">
-      {error ? <Alert tone="danger">{error}</Alert> : null}
+    <section aria-label="Subir una ficha" className="space-y-5">
+      <div id={errorId}>{error ? <Alert tone="danger">{error}</Alert> : null}</div>
       {notice ? <Alert tone="info">{notice}</Alert> : null}
-
-      {file ? (
-        <div className="flex items-center gap-4 rounded-card border border-border bg-surface p-4 shadow-card">
-          {previewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- local object URL preview, nothing to optimize
-            <img src={previewUrl} alt="Vista previa del archivo seleccionado" className="size-16 shrink-0 rounded-control border border-border object-cover" />
-          ) : (
-            <span className="flex size-16 shrink-0 items-center justify-center rounded-control bg-primary/10 text-primary">
-              <Icon aria-hidden className="size-7" />
-            </span>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">{file.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {FILE_TYPES[format ?? "pdf"].label} · {formatSize(file.size)}
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => inputRef.current?.click()} disabled={busy}>
-            Cambiar
-          </Button>
-          <Button variant="ghost" size="sm" onClick={clear} disabled={busy} aria-label="Quitar el archivo">
-            <X aria-hidden className="size-4" />
-            Quitar
-          </Button>
-        </div>
-      ) : (
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            accept(e.dataTransfer.files);
-          }}
-          className={cn(
-            "group flex flex-col items-center gap-3 rounded-card border border-dashed px-5 py-12 text-center transition-colors duration-150",
-            dragging ? "border-primary bg-primary-soft" : "border-control-border bg-surface hover:border-primary hover:bg-primary-soft/30",
-          )}
-        >
-          <Upload aria-hidden className="mb-2 size-7 text-primary" strokeWidth={1.5} />
-          <p className="text-xl font-semibold">{dragging ? "Suelta tu ficha aquí" : "Arrastra tu ficha aquí"}</p>
-          <p className="text-muted-foreground">
-            o{" "}
-            <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4">
-              selecciona un archivo
-            </button>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Formatos admitidos: {FORMATS_LABEL}. PDF de hasta {Math.floor(limits.maxPdfBytes / MIB)} MB y {limits.maxPages} páginas; imágenes de hasta{" "}
-            {Math.floor(limits.maxImageBytes / MIB)} MB.
-          </p>
-        </div>
-      )}
-
-      <input ref={inputRef} type="file" accept={ACCEPT_ATTRIBUTE} className="sr-only" aria-label="Seleccionar un archivo" tabIndex={-1} onChange={(e) => accept(e.target.files)} />
-
+      <UploadSurface file={file} format={format} previewUrl={previewUrl} busy={busy} limits={limits}
+        select={() => inputRef.current?.click()} clear={clear} accept={accept} />
+      <input ref={inputRef} type="file" accept={ACCEPT_ATTRIBUTE} disabled={busy} className="sr-only" aria-label="Seleccionar un archivo" aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} tabIndex={-1} onChange={(e) => accept(e.target.files)} />
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
         Evita incluir información personal innecesaria del alumnado en los archivos que subas.
       </p>
-
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <Button size="lg" onClick={analyze} disabled={!file || busy}>
+      <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
+        <Button ref={submitRef} size="lg" onClick={analyze} disabled={!file || busy}>
           {busy ? "Un momento…" : "Analizar material"}
         </Button>
-        <p role="status" className="text-sm text-muted-foreground">
-          {phase === "idle" ? "" : PHASE_TEXT[phase]}
-        </p>
+        <p role="status" className="text-sm text-muted-foreground">{phase === "idle" ? "Después, elegirás los apoyos." : PHASE_TEXT[phase]}</p>
       </div>
-    </div>
+    </section>
   );
 }

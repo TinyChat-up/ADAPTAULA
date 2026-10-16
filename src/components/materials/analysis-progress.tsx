@@ -34,7 +34,7 @@ export function stepStates(status: string, step: string | null): StepState[] {
   });
 }
 
-export function AnalysisProgress({ materialId, initialStatus }: { materialId: string; initialStatus: string }) {
+export function AnalysisProgress({ materialId, initialStatus, canRun = true }: { materialId: string; initialStatus: string; canRun?: boolean }) {
   const router = useRouter();
   const [payload, setPayload] = useState<StatusPayload>({ status: initialStatus, step: null });
   const [offline, setOffline] = useState(false);
@@ -55,7 +55,7 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
         if (settled(next.status)) router.refresh();
       },
     });
-    runner.kick(true);
+    if (canRun) runner.kick(true);
 
     async function poll() {
       try {
@@ -69,7 +69,7 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
           router.refresh();
           return;
         }
-        if (next.status === "queued" || next.status === "analyzing") runner.kick();
+        if (canRun && (next.status === "queued" || next.status === "analyzing")) runner.kick();
       } catch {
         if (!cancelled) setOffline(true);
       }
@@ -82,7 +82,7 @@ export function AnalysisProgress({ materialId, initialStatus }: { materialId: st
       runner.stop();
       clearTimeout(timer);
     };
-  }, [materialId, router]);
+  }, [materialId, router, canRun]);
 
   const states = stepStates(payload.status, payload.step);
   const waiting = payload.status === "queued" || payload.status === "uploaded";

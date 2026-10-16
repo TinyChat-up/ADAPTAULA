@@ -1,10 +1,11 @@
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Loader2 } from "lucide-react";
 import { STATUS_LABELS, type MaterialStatus } from "@/lib/materials/types";
 import { cn } from "@/lib/utils/cn";
 
 /** Status is always icon + text, never color alone. */
 export function StatusBadge({ status }: { status: MaterialStatus }) {
-  const Icon = status === "analyzed" ? CheckCircle2 : status === "failed" ? AlertTriangle : Loader2;
+  const moving = status === "analyzing" || status === "uploading";
+  const Icon = status === "analyzed" ? CheckCircle2 : status === "failed" ? AlertTriangle : moving ? Loader2 : Clock3;
   return (
     <span
       className={cn(
@@ -14,7 +15,7 @@ export function StatusBadge({ status }: { status: MaterialStatus }) {
         status !== "analyzed" && status !== "failed" && "bg-primary/10 text-primary",
       )}
     >
-      <Icon aria-hidden className={cn("size-3.5", status !== "analyzed" && status !== "failed" && "motion-safe:animate-spin")} />
+      <Icon aria-hidden className={cn("size-3.5", moving && "motion-safe:animate-spin")} />
       {STATUS_LABELS[status]}
     </span>
   );
