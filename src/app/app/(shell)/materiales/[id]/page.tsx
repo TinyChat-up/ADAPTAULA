@@ -8,7 +8,10 @@ import { ActivitiesList, IdentifiedCard, ProtectedList, ReviewNotice, VisualsLis
 import { AnalysisProgress } from "@/components/materials/analysis-progress";
 import { ContextForm } from "@/components/materials/context-form";
 import { MaterialActions } from "@/components/materials/material-actions";
-import { OriginalPreview } from "@/components/materials/original-preview";
+import { OriginalDocument } from "@/components/workspace/original-document";
+import { DocumentWorkspace } from "@/components/workspace/document-workspace";
+import { WorkspaceDisclosure } from "@/components/workspace/disclosure";
+import { summarizeProfile } from "@/lib/profiles/summary";
 import { StatusBadge } from "@/components/materials/status-badge";
 import { Alert, Badge } from "@/components/ui/feedback";
 import { Card, PageHeader } from "@/components/ui/layout";
@@ -44,7 +47,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
     listAdaptations({ materialId: id, limit: 10 }),
   ]);
   if (!detail) notFound();
-  const profileOptions = profiles.map((p) => ({ id: p.id, name: p.display_name }));
+  const profileOptions = profiles.map((p) => ({ id: p.id, name: p.display_name, summary: summarizeProfile(p.functional_profile) }));
   // `?perfil=` comes from "Adaptar un material" on a profile or right after creating one: only preselects, never trusted.
   const preselected = typeof query.perfil === "string" && profileOptions.some((p) => p.id === query.perfil) ? query.perfil : undefined;
   const canWrite = hasRole(ctx.role, WRITE_ROLES);
@@ -76,98 +79,99 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
         {labels.grade ? <Badge>{labels.grade}</Badge> : null}
       </div>
 
-      {quota ? (
-        <LimitReachedCard
-          title={analysisQuotaMessage(quota.entitlement.limit, formatDay(quota.usage.period_end))}
-          upgrade={await getUpgradeCta(quota.entitlement)}
-        >
-          El material queda guardado: podrás analizarlo cuando se renueve tu límite.
-        </LimitReachedCard>
-      ) : null}
+      <DocumentWorkspace
+        nextLabel={status === "analyzed" ? canWrite ? "Elegir apoyos" : "Ver análisis" : "Ver estado"}
+        document={file ? <OriginalDocument key={file.id} materialId={material.id} file={{
+          mime_type: file.mime_type, size_bytes: file.size_bytes,
+          page_count: file.page_count, original_name: file.original_name,
+        }} /> : <Alert tone="info">El archivo original todavía no está disponible.</Alert>}
+      >
+        {quota ? (
+          <LimitReachedCard
+            title={analysisQuotaMessage(quota.entitlement.limit, formatDay(quota.usage.period_end))}
+            upgrade={await getUpgradeCta(quota.entitlement)}
+          >
+            El material queda guardado: podrás analizarlo cuando se renueve tu límite.
+          </LimitReachedCard>
+        ) : null}
 
-      {IN_PROGRESS.includes(status) && status !== "uploading" && !quota ? <AnalysisProgress materialId={material.id} initialStatus={status} /> : null}
+        {IN_PROGRESS.includes(status) && status !== "uploading" && !quota ? <AnalysisProgress materialId={material.id} initialStatus={status} canRun={canWrite} /> : null}
 
-      {status === "failed" ? (
-        <Card className="space-y-4 border-danger/40">
-          <Alert tone="danger" title="No hemos podido analizar este material.">
-            {failureMessage(material.failure_code)}
+        {status === "failed" ? (
+          <Card className="space-y-4 border-danger/40">
+            <Alert tone="danger" title="No hemos podido analizar este material.">
+              {failureMessage(material.failure_code)}
+            </Alert>
+            {canWrite ? <MaterialActions retry={retryAnalysisAction.bind(null, material.id)} remove={deleteMaterialAction.bind(null, material.id)} /> : null}
+          </Card>
+        ) : null}
+
+        {analysisOutdated ? (
+          <Alert tone="warning" title="El análisis guardado es de una versión anterior.">
+            Vuelve a analizar el material para actualizarlo.
           </Alert>
-          <MaterialActions retry={retryAnalysisAction.bind(null, material.id)} remove={deleteMaterialAction.bind(null, material.id)} />
-        </Card>
-      ) : null}
+        ) : null}
 
-      {analysisOutdated ? (
-        <Alert tone="warning" title="El análisis guardado es de una versión anterior.">
-          Vuelve a analizar el material para actualizarlo.
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
-        <div className="min-w-0 space-y-8">
-          {analysis ? (
-            <>
-              <IdentifiedCard analysis={analysis} reused={meta?.source === "reused"} />
-              <ReviewNotice analysis={analysis} />
-              {/* The next step comes right after what was understood, not after every detail of the analysis. */}
-              {status === "analyzed" ? (
-                <div id="adaptar" className="scroll-mt-6">
-                  <StartAdaptationCard
-                    profiles={profileOptions}
-                    initialProfileId={preselected}
-                    canWrite={canWrite}
-                    newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
-                    create={createAdaptationFromMaterialAction.bind(null, material.id)}
-                  />
-                </div>
-              ) : null}
-              {recent.length > 0 ? (
-                <section aria-labelledby="adaptaciones-material" className="space-y-3">
-                  <h2 id="adaptaciones-material" className="text-lg font-semibold">
-                    Adaptaciones de este material
-                  </h2>
-                  <AdaptationList items={recent} show={{ material: false, profile: true }} />
-                </section>
-              ) : null}
+        {analysis ? (
+          <>
+            <IdentifiedCard analysis={analysis} reused={meta?.source === "reused"} />
+            <ReviewNotice analysis={analysis} />
+            {/* The next step comes right after what was understood, not after every detail of the analysis. */}
+            {status === "analyzed" ? (
+              <div id="adaptar" data-workspace-next={canWrite ? true : undefined} tabIndex={-1} aria-label={canWrite ? "Elegir apoyos" : "Acceso de solo lectura"} className="scroll-mt-28">
+                <StartAdaptationCard
+                  profiles={profileOptions}
+                  initialProfileId={preselected}
+                  canWrite={canWrite}
+                  newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
+                  create={createAdaptationFromMaterialAction.bind(null, material.id)}
+                />
+              </div>
+            ) : null}
+            <WorkspaceDisclosure title="Actividades y elementos a conservar">
               <ActivitiesList analysis={analysis} />
               <ProtectedList analysis={analysis} />
               <VisualsList analysis={analysis} />
-            </>
-          ) : null}
-        </div>
+            </WorkspaceDisclosure>
+          </>
+        ) : null}
+        {analysis && canWrite ? (
+          <WorkspaceDisclosure title="Datos del material">
+            <ContextForm
+              initial={{
+                title: material.title,
+                stage: material.stage_slug ?? "",
+                grade: material.grade_slug ?? "",
+                subject: material.subject_slug ?? "",
+                topic: material.topic ?? "",
+              }}
+              provenance={resolved}
+              stages={catalog.stages}
+              grades={catalog.grades}
+              subjects={subjects}
+              onSave={updateContextAction.bind(null, material.id)}
+            />
+          </WorkspaceDisclosure>
+        ) : null}
+        {canWrite && (status === "analyzed" || status === "uploaded") ? (
+          <WorkspaceDisclosure title="Más opciones del material">
+            <MaterialActions
+              retry={retryAnalysisAction.bind(null, material.id)}
+              retryLabel={status === "analyzed" ? "Volver a analizar" : "Analizar"}
+              remove={deleteMaterialAction.bind(null, material.id)}
+            />
+          </WorkspaceDisclosure>
+        ) : null}
+      </DocumentWorkspace>
+      {recent.length > 0 ? (
+        <section aria-labelledby="adaptaciones-material" className="space-y-3">
+          <h2 id="adaptaciones-material" className="text-lg font-semibold">
+            Adaptaciones de este material
+          </h2>
+          <AdaptationList items={recent} show={{ material: false, profile: true }} />
+        </section>
+      ) : null}
 
-        <aside className="min-w-0 space-y-6">
-          {file ? <OriginalPreview materialId={material.id} file={file} /> : null}
-          {analysis ? (
-            <Card className="space-y-3">
-              <h2 className="text-lg font-semibold">Datos del material</h2>
-              <ContextForm
-                initial={{
-                  title: material.title,
-                  stage: material.stage_slug ?? "",
-                  grade: material.grade_slug ?? "",
-                  subject: material.subject_slug ?? "",
-                  topic: material.topic ?? "",
-                }}
-                provenance={resolved}
-                stages={catalog.stages}
-                grades={catalog.grades}
-                subjects={subjects}
-                onSave={updateContextAction.bind(null, material.id)}
-              />
-            </Card>
-          ) : null}
-          {status === "analyzed" || status === "uploaded" ? (
-            <Card className="space-y-3">
-              <h2 className="text-lg font-semibold">Más opciones</h2>
-              <MaterialActions
-                retry={retryAnalysisAction.bind(null, material.id)}
-                retryLabel={status === "analyzed" ? "Volver a analizar" : "Analizar"}
-                remove={deleteMaterialAction.bind(null, material.id)}
-              />
-            </Card>
-          ) : null}
-        </aside>
-      </div>
     </div>
   );
 }

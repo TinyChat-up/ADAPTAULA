@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { randomBytes } from "node:crypto";
+import { editorDocument } from "../support/editor-document";
 
 /**
  * Puts an adaptation created through the UI into a given pipeline state by writing the rows the real pipeline would have
@@ -55,6 +56,7 @@ export async function seedAwaitingReview(page: Page, workspaceId: string, id: st
 
 export async function seedReadyWithWarnings(page: Page, workspaceId: string, id: string) {
   const review = {
+    schema_version: 1, plan_fingerprint: hex(), document_fingerprint: hex(), blocks_to_revise: [],
     verdict: "approved_with_warnings",
     checks: [
       { check: "traceability_complete", status: "WARN", detail: "R1: ayuda duplicada blk_abc12345", method: "deterministic", targets: [] },
@@ -63,7 +65,8 @@ export async function seedReadyWithWarnings(page: Page, workspaceId: string, id:
   };
   await artifact(page, workspaceId, id, "pedagogical_review", { review, pending: [] });
   await artifact(page, workspaceId, id, "execution_report", { execution: { ai: ["dec_1"], deferred: [{ id: "dec_4" }], blockers: [] } });
-  await ok(await page.request.post(`${FAKE}/rest/v1/adaptation_versions`, { headers, data: { adaptation_id: id, workspace_id: workspaceId, version: 1, document: { schema_version: 1 }, review, source: "ai_generated" } }));
+  await ok(await page.request.post(`${FAKE}/rest/v1/adaptation_versions`, { headers, data: { adaptation_id: id, workspace_id: workspaceId, version: 1, document: editorDocument(), review, source: "ai_generated" } }));
+  await requireVisuals(page, id, []);
   await setStatus(page, id, { status: "ready", current_version: 1, delivered_at: new Date().toISOString() });
 }
 

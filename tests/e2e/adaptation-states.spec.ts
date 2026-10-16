@@ -106,6 +106,7 @@ test("PlanReview, trabajando (con diálogo) y ready con observaciones: sin desbo
   await expect(page.getByText("presentación final")).toBeVisible();
   await expect(page.getByText(/R1|blk_|need_|traceability_complete/)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Volver al material" }).first()).toBeVisible();
+  await page.getByRole("link", { name: "Volver al material" }).last().scrollIntoViewIfNeeded();
   await expect(page.getByRole("link", { name: "Volver al material" }).last()).toBeInViewport({ ratio: 0.1 });
   expect(await noOverflow(page)).toBe(true);
   expect(await seriousViolations(page)).toEqual([]);

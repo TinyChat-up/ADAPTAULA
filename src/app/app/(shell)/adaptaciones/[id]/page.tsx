@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { AdaptationView, type AdaptationActions } from "@/components/adaptation/adaptation-view";
+import { OriginalDocument } from "@/components/workspace/original-document";
+import { getMaterialDetail } from "@/lib/materials/repository";
 import { PageHeader } from "@/components/ui/layout";
 import { loadAdaptationPage } from "@/lib/adaptation/orchestration/page-data";
 import { requireWorkspace } from "@/lib/auth/workspace";
@@ -25,6 +27,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
   const ctx = await requireWorkspace();
   const data = await loadAdaptationPage(ctx, id, { editing });
   if (!data) notFound();
+  const original = await getMaterialDetail(ctx.workspace.id, data.context.materialId);
 
   const actions: AdaptationActions = {
     start: startPlanningAction.bind(null, id),
@@ -42,7 +45,10 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
         Volver al material
       </Link>
       <div className="space-y-3"><p className="eyebrow text-muted-foreground">Adaptación{data.profileName ? ` · Perfil ${data.profileName}` : ""}</p><PageHeader title={data.context.materialTitle} description="El material, los apoyos y el estado de tu ficha, en un mismo lugar." /></div>
-      <AdaptationView initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} editing={editing} />
+      <AdaptationView original={original?.file ? <OriginalDocument key={original.file.id} materialId={data.context.materialId} file={{
+        mime_type: original.file.mime_type, size_bytes: original.file.size_bytes,
+        page_count: original.file.page_count, original_name: original.file.original_name,
+      }} /> : undefined} initial={data.status} plan={data.plan} context={data.context} readyInfo={data.readyInfo} actions={actions} canWrite={data.canWrite} editing={editing} />
     </div>
   );
 }

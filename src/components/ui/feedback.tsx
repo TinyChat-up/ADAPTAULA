@@ -23,7 +23,7 @@ export function Alert({ tone = "info", title, children }: { tone?: Tone; title?:
   return (
     <div role={role} className={cn("flex gap-3 rounded-card border p-4 text-sm", classes)}>
       <Icon aria-hidden className={cn("mt-0.5 size-5 shrink-0", iconColor[tone])} />
-      <div className="space-y-1">
+      <div className="min-w-0 flex-1 space-y-1 [overflow-wrap:anywhere]">
         {title ? <p className="font-semibold">{title}</p> : null}
         {children ? <div className="text-foreground/90">{children}</div> : null}
       </div>
