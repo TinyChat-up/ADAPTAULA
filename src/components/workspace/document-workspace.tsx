@@ -5,14 +5,18 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 
 /** Slots keep authorized data on the server. Hiding the inspector never unmounts forms or stops polling. */
-export function DocumentWorkspace({ document, children, nextLabel = "Ver preparación" }: {
+export function DocumentWorkspace({ document, children, nextLabel = "Ver preparación", panelOpen, onPanelOpenChange }: {
   document: ReactNode;
   children: ReactNode;
   nextLabel?: string;
+  panelOpen?: boolean;
+  onPanelOpenChange?: (open: boolean) => void;
 }) {
   const id = useId();
   const panel = useRef<HTMLElement>(null);
-  const [open, setOpen] = useState(true);
+  const [localOpen, setLocalOpen] = useState(true);
+  const open = panelOpen ?? localOpen;
+  const setOpen = (value: boolean) => { setLocalOpen(value); onPanelOpenChange?.(value); };
   function continueHere() {
     setOpen(true);
     requestAnimationFrame(() => {

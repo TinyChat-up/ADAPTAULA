@@ -32,6 +32,7 @@ test("editar, deshacer, guardar, recuperar y descargar la misma ficha sin cambia
   await expect(prompt).toHaveValue(original);
   await page.getByRole("button", { name: "Rehacer", exact: true }).click();
   await expect(prompt).toHaveValue(edited);
+  await page.getByText("Presentación de toda la ficha", { exact: true }).click();
   await page.getByLabel("Tamaño de letra", { exact: true }).selectOption("1.3");
   await page.getByLabel("Líneas para responder", { exact: true }).selectOption("8");
   const preview = page.getByRole("region", { name: "Hoja A4, desplazable" });
@@ -47,6 +48,7 @@ test("editar, deshacer, guardar, recuperar y descargar la misma ficha sin cambia
   await expect(page.getByText("Borrador guardado. La ficha generada sigue intacta.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(prompt).toHaveValue(edited);
+  await page.getByText("Presentación de toda la ficha", { exact: true }).click();
   await expect(page.getByLabel("Tamaño de letra", { exact: true })).toHaveValue("1.3");
   await expect(preview.locator(".ms-lines > div")).toHaveCount(8);
   await prompt.fill("Un cambio sin guardar.");

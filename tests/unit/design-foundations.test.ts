@@ -15,6 +15,7 @@ describe("navegación del espacio docente", () => {
     ["/app/alumnos/nuevo", "/app/alumnos", "Crear perfil"],
     ["/app/adaptaciones/123", "/app/historial", "Preparar ficha"],
     ["/app/adaptaciones/123/editar", "/app/historial", "Editar ficha"],
+    ["/app/adaptaciones/123/comparar", "/app/historial", "Comparar documentos"],
     ["/app/adaptaciones/123/vista", "/app/historial", "Ficha adaptada"],
     ["/app/uso", "/app/uso", undefined],
   ])("%s tiene una sola sección activa y contexto sin inventar un estado", (path, parent, detail) => {

@@ -1,19 +1,19 @@
-import { NodeView } from "./nodes";
+import { NodeView, type ActivitySelection } from "./nodes";
 import { tokenStyle } from "@/lib/render/tokens";
 import type { RenderModel } from "@/lib/render/model";
 import "./material.css";
 
 /**
- * The printable sheet: A4 pages of the RenderModel. Server-rendered, no client code. The same markup is what the browser prints;
- * everything that is not the sheet (app chrome, teacher panel, controls) lives outside `.ms-sheet` and is hidden in print.
+ * Shared A4 markup, without state. Screen callers may select a logical page/activity;
+ * the PDF supplies only `model`, rendering every page without interaction attributes.
  */
-export function MaterialSheet({ model }: { model: RenderModel }) {
+export function MaterialSheet({ model, visiblePage, selection }: { model: RenderModel; visiblePage?: number | undefined; selection?: ActivitySelection | undefined }) {
   const { header } = model;
   const meta = [header.subject, header.grade].filter(Boolean).join(" · ");
   return (
     <div className="ms-root" style={tokenStyle(model.tokens) as React.CSSProperties} data-decoration={model.tokens.decoration} data-contrast={model.tokens.contrast} data-stage={model.stage ?? undefined} data-design={model.design === "claro" ? "claro" : undefined} lang={model.language}>
       {model.pages.map((page, index) => (
-        <article key={page.number} className="ms-sheet" aria-label={`Página ${page.number} de ${model.pages.length}`} data-page={page.number}>
+        <article key={page.number} className="ms-sheet" hidden={visiblePage !== undefined && page.number !== visiblePage} aria-label={`Página ${page.number} de ${model.pages.length}`} data-page={page.number}>
           {index === 0 && (meta || header.fields.length > 0) ? (
             <header className="ms-header">
               {model.design === "claro" ? (
@@ -38,7 +38,7 @@ export function MaterialSheet({ model }: { model: RenderModel }) {
           ) : null}
           <div className="ms-flow">
             {page.nodes.map((node) => (
-              <NodeView key={node.key} node={node} mode={model.mode} design={model.design} />
+              <NodeView key={node.key} node={node} mode={model.mode} design={model.design} selection={selection} />
             ))}
           </div>
           <footer className="ms-footer">

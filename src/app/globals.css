@@ -2,6 +2,7 @@
 @import "../styles/tokens.css";
 @import "../styles/chrome.css";
 @import "../styles/workspace.css";
+@import "../styles/document-review.css";
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
