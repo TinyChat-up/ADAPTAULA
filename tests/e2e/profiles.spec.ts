@@ -77,7 +77,7 @@ test("Free: el tercer perfil se bloquea con el mensaje del plan", async ({ page 
   await expect(page.getByText("Perfil creado.")).toBeVisible();
 
   await expect(page.getByText("Has utilizado los 2 perfiles incluidos en Free.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Ver Pro" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Consultar planes (contratación no disponible)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Nuevo perfil" })).toHaveCount(0);
 
   await page.goto("/app/alumnos/nuevo");
