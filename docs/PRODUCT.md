@@ -39,34 +39,23 @@ North Star: **adaptaciones descargadas por profesor activo semanal.**
 
 ## Planes
 
-**Nueva decisión provisional para la etapa 4:** Free 0 €, Pro 24,90 €/mes, Max 49,90 €/mes, IVA incluido; cuotas y condiciones en [Adaptaula 2.0](ADAPTAULA_2.md#política-comercial-aprobada-como-objetivo-provisional-etapa-4). **Todavía no aplicada en etapa 3A.** Las cifras de la tabla siguiente describen la configuración heredada, no la nueva política. Su cambio requiere migración, pruebas y comprobación previa de condiciones de suscripciones activas; no basta con editar esta documentación o seed. Max debe quedar «En preparación» en esa entrega, sin contratación ni imágenes activas. Sin nuevos precios anuales ni descuentos.
-
-Los valores viven en la tabla `plans` (sembrada por `supabase/seed.sql`) y se pueden cambiar sin desplegar: es la **única fuente**. El control de cuota (`adaptation_entitlement_limit`, `consume_quota`), la pantalla de uso (`workspace_usage`) y `/precios` la leen; ningún componente lleva números de planes. Estos son los valores iniciales.
-
-**Todos son provisionales** hasta cerrar precios y economía unitaria (Phase 7A: confianza baja; el pricing definitivo espera a la telemetría de `ai_spend_summary`).
-
-**Lo que existe y se aplica hoy** (y lo único que muestra `/precios`): adaptaciones/mes, análisis de materiales/mes, perfiles guardados, páginas y tamaño por material, y la descarga en PDF. El resto de filas son diseño de producto, marcadas abajo como no implementadas; no se venden. En concreto, **Free = 5 adaptaciones/mes es un valor provisional**, no una decisión económica: permite evaluar el producto de verdad con tus fichas, sigue limitando el coste y se revisará con el pricing definitivo. No cambia los límites de análisis (Free 10/mes), que también son provisionales. `/precios` muestra los valores como «precios y límites de lanzamiento», sin compromiso comercial definitivo.
+**Política 4A implementada en migración 026, pendiente de aplicación remota autorizada.** Los límites efectivos viven en `plans`; el seed replica el catálogo para instalaciones nuevas. Precios provisionales con IVA incluido, pendientes de validar costes y demanda.
 
 | | Free | Pro | Max |
 |---|---|---|---|
-| Precio | 0 € | 9,99 €/mes · 99 €/año | 17,99 €/mes · 179 €/año |
-| Adaptaciones/mes | 5 | 75 | 150 |
-| Análisis de materiales/mes (aparte de las adaptaciones; reutilizar uno ya hecho no cuenta) | 10 | 100 | 250 |
+| Precio mensual | 0 € | 24,90 € | 49,90 € |
+| Adaptaciones/periodo mensual | 1 | 15 | 30 |
+| Análisis/periodo mensual | 2 | 30 | 50 |
 | Perfiles guardados | 2 | 30 | 100 |
-| Clases *(no implementado; no se anuncia)* | 0 | 10 | 30 |
-| Varios perfiles por ficha *(no implementado; no se anuncia)* | — | ✓ (hasta 6) | ✓ (hasta 30) |
-| Regeneración de bloques/mes (uso justo) *(no implementado)* | 20 | 400 | 800 |
-| Historial *(no se recorta: hoy es completo para todos; no se anuncia)* | 30 días | completo | completo |
-| Plantillas *(no implementado)* | básicas | todas | todas |
-| Comparador / editor avanzado *(no implementado)* | básico | ✓ | ✓ |
-| Calidad de IA base *(no aplicado: todos los planes usan STANDARD; sin PREMIUM)* | ECONOMY | STANDARD | STANDARD (+PREMIUM ocasional) |
-| Generaciones visuales/mes *(no implementado; no se anuncia)* | 0 | 0 | 50 |
-| Prioridad de procesamiento *(no implementado; no se anuncia)* | — | — | ✓ |
-| Páginas máx. por material | 5 | 15 | 25 |
+| Páginas por material | 5 | 15 | 25 |
+| PDF | Incluido | Incluido | Incluido |
+| Disponibilidad comercial | Registro gratuito | Contratación no disponible | En preparación |
 
-**Qué cuenta como una adaptación:** una versión generada para un perfil (guardado o rápido). Adaptar una ficha para 4 alumnos consume 4. Regenerar o editar bloques no consume adaptaciones (tiene su propio límite de uso justo). Un fallo que no entrega material no consume nada.
+Sin precios anuales anunciados, sin imágenes IA habilitadas y sin diferencias de calidad introducidas entre Free y Pro. CLARO, editor y comparador existentes se conservan. Los metadatos heredados de funciones futuras no son prestaciones comerciales.
 
-Max está detrás del feature flag `MAX_PLAN_ENABLED` hasta la Fase 2.
+Una adaptación reserva una unidad; cancelarla antes de entregar libera esa reserva. Fallos/revisión conservan la reserva para recuperar el mismo trabajo. Análisis tiene cuota independiente: caché no consume, fallo definitivo devuelve una vez. No se cambia la semántica del pipeline.
+
+Las suscripciones anteriores conservan sus filas y condiciones; su cuenta puede mostrar límites distintos del catálogo nuevo. No se ha inspeccionado producción. Véase [procedimiento de migración y compatibilidad](qa/adaptaula-2-etapa-4a/README.md).
 
 **Adaptaula Centros** (futuro): el modelo `workspace` (personal, colegio, instituto, academia, organización) con roles `owner/admin/teacher/viewer` existe desde el día 1; la venta B2B no se construye en el MVP (solo `/centros` con formulario de contacto).
 

@@ -2,6 +2,15 @@
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
 
+## 2026-10-17 — Adaptaula 2.0, etapa 4A: política comercial y límites reales
+
+- Base comprobada: #43 fusionada en `5867d30`; rama `codex/adaptaula-2-planes-cuotas` desde main. No incluye 4B.
+- Migración 026 idempotente y seed: cuotas Free 1/2, Pro 15/30, Max 30/50, perfiles 2/30/100 y páginas 5/15/25; precios 0/24,90/49,90 €/mes IVA incluido. Catálogo nuevo sin imágenes ni precios Stripe. Filas anteriores con referencias o IDs de Stripe preservadas y retiradas del catálogo; suscripciones y consumo intactos.
+- `/precios` dinámica con tres planes, sin contratación ni importes anuales; cuenta con avisos de cuota real y renovación. Reflow de precios/cabecera corregido tras detectar desbordamiento al 200 %.
+- Verificación: 134 pruebas focalizadas unitarias/PGlite y 14 E2E distintos superados; typecheck/build correctos; lint sin errores (un aviso preexistente); escáner de secretos correcto. Capturas reales de escritorio/móvil y limitaciones en [QA 4A](qa/adaptaula-2-etapa-4a/README.md).
+- No se inspeccionaron clientes reales ni se aplicaron migraciones remotas. No APIs pagadas, Stripe, cambios de modelos/prompts ni validación pedagógica real. Las condiciones comerciales anteriores requieren revisión antes del despliegue autorizado.
+- Siguiente: revisar e integrar 4A manualmente; después implementar 4B sobre main. No merge automático.
+
 ## 2026-10-17 — Adaptaula 2.0, etapa 3B: perfiles y Plan y cuenta
 
 - **Base:** `origin/main` / `9f064ef`, #41 y #42 confirmadas MERGED por GitHub. Rama nueva `codex/adaptaula-2-perfiles-cuenta`. Entorno existente reutilizado con la skill de setup; ninguna dependencia nueva. Instrucciones, continuidad, arquitectura, UX, seguridad y guía local Next de formularios leídas.

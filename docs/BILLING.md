@@ -1,5 +1,7 @@
 # Facturación, planes y cuotas
 
+> **Estado 4A:** política efectiva nueva en migración 026: Free 1/2, Pro 15/30 y Max 30/50 (adaptaciones/análisis). Pro 24,90 €/mes y Max 49,90 €/mes con IVA, provisionales. Sin contratación ni precios anuales anunciados. Las suscripciones antiguas conservan sus condiciones. [Procedimiento y límites](qa/adaptaula-2-etapa-4a/README.md). Los flujos Stripe descritos debajo son diseño futuro, no endpoints operativos.
+
 ## Productos Stripe
 
 | Producto | Precio | Intervalo |
@@ -58,7 +60,7 @@ type EntitlementResult =
 |---|---|
 | `adaptation.generate` | `monthly_adaptations` (unidades = número de perfiles) + `multi_profile` + `max_profiles_per_job` |
 | `image.generate` | `monthly_images` + `image_generation` + flag `FLAG_AI_IMAGES_ENABLED` (implementado en la migración 024: ilustraciones de «Hacer magia») |
-| `analysis.start` | `monthly_analyses` (Free 10 · Pro 100 · Max 250) + *rate limit* + análisis simultáneos. Una reutilización de caché no consume |
+| `analysis.start` | `monthly_analyses` (Free 2 · Pro 30 · Max 50) + *rate limit* + análisis simultáneos. Una reutilización de caché no consume |
 | `block.revise` | `monthly_block_revisions` + rate limit |
 | `profile.create` | `max_profiles` (perfiles no archivados) |
 | `class.create` | `max_classes` |
@@ -88,7 +90,7 @@ La UI usa el mismo resultado para mostrar el uso y los CTA, pero **el servidor s
 
 ## Cuotas: libro de movimientos
 
-> **Qué consume cuota.** Subir y analizar un material **no** descuenta adaptaciones (el análisis es infraestructura previa y se reutiliza para varios alumnos): tiene **su propia cuota, `monthly_analyses`** (Free 10 · Pro 100 · Max 250; viven en `plans.features` y se cambian sin desplegar). La cuota de adaptaciones se reserva al generar una adaptación (fase 4).
+> **Qué consume cuota.** Subir y analizar un material **no** descuenta adaptaciones (el análisis es infraestructura previa y se reutiliza para varios alumnos): tiene **su propia cuota, `monthly_analyses`** (Free 2 · Pro 30 · Max 50; viven en `plans.features` y se cambian sin desplegar). La cuota de adaptaciones se reserva al generar una adaptación (fase 4).
 >
 > - La unidad de análisis se reserva **al encolar** (atómico con la creación del job, `kind = 'analysis'`, clave `analysis:<job>`) y se **devuelve** si el job termina sin entregar análisis (error técnico, rechazo del proveedor o intentos agotados). Reutilizar un análisis idéntico (caché) no encola ni consume; «Volver a analizar» sí consume (ignora la caché a propósito).
 > - Independiente de lo anterior, el análisis tiene *rate limit* y límite de análisis simultáneos (ver `docs/AI_PIPELINE.md`). Su coste real queda en `ai_runs`.
@@ -96,7 +98,7 @@ La UI usa el mismo resultado para mostrar el uso y los CTA, pero **el servidor s
 
 - Periodo: **Free = mes natural en Europe/Madrid** (se reinicia el día 1; fácil de explicar: "se renueva el 1 de cada mes"). **Pago = ciclo de facturación de Stripe** (`period_start`/`period_end`); el plan anual reinicia la cuota cada mes dentro del ciclo anual (de forma mensual, anclada al día de alta).
 - Uso del periodo = `sum(units)` de `usage_events` por `kind` dentro del periodo.
-- **Reserva al crear el job** (`consume_quota`, atómica con un lock por workspace) → si el job falla sin entregar → **devolución** (`refund_quota`, idempotente por clave).
+- **Análisis:** reserva al encolar; fallo definitivo devuelve una vez. **Adaptaciones:** reserva por entitlement; fallo o revisión conservan la reserva, cancelación sin entrega libera. No se unifican ambas semánticas.
 - Fallo parcial con varios perfiles: solo se devuelven las unidades de los perfiles fallidos.
 - Sin cobros extra automáticos en el MVP.
 
