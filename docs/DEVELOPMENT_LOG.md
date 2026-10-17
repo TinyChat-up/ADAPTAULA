@@ -12,7 +12,7 @@ Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: b
 - **Excepción de ensayo:** se interrumpió un intento del spec histórico `teacher-workflow` al esperar el encabezado antiguo «Actividades detectadas». No se cuenta como aprobado ni se cambia producto para satisfacerlo. Se completaron los recorridos vigentes `document-workspace` y `sheet-editor`; actualizar el spec histórico queda pendiente.
 - **Evidencia:** [QA y seis capturas](qa/adaptaula-2-etapa-3b/README.md). Fixtures y cuentas sintéticas, PGlite/Supabase simulado local, STANDARD/PREMIUM mock, imágenes desactivadas. Sin credenciales nuevas ni servicios externos.
 - **Límites:** búsqueda sobre perfiles cargados, sin paginación nueva ni versiones/autoguardado de perfiles. Nombre de app en `profiles`, sin sincronizar metadatos Auth. Entrega de correo y Auth/Vercel remoto no comprobados. Misma selección de seis materiales recientes desde un perfil; no se amplía su contrato.
-- **Publicación:** pendiente de abrir PR de esta rama; sin merge.
+- **Publicación:** [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43), abierta sin merge. Implementación `ed2616f`, documentación/capturas `7faf9dd`.
 - **Siguiente:** revisar esta entrega 3B; después etapa 4 (pantallas públicas y política comercial) mediante migración y pruebas propias, manteniendo los precios/cuotas actuales hasta entonces.
 
 ## 2026-10-16 — Adaptaula 2.0, etapa 3A: mesa, biblioteca e historial

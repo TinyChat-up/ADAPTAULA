@@ -1,6 +1,6 @@
 # Adaptaula 2.0 · Etapa 3B: perfiles y Plan y cuenta
 
-2026-10-17. Base `9f064ef` (PR #42 integrada, y #41 confirmada). Rama `codex/adaptaula-2-perfiles-cuenta`. Sin merge automático.
+2026-10-17. Base `9f064ef` (PR #42 integrada, y #41 confirmada). Rama `codex/adaptaula-2-perfiles-cuenta`; [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43) abierta, sin merge.
 
 ## Entrega
 

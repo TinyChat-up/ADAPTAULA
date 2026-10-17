@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Actualizado: 2026-10-17. Base actual: `origin/main` en `9f064ef`, **PR #41 y #42 integradas** (comprobado en GitHub). Rama nueva `codex/adaptaula-2-perfiles-cuenta` para la etapa 3B. Sin merge en esta sesión.
+Actualizado: 2026-10-17. Base actual: `origin/main` en `9f064ef`, **PR #41 y #42 integradas** (comprobado en GitHub). Rama `codex/adaptaula-2-perfiles-cuenta` para la etapa 3B; [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43) abierta, sin merge.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
