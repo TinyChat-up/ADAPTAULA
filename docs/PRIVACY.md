@@ -64,8 +64,9 @@ auditado: [`legal/AUDITORIA_DATOS.md`](legal/AUDITORIA_DATOS.md).
 
 ## Retención
 
-> **Objetivos de diseño, NO implementados** salvo el borrado de subidas abandonadas y el borrado individual de materiales sin
-> adaptaciones. No existe job de retención, exportación, borrado de cuenta ni opción de borrado automático de originales. Los
+> **Objetivos de diseño, NO implementados** salvo el borrado de subidas abandonadas, el borrado individual de materiales sin
+> adaptaciones, la exportación personal JSON acotada y el registro de solicitudes de baja. No existe job de retención,
+> borrado efectivo de cuenta ni opción de borrado automático de originales. Los
 > plazos están pendientes de revisión jurídica ([auditoría §3](legal/AUDITORIA_DATOS.md#3-conservación-y-borrado)).
 
 | Dato | Retención por defecto (objetivo) |
@@ -81,10 +82,10 @@ Un cron diario aplicaría las retenciones. Hoy solo limpia subidas abandonadas.
 
 ## Derechos del usuario
 
-> Objetivo. Hoy solo existe el borrado individual de materiales; ni la exportación ni el borrado de cuenta están implementados.
+> Implementado parcialmente en etapa 5A. La exportación personal y la solicitud de baja funcionan; el borrado efectivo queda pendiente.
 
-- **Exportar mis datos** (Configuración → Datos): ZIP con JSON de perfiles, materiales, adaptaciones y PDFs.
-- **Eliminar cuenta**: confirmación reforzada; cancela la suscripción en Stripe y borra workspace(s) personales.
+- **Descargar mis datos** (Plan y cuenta): JSON de cuenta y espacio personal de un único miembro, con originales pequeños en base64 y ruta privada de descarga para los mayores. Los datos compartidos se excluyen.
+- **Solicitar eliminación** (Plan y cuenta): verificación de contraseña y solicitud persistente. No inicia todavía una eliminación automática ni cancela suscripciones.
 - Eliminar perfiles, materiales y adaptaciones de forma individual (borrado físico + Storage).
 
 ## Analítica y cookies

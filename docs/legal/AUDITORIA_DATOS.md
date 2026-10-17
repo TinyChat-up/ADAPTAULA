@@ -49,8 +49,8 @@ Las rutas de código son del repositorio a esta fecha.
 | Borrar un material: borra el original y la fila; se niega si existen adaptaciones (FK `RESTRICT`) | Implementado | `materiales/actions.ts` → `service.ts` (`deleteMaterial`) |
 | Cascadas de base de datos: el workspace arrastra todos sus datos y la adaptación arrastra versiones, recursos, exportaciones y comentarios | Implementado (SQL) | `000400`, `001600`, `002200`, `002400` |
 | Borrado de los **objetos** de Storage de `generated-assets` al borrar una adaptación | **Pendiente**: en `src/` solo se eliminan objetos de `source-materials` | Las filas caen en cascada, pero los ficheros pueden quedar huérfanos en el bucket |
-| Borrado de una adaptación, de una cuenta o de un workspace desde la aplicación | **Pendiente** | No hay código en el servidor |
-| Exportar mis datos (ZIP) | **Documentado** (`PRIVACY.md`), no implementado | — |
+| Borrado de una adaptación, de una cuenta o de un workspace desde la aplicación | **Pendiente**: se puede solicitar la baja, no ejecutarla | `account_deletion_requests` (027), `/api/account/deletion-request` |
+| Exportar mis datos personales (JSON) | Implementado para espacio personal de miembro único, con límite de 500 filas por entidad y 20 MB de originales incrustados; compartidos excluidos | `/api/account/export`, `src/lib/privacy/export.ts` |
 | Opción «Eliminar originales automáticamente» a los 7, 30 o 90 días | **Documentado**, no implementado | — |
 | Retención de 13 meses de `ai_runs` y `product_events` y de 24 meses de `audit_logs` | **Documentado**, no implementado | No existe ningún job de purga. `ai_runs` pasa a `SET NULL` al borrar workspace o material y se conserva indefinidamente (solo identificadores y métricas, sin contenido) |
 | `history_days` del plan Free | **Documentado** en `plans.features`; no hay código que lo aplique | `supabase/seed.sql` |

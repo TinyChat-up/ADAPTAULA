@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; rama `codex/adaptaula-2-datos-5a` desde main. Exportación personal JSON autenticada con archivos originales pequeños y solicitud persistente de baja verificada con contraseña. El borrado efectivo de Auth, filas y Storage **sigue pendiente**; no se simula. Migración 027 local, sin aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
 
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
 
@@ -8,7 +8,7 @@ La PR #44 está fusionada en `c925c33` (verificado en GitHub). Etapa 4B en rama 
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `c925c33`, PR #38–#44 integradas.
+Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `5317031`, PR #38–#45 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -30,12 +30,12 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 | Sustitución pedagógica | PR #26: equivalencia y corrección acotada. PR #27: selección única de fracciones. PR #28: consulta literal de celdas de tablas corroboradas contra PDF | Alcance acotado por ADR-023: cuadrícula, texto verificable y consigna explícita. Sin escaneos, inferencias, equivalencias numéricas ni unidades separadas. Calidad de prompts v2/v3/v4 con modelos reales pendiente |
 | Presentación y PDF | CLARO, apoyos junto a actividades, render compartido, validación y descarga PDF | Calidad de cada imagen real y runtime PDF en Vercel pendientes de comprobación; no se promete soporte universal |
 | Interfaz y navegación | ADR-030: fundamentos Adaptaula 2.0. ADR-031: workspace original (2A). ADR-032: comparación privada y edición contextual CLARO (2B), borrador guardado distinguido de generada | 2B y 3A integradas. 3B implementa perfiles progresivos y Plan y cuenta; [pruebas y capturas](qa/adaptaula-2-etapa-3b/README.md). Modo oscuro pendiente. Pruebas automáticas no equivalen a auditoría WCAG completa |
-| Datos, legal y corpus | Buckets privados con RLS por workspace, validación de bytes, logger sin contenido, `ai_runs` sin contenido. Contrato y reglas de admisión al corpus de mejora (ADR-028), registro sintético y borradores de `/privacidad` y `/terminos` | Sin registro de aceptación ni autorizaciones, sin limpieza de metadatos de originales, sin borrado de cuenta, exportación ni job de retenciones, y garantías de proveedores sin verificar ([auditoría](legal/AUDITORIA_DATOS.md)). Revisión jurídica pendiente ([lista](legal/REVISION_ESPECIALISTA.md)) |
+| Datos, legal y corpus | Buckets privados con RLS, exportación personal JSON acotada y solicitud duradera de baja (027), sin envío a IA. Contrato y reglas de admisión al corpus de mejora (ADR-028) y borradores de `/privacidad` y `/terminos` | Sin borrado efectivo de cuenta/Storage, limpieza de metadatos de originales, job de retenciones ni revisión jurídica final ([auditoría](legal/AUDITORIA_DATOS.md), [lista](legal/REVISION_ESPECIALISTA.md)) |
 | Planes y consumo | Plan efectivo y cuotas en servidor; gate de imágenes y registro de costes | Integración Stripe completa es trabajo propuesto, no completado por existir tablas; pricing y propuesta de beta no son decisiones aprobadas |
 
 ## Despliegue, pruebas y límites de esta sesión
 
-- El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que esté desplegada en todos los entornos. Esta fase no añade migraciones.
+- El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que estén desplegadas 025–027. Esta fase añade **027**, probada solo localmente; requiere aplicación futura antes del despliegue de la UI.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
 - Verificación de 2B y capturas en [QA](qa/adaptaula-2-etapa-2b/README.md); las pruebas anteriores de 2A se conservan como antecedentes. Se mantiene Google Fonts sin cambios; no se valida el runtime de Vercel.
 - Git y la API de GitHub están disponibles. #41 y #42 confirmadas MERGED (base `9f064ef`); esta entrega no modifica otras PR.
@@ -44,7 +44,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Adaptaula 2.0, etapa 3B**, rama `codex/adaptaula-2-perfiles-cuenta` desde `9f064ef`. Directorio de perfiles, apoyos progresivos, capacidad para duplicación y consulta sin escritura para lectores. Cuenta con nombre editable, análisis/adaptaciones/perfiles y periodo real, acceso a contraseña y cierre de sesión. No cambia dimensiones, cuotas, RLS, pipeline, CLARO ni datos originales. Política comercial nueva reservada a etapa 4; no se activa en esta entrega. [QA](qa/adaptaula-2-etapa-3b/README.md): 82 focalizadas, 26 E2E distintos aprobados, typecheck/lint/build y PDF real de fixture. Un spec heredado anterior al workspace se interrumpió por un selector obsoleto; documentado sin contarlo como pasado.
+**Adaptaula 2.0, etapa 5A (primera entrega)**, rama `codex/adaptaula-2-datos-5a` desde `5317031`. Exportación personal acotada y solicitud autenticada de baja. No existe aún eliminación efectiva ni purga por retención: Storage, jobs, Auth y decisiones jurídicas requieren una segunda entrega específica. [QA y capturas](qa/adaptaula-2-etapa-5a/README.md). No se modifican cuotas, pipeline, CLARO, Stripe ni datos remotos.
 
 
 ## Antecedente — entrega del editor de #38 (ya integrada)
