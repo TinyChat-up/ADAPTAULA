@@ -1,5 +1,7 @@
 # Adaptaula 2.0 — dirección y entregas
 
+> Etapa 4B: portada y demostración pública sintética, «Cómo funciona», acceso y primera experiencia. [Alcance y pruebas](qa/adaptaula-2-etapa-4b/README.md). #44 está fusionada; no se ha aplicado migración remota.
+
 Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → comprender → elegir apoyos → Hacer magia → revisar → editar → descargar**. Calidad de herramienta creativa, claridad pedagógica y accesibilidad antes que efectos. Se mantiene Next/React/TypeScript/Tailwind, el pipeline y el único renderer CLARO. PR #38 integrada en `7e5ef52` es la base del editor; no se construye otro.
 
 ## Entregas verificables, sin merge automático
