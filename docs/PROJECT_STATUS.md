@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; rama `codex/adaptaula-2-datos-5a` desde main. Exportación personal JSON autenticada con archivos originales pequeños y solicitud persistente de baja verificada con contraseña. El borrado efectivo de Auth, filas y Storage **sigue pendiente**; no se simula. Migración 027 local, sin aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
+> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. Exportación personal JSON autenticada con archivos originales pequeños y solicitud persistente de baja verificada con contraseña. El borrado efectivo de Auth, filas y Storage **sigue pendiente**; no se simula. Migración 027 local, sin aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
 
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
 

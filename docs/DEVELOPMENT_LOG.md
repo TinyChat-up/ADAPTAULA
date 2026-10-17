@@ -2,7 +2,7 @@
 
 ## 2026-10-17 — Adaptaula 2.0, etapa 5A: exportación y solicitud de baja
 
-- #45 fusionada en `5317031`; rama nueva `codex/adaptaula-2-datos-5a` desde main. Migración 027 probada solo en PGlite local; no aplicada en Supabase remoto.
+- #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde la rama nueva `codex/adaptaula-2-datos-5a`. Migración 027 probada solo en PGlite local; no aplicada en Supabase remoto.
 - `/app/uso` ofrece descarga JSON autenticada y solicitud de eliminación con frase de confirmación y contraseña reciente. Descarga de espacios personales de miembro único; contenido de compartidos excluido. RLS para filas y objetos, límite de tamaño/filas, rate limit y SHA-256; sin URL pública persistente. La solicitud queda en tabla propia, idempotente y de lectura exclusiva para el titular. No borra Auth ni documentos: el flujo completo depende de orquestación recuperable de Storage y revisión jurídica.
 - El cron de subidas abandonadas ya existía. No se añaden purgas para borradores, PDFs, registros técnicos ni usuarios activos porque sus plazos no están aprobados. [QA, capturas y despliegue](qa/adaptaula-2-etapa-5a/README.md).
 - Verificación final: 2 pruebas focalizadas unitarias/PGlite, 2 E2E (escritorio y móvil) con PDF sintético y dos identidades, Axe WCAG 2.2 AA y reflujo a 320 px/200 %; typecheck, lint completo, build, escáner de secretos y `git diff --check` correctos. No se ha ejecutado la suite completa ni se ha probado Supabase o Vercel remoto.
