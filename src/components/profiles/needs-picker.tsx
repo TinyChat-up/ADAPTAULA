@@ -27,7 +27,7 @@ export function PresetPicker({
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <SelectField label="Punto de partida" value={presetId} onChange={(e) => onSelect(e.target.value)}>
             <option value="">Ninguno</option>
             {PROFILE_PRESETS.map((p) => (
@@ -62,18 +62,18 @@ export function AreaPicker({
 }) {
   return (
     <div>
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {PROFILE_AREAS.map((area) => {
           const selected = open.has(area.id);
           const active = dimensionsOfArea(area).filter((k) => (profile.supports[k] ?? "none") !== "none").length;
           return (
-            <li key={area.id}>
+            <li key={area.id} className="min-w-0">
               <button
                 type="button"
                 aria-pressed={selected}
                 onClick={() => onToggle(area.id)}
                 className={cn(
-                  "h-full w-full rounded-card border p-4 text-left",
+                  "h-full w-full rounded-card border p-4 text-left [overflow-wrap:anywhere]",
                   selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-surface hover:bg-background",
                 )}
               >

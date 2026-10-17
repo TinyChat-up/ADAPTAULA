@@ -3,6 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { ProfileActions } from "@/components/profiles/profile-actions";
+import { ProfileSummaryPanel } from "@/components/profiles/profile-summary-panel";
+import { summarizeProfile } from "@/lib/profiles/summary";
+import { checkEntitlement } from "@/lib/permissions/check-entitlement";
+import { labelsFor } from "@/lib/profiles/catalog";
 import { ProfileForm } from "@/components/profiles/profile-form";
 import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
@@ -17,20 +21,22 @@ import { formatDateTime } from "@/lib/format/date";
 import { getCatalog, getProfile } from "@/lib/profiles/repository";
 import { deleteProfileAction, duplicateProfileAction, updateProfileAction } from "../actions";
 
-export const metadata: Metadata = { title: "Editar perfil" };
+export const metadata: Metadata = { title: "Perfil de alumnado" };
 
 export default async function EditProfilePage({ params, searchParams }: PageProps<"/app/alumnos/[id]">) {
   const { id } = await params;
   const query = await searchParams;
   const ctx = await requireWorkspace();
-  const [profile, catalog, materials, adaptations] = await Promise.all([
-    getProfile(ctx.workspace.id, id),
+  const profile = await getProfile(ctx.workspace.id, id);
+  if (!profile) notFound();
+  const [catalog, materials, adaptations] = await Promise.all([
     getCatalog(),
     listMaterials(ctx.workspace.id, { status: "analyzed" }),
     listAdaptations({ profileId: id, limit: 10 }),
   ]);
-  if (!profile) notFound();
   const canWrite = hasRole(ctx.role, WRITE_ROLES);
+  const creation = await checkEntitlement(ctx, "profile.create");
+  const labels = labelsFor(catalog, profile.stage_slug, profile.grade_slug);
 
   return (
     <div className="space-y-8">
@@ -41,9 +47,12 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
       <PageHeader
         title={profile.display_name}
         description={`Última actualización: ${formatDateTime(profile.updated_at)}`}
-        actions={<ProfileActions duplicate={duplicateProfileAction.bind(null, id)} remove={deleteProfileAction.bind(null, id)} />}
+        actions={canWrite ? <ProfileActions canDuplicate={creation.allowed} duplicate={duplicateProfileAction.bind(null, id)} remove={deleteProfileAction.bind(null, id)} /> : null}
       />
       {query.aviso === "duplicado" ? <Alert tone="success">Perfil duplicado. Ya puedes ajustarlo.</Alert> : null}
+
+      <p className="text-sm text-muted-foreground">{[labels.stage, labels.grade].filter(Boolean).join(" · ")}</p>
+      {!canWrite ? <Alert>Tu acceso es de solo lectura. Puedes consultar los apoyos y las adaptaciones guardadas.</Alert> : null}
 
       {canWrite ? (
         <Card className="space-y-3">
@@ -57,7 +66,7 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Elige un material analizado. Antes de crear la ficha podrás revisar la propuesta.</p>
+              <p className="text-sm text-muted-foreground">Elige un material analizado. Continuarás en la ficha con este perfil seleccionado.</p>
               <ul className="space-y-1">
                 {materials.slice(0, 6).map((m) => (
                   <li key={m.id}>
@@ -85,7 +94,7 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
           <AdaptationList items={adaptations} show={{ material: true, profile: false }} />
         </section>
       ) : null}
-      <ProfileForm
+      {canWrite ? <ProfileForm
         catalog={catalog}
         submitLabel="Guardar cambios"
         initial={{
@@ -95,7 +104,7 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
           functional_profile: profile.functional_profile,
         }}
         onSubmit={updateProfileAction.bind(null, id)}
-      />
+      /> : <ProfileSummaryPanel summary={summarizeProfile(profile.functional_profile)} />}
     </div>
   );
 }

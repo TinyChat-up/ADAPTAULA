@@ -9,8 +9,8 @@ Decisión del usuario, 2026-10-15. El documento es el protagonista: **subir → 
 | 1 | Tokens semánticos, componentes base, superficies, navegación plegable/móvil y preferencias de accesibilidad | Integrada en `a6474a7` mediante PR #39; [evidencia](qa/adaptaula-2-etapa-1/README.md) |
 | 2A | Workspace del original, subida, estados reales, apoyos y navegación contextual | Integrada mediante [PR #40](https://github.com/TinyChat-up/ADAPTAULA/pull/40) en `330cb4f`. [QA](qa/adaptaula-2-etapa-2a/README.md) |
 | 2B | Revisión, experiencia del editor CLARO y comparador original/adaptado | Integrada mediante [PR #41](https://github.com/TinyChat-up/ADAPTAULA/pull/41) en `740e2db`; [QA y capturas](qa/adaptaula-2-etapa-2b/README.md) |
-| 3A | Mesa docente, biblioteca e historial | Implementada en [PR #42](https://github.com/TinyChat-up/ADAPTAULA/pull/42), abierta y sin merge; [QA](qa/adaptaula-2-etapa-3a/README.md) |
-| 3B | Perfiles funcionales y Plan y cuenta | Pendiente tras integrar 3A |
+| 3A | Mesa docente, biblioteca e historial | Integrada en `9f064ef` mediante [PR #42](https://github.com/TinyChat-up/ADAPTAULA/pull/42); [QA](qa/adaptaula-2-etapa-3a/README.md) |
+| 3B | Perfiles funcionales y Plan y cuenta | Implementada en [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43), abierta sin merge desde `9f064ef`; [QA y capturas](qa/adaptaula-2-etapa-3b/README.md) |
 | 4 | Landing, cómo funciona, registro, onboarding, precios y migración comercial | Heredan primitivas; rediseño y política nueva pendientes |
 | 5 | Consistencia final, responsive, accesibilidad y microinteracciones | Verificación incremental en cada entrega; cierre global pendiente |
 
@@ -67,4 +67,4 @@ No APIs de IA pagadas, Supabase remoto sin autorización, cobros/Stripe, entrena
 
 **3A:** la mesa presenta primero adaptaciones que exigen intervención, después la entrada a un material nuevo, trabajos en curso, fichas preparadas y materiales recientes; uso real del plan en el pie. La biblioteca deja la búsqueda visible y pliega filtros/orden secundarios; busca títulos en la consulta del workspace antes del límite de 200, filtra por etapa/curso/asignatura/estado y ordena. El historial conserva estados derivados del trabajo real y añade acceso al original, comparación, edición autorizada y PDF de la ficha entregada. El selector de versiones y último borrador válido sigue en el comparador de 2B. [Alcance y pruebas](qa/adaptaula-2-etapa-3a/README.md).
 
-**3B pendiente:** perfiles funcionales, edición permitida y Plan y cuenta. La política Free/Pro/Max siguiente sigue siendo **objetivo de etapa 4**, no un límite vigente.
+**3B:** directorio de perfiles con búsqueda local por alias y filtro de curso, capacidad real visible, apoyos progresivos y consulta de solo lectura. Plan y cuenta muestra análisis y adaptaciones separados, perfiles, periodo, edición del nombre de docente, cambio de contraseña con Supabase Auth y cierre de sesión. Reutiliza operaciones existentes, sin migraciones. La política Free/Pro/Max siguiente sigue siendo **objetivo de etapa 4**, no un límite vigente.

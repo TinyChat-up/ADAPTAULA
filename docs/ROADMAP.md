@@ -2,7 +2,12 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
-## Prioridad actual — Adaptaula 2.0, etapa 3A (2026-10-16)
+## Continuidad 2026-10-17 — etapa 3B
+
+PR #42 (3A) integrada en `9f064ef`, comprobada en GitHub junto con #41. Entrega 3B en `codex/adaptaula-2-perfiles-cuenta`: directorio y edición progresiva de perfiles, vista de lectura, cuenta editable y consumo separado. Revisar [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43), abierta sin merge, antes de la etapa 4. No activar todavía nuevos precios/límites: la política objetivo está en [ADAPTAULA_2.md](ADAPTAULA_2.md) y requiere su propia migración segura. No APIs pagadas, Supabase remoto ni Stripe.
+
+
+## Antecedente — Adaptaula 2.0, etapa 3A (2026-10-16)
 
 PR #41 integrada en `740e2db`. Esta entrega reorganiza mesa, biblioteca e historial con datos y operaciones existentes. [Dirección](ADAPTAULA_2.md), [estado](PROJECT_STATUS.md), [QA](qa/adaptaula-2-etapa-3a/README.md). Revisar 3A antes de 3B (perfiles y cuenta). No adelantar precios ni límites: la etapa 4 requiere migraciones y pruebas comerciales específicas. Sin merge automático.
 

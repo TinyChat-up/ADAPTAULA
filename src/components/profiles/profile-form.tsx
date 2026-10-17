@@ -100,10 +100,10 @@ export function ProfileForm({
         e.preventDefault();
         submit();
       }}
-      className="grid gap-8 lg:grid-cols-[1fr_20rem]"
+      className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]"
       noValidate
     >
-      <div className="space-y-10">
+      <div className="min-w-0 space-y-8">
         {result ? (
           <div ref={errorRef} tabIndex={-1}>
             <Alert tone="danger">{result.message}</Alert>
@@ -167,10 +167,13 @@ export function ProfileForm({
             <h2 id="apoyo-titulo" className="text-xl font-semibold">
               ¿En qué necesita apoyo?
             </h2>
-            <p className="text-muted-foreground">Elige las áreas que quieras ajustar. Solo verás los controles de las que selecciones.</p>
+            <p className="text-muted-foreground">Empieza con un apoyo habitual y personaliza solo lo que necesites.</p>
           </div>
           <PresetPicker presetId={presetId} onSelect={setPresetId} onApply={applySelectedPreset} hasConfiguration={hasConfiguration} />
-          <AreaPicker open={openAreas} profile={profile} onToggle={toggleArea} />
+          <details className="rounded-card border border-border p-4">
+            <summary className="min-h-7 cursor-pointer font-medium">Elegir otras áreas de apoyo</summary>
+            <div className="mt-4"><AreaPicker open={openAreas} profile={profile} onToggle={toggleArea} /></div>
+          </details>
           {PROFILE_AREAS.filter((a) => openAreas.has(a.id)).map((area) => (
             <AreaControls key={area.id} area={area} profile={profile} onChange={(key, level) => setProfile((p) => setSupport(p, key, level))} />
           ))}
@@ -187,7 +190,7 @@ export function ProfileForm({
         </div>
       </div>
 
-      <aside aria-label="Resumen del perfil" className="lg:sticky lg:top-6 lg:self-start">
+      <aside aria-label="Resumen del perfil" className="min-w-0 xl:sticky xl:top-6 xl:self-start">
         <ProfileSummaryPanel summary={summary} />
         <p className="mt-3 text-xs text-muted-foreground">
           Resumen generado a partir de tus ajustes. Nunca incluye el alias.{" "}

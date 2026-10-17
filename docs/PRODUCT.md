@@ -1,6 +1,6 @@
 # Adaptaula — Producto
 
-**Dirección vigente (2026-10-15): [Adaptaula 2.0](ADAPTAULA_2.md).** Desarrollo incremental centrado en el documento. Etapas 1, 2A y 2B integradas: fundamentos visuales, workspace documental y comparación/edición contextual sobre CLARO. La etapa 3A reorganiza mesa, biblioteca e historial; perfiles y cuenta siguen para 3B. La política comercial nueva corresponde a la etapa 4 y no está aplicada. Las capacidades propuestas abajo no son una lista de funciones disponibles.
+**Dirección vigente (2026-10-15): [Adaptaula 2.0](ADAPTAULA_2.md).** Desarrollo incremental centrado en el documento. Etapas 1, 2A y 2B integradas: fundamentos visuales, workspace documental y comparación/edición contextual sobre CLARO. La etapa 3A está integrada (mesa, biblioteca e historial); 3B incorpora perfiles progresivos y cuenta con nombre editable y consumo real separado. La política comercial nueva corresponde a la etapa 4 y no está aplicada. Las capacidades propuestas abajo no son una lista de funciones disponibles.
 
 ## Propuesta de valor
 
