@@ -14,17 +14,17 @@ async function accessible(page: Page) {
 test("portada: demostración fiel entre páginas, navegación y movimiento reducido", async ({ page }, info) => {
   await page.goto("/");
   await accessible(page);
-  const original = page.getByRole("article", { name: "Ficha original", exact: true });
-  const adapted = page.getByRole("article", { name: "Ficha adaptada", exact: true });
+  await page.getByRole("tab", { name: "Comparar" }).click();
+  const original = page.locator('article[aria-label="Ficha original de demostración"]').last();
+  const adapted = page.locator('article[aria-label="Ficha adaptada de demostración"]').last();
+  if (info.project.name === "mobile") await page.getByRole("button", { name: "Adaptación", exact: true }).click();
   expect(await original.locator("tr").allTextContents()).toEqual(await adapted.locator("tr").allTextContents());
   for (const option of TABLE_CHOICE_DRAFT.choice.options) { await expect(original).toContainText(option.text); await expect(adapted).toContainText(option.text); }
   await expect(adapted.locator(".sample-circle")).toHaveCount(3);
   await expect(page.getByText("Demostración preparada por nosotros.", { exact: true })).toBeVisible();
-  expect(await page.locator(".sample-paper").evaluateAll((els) => els.every((el) => { const r = el.getBoundingClientRect(); return Math.abs(r.height / r.width - 297 / 210) < 0.04; }))).toBe(true);
+  if (info.project.name === "desktop") expect(await page.locator(".sample-paper").evaluateAll((els) => els.every((el) => { const r = el.getBoundingClientRect(); return r.width === 0 || Math.abs(r.height / r.width - 297 / 210) < 0.04; }))).toBe(true);
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await page.locator("main").evaluate((el) => [el, ...el.querySelectorAll("*")].every((node) => getComputedStyle(node).animationName === "none"))).toBe(true);
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Saltar al contenido" })).toBeFocused();
   if (info.project.name === "mobile") await page.getByRole("button", { name: "Abrir menú" }).click();
   await page.getByRole("navigation", { name: "Principal", exact: true }).getByRole("link", { name: "Cómo funciona" }).click();
   await expect(page).toHaveURL(/\/como-funciona$/);

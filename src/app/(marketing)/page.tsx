@@ -1,11 +1,11 @@
 import { Faq } from "@/components/marketing/faq";
 import { FinalCta } from "@/components/marketing/final-cta";
 import { Hero } from "@/components/marketing/hero";
-import { AdaptationTypes, HowItWorks, Needs, PrivacySection, Stages } from "@/components/marketing/info-sections";
+import { HowItWorks, PrivacySection } from "@/components/marketing/info-sections";
 import { PricingSection } from "@/components/marketing/pricing";
 import { getPublicPlans } from "@/lib/plans/public-plans";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
   const plans = await getPublicPlans();
@@ -13,9 +13,6 @@ export default async function LandingPage() {
     <>
       <Hero />
       <HowItWorks />
-      <AdaptationTypes />
-      <Stages />
-      <Needs />
       <PrivacySection />
       <PricingSection plans={plans} />
       <Faq />

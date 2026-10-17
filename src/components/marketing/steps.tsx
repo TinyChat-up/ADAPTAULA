@@ -1,15 +1,16 @@
 export const STEPS = [
-  { title: "Parte de tu material", text: "Sube el PDF o la imagen de una ficha, un texto o una actividad que ya utilizas." },
-  { title: "Define los apoyos", text: "Elige un perfil guardado con las necesidades funcionales que quieres atender." },
-  { title: "Elige cómo prepararlo", text: "Hacer magia prepara y comprueba la ficha automáticamente. Con Revisar antes de crear puedes ajustar primero la propuesta." },
-  { title: "Revisa y lleva al aula", text: "Comprueba el resultado y descarga el PDF cuando esté listo. Si no puede completarse, te explicamos el motivo." },
+  { title: "Sube tu material", text: "Selecciona una ficha en PDF, JPG, PNG o WEBP. El archivo se guarda de forma privada y se comprueba antes de analizarlo." },
+  { title: "Elige los apoyos", text: "Usa un perfil funcional con alias: lectura, organización, lenguaje o pasos matemáticos, según lo que necesite la actividad." },
+  { title: "Prepara la adaptación", text: "Hacer magia analiza el material y prepara una propuesta. Si una figura o un contenido no se puede comprobar, te lo explica y se detiene." },
+  { title: "Revisa y edita", text: "Compara con el original. CLARO permite ajustar enunciados editables, presentación y espacio de respuesta en un borrador separado." },
+  { title: "Descarga el PDF", text: "Descarga la ficha generada o tu revisión guardada. Comprueba el resultado antes de entregarlo al alumnado." },
 ] as const;
 
 export function StepsList() {
   return (
-    <ol className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+    <ol className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-5">
       {STEPS.map((step, i) => (
-        <li key={step.title} className="border-t border-foreground pt-4">
+        <li key={step.title} className="min-w-0 border-t border-foreground pt-4">
           <span aria-hidden className="font-editorial text-3xl text-primary">0{i + 1}</span>
           <h3 className="mb-2 mt-5 text-lg font-semibold"><span className="sr-only">Paso {i + 1}: </span>{step.title}</h3>
           <p className="text-sm leading-relaxed text-muted-foreground">{step.text}</p>

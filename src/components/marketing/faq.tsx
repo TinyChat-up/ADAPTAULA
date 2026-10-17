@@ -35,7 +35,7 @@ export function Faq() {
         {FAQ_ITEMS.map((item) => (
           <details key={item.q} className="group py-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
-              {item.q}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{item.q}</span>
               <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground transition-transform motion-safe:group-open:rotate-180" />
             </summary>
             <p className="mt-3 text-muted-foreground">{item.a}</p>

@@ -13,11 +13,12 @@ export async function signUpAndOnboard(page: Page, email: string, start: RegExp 
 
   await expect(page).toHaveURL(/\/app\/bienvenida/);
   await page.getByRole("radio", { name: "Primaria" }).check();
-  await page.getByRole("button", { name: "Siguiente" }).click();
-  await page.getByRole("radio", { name: start }).check();
-  await page.getByRole("button", { name: "Siguiente" }).click();
-  await expect(page.getByText("Puedes utilizar iniciales o alias")).toBeVisible();
-  await page.getByRole("button", { name: "Entrar en Adaptaula" }).click();
+  await expect(page.getByText("Un perfil funcional describe apoyos, no diagnósticos.")).toBeVisible();
+  if (!/Adaptar|Subir mi primera ficha/.test(start.source)) {
+    await page.getByText("Prefiero empezar de otra forma").click();
+    await page.getByRole("radio", { name: /Crear un perfil/.test(start.source) ? "Crear primero un perfil" : "Explorar mi mesa de trabajo" }).check();
+  }
+  await page.getByRole("button", { name: /Subir mi primera ficha|Entrar en Adaptaula/ }).click();
   // Wait for the server-action redirect before a spec navigates to a different screen.
   await expect(page).toHaveURL(/\/app(?:\/alumnos\/nuevo|\/adaptar)?$/);
 }
