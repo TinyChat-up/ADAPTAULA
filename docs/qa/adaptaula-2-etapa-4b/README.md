@@ -1,5 +1,7 @@
 # Adaptaula 2.0 · Etapa 4B
 
+PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+
 Base: `main` tras fusionar #44 (`c925c33`). Sin cambios en planes, RLS, Supabase remoto, Stripe, CLARO o modelos/prompts. Esta entrega cambia la experiencia pública y el onboarding.
 
 ## Demostración pública

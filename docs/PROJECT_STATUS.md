@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
 
 La PR #44 está fusionada en `c925c33` (verificado en GitHub). Etapa 4B en rama `codex/adaptaula-2-publica-4b`, sin merge.

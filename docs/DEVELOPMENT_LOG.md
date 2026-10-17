@@ -1,5 +1,7 @@
 # Registro de desarrollo
 
+PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+
 PR de esta entrega: [#44](https://github.com/TinyChat-up/ADAPTAULA/pull/44), abierta y sin merge.
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
