@@ -1,10 +1,14 @@
 # Estado compartido de Adaptaula
 
-PR de esta entrega: [#44](https://github.com/TinyChat-up/ADAPTAULA/pull/44), abierta y sin merge.
+PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+
+> **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
+
+La PR #44 está fusionada en `c925c33` (verificado en GitHub). Etapa 4B en rama `codex/adaptaula-2-publica-4b`, sin merge.
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-17. Base actual: `origin/main` en `9f064ef`, **PR #41 y #42 integradas** (comprobado en GitHub). Rama `codex/adaptaula-2-perfiles-cuenta` para la etapa 3B; [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43) abierta, sin merge.
+Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `c925c33`, PR #38–#44 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar

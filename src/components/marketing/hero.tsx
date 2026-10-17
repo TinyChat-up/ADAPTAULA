@@ -6,27 +6,22 @@ import { Demo } from "./demo";
 export function Hero() {
   return (
     <section aria-labelledby="hero-titulo" className="border-b border-border">
-      <div className="mx-auto max-w-7xl px-5 pb-12 pt-8 sm:px-8 sm:pb-16 sm:pt-12">
-        <div className="mb-6 flex flex-wrap sm:mb-10 justify-between gap-3 border-b border-border pb-4 text-xs text-muted-foreground">
-          <span className="eyebrow">Un estudio pedagógico digital</span>
-          <span>Primaria · ESO · Bachillerato</span>
-        </div>
-        <div className="grid items-center gap-10 xl:grid-cols-[0.85fr_1.25fr] xl:gap-14">
-          <div className="max-w-xl space-y-4 sm:space-y-6">
-            <h1 id="hero-titulo" className="font-editorial text-[2.75rem] leading-[1.06] tracking-[-0.04em] sm:text-6xl xl:text-[4.25rem]">
-              Un mismo material.<br /><span className="text-primary">Más formas de aprender.</span>
-            </h1>
-            <p className="max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Convierte las fichas que ya utilizas en materiales accesibles para tu alumnado. Tú conoces sus necesidades; Adaptaula te ayuda a darles forma.
-            </p>
-            <div className="flex flex-col items-start gap-1 pt-2 sm:gap-4">
-              <LinkButton href="/registro" size="lg">Adaptar mi primera ficha<ArrowRight aria-hidden className="size-4" /></LinkButton>
-              <Link href="#como-funciona" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4">Conoce el proceso</Link>
-            </div>
-            <p className="text-xs text-muted-foreground">Acceso anticipado. Gratis, sin tarjeta. Usa alias, no nombres del alumnado.</p>
+      <div className="mx-auto max-w-6xl px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-20">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="eyebrow mb-5 text-primary">Un espacio de trabajo para docentes</p>
+          <h1 id="hero-titulo" className="font-editorial text-[clamp(2.5rem,6vw,5.4rem)] leading-[1.07] tracking-[-0.045em] [overflow-wrap:anywhere]">
+            Tus materiales de siempre.<br /><span className="text-primary">Adaptados a cada forma de aprender.</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-xl">
+            Sube una ficha, elige los apoyos funcionales y prepara una propuesta. Revísala con CLARO, ajusta lo necesario y descarga el PDF para tu aula.
+          </p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <LinkButton href="/registro" size="lg">Empezar gratis<ArrowRight aria-hidden className="size-4" /></LinkButton>
+            <Link href="#demostracion" className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4">Explorar la demostración</Link>
           </div>
-          <Demo />
+          <p className="mt-3 text-sm text-muted-foreground">Gratis, sin tarjeta. El docente conserva la decisión final.</p>
         </div>
+        <div className="mt-12 sm:mt-16"><Demo /></div>
       </div>
     </section>
   );

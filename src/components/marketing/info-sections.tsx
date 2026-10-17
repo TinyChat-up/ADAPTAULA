@@ -4,7 +4,7 @@ import { Section } from "./section";
 import { StepsList } from "./steps";
 
 export function HowItWorks() {
-  return <Section id="como-funciona" eyebrow="Del material al aula" title="Tu criterio, en cada paso." intro="Un recorrido sencillo, con preparación automática o revisión previa de la propuesta."><StepsList /></Section>;
+  return <Section id="como-funciona" eyebrow="Cinco pasos · una ficha" title="Del material al PDF, con tu criterio." intro="Sube, prepara, revisa y descarga. Si una ficha no puede adaptarse con seguridad, Adaptaula te lo indica."><StepsList /></Section>;
 }
 
 const TYPES = [

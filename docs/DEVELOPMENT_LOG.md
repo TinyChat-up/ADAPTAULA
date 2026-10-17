@@ -1,8 +1,17 @@
 # Registro de desarrollo
 
+PR de esta entrega: [#45](https://github.com/TinyChat-up/ADAPTAULA/pull/45), abierta y sin merge.
+
 PR de esta entrega: [#44](https://github.com/TinyChat-up/ADAPTAULA/pull/44), abierta y sin merge.
 
 Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: base, rama/PR, cambios, verificaciones, límites y siguiente acción. Nunca incluir secretos, materiales privados o datos del alumnado.
+
+## 2026-10-17 — Adaptaula 2.0, etapa 4B: experiencia pública y primera ficha
+
+- Base verificada: PR #44 fusionada en `c925c33`; rama nueva desde main. Se reutilizan Auth, componentes visuales, datos de planes, CLARO como referencia visual y la subida existente.
+- Landing y «Cómo funciona»: demostración sintética con alternancia original/adaptación/comparación/revisión, cinco pasos reales, avisos honestos. Onboarding reducido a una pantalla con capacidades actuales de `workspace_usage` y primera subida por defecto. Auth reorganizada conservando acciones y seguridad.
+- Verificación: 8 E2E focalizados (escritorio/móvil), 32 unitarias, typecheck, lint de área modificada, build y escáner de secretos correctos; capturas reales en [QA 4B](qa/adaptaula-2-etapa-4b/README.md). Sin paid AI, Stripe, Supabase remoto, cambios de modelos/prompts, datos reales ni recolección.
+- Siguiente: integrar manualmente esta PR tras revisar los resultados; comprobar correos de Auth y precios efectivos en staging.
 
 ## 2026-10-17 — Adaptaula 2.0, etapa 4A: política comercial y límites reales
 

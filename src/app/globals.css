@@ -34,12 +34,16 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
 
 /* Muestras web de demostración; clases propias, sin compartir ni alterar el renderer del alumno. */
-.sample-pair { display: grid; gap: 1.25rem; }
+
 .sample-paper {
   aspect-ratio: 210 / 297;
+  max-width: 35rem;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
   padding: 1.4rem 1.2rem;
   background: #fff;
   color: #192b40;
@@ -48,7 +52,7 @@ dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
   line-height: 1.55;
 }
 .sample-paper h3 { font-size: 1.125rem; line-height: 1.2; font-weight: 600; margin-block: 0.75rem; }
-.sample-paper table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; margin-block: 0.75rem; }
+.sample-paper table { width: 100%; table-layout: fixed; overflow-wrap: anywhere; border-collapse: collapse; font-size: 0.6875rem; margin-block: 0.75rem; }
 .sample-paper th, .sample-paper td { border: 1px solid #b8c1c8; padding: 0.35rem 0.25rem; text-align: left; }
 .sample-paper th { font-weight: 600; }
 .sample-paper--adapted { border-top: 3px solid #315a86; }
@@ -58,9 +62,9 @@ dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
 .sample-options { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
 .sample-options li { display: flex; align-items: center; gap: 0.6rem; }
 .sample-circle { width: 0.875rem; height: 0.875rem; border: 1px solid #192b40; border-radius: 50%; flex-shrink: 0; }
-@media (min-width: 640px) { .sample-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 @media (max-width: 639px) {
-  .sample-pair { max-width: 26rem; margin-inline: auto; }
+
   .sample-paper { font-size: 0.875rem; padding: 1.25rem; }
   .sample-paper table { font-size: 0.75rem; }
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LinkButton } from "@/components/ui/button";
+import { Demo } from "@/components/marketing/demo";
 import { StepsList } from "@/components/marketing/steps";
 
 export const metadata: Metadata = {
@@ -17,11 +18,14 @@ export default function HowItWorksPage() {
         </p>
       </div>
       <StepsList />
+      <section aria-labelledby="vista-ejemplo" className="space-y-5 border-t border-border pt-10">
+        <div className="max-w-2xl"><h2 id="vista-ejemplo" className="font-editorial text-3xl">Conoce el documento antes de empezar</h2><p className="mt-2 text-muted-foreground">Explora una ficha sintética. Puedes alternar original, propuesta, comparación y aspecto de revisión.</p></div>
+        <Demo />
+      </section>
       <div className="max-w-2xl space-y-4 border-t border-border pt-10">
         <h2 className="text-xl font-semibold">Tú decides siempre</h2>
         <p className="text-muted-foreground">
-          Adaptaula propone y te explica qué ha cambiado y por qué. No diagnostica y no sustituye el criterio del docente ni del
-          orientador: la adaptación es un borrador que revisas y editas antes de usarlo.
+          Adaptaula prepara una propuesta que revisas y puedes editar antes de usarla. Algunas figuras o materiales pueden requerir intervención docente o bloquear la adaptación. La herramienta no diagnostica ni sustituye tu criterio.
         </p>
         <LinkButton href="/registro" size="lg">
           Adaptar mi primera ficha

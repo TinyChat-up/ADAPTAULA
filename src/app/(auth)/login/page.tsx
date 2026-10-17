@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Entrar en Adaptaula</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Bienvenido de nuevo</h1>
         <p className="text-sm text-muted-foreground">
           ¿Aún no tienes cuenta?{" "}
           <Link href="/registro" className="font-medium text-primary underline-offset-2 hover:underline">

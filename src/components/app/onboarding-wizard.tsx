@@ -10,28 +10,23 @@ type Stage = OnboardingInput["stage"];
 type Start = OnboardingInput["start"];
 
 const STAGES: Choice<Stage>[] = [
-  { value: "primaria", label: "Primaria" },
-  { value: "eso", label: "ESO" },
-  { value: "bachillerato", label: "Bachillerato" },
-  { value: "varias", label: "Varias etapas" },
+  { value: "primaria", label: "Primaria" }, { value: "eso", label: "ESO" },
+  { value: "bachillerato", label: "Bachillerato" }, { value: "varias", label: "Varias etapas" },
 ];
-
 const STARTS: Choice<Start>[] = [
-  { value: "adaptar", label: "Adaptar una ficha", description: "Ve directo a subir un material." },
-  { value: "perfil", label: "Crear un perfil", description: "Define primero las necesidades de un alumno o alumna." },
-  { value: "explorar", label: "Explorar Adaptaula", description: "Echa un vistazo antes de empezar." },
+  { value: "adaptar", label: "Subir mi primera ficha", description: "Ir al espacio de trabajo documental." },
+  { value: "perfil", label: "Crear primero un perfil", description: "Definir los apoyos funcionales con un alias." },
+  { value: "explorar", label: "Explorar mi mesa de trabajo", description: "Conocer Adaptaula antes de subir un material." },
 ];
 
-export function OnboardingWizard({ action }: { action: (input: unknown) => Promise<{ error: string }> }) {
-  const [step, setStep] = useState(1);
+export function OnboardingWizard({ action, plan }: { action: (input: unknown) => Promise<{ error: string }>; plan: { name: string; adaptations: number; analyses: number; profiles: number } }) {
   const [stage, setStage] = useState<Stage | null>(null);
-  const [start, setStart] = useState<Start | null>(null);
+  const [start, setStart] = useState<Start>("adaptar");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const canContinue = (step === 1 && stage !== null) || (step === 2 && start !== null) || step === 3;
-
   function finish() {
+    if (!stage) return;
     setError(null);
     startTransition(async () => {
       const result = await action({ stage, start });
@@ -40,56 +35,14 @@ export function OnboardingWizard({ action }: { action: (input: unknown) => Promi
   }
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">Paso {step} de 3</p>
-        <div
-          role="progressbar"
-          aria-label="Progreso del primer paso"
-          aria-valuemin={1}
-          aria-valuemax={3}
-          aria-valuenow={step}
-          aria-valuetext={`Paso ${step} de 3`}
-          className="h-1.5 overflow-hidden rounded-full bg-border"
-        >
-          <div className="h-full bg-primary transition-all" style={{ width: `${(step / 3) * 100}%` }} />
-        </div>
-      </div>
-
+    <div className="space-y-7">
+      <div className="space-y-2"><p className="eyebrow text-primary">Primeros pasos</p><h1 className="font-editorial text-3xl tracking-tight sm:text-4xl">Tu primera ficha empieza aquí.</h1><p className="text-muted-foreground">Elige la etapa en la que trabajas. Podrás cambiarla después.</p></div>
       {error ? <Alert tone="danger">{error}</Alert> : null}
-
-      {step === 1 ? <ChoiceCards name="stage" legend="¿Qué enseñas?" options={STAGES} value={stage} onChange={setStage} columns={2} /> : null}
-      {step === 2 ? <ChoiceCards name="start" legend="¿Cómo quieres empezar?" options={STARTS} value={start} onChange={setStart} /> : null}
-      {step === 3 ? (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Privacidad</h2>
-          <p className="text-lg">
-            Puedes utilizar iniciales o alias para identificar al alumnado. Evita introducir información personal innecesaria.
-          </p>
-          <p className="text-muted-foreground">
-            No te pediremos nombres completos, fechas de nacimiento, DNI, fotografías ni informes.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-3">
-        {step > 1 ? (
-          <Button variant="ghost" onClick={() => setStep(step - 1)} disabled={pending}>
-            Atrás
-          </Button>
-        ) : (
-          <span />
-        )}
-        {step < 3 ? (
-          <Button onClick={() => setStep(step + 1)} disabled={!canContinue}>
-            Siguiente
-          </Button>
-        ) : (
-          <Button onClick={finish} disabled={pending || !stage || !start}>
-            {pending ? "Un momento…" : "Entrar en Adaptaula"}
-          </Button>
-        )}
-      </div>
+      <ChoiceCards name="stage" legend="¿Qué enseñas?" options={STAGES} value={stage} onChange={setStage} columns={2} />
+      <div className="border-y border-border py-5 text-sm"><p className="font-medium">Un perfil funcional describe apoyos, no diagnósticos.</p><p className="mt-1 text-muted-foreground">Después de subir la ficha, podrás elegir apoyos de lectura, lenguaje, organización o matemáticas. Identifica al alumnado mediante un alias o iniciales.</p></div>
+      <div className="space-y-3"><p className="text-sm font-medium">Tu plan {plan.name} incluye {plan.adaptations} {plan.adaptations === 1 ? "adaptación" : "adaptaciones"} y {plan.analyses} análisis por periodo; puedes guardar {plan.profiles} perfiles.</p><p className="text-sm text-muted-foreground">No necesitas crear un perfil ahora. Evita introducir nombres completos, datos médicos o informes del alumnado.</p></div>
+      <details className="group border-t border-border pt-4"><summary className="cursor-pointer font-medium text-primary">Prefiero empezar de otra forma</summary><div className="mt-4"><ChoiceCards name="start" legend="Elige cómo continuar" options={STARTS} value={start} onChange={setStart} /></div></details>
+      <Button onClick={finish} disabled={pending || !stage} size="lg" className="w-full">{pending ? "Preparando tu espacio…" : start === "adaptar" ? "Subir mi primera ficha" : "Entrar en Adaptaula"}</Button>
     </div>
   );
 }

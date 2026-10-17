@@ -30,7 +30,7 @@ function Submit({ pending, children }: { pending: boolean; children: string }) {
 export function SignInForm({ action, next }: { action: Action; next: string }) {
   const [state, formAction, pending] = useAuthAction(action);
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-5" aria-busy={pending} noValidate>
       <FormMessage state={state} />
       <input type="hidden" name="next" value={next} />
       <TextField label="Email" name="email" type="email" autoComplete="email" required error={state.fieldErrors?.email} />
@@ -55,7 +55,7 @@ export function SignInForm({ action, next }: { action: Action; next: string }) {
 export function MagicLinkForm({ action, next }: { action: Action; next: string }) {
   const [state, formAction, pending] = useAuthAction(action);
   return (
-    <form action={formAction} className="space-y-4" noValidate>
+    <form action={formAction} className="space-y-4" aria-busy={pending} noValidate>
       <FormMessage state={state} />
       <input type="hidden" name="next" value={next} />
       <TextField label="Email" name="email" type="email" autoComplete="email" required error={state.fieldErrors?.email} />
@@ -70,9 +70,9 @@ export function SignUpForm({ action }: { action: Action }) {
   const [state, formAction, pending] = useAuthAction(action);
   if (state.status === "success") return <Alert tone="success" title="Revisa tu email">{state.message}</Alert>;
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-5" aria-busy={pending} noValidate>
       <FormMessage state={state} />
-      <TextField label="Nombre" name="full_name" autoComplete="name" optional error={state.fieldErrors?.full_name} />
+      <TextField label="Nombre" name="full_name" autoComplete="name" optional hint="Solo para mostrarlo en tu cuenta; puedes dejarlo vacío." error={state.fieldErrors?.full_name} />
       <TextField label="Email" name="email" type="email" autoComplete="email" required error={state.fieldErrors?.email} />
       <TextField
         label="Contraseña"
@@ -103,7 +103,7 @@ export function ForgotPasswordForm({ action }: { action: Action }) {
   const [state, formAction, pending] = useAuthAction(action);
   if (state.status === "success") return <Alert tone="success" title="Revisa tu email">{state.message}</Alert>;
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-5" aria-busy={pending} noValidate>
       <FormMessage state={state} />
       <TextField label="Email" name="email" type="email" autoComplete="email" required error={state.fieldErrors?.email} />
       <Submit pending={pending}>Enviar enlace</Submit>
@@ -114,7 +114,7 @@ export function ForgotPasswordForm({ action }: { action: Action }) {
 export function ResetPasswordForm({ action }: { action: Action }) {
   const [state, formAction, pending] = useAuthAction(action);
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-5" aria-busy={pending} noValidate>
       <FormMessage state={state} />
       <TextField
         label="Contraseña nueva"
