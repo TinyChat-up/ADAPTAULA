@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { PNG_1X1, alertOf, analysisUnits, chooseFile, makePdf, reserveAnalyses, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { PNG_1X1, alertOf, analysisUnits, chooseFile, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -111,39 +111,39 @@ test("cada análisis nuevo consume una unidad de la cuota mensual; reutilizar un
   const email = uniqueEmail();
   await signUpAndOnboard(page, email);
   const workspace = await workspaceOf(page, email);
-  await reserveAnalyses(page, workspace, 8); // Free incluye 10: quedan 2
+  // Free incluye 2 análisis; no se consume cuota artificialmente.
 
   const first = await pdf("cuota-a");
   await uploadAndOpen(page, first);
   await waitForAnalysis(page);
-  expect(await analysisUnits(page, workspace)).toBe(9);
+  expect(await analysisUnits(page, workspace)).toBe(1);
 
   // Mismo archivo: se reutiliza el análisis y no se gasta nada.
   await uploadAndOpen(page, first);
   await expect(page.getByText("Hemos reutilizado el análisis de este mismo archivo")).toBeVisible();
-  expect(await analysisUnits(page, workspace)).toBe(9);
+  expect(await analysisUnits(page, workspace)).toBe(1);
 
   // Volver a analizar es una petición explícita de saltarse la caché: gasta la última unidad.
   await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Volver a analizar" }).click();
   // The previous analysis remains readable while the explicit reanalysis is starting.
-  await expect.poll(() => analysisUnits(page, workspace)).toBe(10);
+  await expect.poll(() => analysisUnits(page, workspace)).toBe(2);
   await waitForAnalysis(page);
 
   // Cuota agotada: el archivo es válido y queda guardado, pero no se analiza.
   await uploadAndOpen(page, await pdf("cuota-b"));
-  await expect(page.getByText("Has utilizado los 10 análisis incluidos este mes.")).toBeVisible();
+  await expect(page.getByText("Has utilizado los 2 análisis incluidos este mes.")).toBeVisible();
   await expect(page.getByText(/Se renuevan el \d{1,2} de \w+/)).toBeVisible();
   await expect(page.getByText("El material queda guardado")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Ver Pro" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Consultar planes (contratación no disponible)" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Estamos preparando tu material" })).toHaveCount(0);
-  expect(await analysisUnits(page, workspace)).toBe(10);
+  expect(await analysisUnits(page, workspace)).toBe(2);
 
   await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Analizar" }).click();
-  await expect(alertOf(page)).toContainText("Has utilizado los 10 análisis incluidos este mes. Se renuevan el");
+  await expect(alertOf(page)).toContainText("Has utilizado los 2 análisis incluidos este mes. Se renuevan el");
   await expect(page.getByText(/quota|límite excedido|403|402|429|analysis_quota/i)).toHaveCount(0);
-  expect(await analysisUnits(page, workspace)).toBe(10);
+  expect(await analysisUnits(page, workspace)).toBe(2);
 });
 
 test("el análisis no se comparte entre cuentas: otro docente con el mismo archivo lo analiza por su cuenta", async ({ page, browser }) => {

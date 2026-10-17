@@ -4,6 +4,7 @@ import { signOut } from "@/app/(auth)/actions";
 import { AccountNameForm } from "@/components/account/account-name-form";
 import { UsageSummary } from "@/components/account/usage-summary";
 import { Button, LinkButton } from "@/components/ui/button";
+import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { formatDay } from "@/lib/format/date";
@@ -28,6 +29,11 @@ export default async function UsagePage() {
           </div>
           <LinkButton href="/precios" variant="secondary">Ver planes</LinkButton>
         </div>
+        {usage.adaptations.limit - usage.adaptations.used <= 1 && (
+          <Alert tone="warning" title={usage.adaptations.used >= usage.adaptations.limit ? "Has agotado las adaptaciones del periodo" : "Te queda una adaptación este periodo"}>
+            Podrás continuar con una nueva cuota el {formatDay(usage.period_end)}. La contratación de otros planes todavía no está disponible.
+          </Alert>
+        )}
         <div className="grid gap-x-10 md:grid-cols-2">
           <UsageSummary title="Adaptaciones este periodo" used={usage.adaptations.used} limit={usage.adaptations.limit} hint="Fichas adaptadas; incluye las reservas en curso." />
           <UsageSummary title="Análisis este periodo" used={usage.analyses.used} limit={usage.analyses.limit} hint="Comprender el original no consume adaptaciones." />

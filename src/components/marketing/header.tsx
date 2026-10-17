@@ -12,7 +12,7 @@ const NAV: NavItem[] = [
 export function MarketingHeader() {
   return (
     <header className="surface-glass sticky top-0 z-40 border-x-0 border-t-0 shadow-none">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
+      <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-y-2 px-5 py-2 sm:px-8">
         <Logo />
         <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
           {NAV.map((item) => (

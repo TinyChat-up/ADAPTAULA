@@ -21,7 +21,7 @@ async function ok(response: { ok(): boolean; text(): Promise<string> }) {
  * checks the real Free plan puts back the seeded value first (supabase/seed.sql), whatever ran before it.
  */
 export async function restoreSeededFreePlan(page: Page) {
-  await ok(await page.request.patch(`${FAKE}/rest/v1/plans?slug=eq.free`, { headers, data: { monthly_adaptations: 5 } }));
+  await ok(await page.request.patch(`${FAKE}/rest/v1/plans?slug=eq.free`, { headers, data: { monthly_adaptations: 1 } }));
 }
 
 export async function allowAdaptations(page: Page) {

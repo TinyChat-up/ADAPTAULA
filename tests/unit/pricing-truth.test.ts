@@ -30,7 +30,7 @@ describe("/precios tells the truth", () => {
   it("reads the three seeded plans, including the options that are not built yet", () => {
     const plans = seededPlans();
     expect(plans.map((p) => p.slug)).toEqual(["free", "pro", "max"]);
-    expect(plans.find((p) => p.slug === "max")).toMatchObject({ monthly_images: 50, max_classes: 30, features: { multi_profile: true, priority_processing: true } });
+    expect(plans.find((p) => p.slug === "max")).toMatchObject({ monthly_images: 0, max_classes: 30, features: { multi_profile: true, priority_processing: true } });
   });
 
   it("each plan lists only real, enforced differences: adaptations, analyses, profiles, pages and the PDF download", () => {
@@ -38,7 +38,7 @@ describe("/precios tells the truth", () => {
       const bullets = planBullets(plan);
       for (const b of bullets) expect(b, `${plan.slug}: ${b}`).not.toMatch(NOT_BUILT);
       expect(bullets).toEqual([
-        `${plan.monthly_adaptations} adaptaciones al mes`,
+        `${plan.monthly_adaptations} ${plan.monthly_adaptations === 1 ? "adaptación" : "adaptaciones"} al mes`,
         `${plan.features.monthly_analyses} análisis de materiales al mes`,
         `Hasta ${plan.max_profiles} perfiles guardados`,
         `Materiales de hasta ${plan.features.max_pages_per_material} páginas`,
@@ -49,7 +49,11 @@ describe("/precios tells the truth", () => {
 
   it("the page says the numbers are launch values and that classes, generated visuals and several profiles at once are not available", () => {
     const html = renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans() }));
-    expect(html).toContain("Precios y límites de lanzamiento");
+    expect(html).toContain("Precios provisionales, IVA incluido.");
+    expect(html).toContain("En preparación");
+    expect(html).toContain("Contratación no disponible");
+    expect(html.match(/href="\/registro"/g)).toHaveLength(1);
+    expect(html).not.toContain("al año");
     expect(html).toContain("todavía no están disponibles y no forman parte de ningún plan");
     expect(html).not.toMatch(/50 recursos visuales|Hasta 30 clases|Hasta 10 clases|Varios perfiles a la vez|Historial completo|Historial de 30 días/);
   });

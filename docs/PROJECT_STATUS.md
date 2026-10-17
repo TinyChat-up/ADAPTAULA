@@ -1,5 +1,9 @@
 # Estado compartido de Adaptaula
 
+PR de esta entrega: [#44](https://github.com/TinyChat-up/ADAPTAULA/pull/44), abierta y sin merge.
+
+> **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
+
 Actualizado: 2026-10-17. Base actual: `origin/main` en `9f064ef`, **PR #41 y #42 integradas** (comprobado en GitHub). Rama `codex/adaptaula-2-perfiles-cuenta` para la etapa 3B; [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43) abierta, sin merge.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 

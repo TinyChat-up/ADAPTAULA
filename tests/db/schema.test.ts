@@ -250,19 +250,19 @@ describe("cuotas", () => {
       ),
     ).then((res) => res.rows[0]!.r);
 
-  it("Free permite 5 adaptaciones al mes y bloquea la sexta", async () => {
+  it("Free permite una adaptación y bloquea la segunda", async () => {
     const u = await createUser(db, "cuota@example.com");
-    for (let i = 1; i <= 5; i++) {
-      expect(await consume(u.workspaceId, `reserve:${u.id}:${i}`)).toMatchObject({ allowed: true, used: i, limit: 5 });
+    for (let i = 1; i <= 1; i++) {
+      expect(await consume(u.workspaceId, `reserve:${u.id}:${i}`)).toMatchObject({ allowed: true, used: i, limit: 1 });
     }
-    expect(await consume(u.workspaceId, `reserve:${u.id}:6`)).toMatchObject({ allowed: false, used: 5, limit: 5 });
+    expect(await consume(u.workspaceId, `reserve:${u.id}:6`)).toMatchObject({ allowed: false, used: 1, limit: 1 });
   });
 
   it("la reserva y la devolución son idempotentes", async () => {
     const u = await createUser(db, "idem@example.com");
     const key = `reserve:${u.id}:x`;
-    await consume(u.workspaceId, key, 2);
-    expect(await consume(u.workspaceId, key, 2)).toMatchObject({ allowed: true, duplicate: true, used: 2 });
+    await consume(u.workspaceId, key, 1);
+    expect(await consume(u.workspaceId, key, 1)).toMatchObject({ allowed: true, duplicate: true, used: 1 });
 
     const refund = () =>
       as(db, "service_role", null, () => db.query("select public.refund_quota($1)", [key]));
@@ -287,7 +287,7 @@ describe("cuotas", () => {
     ).rejects.toThrow(/permission denied/);
   });
 
-  it("una suscripción activa a Pro sube el límite a 75", async () => {
+  it("una suscripción activa a Pro sube el límite a 15", async () => {
     const u = await createUser(db, "pro@example.com");
     await db.query(
       `insert into public.subscriptions (workspace_id, stripe_subscription_id, stripe_price_id, plan_id, billing_interval,
@@ -296,10 +296,10 @@ describe("cuotas", () => {
        from public.plans where slug = 'pro'`,
       [u.workspaceId],
     );
-    expect(await consume(u.workspaceId, `reserve:${u.id}:1`)).toMatchObject({ allowed: true, limit: 75 });
+    expect(await consume(u.workspaceId, `reserve:${u.id}:1`)).toMatchObject({ allowed: true, limit: 15 });
 
     await db.query("update public.subscriptions set status = 'canceled' where workspace_id = $1", [u.workspaceId]);
-    expect(await consume(u.workspaceId, `reserve:${u.id}:2`)).toMatchObject({ limit: 5 });
+    expect(await consume(u.workspaceId, `reserve:${u.id}:2`)).toMatchObject({ limit: 1 });
   });
 });
 

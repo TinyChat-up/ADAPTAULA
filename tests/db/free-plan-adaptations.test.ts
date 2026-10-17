@@ -8,7 +8,7 @@ import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, see
 
 /**
  * The Free plan exactly as seeded (`supabase/seed.sql`, the single source of the limits): no override anywhere in this file.
- * 5 adaptations a month is PROVISIONAL (docs/PRODUCT.md § Planes); these tests pin what the app enforces and shows today.
+ * 1 adaptation a month is PROVISIONAL (docs/PRODUCT.md § Planes); these tests pin what the app enforces and shows today.
  */
 
 let db: PGlite;
@@ -32,21 +32,21 @@ async function teacher() {
   return { user, deps, actor, create, usage, units };
 }
 
-describe("Free plan · adaptations (provisional 5 a month)", () => {
-  it("the seed is the source: Free allows 5 adaptations a month and no unlimited flag", async () => {
+describe("Free plan · adaptations (provisional 1 a month)", () => {
+  it("the seed is the source: Free allows 1 adaptation a month and no unlimited flag", async () => {
     const { rows } = await db.query<{ monthly_adaptations: number; unlimited: unknown }>("select monthly_adaptations, features -> 'unlimited_adaptations' as unlimited from public.plans where slug = 'free'");
-    expect(rows[0]).toEqual({ monthly_adaptations: 5, unlimited: null });
+    expect(rows[0]).toEqual({ monthly_adaptations: 1, unlimited: null });
   });
 
-  it("a Free teacher creates 5; the 6th is refused with the plan-limit error; usage shows 5 of 5", async () => {
+  it("a Free teacher creates 1; the 2nd is refused with the plan-limit error; usage shows 1 of 1", async () => {
     const t = await teacher();
-    expect(await t.usage()).toEqual({ used: 0, limit: 5 });
-    for (let i = 1; i <= 5; i++) expect((await t.create()).ok, `adaptación ${i}`).toBe(true);
-    expect(await t.usage()).toEqual({ used: 5, limit: 5 });
+    expect(await t.usage()).toEqual({ used: 0, limit: 1 });
+    for (let i = 1; i <= 1; i++) expect((await t.create()).ok, `adaptación ${i}`).toBe(true);
+    expect(await t.usage()).toEqual({ used: 1, limit: 1 });
     const sixth = await t.create();
     expect(sixth).toMatchObject({ ok: false, code: "entitlement_exhausted" });
-    expect(await t.units()).toBe(5);
-    expect(await t.usage()).toEqual({ used: 5, limit: 5 });
+    expect(await t.units()).toBe(1);
+    expect(await t.usage()).toEqual({ used: 1, limit: 1 });
   });
 
   it("no double consumption: the same request (double click, retry) is one adaptation and one unit", async () => {
@@ -55,25 +55,25 @@ describe("Free plan · adaptations (provisional 5 a month)", () => {
     const again = await t.create("same-key");
     expect(first.ok && again.ok && first.data.adaptationId === again.data.adaptationId).toBe(true);
     expect(await t.units()).toBe(1);
-    expect(await t.usage()).toEqual({ used: 1, limit: 5 });
+    expect(await t.usage()).toEqual({ used: 1, limit: 1 });
   });
 
-  it("cancelling an undelivered adaptation gives its unit back, so a 6th fits again", async () => {
+  it("cancelling an undelivered adaptation gives its unit back, so a 2nd fits again", async () => {
     const t = await teacher();
     const ids: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 1; i++) {
       const r = await t.create();
       if (r.ok) ids.push(r.data.adaptationId);
     }
     expect((await t.create()).ok).toBe(false);
     expect((await cancelAdaptationCommand(t.deps, t.actor, ids[0]!)).ok).toBe(true);
-    expect(await t.usage()).toEqual({ used: 4, limit: 5 });
+    expect(await t.usage()).toEqual({ used: 0, limit: 1 });
     expect((await t.create()).ok).toBe(true);
   });
 
   it("upgrading still works: an active Pro subscription lifts the limit for the same workspace", async () => {
     const t = await teacher();
-    for (let i = 0; i < 5; i++) await t.create();
+    for (let i = 0; i < 1; i++) await t.create();
     expect((await t.create()).ok).toBe(false);
     await db.query(
       `insert into public.subscriptions (workspace_id, stripe_subscription_id, stripe_price_id, plan_id, billing_interval, status, period_start, period_end)

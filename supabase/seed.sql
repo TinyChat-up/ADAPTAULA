@@ -73,29 +73,29 @@ insert into public.plans (
   slug, name, monthly_price_cents, annual_price_cents,
   monthly_adaptations, monthly_images, max_profiles, max_classes, features, sort_order
 ) values
-  ('free', 'Free', 0, 0, 5, 0, 2, 0, '{
-    "multi_profile": false, "max_profiles_per_job": 1,
-    "monthly_analyses": 10, "monthly_block_revisions": 20, "premium_escalations_per_month": 0,
+  ('free', 'Free', 0, 0, 1, 0, 2, 0, '{
+    "commercial_policy": "2026-10-v2", "multi_profile": false, "max_profiles_per_job": 1,
+    "monthly_analyses": 2, "monthly_block_revisions": 20, "premium_escalations_per_month": 0,
     "max_pages_per_material": 5, "max_file_mb": 15,
     "history_days": 30, "templates": "basic",
     "advanced_editor": false, "comparison": "basic",
     "ai_base_tier": "ECONOMY", "image_generation": false, "priority_processing": false
   }'::jsonb, 10),
-  ('pro', 'Pro', 999, 9900, 75, 0, 30, 10, '{
-    "multi_profile": true, "max_profiles_per_job": 6,
-    "monthly_analyses": 100, "monthly_block_revisions": 400, "premium_escalations_per_month": 5,
+  ('pro', 'Pro', 2490, 0, 15, 0, 30, 10, '{
+    "commercial_policy": "2026-10-v2", "multi_profile": true, "max_profiles_per_job": 6,
+    "monthly_analyses": 30, "monthly_block_revisions": 400, "premium_escalations_per_month": 5,
     "max_pages_per_material": 15, "max_file_mb": 20,
     "history_days": null, "templates": "all",
     "advanced_editor": true, "comparison": "full",
     "ai_base_tier": "STANDARD", "image_generation": false, "priority_processing": false
   }'::jsonb, 20),
-  ('max', 'Max', 1799, 17900, 150, 50, 100, 30, '{
-    "multi_profile": true, "max_profiles_per_job": 30,
-    "monthly_analyses": 250, "monthly_block_revisions": 800, "premium_escalations_per_month": 20,
+  ('max', 'Max', 4990, 0, 30, 0, 100, 30, '{
+    "commercial_policy": "2026-10-v2", "multi_profile": true, "max_profiles_per_job": 30,
+    "monthly_analyses": 50, "monthly_block_revisions": 800, "premium_escalations_per_month": 20,
     "max_pages_per_material": 25, "max_file_mb": 25,
     "history_days": null, "templates": "all",
     "advanced_editor": true, "comparison": "full",
-    "ai_base_tier": "STANDARD", "image_generation": true, "priority_processing": true
+    "ai_base_tier": "STANDARD", "image_generation": false, "priority_processing": true
   }'::jsonb, 30)
 on conflict (slug) do nothing;
 

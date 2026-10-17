@@ -2,7 +2,6 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { publicEnv } from "@/lib/config/env.public";
-import { getFlags } from "@/lib/config/flags";
 import { PublicPlanSchema, type PublicPlan } from "@/lib/schemas/plan";
 
 /**
@@ -25,7 +24,7 @@ export async function getPublicPlans(): Promise<PublicPlan[]> {
       .order("sort_order");
     if (error) return [];
     const plans = z.array(PublicPlanSchema).parse(data);
-    return getFlags().maxPlanEnabled ? plans : plans.filter((p) => p.slug !== "max");
+    return plans.filter((p) => ["free", "pro", "max"].includes(p.slug));
   } catch {
     return [];
   }

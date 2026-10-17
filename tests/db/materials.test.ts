@@ -246,22 +246,22 @@ const usageOf = (u: User) =>
 const jobsOf = (u: User) => db.query("select 1 from public.adaptation_jobs where workspace_id = $1", [u.workspaceId]).then((r) => r.rows.length);
 
 describe("cuota mensual de análisis (monthly_analyses)", () => {
-  it("los límites iniciales viven en los planes: Free 10, Pro 100, Max 250", async () => {
+  it("los límites iniciales viven en los planes: Free 2, Pro 30, Max 50", async () => {
     const { rows } = await db.query<{ slug: string; n: number }>(
       "select slug, (features ->> 'monthly_analyses')::int as n from public.plans where slug in ('free', 'pro', 'max') order by sort_order",
     );
     expect(rows).toEqual([
-      { slug: "free", n: 10 },
-      { slug: "pro", n: 100 },
-      { slug: "max", n: 250 },
+      { slug: "free", n: 2 },
+      { slug: "pro", n: 30 },
+      { slug: "max", n: 50 },
     ]);
   });
 
   it("encolar reserva una unidad y la UI la ve en workspace_usage", async () => {
     const u = await createUser(db, "cuota-analisis@example.com");
-    expect((await usageOf(u)).analyses).toEqual({ used: 0, limit: 10 });
+    expect((await usageOf(u)).analyses).toEqual({ used: 0, limit: 2 });
     const job = await enqueue(await insertMaterial(u), u.id);
-    expect((await usageOf(u)).analyses).toEqual({ used: 1, limit: 10 });
+    expect((await usageOf(u)).analyses).toEqual({ used: 1, limit: 2 });
     const { rows } = await db.query<{ kind: string; units: number; job_id: string; user_id: string }>(
       "select kind, units, job_id, user_id from public.usage_events where workspace_id = $1",
       [u.workspaceId],
@@ -269,23 +269,23 @@ describe("cuota mensual de análisis (monthly_analyses)", () => {
     expect(rows).toEqual([{ kind: "analysis", units: 1, job_id: job, user_id: u.id }]);
   });
 
-  it("Free permite 10 análisis al mes y la undécima petición no crea ningún job ni cambia el material", async () => {
+  it("Free permite 2 análisis al mes y la tercera petición no crea ningún job ni cambia el material", async () => {
     const u = await createUser(db, "cuota-agotada@example.com");
-    for (let i = 0; i < 10; i++) await enqueue(await insertMaterial(u), u.id, 50);
+    for (let i = 0; i < 2; i++) await enqueue(await insertMaterial(u), u.id, 50);
     const extra = await insertMaterial(u);
     await expect(enqueue(extra, u.id, 50)).rejects.toThrow(/analysis_quota_exceeded/);
-    expect(await jobsOf(u)).toBe(10);
+    expect(await jobsOf(u)).toBe(2);
     expect(await statusOf("materials", extra)).toBe("uploaded");
-    expect((await usageOf(u)).analyses).toEqual({ used: 10, limit: 10 });
+    expect((await usageOf(u)).analyses).toEqual({ used: 2, limit: 2 });
   });
 
   it("peticiones simultáneas nunca superan el límite", async () => {
     const u = await createUser(db, "cuota-carrera@example.com");
-    const materials = await Promise.all(Array.from({ length: 14 }, () => insertMaterial(u)));
+    const materials = await Promise.all(Array.from({ length: 6 }, () => insertMaterial(u)));
     const results = await Promise.allSettled(materials.map((m) => enqueue(m, u.id, 50)));
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(10);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
     expect(results.filter((r) => r.status === "rejected")).toHaveLength(4);
-    expect((await usageOf(u)).analyses.used).toBe(10);
+    expect((await usageOf(u)).analyses.used).toBe(2);
   });
 
   it("encolar dos veces el mismo material reserva una sola unidad", async () => {
@@ -301,11 +301,11 @@ describe("cuota mensual de análisis (monthly_analyses)", () => {
     let usage = await usageOf(u);
     expect(usage.adaptations.used).toBe(0);
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 1; i++) {
       await service(() => db.query("select public.consume_quota($1, 'adaptation', 1, null, null, $2)", [u.workspaceId, `adapt:${u.id}:${i}`]));
     }
     usage = await usageOf(u);
-    expect(usage).toMatchObject({ adaptations: { used: 5, limit: 5 }, analyses: { used: 1, limit: 10 } });
+    expect(usage).toMatchObject({ adaptations: { used: 1, limit: 1 }, analyses: { used: 1, limit: 2 } });
     await enqueue(await insertMaterial(u), u.id); // las adaptaciones agotadas no bloquean el análisis
     expect((await usageOf(u)).analyses.used).toBe(2);
   });
@@ -363,12 +363,12 @@ describe("cuota mensual de análisis (monthly_analyses)", () => {
   it("devolver la unidad libera cupo: se puede volver a analizar tras agotar el límite con fallos", async () => {
     const u = await createUser(db, "cuota-libera@example.com");
     const jobs: string[] = [];
-    for (let i = 0; i < 10; i++) jobs.push(await enqueue(await insertMaterial(u), u.id, 50));
+    for (let i = 0; i < 2; i++) jobs.push(await enqueue(await insertMaterial(u), u.id, 50));
     await expect(enqueue(await insertMaterial(u), u.id, 50)).rejects.toThrow(/analysis_quota_exceeded/);
     await claim(jobs[0]!);
     await service(() => db.query("select public.fail_analysis_job($1, 1, 'refusal', false, 0)", [jobs[0]]));
     await enqueue(await insertMaterial(u), u.id, 50);
-    expect((await usageOf(u)).analyses.used).toBe(10);
+    expect((await usageOf(u)).analyses.used).toBe(2);
   });
 
   it("el indicador force del reanálisis viaja hasta el job reclamado (de ahí sale forced_reanalysis)", async () => {
@@ -381,7 +381,7 @@ describe("cuota mensual de análisis (monthly_analyses)", () => {
     expect(claimed.rows[0]!.j.input.force).toBe(true);
   });
 
-  it("el límite sale del plan activo: Pro permite 100", async () => {
+  it("el límite sale del plan activo: Pro permite 30", async () => {
     const u = await createUser(db, "cuota-pro@example.com");
     await db.query(
       `insert into public.subscriptions (workspace_id, stripe_subscription_id, stripe_price_id, plan_id, billing_interval, status, period_start, period_end)
@@ -389,9 +389,9 @@ describe("cuota mensual de análisis (monthly_analyses)", () => {
        from public.plans where slug = 'pro'`,
       [u.workspaceId],
     );
-    expect((await usageOf(u)).analyses.limit).toBe(100);
+    expect((await usageOf(u)).analyses.limit).toBe(30);
     for (let i = 0; i < 11; i++) await enqueue(await insertMaterial(u), u.id, 50);
-    expect((await usageOf(u)).analyses).toEqual({ used: 11, limit: 100 });
+    expect((await usageOf(u)).analyses).toEqual({ used: 11, limit: 30 });
   });
 
   it("un plan sin monthly_analyses no permite analizar (falla cerrado)", async () => {

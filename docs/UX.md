@@ -1,5 +1,7 @@
 # UX, arquitectura de información y sistema de diseño
 
+> **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
+
 ## Personalidad
 
 Un **estudio pedagógico digital**: papel, tinta, materiales y composición tipográfica. Profesional, educativo y tranquilo. La identidad nace del contenido y su jerarquía, no de decoración tecnológica. Dirección editorial de la PR #29 (ADR-025), sobre las mejoras funcionales de ADR-024.

@@ -41,7 +41,7 @@ Dirección completa:
 
 ## Política comercial aprobada como objetivo provisional (etapa 4)
 
-**No aplicada por esta entrega.** Los valores efectivos actuales continúan en la base de datos y la interfaz los lee. No anunciar estos nuevos números como activos hasta incluir la migración y sus pruebas en su entrega.
+**4A implementada mediante migración 026 y seed; aplicación remota pendiente y no autorizada en esta entrega.** Catálogo, cuenta y cuotas leen la base de datos. Se conservan condiciones de suscripciones anteriores. [Aplicación y QA](qa/adaptaula-2-etapa-4a/README.md).
 
 | | Free | Pro | Max |
 | --- | --- | --- | --- |
