@@ -47,7 +47,7 @@ export function PrivacyControls({ deletionStatus, deletionAvailable }: { deletio
       const result = await response.json();
       form.reset();
       setRequestStatus(result.status);
-      setDeleteMessage("Solicitud registrada. Tu cuenta y tus documentos siguen disponibles mientras se tramita.");
+      setDeleteMessage("Solicitud registrada. No se ha ejecutado el borrado: tu cuenta y tus documentos siguen disponibles. La tramitación efectiva está pendiente.");
     } catch (error) { setDeleteMessage(error instanceof Error ? error.message : "Error al registrar la solicitud."); }
     finally { setDeleteBusy(false); }
   }
@@ -55,13 +55,13 @@ export function PrivacyControls({ deletionStatus, deletionAvailable }: { deletio
   return <div className="space-y-8">
     <div className="space-y-3">
       <h3 className="font-semibold">Descargar una copia de mis datos</h3>
-      <p className="text-sm text-muted-foreground">Descarga un JSON con tus datos de cuenta, perfiles funcionales, materiales y adaptaciones de tus espacios personales donde eres la única persona. Incluye originales de hasta 2 MB en total; los mayores puedes descargarlos por separado desde su ficha en Materiales. El contenido de espacios compartidos queda fuera.</p>
+      <p className="text-sm text-muted-foreground">El JSON incluye tus datos de cuenta y, de tus espacios personales donde eres la única persona, perfiles funcionales, clases, materiales, adaptaciones, versiones, borradores y comentarios de revisión. Incorpora originales de hasta 2 MB en total; los mayores puedes descargarlos por separado desde su ficha en Materiales. Excluye el contenido de espacios compartidos, los PDF adaptados almacenados y los recursos visuales; estos últimos se consultan desde sus vistas privadas cuando estén disponibles.</p>
       <Button type="button" variant="secondary" onClick={download} disabled={exportBusy}>{exportBusy ? "Preparando copia…" : "Descargar mis datos"}</Button>
       <p role="status" className="text-sm text-muted-foreground">{exportMessage}</p>
     </div>
     <div className="space-y-3 border-t border-border pt-6">
       <h3 className="font-semibold">Solicitar eliminación de cuenta</h3>
-      <p className="text-sm text-muted-foreground">La solicitud queda registrada para revisión manual de tus espacios, documentos y obligaciones de conservación. No borra inmediatamente tu cuenta ni los documentos de otras personas. Puedes seguir accediendo mientras esté pendiente y consultar aquí su estado.</p>
+      <p className="text-sm text-muted-foreground">La solicitud queda registrada para revisión manual de tus espacios, documentos y obligaciones de conservación. No inicia el borrado de tu cuenta ni de documentos de otras personas. Tu cuenta y tus documentos siguen disponibles; la tramitación efectiva está pendiente.</p>
       {!deletionAvailable ? <p role="status" className="text-sm font-medium">La solicitud de eliminación todavía no está disponible en este entorno.</p> :
         requestStatus ? <p role="status" className="text-sm font-medium">{
           requestStatus === "completed" ? "Solicitud marcada como completada." :

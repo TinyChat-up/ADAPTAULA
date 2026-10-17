@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. Exportación personal JSON autenticada con archivos originales pequeños y solicitud persistente de baja verificada con contraseña. El borrado efectivo de Auth, filas y Storage **sigue pendiente**; no se simula. Migración 027 local, sin aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
+> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. Exportación personal JSON y solicitud de baja verificada con contraseña. La RPC de baja queda reservada al servidor por 027 corregida + 028 compensatoria. El borrado efectivo de Auth, filas y Storage **sigue pendiente**. Migraciones probadas localmente, sin consulta ni aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
 
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
 
@@ -35,7 +35,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Despliegue, pruebas y límites de esta sesión
 
-- El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma que estén desplegadas 025–027. Esta fase añade **027**, probada solo localmente; requiere aplicación futura antes del despliegue de la UI.
+- El usuario confirma que la migración **024 está aplicada en Supabase**. No se ha consultado el proyecto remoto ni se afirma el estado de 025–028. Esta fase incluye 027 corregida y 028 compensatoria; comprobar su estado real en staging antes del despliegue autorizado.
 - Las verificaciones previas se consideran antecedentes; esta sesión usa pruebas focalizadas, PGlite local y proveedores simulados. Ver comandos y resultados en el registro.
 - Verificación de 2B y capturas en [QA](qa/adaptaula-2-etapa-2b/README.md); las pruebas anteriores de 2A se conservan como antecedentes. Se mantiene Google Fonts sin cambios; no se valida el runtime de Vercel.
 - Git y la API de GitHub están disponibles. #41 y #42 confirmadas MERGED (base `9f064ef`); esta entrega no modifica otras PR.

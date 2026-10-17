@@ -28,29 +28,30 @@ drop policy if exists "account_deletion_requests: read own" on public.account_de
 create policy "account_deletion_requests: read own" on public.account_deletion_requests
   for select to authenticated using (user_id = (select auth.uid()));
 
-create or replace function public.request_account_deletion()
+-- Solo el servidor con service_role puede invocarla, después de verificar la contraseña.
+-- p_user procede de auth.getUser() en el servidor; nunca de parámetros del navegador.
+create or replace function public.request_account_deletion(p_user uuid)
 returns uuid
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_user uuid := (select auth.uid());
   v_id uuid;
 begin
-  if v_user is null then
+  if p_user is null then
     raise exception 'authentication_required' using errcode = '28000';
   end if;
-  if not exists (select 1 from auth.users where id = v_user) then
+  if not exists (select 1 from auth.users where id = p_user) then
     raise exception 'authentication_required' using errcode = '28000';
   end if;
   insert into public.account_deletion_requests (user_id)
-  values (v_user)
+  values (p_user)
   on conflict (user_id) do update set user_id = excluded.user_id
   returning id into v_id;
   return v_id;
 end;
 $$;
 
-revoke execute on function public.request_account_deletion() from public, anon;
-grant execute on function public.request_account_deletion() to authenticated;
+revoke execute on function public.request_account_deletion(uuid) from public, anon, authenticated;
+grant execute on function public.request_account_deletion(uuid) to service_role;
