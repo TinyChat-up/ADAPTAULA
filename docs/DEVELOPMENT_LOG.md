@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-17 — Adaptaula 2.0, etapa 5B fase A
+
+- Base `origin/main` en `e37951a` tras verificar #46 fusionada; rama `codex/adaptaula-2-staging-5b`. No se ejecutó la fase B: sin consultas a Supabase/Vercel de staging, migraciones remotas, correos ni llamadas de IA.
+- `scripts/staging/inspect-schema.sql` comprueba en solo lectura borradores 025, cuotas 026, RLS y baja 027/028, firma vulnerable ausente y buckets privados. Tres tests PGlite prueban estado sano, 027 heredada antes/después de 028 y deriva comercial. Historia de migraciones se consulta aparte si existe; los objetos efectivos mandan.
+- `scripts/staging/pdf-probe.mjs` prepara una descarga autenticada en Vercel con dos identidades ficticias y PDF sintético entregado; sin bandera/autorización/variables no conecta. Verifica 401/200/404, PDF A4, páginas, texto sintético, cabeceras y duración sin guardar contenido. La ruta PDF añade ID de solicitud y logs técnicos acotados; se retiró el detalle libre de errores de Chromium de logs.
+- Prueba RLS real ampliada para denegar RPC directa de baja; **preparada, no ejecutada**. El procedimiento de staging cubre correo/redirects, Storage, cuotas, exportación y canales de baja. En la suite general aparecieron 8 fallos preexistentes: la prueba de ilustraciones suponía imágenes Max activas contra la política 026, y una prueba UI interpretaba una clase de hover como estilo principal. Se corrigieron **solo las fixtures/expectativas de test**, sin activar imágenes ni cambiar producto.
+- Verificación local: typecheck, lint, build, escáner de secretos, 1803 pruebas aprobadas (13 omitidas), `smoke:raster` y `smoke:pdf` (39 pruebas, ruta PDF real local). Traza PDF: 343 ficheros/116,6 MB; pico RSS de Chromium local 170 MB entre 21 fixtures, duración de render máxima 215 ms. Son medidas de esta máquina, no de Vercel. Fase B y eliminación física pendientes. [Detalle](qa/adaptaula-2-etapa-5b/README.md).
+
 ## 2026-10-17 — Adaptaula 2.0, etapa 5A: exportación y solicitud de baja
 
 - #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. La evidencia disponible solo acredita 027 en PGlite; no se consultó ni modificó Supabase remoto. Se corrigió 027 para instalaciones nuevas y se añadió 028 para cerrar la firma insegura si un entorno ya tenía 027.
