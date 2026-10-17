@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/layout";
 import { cn } from "@/lib/utils/cn";
 import { dimensionsOfArea, type ProfileArea } from "@/lib/profiles/areas";
 import { DIMENSION_COPY, LEVEL_OPTIONS } from "@/lib/profiles/copy";
@@ -9,7 +8,7 @@ function LevelControl({ dimension, value, onChange }: { dimension: DimensionKey;
   const labelId = `label-${dimension}`;
   const hintId = `hint-${dimension}`;
   return (
-    <div className="grid gap-2 py-3 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-6">
+    <div className="grid min-w-0 gap-3 py-3">
       <div>
         <p id={labelId} className="text-sm font-medium">
           {copy.control}
@@ -57,13 +56,13 @@ export function AreaControls({
   onChange: (dimension: DimensionKey, level: SupportLevel) => void;
 }) {
   return (
-    <Card>
-      <h3 className="text-lg font-semibold">{area.label}</h3>
-      <div className="mt-2 divide-y divide-border">
+    <details className="min-w-0 rounded-card border border-border bg-surface p-5">
+      <summary className="min-h-7 cursor-pointer font-semibold">Ajustar {area.label.toLocaleLowerCase("es")}</summary>
+      <div className="mt-3 divide-y divide-border">
         {dimensionsOfArea(area).map((key) => (
           <LevelControl key={key} dimension={key} value={profile.supports[key] ?? "none"} onChange={(level) => onChange(key, level)} />
         ))}
       </div>
-    </Card>
+    </details>
   );
 }

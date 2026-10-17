@@ -11,7 +11,9 @@ type ActionResult = { ok: false; message: string } | undefined;
 export function ProfileActions({
   duplicate,
   remove,
+  canDuplicate = true,
 }: {
+  canDuplicate?: boolean;
   duplicate: () => Promise<ActionResult>;
   remove: () => Promise<ActionResult>;
 }) {
@@ -27,10 +29,11 @@ export function ProfileActions({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="max-w-xs space-y-3">
+      {!canDuplicate ? <p className="text-sm text-muted-foreground">No quedan plazas para duplicar. Puedes editar este perfil o gestionar los que ya tienes.</p> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={run(duplicate)} disabled={pending}>
+        <Button variant="secondary" onClick={run(duplicate)} disabled={pending || !canDuplicate}>
           <Copy aria-hidden className="size-4" />
           Duplicar
         </Button>

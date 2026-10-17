@@ -41,6 +41,7 @@ test("registro → onboarding → crear perfil desde un punto de partida → edi
 
   await expect(page.getByText("instrucciones breves y divididas en pasos (mucho)")).toBeVisible();
   await expect(page.getByText("como máximo 3 tareas visibles a la vez")).toBeVisible();
+  await page.getByText("Ajustar atención y organización", { exact: true }).click();
   await expect(
     page.getByRole("radiogroup", { name: "Dividir instrucciones largas en pasos" }).getByRole("radio", { name: "Mucho" }),
   ).toBeChecked();
@@ -123,7 +124,10 @@ test("accesibilidad (axe) en las pantallas principales de la app", async ({ page
   await createProfile(page, "A11y", "Lectura y decodificación");
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso", "/app/adaptar"]) {
     await page.goto(path);
-    if (path === "/app/alumnos/nuevo") await page.getByRole("button", { name: /^Lectura/ }).click();
+    if (path === "/app/alumnos/nuevo") {
+      await page.getByText("Elegir otras áreas de apoyo", { exact: true }).click();
+      await page.getByRole("button", { name: /^Lectura/ }).click();
+    }
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze();
     expect(results.violations.map((v) => `${path}: ${v.id}`), path).toEqual([]);
   }
