@@ -57,7 +57,7 @@ Dirección completa:
 
 Max se mostrará «En preparación», sin contratación. Sin nuevos precios anuales ni descuentos. Sin diferencias de calidad entre Free/Pro. Precios no validados económicamente. Ningún cobro ni Stripe real.
 
-Los límites permanecen exclusivamente en BD: migración nueva y segura, no solo seed. Antes de aplicar cambios a un entorno, comprobar suscripciones activas y cómo conservar sus condiciones; no se conoce aquí si hay clientes de pago y no se ha consultado Supabase remoto. Probar bloqueo de segunda adaptación/tercer análisis Free, límites Pro/Max, reservas/devoluciones, separación de contadores y límites de perfiles/páginas. La cuenta mostrará plan, consumo, periodo y perfil real, edición básica disponible, cambio seguro de contraseña y salida; no inventar borrado/exportación.
+Los límites permanecen exclusivamente en BD: migración nueva y segura, no solo seed. Antes de aplicar cambios a un entorno, comprobar suscripciones activas y cómo conservar sus condiciones; no se conoce aquí si hay clientes de pago y no se ha consultado Supabase remoto. Probar bloqueo de segunda adaptación/tercer análisis Free, límites Pro/Max, reservas/devoluciones, separación de contadores y límites de perfiles/páginas. La cuenta muestra plan, consumo, periodo y perfil real, edición básica disponible, cambio seguro de contraseña y salida. La etapa 5A añade exportación personal acotada y solicitud de baja; el borrado efectivo sigue pendiente.
 
 ## Condiciones para todas las entregas
 

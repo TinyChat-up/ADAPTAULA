@@ -5,8 +5,8 @@ import { serverEnv } from "@/lib/config/env.server";
 
 /**
  * Service-role client: bypasses RLS. Only for Stripe webhooks, the job processor, quota accounting,
- * cron and /admin. Never call it from code that acts on behalf of a user request without
- * having resolved and checked the workspace first.
+ * cron and /admin. For workspace data, resolve and check that workspace first. For an
+ * account-scoped operation, verify the Auth identity and any required recent credential first.
  */
 export function createAdminClient() {
   const key = serverEnv().SUPABASE_SECRET_KEY;

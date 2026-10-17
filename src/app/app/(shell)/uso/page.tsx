@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { signOut } from "@/app/(auth)/actions";
 import { AccountNameForm } from "@/components/account/account-name-form";
+import { PrivacyControls } from "@/components/account/privacy-controls";
 import { UsageSummary } from "@/components/account/usage-summary";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
 import { requireWorkspace } from "@/lib/auth/workspace";
+import { getSupabase } from "@/lib/auth/session";
 import { formatDay } from "@/lib/format/date";
 import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { countActiveProfiles } from "@/lib/profiles/repository";
@@ -16,7 +18,10 @@ export const metadata: Metadata = { title: "Plan y cuenta" };
 
 export default async function UsagePage() {
   const ctx = await requireWorkspace();
-  const [usage, profiles] = await Promise.all([getWorkspaceUsage(ctx.workspace.id), countActiveProfiles(ctx.workspace.id)]);
+  const [usage, profiles, request] = await Promise.all([
+    getWorkspaceUsage(ctx.workspace.id), countActiveProfiles(ctx.workspace.id),
+    (await getSupabase()).from("account_deletion_requests").select("status").eq("user_id", ctx.user.id).maybeSingle(),
+  ]);
   return (
     <div className="space-y-10">
       <PageHeader title="Plan y cuenta" description="Tu capacidad de trabajo y los datos de tu cuenta, en un mismo lugar." />
@@ -66,6 +71,12 @@ export default async function UsagePage() {
             <Link href="/privacidad" className="flex min-h-11 items-center text-sm text-primary underline underline-offset-4">Privacidad y datos del alumnado</Link>
           </div>
         </div>
+      </section>
+
+      <section aria-labelledby="tus-datos" className="space-y-5 border-t border-border pt-6">
+        <h2 id="tus-datos" className="text-xl font-semibold">Tus datos y privacidad</h2>
+        <PrivacyControls deletionStatus={request.data?.status ?? null}
+          deletionAvailable={!request.error} />
       </section>
     </div>
   );

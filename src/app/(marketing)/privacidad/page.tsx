@@ -31,7 +31,8 @@ export default function PrivacyPage() {
       <h2>Para qué los usamos</h2>
       <p>
         <strong>Para prestarte el servicio:</strong> analizar y adaptar las fichas que nos pides y guardarlas en tu espacio de
-        trabajo hasta que las borres. Es la única finalidad para la que usamos tus materiales. Base jurídica: pendiente de revisión.
+        trabajo. Hoy puedes borrar materiales sin adaptaciones; la baja completa requiere tramitar una solicitud. Es la única finalidad
+        para la que usamos tus materiales. Base jurídica: pendiente de revisión.
       </p>
       <p>
         <strong>No usamos tus materiales para mejorar Adaptaula ni para entrenar modelos.</strong> Aceptar estas condiciones o subir
@@ -63,13 +64,15 @@ export default function PrivacyPage() {
       <h2>Cuánto tiempo los conservamos</h2>
       <p>
         Tus materiales y adaptaciones se conservan hasta que los borres. Hoy puedes borrar materiales que no tengan adaptaciones.
-        Pendiente: plazos para registros técnicos y cuentas eliminadas, y la forma de solicitar el borrado completo de la cuenta.
+        Pendiente: plazos para registros técnicos y cuentas eliminadas. Puedes registrar una solicitud de eliminación desde «Plan y cuenta»;
+        registrarla no borra inmediatamente la cuenta ni sus archivos.
       </p>
 
       <h2>Tus derechos</h2>
       <p>
         Puedes solicitar acceso, rectificación, supresión, oposición, limitación y portabilidad, y reclamar ante la Agencia Española
-        de Protección de Datos. Pendiente: canal para ejercerlos.
+        de Protección de Datos. Desde «Plan y cuenta» puedes descargar una copia técnica de tus datos personales y registrar una
+        solicitud de eliminación. Pendiente: canal de atención y procedimiento jurídico para el resto de derechos.
       </p>
 
       <h2>Centros educativos</h2>

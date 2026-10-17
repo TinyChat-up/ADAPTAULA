@@ -26,8 +26,8 @@ Contexto para la revisión:
    destinatarios, transferencias y derechos. Informar a los titulares de datos que aparezcan en las fichas: ¿quién lo hace y cómo?
 6. **Plazos** de conservación de originales, adaptaciones, registros técnicos, cuentas eliminadas y evidencias de autorización tras
    una retirada. Hoy no existe ningún job que aplique retenciones ([auditoría §3](AUDITORIA_DATOS.md#3-conservación-y-borrado)).
-7. **Derechos.** Hoy no existen borrado de cuenta, exportación ni borrado de adaptaciones en la aplicación. ¿Qué mínimo exige el
-   lanzamiento?
+7. **Derechos.** Hay exportación personal JSON acotada y solicitud autenticada de baja, pero no borrado efectivo de cuenta ni
+   adaptaciones. ¿Qué cobertura y plazos exige el lanzamiento, especialmente para documentos de workspaces compartidos?
 8. **Subencargados y transferencias** (Anthropic, OpenAI, Supabase, Vercel, Stripe y correo). Verificar contratos firmados,
    regiones, mecanismo de transferencia y conservación del lado del proveedor (§6 de la propuesta). Valorar si hay que solicitar
    retención cero o residencia en la UE antes de tratar fichas que puedan contener datos de menores.
@@ -60,8 +60,8 @@ Contexto para la revisión:
 1. Texto definitivo del aviso de contribución (borrador en la propuesta §3) y del canal de retirada.
 2. Condiciones de pago, cancelación, garantías, limitación de responsabilidad y ley aplicable (pendientes en `/terminos`).
 3. Confirmar que no hace falta banner de cookies mientras solo existan cookies técnicas, y revisar `/cookies`.
-4. Revisar que el borrador no promete nada que el producto no hace: no hay exportación, ni borrado de cuenta, ni retenciones
-   automáticas.
+4. Revisar que el borrador refleje el alcance real: exportación personal JSON acotada y solicitud de baja, sin borrado efectivo
+   ni retenciones automáticas.
 
 ## D · Datos que el equipo debe aportar al especialista
 
