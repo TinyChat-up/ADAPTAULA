@@ -44,8 +44,8 @@ describe("A · creation screen: «¿Cómo quieres preparar esta ficha?»", () =>
     expect(out.indexOf("Hacer magia")).toBeLessThan(out.indexOf("Revisar antes de crear"));
     const buttons = [...out.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
     expect(buttons).toHaveLength(2);
-    expect(buttons[0]).toContain("bg-primary");
-    expect(buttons[1]).not.toContain("bg-primary");
+    expect(buttons[0]).toMatch(/(?:^|\s)bg-primary-strong(?:\s|")/);
+    expect(buttons[1]).not.toMatch(/(?:^|\s)bg-primary-strong(?:\s|")/);
     expect(buttons.every((b) => b.includes("aria-describedby="))).toBe(true);
     expect(visible(out)).not.toMatch(INTERNAL);
   });

@@ -154,6 +154,16 @@ describe.skipIf(!enabled)("aislamiento entre workspaces en Supabase real", () =>
     expect((await b.client.rpc("workspace_usage", { ws: a.workspaceId })).error).not.toBeNull();
   });
 
+  it("la baja no se puede registrar mediante RPC directa ni consultar desde otra identidad", async () => {
+    for (const client of [a.client, b.client]) {
+      expect((await client.rpc("request_account_deletion")).error).not.toBeNull();
+      expect((await client.rpc("request_account_deletion", { p_user: a.id })).error).not.toBeNull();
+    }
+    expect((await a.client.from("account_deletion_requests").select("id")).data).toEqual([]);
+    expect((await b.client.from("account_deletion_requests").select("id")).data).toEqual([]);
+    expect((await b.client.from("account_deletion_requests").insert({ user_id: a.id })).error).not.toBeNull();
+  });
+
   it("anon no lee datos de negocio, pero sí el catálogo y los planes", async () => {
     const anon = createClient(url!, anonKey!, noSession);
     expect((await anon.from("learner_profiles").select("id")).data ?? []).toEqual([]);
