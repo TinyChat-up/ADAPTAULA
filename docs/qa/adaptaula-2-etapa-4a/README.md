@@ -1,5 +1,7 @@
 # Etapa 4A — política comercial y cuotas
 
+PR de esta entrega: [#44](https://github.com/TinyChat-up/ADAPTAULA/pull/44), abierta y sin merge.
+
 Base: `main` después de integrar #43 (`5867d30`). No incluye 4B.
 
 ## Alcance
