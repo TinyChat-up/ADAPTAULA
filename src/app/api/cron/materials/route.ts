@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/config/env.server";
 import { logger } from "@/lib/logger";
 import { recoverAnalysisJobs } from "@/lib/materials/analysis-job";
-import { ANALYSIS_LIMITS, SOURCE_BUCKET } from "@/lib/materials/config";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { runUploadCleanups, uploadCleanupDeps } from "@/lib/materials/upload-cleanup";
 
 // A recovered analysis runs inside this request (its own deadline is 270 s).
 export const maxDuration = 300;
@@ -26,28 +25,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
   }
 
-  const admin = createAdminClient();
-  const cutoff = new Date(Date.now() - ANALYSIS_LIMITS.staleUploadMinutes * 60_000).toISOString();
-  const { data: stale, error } = await admin.from("materials").select("id").eq("status", "uploading").lt("created_at", cutoff).limit(200);
-  if (error) return NextResponse.json({ error: { code: "query_failed" } }, { status: 500 });
-
-  let removed = 0;
-  for (const material of stale ?? []) {
-    const { data: files } = await admin.from("material_files").select("storage_path").eq("material_id", material.id);
-    const paths = (files ?? []).map((f) => f.storage_path);
-    if (paths.length > 0) {
-      const { error: removeError } = await admin.storage.from(SOURCE_BUCKET).remove(paths);
-      if (removeError) {
-        logger.error("stale_upload_file_not_removed", { materialId: material.id });
-        continue;
-      }
-    }
-    await admin.from("materials").delete().eq("id", material.id).eq("status", "uploading");
-    removed += 1;
+  let cleanup: Awaited<ReturnType<typeof runUploadCleanups>>;
+  try { cleanup = await runUploadCleanups(uploadCleanupDeps()); }
+  catch {
+    logger.error("upload_cleanup_claim_failed", {});
+    return NextResponse.json({ error: { code: "cleanup_unavailable" } }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
   }
-  logger.info("stale_uploads_cleaned", { removed });
+  logger.info("stale_uploads_cleaned", cleanup);
 
   const recovered = await recoverAnalysisJobs({ limit: RECOVERY_LIMIT, minAgeSeconds: RECOVERY_MIN_AGE_SECONDS });
   logger.info("analysis_jobs_recovered", { found: recovered.found, ...recovered.outcomes });
-  return NextResponse.json({ removed, recovered });
+  return NextResponse.json({ removed: cleanup.removed, cleanup, recovered }, { headers: { "Cache-Control": "private, no-store" } });
 }

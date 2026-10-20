@@ -10,6 +10,8 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
+**Corrección focalizada A1 (2026-10-20):** [integridad de originales](qa/integridad-originales/README.md), migración 029 local. Cierra la carrera de cron/finalización con decisión atómica y limpieza recuperable; no se activa con una simple publicación de código. Pendiente revisar/integrar su PR y ejecutar después el procedimiento autorizado de staging: pausa de cron antiguo, copia de seguridad, esquema, despliegue compatible y validación con identidades ficticias. No se cambia el siguiente roadmap pedagógico.
+
 ## Continuidad 2026-10-17 — etapa 3B
 
 PR #42 (3A) integrada en `9f064ef`, comprobada en GitHub junto con #41. Entrega 3B en `codex/adaptaula-2-perfiles-cuenta`: directorio y edición progresiva de perfiles, vista de lectura, cuenta editable y consumo separado. Revisar [PR #43](https://github.com/TinyChat-up/ADAPTAULA/pull/43), abierta sin merge, antes de la etapa 4. No activar todavía nuevos precios/límites: la política objetivo está en [ADAPTAULA_2.md](ADAPTAULA_2.md) y requiere su propia migración segura. No APIs pagadas, Supabase remoto ni Stripe.

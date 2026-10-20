@@ -86,18 +86,23 @@ export async function initUpload(ctx: WorkspaceContext, file: { name: string; si
     });
     if (fileError) throw new Error("file row");
     const { token } = await createSignedUpload(path);
+    const uploadWindow = await createAdminClient().rpc("open_material_upload_window", {
+      p_material: material.id, p_user: ctx.user.id, p_workspace: ctx.workspace.id,
+    });
+    if (uploadWindow.error || uploadWindow.data !== true) throw new Error("upload window");
     return { ok: true, materialId: material.id, path, token };
   } catch {
-    await supabase.from("materials").delete().eq("id", material.id);
+    // Keep file metadata if issuing a token or its acknowledgment was interrupted: the durable cleaner owns recovery.
     return { ok: false, code: "unexpected" };
   }
 }
 
-/** Removes a rejected upload completely: stored object and records. */
-async function discardUpload(materialId: string, path: string | null) {
-  if (path) await removeSources([path]);
-  const supabase = await getSupabase();
-  await supabase.from("materials").delete().eq("id", materialId);
+/** Rejection cannot erase an original completed by another request; its paths remain tracked until token expiry. */
+async function discardUpload(ctx: WorkspaceContext, materialId: string) {
+  const { error } = await createAdminClient().rpc("reject_material_upload", {
+    p_material: materialId, p_user: ctx.user.id, p_workspace: ctx.workspace.id,
+  });
+  if (error) logger.warn("upload_rejection_pending", { materialId });
 }
 
 /**
@@ -121,14 +126,14 @@ export async function completeUpload(ctx: WorkspaceContext, materialId: string):
 
   const bytes = await downloadSource(file.storage_path);
   if (!bytes) {
-    await discardUpload(materialId, null);
+    await discardUpload(ctx, materialId);
     return { ok: false, code: "not_found" };
   }
 
   const declaredFormat = FORMAT_BY_MIME[file.mime_type];
   const content = declaredFormat ? validateFileContent(bytes, declaredFormat, limits) : ({ ok: false, code: "unsupported_type" } as const);
   if (!content.ok) {
-    await discardUpload(materialId, file.storage_path);
+    await discardUpload(ctx, materialId);
     return content;
   }
 
@@ -136,11 +141,11 @@ export async function completeUpload(ctx: WorkspaceContext, materialId: string):
   if (content.kind === "pdf") {
     const inspection = await inspectPdf(bytes);
     if (!inspection.ok) {
-      await discardUpload(materialId, file.storage_path);
+      await discardUpload(ctx, materialId);
       return inspection;
     }
     if (inspection.pages > limits.maxPages) {
-      await discardUpload(materialId, file.storage_path);
+      await discardUpload(ctx, materialId);
       return { ok: false, code: "too_many_pages" };
     }
     pages = inspection.pages;
@@ -148,13 +153,20 @@ export async function completeUpload(ctx: WorkspaceContext, materialId: string):
 
   const hash = sha256Hex(bytes);
   const admin = createAdminClient();
-  await admin.from("material_files").update({ size_bytes: bytes.length, page_count: pages }).eq("id", file.id);
-  const { error: markError } = await admin
-    .from("materials")
-    .update({ status: "uploaded", content_hash: hash, page_count: pages })
-    .eq("id", materialId)
-    .eq("status", "uploading");
+  const { data: completion, error: markError } = await admin.rpc("complete_material_upload", {
+    p_material: materialId, p_user: ctx.user.id, p_workspace: ctx.workspace.id,
+    p_file: file.id, p_size: bytes.length, p_pages: pages, p_hash: hash,
+  });
   if (markError) return { ok: false, code: "unexpected" };
+  if (completion === "expired") return { ok: false, code: "upload_expired" };
+  if (completion === "not_found") return { ok: false, code: "not_found" };
+  if (completion === "already_completed") {
+    const latest = await getMaterialDetail(ctx.workspace.id, materialId);
+    if (!latest) return { ok: false, code: "not_found" };
+    const status = latest.material.status;
+    return { ok: true, status: status === "analyzed" ? "analyzed" : status === "uploaded" ? "uploaded" : "queued", reused: false, jobId: null };
+  }
+  if (completion !== "completed") return { ok: false, code: "unexpected" };
 
   const requested = await requestAnalysis(ctx, materialId, { force: false, contentHash: hash });
   if (requested.ok) {

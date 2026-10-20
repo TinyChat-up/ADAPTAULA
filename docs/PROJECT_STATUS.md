@@ -15,6 +15,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Lectura para continuar
 
+- **Integridad de originales, 029 (2026-10-20):** [implementación y despliegue](qa/integridad-originales/README.md), rama independiente `codex/integridad-originales`. Finalización/limpieza atómicas, leases recuperables y rutas persistidas tras borrar. Preparado y probado localmente; **no aplicado remotamente**. Requiere parar el cron antiguo durante migración/despliegue. Compatible con #49, que no se modifica ni fusiona aquí.
 - Prioridades y criterios de aceptación: [ROADMAP.md](ROADMAP.md). Es el equivalente a `NEXT_STEPS.md`.
 - Decisiones: ADR de [ARCHITECTURE.md](ARCHITECTURE.md). Es el equivalente a `DECISIONS.md`.
 - Trabajo y verificaciones de cada sesión: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).

@@ -78,7 +78,7 @@ test("el servidor rechaza un archivo cuyo contenido no es lo que dice su extensi
   await expect(page.getByText("Todavía no has subido ningún material.")).toBeVisible();
 });
 
-test("un PDF con más páginas de las permitidas en Free se rechaza y no deja rastro", async ({ page }) => {
+test("un PDF con más páginas de las permitidas en Free se rechaza y no aparece en la biblioteca", async ({ page }) => {
   await signUpAndOnboard(page, uniqueEmail());
   await page.goto("/app/adaptar");
   await chooseFile(page, await pdf(undefined, 6));
