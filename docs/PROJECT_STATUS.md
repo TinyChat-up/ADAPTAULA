@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **PDF, descarga interrumpida (2026-10-20):** entrega pequeña desde `origin/main` (`e37951a`): la descarga muestra un error recuperable si falla la lectura del archivo después de recibir las cabeceras, y el botón abandona el estado de espera ante fallos inesperados del navegador. Prueba de regresión, typecheck y build locales correctos. No cambia CLARO ni acredita el runtime PDF en Vercel. La PR #47 de preparación de staging seguía abierta al comprobar GitHub en esta sesión; la validación remota permanece pendiente.
+
 > **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. Exportación personal JSON y solicitud de baja verificada con contraseña. La RPC de baja queda reservada al servidor por 027 corregida + 028 compensatoria. El borrado efectivo de Auth, filas y Storage **sigue pendiente**. Migraciones probadas localmente, sin consulta ni aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
 
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.

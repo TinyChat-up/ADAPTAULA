@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
-import { fetchAdaptationPdf } from "@/lib/render/pdf-download";
+import { fetchAdaptationPdf, PDF_GENERIC_ERROR } from "@/lib/render/pdf-download";
 
 type State = { kind: "idle" } | { kind: "generating" } | { kind: "started"; filename: string } | { kind: "error"; message: string; pending: boolean };
 
@@ -36,6 +36,8 @@ export function PdfDownload({ adaptationId, draftRevision, disabled = false }: {
         URL.revokeObjectURL(url);
       }, 60_000);
       setState({ kind: "started", filename: result.filename });
+    } catch {
+      setState({ kind: "error", message: PDF_GENERIC_ERROR, pending: false });
     } finally {
       running.current = false;
     }

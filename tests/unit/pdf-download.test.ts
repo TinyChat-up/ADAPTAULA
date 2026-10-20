@@ -60,4 +60,14 @@ describe("fetchAdaptationPdf (browser)", () => {
     expect(await fetchAdaptationPdf("x", async () => new Response("no", { status: 200, headers: { "Content-Type": "text/html" } }))).toEqual({ ok: false, message: PDF_GENERIC_ERROR });
     expect((await fetchAdaptationPdf("x", async () => Promise.reject(new TypeError("offline")))).ok).toBe(false);
   });
+
+  it("reports an interrupted PDF body instead of leaving the download pending", async () => {
+    const interrupted = new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
+        controller.error(new Error("connection closed"));
+      },
+    }), { headers: { "Content-Type": "application/pdf" } });
+    expect(await fetchAdaptationPdf("x", async () => interrupted)).toEqual({ ok: false, message: PDF_GENERIC_ERROR });
+  });
 });

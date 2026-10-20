@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-20 — Descarga PDF recuperable ante una conexión interrumpida
+
+- Base: `origin/main` (`e37951a`), rama `codex/pdf-descarga-interrumpida`. GitHub mostraba la PR #47 abierta; no se modificó su rama.
+- Defecto reproducido: el servidor podía responder con cabeceras PDF y cerrarse la conexión antes de completar el cuerpo; `response.blob()` rechazaba y la interfaz quedaba en «Preparando el PDF…».
+- Corrección: la lectura del cuerpo devuelve un error comprensible y el componente captura fallos inesperados del navegador para liberar el estado de espera. El renderer, CLARO, documentos y contratos PDF no cambian.
+- Verificación local: prueba focalizada falló antes y pasó después (8/8); ESLint focalizado, typecheck, build y `git diff --check` correctos. No se repitió la suite completa ni se consumieron APIs de IA.
+- Pendiente: ejecutar el PDF real de CLARO en Vercel con una ficha sintética cuando exista staging autorizado; esta corrección no lo valida.
+
 ## 2026-10-17 — Adaptaula 2.0, etapa 5A: exportación y solicitud de baja
 
 - #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. La evidencia disponible solo acredita 027 en PGlite; no se consultó ni modificó Supabase remoto. Se corrigió 027 para instalaciones nuevas y se añadió 028 para cerrar la firma insegura si un entorno ya tenía 027.
