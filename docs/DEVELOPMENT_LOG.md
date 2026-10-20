@@ -2,7 +2,7 @@
 
 ## 2026-10-20 — Vista previa del PDF definitivo
 
-- Base `origin/main` / `ef8c1bf`; comprobadas #49 y #50 fusionadas. Rama nueva `codex/vista-previa-pdf`. [Contrato, comandos, resultados y capturas](qa/vista-previa-pdf/README.md).
+- Base `origin/main` / `ef8c1bf`; comprobadas #49 y #50 fusionadas. Rama nueva `codex/vista-previa-pdf`; implementación `3d6379e`, [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) publicada y abierta, sin merge. [Contrato, comandos, resultados y capturas](qa/vista-previa-pdf/README.md).
 - Nueva acción «Vista previa de impresión» en ficha imprimible y editor guardado. Diálogo con PDF binario, contador físico, visor nativo y descarga del mismo Blob sin regenerar; vuelta a editar, preparación/error/reintento y alternativa de descarga sin visor. Sin automatizar preparación al entrar.
 - Ruta de exportación existente: cabeceras de páginas/bytes/revisión desde el resultado validado, con privacidad/permisos intactos. Guardado/revisión explícitos, bloqueo de cambios pendientes y comprobación opcional de base (`version`) que devuelve `version_changed`/409 si otra versión sustituye a la abierta. Se conserva la cadena CLARO→HTML→Chromium→validatePdf; sin segundo compositor, dependencias, cuotas ni cambios de prompts/modelos.
 - Integridad cliente: cuerpo completo, longitud, firma/cierre y revisión; una URL por vista, espera abortable acotada, liberación al cerrar/desmontar/cambiar y gracia de 60 s tras iniciar descarga. El abort del cliente no garantiza cancelar un render ya iniciado en servidor.

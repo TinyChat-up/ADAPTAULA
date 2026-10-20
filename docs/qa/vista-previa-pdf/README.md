@@ -1,6 +1,6 @@
 # Vista previa del PDF definitivo
 
-2026-10-20 · base `ef8c1bf` · rama `codex/vista-previa-pdf`. Las PR #49 y #50 estaban fusionadas al iniciar. Sin merge automático, SQL remoto, IA pagada ni migraciones nuevas. La 029 sigue su procedimiento de despliegue independiente; no se aplica aquí.
+2026-10-20 · base `ef8c1bf` · rama `codex/vista-previa-pdf` · [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) abierta, sin merge. Las PR #49 y #50 estaban fusionadas al iniciar. Sin merge automático, SQL remoto, IA pagada ni migraciones nuevas. La 029 sigue su procedimiento de despliegue independiente; no se aplica aquí.
 
 ## Uso docente
 
