@@ -8,22 +8,22 @@ El producto trata material educativo y perfiles de necesidades de menores (datos
 |---|---|
 | Un usuario accede a datos de otro workspace | RLS en todas las tablas y en Storage + comprobación de membresía en servidor + tests de BD (tests/db) y E2E de aislamiento |
 | Manipular el plan o los límites desde el cliente | Entitlements y cuotas solo en servidor (`checkEntitlement`, `consume_quota`); el plan se deriva de `subscriptions` |
-| Webhooks de Stripe falsificados | Verificación de firma (`STRIPE_WEBHOOK_SECRET`), idempotencia con `stripe_events` |
+| Facturación | Contratación desactivada; las tablas y variables reservadas no acreditan una integración Stripe operativa |
 | Inyección de prompts desde el material subido | Material envuelto como datos en el prompt; salida restringida a un schema; la IA no tiene herramientas ni acceso a nada |
-| XSS a través del contenido de IA | Nunca HTML de IA; JSON → componentes; texto inline parseado por nosotros; KaTeX con `trust: false`; CSP |
+| XSS a través del contenido de IA | JSON validado → componentes React; sin HTML arbitrario. El HTML de impresión usa CSP propia; no hay KaTeX instalado ni CSP global configurada en el repositorio |
 | Ficheros maliciosos | Validación por *magic bytes*, tamaño y páginas; buckets privados; los ficheros nunca se sirven públicamente ni se ejecutan; URLs firmadas cortas |
 | Fuga de la service role o de las claves de IA | Solo en módulos `server-only`; nunca `NEXT_PUBLIC_`; revisión en CI |
 | Abuso de coste (IA) | Cuotas, rate limit, `MAX_SINGLE_JOB_COST_USD`, alertas diarias y mensuales, interruptor `ai_paused` |
-| Acceso al panel admin | `/admin` exige `is_system_admin()` en el layout **y** en cada acción o lectura; sin enlaces desde la app |
+| Administración | No existe un panel `/admin` implementado; no se considera disponible por existir funciones SQL reservadas |
 | CSRF | Server Actions (protección de origen integrada en Next); Route Handlers mutantes comprueban `Origin` y requieren sesión; cookies `SameSite=Lax` |
 | Toma de cuentas | Supabase Auth (hash, rate limit, confirmación de email); restablecimiento de contraseña con token de un solo uso |
 
 ## Autenticación y sesión
 
-- Supabase Auth con `@supabase/ssr`: cookies httpOnly; `proxy.ts` refresca la sesión.
+- Supabase Auth con `@supabase/ssr`: sesión en cookies gestionadas por el SDK; `proxy.ts` refresca la sesión en sus rutas configuradas. No se afirma `HttpOnly`: el cliente navegador también participa en Auth.
 - **`proxy.ts` no es la barrera de seguridad**: cada Server Component, Server Action y Route Handler protegido llama a `requireUser()` / `requireWorkspace()` (capa de acceso a datos). El proxy solo redirige para dar buena experiencia.
 - En servidor se usa `supabase.auth.getUser()` (validado contra Auth), nunca la sesión sin verificar.
-- Métodos: email + contraseña, magic link, Google (flag `GOOGLE_AUTH`).
+- Interfaz operativa: email + contraseña, confirmación y recuperación. No se ofrecen Google ni magic link como métodos de acceso.
 
 - El destino posterior al login (`next`) solo admite rutas relativas del propio sitio (`safeNextPath`); cualquier otra cosa vuelve a `/app`.
 - Los mensajes de login, registro y recuperación no revelan si un email existe.
@@ -32,14 +32,14 @@ El producto trata material educativo y perfiles de necesidades de menores (datos
 
 1. **Autenticación**: `requireUser()`.
 2. **Membresía y rol**: `requireWorkspace({ roles })` resuelve el workspace activo desde la cookie, validado contra `workspace_members`.
-3. **Entitlement**: `checkEntitlement(workspaceId, action)` para `adaptation.generate`, `image.generate`, `profile.create`, `class.create`, `block.revise`, `material.upload`.
+3. **Entitlement**: `evaluateEntitlement` y sus consumidores comprueban roles y límites de perfiles/análisis; la orquestación comprueba y reserva adaptaciones en SQL. Los recursos visuales tienen sus propios gates. No existe un guard universal llamado `checkEntitlement`.
 4. **RLS** como segunda barrera, aunque el código de servidor falle.
 
 ## Validación de entradas
 
 - Todo lo que entra al servidor se valida con Zod (`safeParse`); los errores se devuelven por campo.
 - Las salidas de IA también se validan con Zod antes de persistirlas.
-- Límites de longitud en todos los textos libres (alias 60, notas 1000, petición del docente 1000, comentario de feedback 500).
+- Límites de longitud en los contratos Zod y SQL de cada entidad. Los perfiles funcionales no admiten notas libres sobre menores.
 
 ## Ficheros
 
@@ -72,15 +72,15 @@ Las rutas `/api/*` que modifican datos exigen sesión y comprueban el **origen**
 
 ## Cabeceras HTTP
 
-`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` restrictiva y `frame-ancestors 'none'`. CSP con `self` + Supabase + Stripe; se endurece con nonces en la Fase 7.
+No hay una política global de cabeceras de seguridad configurada en `next.config.ts` ni en `proxy.ts`. Varias rutas privadas sí fijan `Cache-Control`, `Vary` y `X-Content-Type-Options`. La impresión autónoma usa `PRINT_CSP` y Chromium sin red. HSTS del hosting, CSP del sitio, protección frente a framing y Permissions-Policy requieren comprobación y una entrega específica; no se dan por implementadas. La política de framing debe conservar los visores privados del mismo origen.
 
 ## Secretos
 
 `tests/unit/boundaries.test.ts` falla si un componente cliente llega (incluso de forma indirecta) a un módulo `server-only`, importa el cliente admin fuera de las zonas permitidas o lee un secreto sin pasar por el env validado.
 
 - `.env*` en `.gitignore` (excepto `.env.example`, sin valores reales).
-- Variables de servidor validadas en `src/lib/config/env.ts`; acceder a una variable de servidor desde el cliente rompe el build (`server-only`).
-- Rotación documentada de: service role, claves de IA, secreto del webhook de Stripe.
+- Variables de servidor validadas en `src/lib/config/env.server-schema.ts` y leídas mediante `env.server.ts`; módulos sensibles marcados `server-only`.
+- La rotación de claves y los secretos del despliegue requieren un procedimiento operativo externo; esta revisión local no acredita su configuración.
 - **Las claves de los proveedores de IA** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) solo existen en el servidor. Comprobaciones automáticas: (1) `tests/unit/boundaries.test.ts` — ningún componente cliente llega, directa o indirectamente, a un SDK de proveedor de IA ni a un módulo `server-only`, y la clave solo se nombra en el esquema de env validado, el *runtime* y el *router* de IA; (2) `tests/unit/secrets.test.ts` — `.env.local` está ignorado y no se versiona, ninguna variable `NEXT_PUBLIC_*` puede ser un secreto, `.env.example` no lleva valores, el *logger* descarta los campos con nombre de secreto y enmascara valores con forma de clave; (3) `pnpm check:secrets` (último paso de `pnpm check`, tras el build) — busca por **valor** y por **forma** (`sk-ant-…`, `sk-…`, `sb_secret_…`, Stripe) y, en los bundles del navegador, también por **nombre**, en `.next/static`, las páginas renderizadas en el build, `evals/results` y los snapshots. Imprime rutas y el tipo de secreto, nunca el secreto.
 - Los errores del proveedor no llegan al usuario ni a los logs con su texto original: se categorizan (`AIError`) y el mensaje técnico solo vive en `cause`. Las herramientas de evals pasan cualquier texto de error por `redactSecrets`.
 
@@ -90,11 +90,11 @@ Sin contenido de materiales, alias, notas, emails ni tokens. Identificadores opa
 
 ## Dependencias
 
-Dependabot (o Renovate) para actualizaciones de seguridad; `pnpm audit` en CI; lockfile commiteado; `allowBuilds` de pnpm restringido.
+Lockfile versionado y `allowBuilds` de pnpm restringido. No hay workflows de GitHub Actions ni configuración de Dependabot/Renovate en el repositorio. `pnpm audit` puede ejecutarse localmente; no se afirma ejecución automática en CI. Resultado y alcance de la revisión de 2026-10-20 en [la auditoría](qa/auditoria-2026-10-20/README.md).
 
 ## Tests de seguridad obligatorios
 
 - E2E: el usuario A no puede leer, editar ni descargar recursos del workspace de B (perfiles, materiales, adaptaciones, exports, URLs firmadas).
-- Free: la sexta adaptación del mes se bloquea en servidor aunque se llame a la API directamente.
-- Un webhook sin firma válida devuelve 400 y no modifica nada.
-- Un usuario que no es admin recibe 404 en `/admin`.
+- Política 026: la segunda adaptación Free y el tercer análisis del periodo se bloquean en servidor; comprobar además reservas, devoluciones e idempotencia.
+- No activar facturación antes de implementar y probar firma e idempotencia de webhooks.
+- No publicar un panel administrativo sin guards y pruebas de aislamiento propios.

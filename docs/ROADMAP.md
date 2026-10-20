@@ -1,5 +1,7 @@
 # Roadmap de implementación
 
+> **Auditoría 2026-10-20, base #48 integrada:** [hallazgos y limpieza](qa/auditoria-2026-10-20/README.md). Próximo defecto prioritario: reclamación atómica y recuperación para limpieza de subidas abandonadas frente a finalización concurrente; conservar siempre originales legítimos. Después, PDF definitivo con paginación física visible y recursos didácticos deterministas. No crear otro renderer ni interpretar pruebas de mocks como validación semántica. Staging y revisión jurídica siguen pendientes.
+
 > **Etapa 5A, primera entrega (2026-10-17):** exportación personal y solicitud de eliminación comprobables. Para cerrar la fase falta un procesador duradero de baja que bloquee jobs, limpie todos los buckets, borre Auth y respete obligaciones de conservación definidas jurídicamente. [Detalle](qa/adaptaula-2-etapa-5a/README.md). No activar borrado automático mientras falte esa infraestructura.
 
 > **Etapa 5B:** #46 integrada en `e37951a`. Fase A: preparar y probar localmente inspección SQL, permisos reales y sonda PDF autenticada; [procedimiento](qa/adaptaula-2-etapa-5b/README.md). Fase B pendiente de autorización expresa: validar en staging 025–028, Auth/correo, PDF Chromium en Vercel, Storage privado, cuotas Free y fallos seguros. No aplicar migraciones ni cambiar secretos ahora. La eliminación física es una entrega separada con conservación definida y limpieza recuperable.

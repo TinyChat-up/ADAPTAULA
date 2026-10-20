@@ -151,7 +151,7 @@ Propuesto para cuando se implemente la generación real (una migración pequeña
 
 ## Corrección docente
 
-`corrections.ts`, contrato `TeacherCorrection`: `block_edit` / `instruction_edit` (nueva versión con un solo bloque cambiado, mismo id, `trace.teacher_edited`), `decision_override` (cambia o descarta una decisión y marca solo sus bloques para regenerar: `blocksOfDecision`), `protected_reinterpretation` (capa sobre el análisis; el análisis guardado no se reescribe) y `review_override` (acepta un aviso conservando el estado original). Nada exige regenerar la ficha entera.
+El editor operativo utiliza `src/lib/editor/changes.ts` (`EditorChangesSchema`) y borradores separados mediante la migración 025. Permite editar enunciados de actividades, presentación y espacio de respuesta; conserva figuras, tablas, opciones y claves. Los cambios de contenido requieren reconocimiento explícito de revisión y no se consideran validados automáticamente. No permite reinterpretar elementos protegidos ni aceptar comprobaciones pedagógicas bloqueantes. El prototipo `TeacherCorrection`, nunca conectado al producto, se retiró en la limpieza de 2026-10-20; no se eliminan documentos ni versiones persistidas.
 
 ## Coste e instrumentación
 
