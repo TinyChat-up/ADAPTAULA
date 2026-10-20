@@ -59,14 +59,13 @@ export const ANALYSIS_LIMITS = {
   analysesPerWorkspacePerHour: 20,
   /** Analyses queued or running at the same time per workspace. */
   maxActivePerWorkspace: 3,
-  /** An upload that never completed is cleaned up after this long. */
-  staleUploadMinutes: 60,
   /** Lease of a processing job. Must exceed the longest legitimate run (function maxDuration is 300 s). */
   leaseSeconds: 330,
   /** Wait before a transient failure is retried. */
   retryBackoffSeconds: 45,
   /** Signed URLs live this long: a fresh one is requested for every view. */
   signedReadUrlSeconds: 60,
+  // Supabase signed uploads live two hours (SDK has no expiry argument); migration 029 enforces this window in PostgreSQL.
   signedUploadUrlSeconds: 7200,
 } as const;
 

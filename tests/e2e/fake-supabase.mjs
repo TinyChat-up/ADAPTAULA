@@ -447,6 +447,15 @@ async function handleStorage(req, res, url, auth, rawBody) {
     });
     return json(200, removed);
   }
+  // GET /object/info/<bucket>/<path> → comprobación de ausencia tras limpiar, sin descargar contenido.
+  m = /^object\/info\/([^/]+)\/(.+)$/.exec(rest);
+  if (m && req.method === "GET") {
+    const [, bucket, name] = m;
+    const objectPath = decodeURIComponent(name);
+    if (!(await visible(bucket, objectPath))) return notFound();
+    const stored = objects.get(`${bucket}/${objectPath}`);
+    return stored ? json(200, { name: objectPath, size: stored.bytes.length }) : notFound();
+  }
   // GET /object/[authenticated/]<bucket>/<path>  → descarga autenticada
   m = /^object\/(?:authenticated\/)?([^/]+)\/(.+)$/.exec(rest);
   if (m && req.method === "GET") {

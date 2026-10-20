@@ -9,6 +9,8 @@ export function describeServiceError(code: ServiceError, limits?: MaterialLimits
       return "Tu rol no permite subir o modificar materiales.";
     case "not_found":
       return "No hemos encontrado ese material.";
+    case "upload_expired":
+      return "Esta subida ha caducado. Vuelve a seleccionar el archivo para iniciar otra.";
     case "rate_limited":
       return "Has enviado muchos archivos en poco tiempo. Espera unos minutos e inténtalo de nuevo.";
     case "too_many_active":
@@ -30,6 +32,8 @@ export function statusCodeFor(code: ServiceError): number {
       return 403;
     case "not_found":
       return 404;
+    case "upload_expired":
+      return 410;
     case "rate_limited":
     case "too_many_active":
     case "quota_exceeded":
