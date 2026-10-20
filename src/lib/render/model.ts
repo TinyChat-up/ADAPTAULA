@@ -1,10 +1,11 @@
 import type { Block, MaterialDocument, ResponseSpec } from "@/lib/schemas/material-document";
-import { describeSpec, type ComparisonSpec, type VisualSpec } from "@/lib/visuals/spec";
+import { VisualSpecSchema, describeSpec, type ComparisonSpec, type VisualSpec } from "@/lib/visuals/spec";
 import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
 import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferred";
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
 import { composeMath, type MathPart } from "./math";
 import { renderTokens, type RenderTokens } from "./tokens";
+import { withAdjacentFigures } from "./figure-order";
 import { MATERIAL_RENDERER_VERSION } from "./version";
 
 /**
@@ -118,7 +119,8 @@ export type IssueCode =
   | "math_source_only"
   | "chart_table_only"
   | "overflow_risk"
-  | "structure_inconsistent";
+  | "structure_inconsistent"
+  | "visual_semantics_unverified";
 
 export interface RenderIssue {
   code: IssueCode;
@@ -317,6 +319,15 @@ interface Ctx {
   next: () => string;
 }
 
+function checkedFigure(node: Extract<RenderNode, { kind: "image" }>, spec: VisualSpec, ctx: Ctx): RenderNode {
+  const parsed = VisualSpecSchema.safeParse(spec);
+  if (!parsed.success) {
+    ctx.issues.push({ code: "structure_inconsistent", severity: "error", message: "Una figura contiene divisiones, celdas o etiquetas incoherentes. Revisa el recurso antes de imprimir." });
+    return { ...node, state: "missing" };
+  }
+  return { ...node, spec: parsed.data, alt: node.caption ?? describeSpec(parsed.data) };
+}
+
 function nodeOf(block: Block, ctx: Ctx): RenderNode {
   const key = ctx.next();
   switch (block.type) {
@@ -356,7 +367,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
         // A figure a person (or the locator) found later in the original wins over the one rebuilt from the analysis's words.
         if (located && "src" in located) return { key, kind: "image", state: "available", src: located.src, ...(located.widthMm ? { widthMm: located.widthMm } : {}), alt: block.caption ?? block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential, origin };
         const spec = located && !("src" in located) ? located : block.source.spec;
-        return { key, kind: "image", state: "available", spec, alt: block.caption ?? describeSpec(spec), ...(block.caption ? { caption: block.caption } : {}), essential, origin };
+        return checkedFigure({ key, kind: "image", state: "available", alt: block.caption ?? block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential, origin }, spec, ctx);
       }
       if (block.source.kind === "generated") {
         const asset = ctx.options.generated?.[block.source.asset_id];
@@ -374,8 +385,8 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       // The accessible name is the printed caption of the original when there is one; otherwise a neutral label (or, for a
       // reconstruction, the description of what it draws). The analyzer's free description of the image is not verified, so it is
       // never used as the student's text alternative.
-      const alt = block.caption ?? (spec ? describeSpec(spec) : NEUTRAL_VISUAL_LABEL);
-      if (spec) return { key, kind: "image", state: "available", spec, alt, ...(block.caption ? { caption: block.caption } : {}), essential, origin: "original" };
+      const alt = block.caption ?? NEUTRAL_VISUAL_LABEL;
+      if (spec) return checkedFigure({ key, kind: "image", state: "available", alt, ...(block.caption ? { caption: block.caption } : {}), essential, origin: "original" }, spec, ctx);
       return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src, ...(asset.widthMm ? { widthMm: asset.widthMm } : {}) } : {}), alt, ...(block.caption ? { caption: block.caption } : {}), essential, ...(failure ? { failure } : {}), origin: "original" };
     }
     case "help_box":
@@ -425,6 +436,7 @@ function validate(nodes: RenderNode[], ctx: Ctx, outcomes: DeferredOutcome[], de
   const issues = [...ctx.issues];
   const add = (code: IssueCode, severity: IssueSeverity, message: string) => issues.push({ code, severity, message });
   for (const n of nodes) {
+    if (n.kind === "image" && n.state === "available" && n.src && !n.spec) add("visual_semantics_unverified", "info", "La impresión comprueba la disponibilidad de la imagen, no sus etiquetas ni su contenido. Comprueba su correspondencia con la consigna.");
     if (n.kind === "unknown") add("unknown_block_type", "error", `Hay un bloque de un tipo que el visor no conoce («${n.type}»): la ficha no se puede mostrar completa`);
     if (n.kind === "image" && n.state === "missing") {
       const code: IssueCode = n.failure && n.failure !== "asset_missing" ? "asset_unsupported" : "asset_missing";
@@ -472,6 +484,10 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   const tokens = renderTokens(doc.presentation, doc.meta.stage, design);
   const max = tokens.maxTasksPerPage;
 
+  const uses = new Map<string, number>();
+  for (const block of doc.pages.flatMap(p => p.blocks)) if (block.type === "activity") {
+    for (const ref of new Set(block.resource_block_ids ?? [])) uses.set(ref, (uses.get(ref) ?? 0) + 1);
+  }
   const pages: RenderPage[] = [];
   for (const logical of doc.pages) {
     let current: RenderNode[] = [];
@@ -486,7 +502,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     // The source of each node of the page being built, to tell what leads into the next activity.
     const sources: string[][] = [];
     const blockIds: string[] = [];
-    for (const block of logical.blocks) {
+    for (const block of withAdjacentFigures(logical.blocks, uses)) {
       const node = nodeOf(block, ctx);
       // The figures and the example an activity uses travel INSIDE it (see `leads` / `figures`): the document places them right
       // before the activity, and their link is the activity's own references, never their position on the page.

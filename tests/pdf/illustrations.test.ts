@@ -10,9 +10,9 @@ import { cellCaseDocument } from "../support/cell-case";
 import { printPdf } from "./harness";
 
 /**
- * Case B printed by the production engine (Chromium, offline): the approved illustration of the cell, pinned by its sha-256, is
+ * Technical case B printed by the production engine (Chromium, offline): the mock illustration of the cell, pinned by its sha-256, is
  * embedded in the PDF next to activity 1, with no network request and no script. The image bytes are the local mock drawing:
- * what is tested is the sheet, not a model. 0 model calls.
+ * what is tested is the sheet, not a model. The mock has NO numbers 1–3: this is a known negative semantic case, not a usable worksheet. 0 model calls.
  */
 describe("case B · the cell sheet with its generated illustration, printed", () => {
   it("the illustration is in the PDF, on the page of «Observa el esquema…», from the pinned bytes; nothing is fetched", async () => {
@@ -25,6 +25,7 @@ describe("case B · the cell sheet with its generated illustration, printed", ()
     const sheet = applyVisualResolution(document, plan);
     const { model, validation } = buildRenderModel(sheet, { mode: "student", design: "claro", requiredVisuals: ["vis_1"], deferred: [], generated: { [assetId]: { src: assetRef({ assetId, sha256 }), widthMm: generatedWidthMm(1536, 1024) } } });
     expect(validation.status).not.toBe("not_renderable");
+    expect(validation.issues.some(i => i.code === "visual_semantics_unverified")).toBe(true);
     const printed = await printPdf("illustrations-cell", model, [{ assetId, sha256, mime: "image/png", bytes: image.data }], 1);
     expect(printed.validation.issues).toEqual([]);
     expect(printed.result.blockedRequests).toEqual([]);

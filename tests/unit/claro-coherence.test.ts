@@ -24,4 +24,19 @@ describe("CLARO: coherencia estructural en la salida compartida", () => {
     expect(task?.kind === "activity" && task.figures.map(n => n.kind)).toEqual(["table", "image"]);
     expect(flatNodes(result.model.pages.flatMap(p => p.nodes)).filter(n => n.kind === "image")).toHaveLength(1);
   });
+  it("no duplica recursos compartidos ni traslada figuras entre páginas lógicas", () => {
+    const doc = editorDocument();
+    const tasks = doc.pages[0]!.blocks.filter(b => b.type === "activity");
+    if (tasks[1]?.type !== "activity") throw Error("fixture");
+    tasks[1].resource_block_ids = ["blk_figure1"];
+    const snapshot = JSON.stringify(doc);
+    const out = buildRenderModel(doc, { mode: "student", design: "claro" });
+    expect(flatNodes(out.model.pages.flatMap(p => p.nodes)).filter(n => n.kind === "image")).toHaveLength(1);
+    expect(JSON.stringify(doc)).toBe(snapshot);
+    const image = doc.pages[0]!.blocks.find(b => b.type === "image")!;
+    doc.pages[0]!.blocks = doc.pages[0]!.blocks.filter(b => b !== image);
+    doc.pages.unshift({ blocks: [image] });
+    const separated = buildRenderModel(doc, { mode: "student", design: "claro" });
+    expect(separated.model.pages[0]!.nodes.some(n => n.kind === "image")).toBe(true);
+  });
 });
