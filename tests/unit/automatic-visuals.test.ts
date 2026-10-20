@@ -305,21 +305,6 @@ describe("unchanged for sheets without these figures", () => {
   });
 });
 
-describe("contracts for 8.2B.2 / 8.2B.3, reserved and not wired", () => {
-  it("only the active provenances are produced; a figure a VisualSpec can draw is never a generation request", async () => {
-    const { ACTIVE_PROVENANCES, GeneratedImageRequestSchema, VISUAL_PROVENANCES } = await import("@/lib/visuals/contracts");
-    expect(VISUAL_PROVENANCES.filter((p) => !(ACTIVE_PROVENANCES as readonly string[]).includes(p))).toEqual(["catalog", "generated"]);
-    const base = { request_version: 1, decision_id: "dec_1", purpose: "Apoyo visual", style: "diagram", essential: false, stage: "primaria", must_include: [], must_not_include: ["la respuesta"] };
-    expect(GeneratedImageRequestSchema.safeParse(base).success).toBe(true);
-    expect(GeneratedImageRequestSchema.safeParse({ ...base, spec: { spec_version: 1, kind: "fraction_bar", parts: 4, shaded: [0] } }).success).toBe(false);
-    const { readdirSync, readFileSync } = await import("node:fs");
-    const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []));
-    const users = files("src").filter((f) => !f.endsWith("visuals/contracts.ts") && /GeneratedImageRequest|visuals\/contracts/.test(readFileSync(f, "utf8")));
-    expect(users).toEqual([]);
-  });
-});
-
-
 describe("textless originals have no independently verified activity identity", () => {
   it("rejects even a matching vision hypothesis before accessing pixels", () => {
     const textless: PageModel = { width: 4096, height: 4096, texts: [], mmPerPx: .05,

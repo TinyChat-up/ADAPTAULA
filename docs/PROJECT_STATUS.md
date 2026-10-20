@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Auditoría y limpieza (2026-10-20):** #48 integrada en `8a7e327`. Revisión transversal local y [resultados](qa/auditoria-2026-10-20/README.md): dos módulos y un contrato de imagen antiguos, sin consumidores de producto, retirados con sus pruebas exclusivas. Editor y pipeline activos conservados. 39 pruebas PDF y 16 E2E escritorio/móvil correctos, además de las regresiones focalizadas. Pendientes principales: carrera entre limpieza de subidas y finalización (A1), validación de infraestructura desplegada y coherencia semántica de visuales. No declarar el MVP listo para producción por estos resultados. Sin servicios Supabase/Vercel, migraciones ni IA pagada.
+
 > **PDF, descarga interrumpida (2026-10-20):** [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48): la descarga muestra un error recuperable si falla la lectura del archivo después de recibir las cabeceras, y el botón abandona el estado de espera ante fallos inesperados del navegador. Prueba de regresión, typecheck y build locales correctos. No cambia CLARO ni acredita el runtime PDF en Vercel. #47 ya está integrada en `main`; la validación remota permanece pendiente.
 
 > **Etapa 5B, fase A (2026-10-17):** [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) fusionada en `e37951a`. Rama `codex/adaptaula-2-staging-5b`: inspección SQL de solo lectura, prueba RLS real preparada y sonda autenticada de PDF para staging; CLARO y Chromium comprobados **solo localmente**. No se han consultado servicios de staging ni ejecutado la fase B. [Procedimiento y estados](qa/adaptaula-2-etapa-5b/README.md).
@@ -10,7 +12,7 @@
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `e37951a`, PR #38–#46 integradas.
+Actualizado: 2026-10-20. Base de esta entrega: `origin/main` en `8a7e327`, PR #38–#48 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -46,7 +48,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Adaptaula 2.0, etapa 5B (fase A)**: herramientas y procedimiento para inspeccionar migraciones, Auth, Storage, PDF y cuotas en staging una vez autorizada la fase B. [QA 5B](qa/adaptaula-2-etapa-5b/README.md). Nada se declara verificado en staging. La eliminación física sigue siendo una entrega separada.
+**Auditoría transversal y limpieza:** resultados y recomendaciones en [QA](qa/auditoria-2026-10-20/README.md). La fase A de 5B ya está integrada: sus herramientas y procedimiento permiten inspeccionar migraciones, Auth, Storage, PDF y cuotas en staging cuando se autorice la fase B. [QA 5B](qa/adaptaula-2-etapa-5b/README.md). Nada se declara verificado en staging. La eliminación física sigue siendo una entrega separada.
 
 
 ## Antecedente — entrega del editor de #38 (ya integrada)

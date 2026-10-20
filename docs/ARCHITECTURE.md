@@ -4,7 +4,7 @@ Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → 
 
 ## Visión general
 
-Un **monolito Next.js** desplegado en Vercel, con Supabase como backend gestionado (Postgres + Auth + Storage) y Stripe para facturación. Sin microservicios, sin Redis, sin colas externas en el MVP.
+Un **monolito Next.js** desplegado en Vercel, con Supabase como backend gestionado (Postgres + Auth + Storage). La facturación Stripe está reservada y desactivada; no hay checkout ni webhooks implementados. Sin microservicios, sin Redis, sin colas externas en el MVP.
 
 ```
 Navegador ──► Next.js (Vercel, región fra1)
@@ -13,9 +13,9 @@ Navegador ──► Next.js (Vercel, región fra1)
                ├─ proxy.ts (refresco de sesión + redirecciones de auth)
                └─ src/lib/ai ──► Anthropic / OpenAI (solo servidor)
                      │
-               Supabase (UE) ── Postgres + RLS · Auth · Storage privado
-                     │
-               Stripe ── Checkout · Billing · Customer Portal · Webhooks
+               Supabase ── Postgres + RLS · Auth · Storage privado
+
+               Stripe: integración futura, sin contratación activa
 ```
 
 ## Stack y versiones
@@ -26,14 +26,16 @@ Navegador ──► Next.js (Vercel, región fra1)
 | UI | React 19, Tailwind CSS 4, primitivas propias (`components/ui`), Lucide |
 | Formularios | Server Actions + Zod 4 (validación siempre en servidor); estado local en el cliente para el editor de perfiles |
 | Datos | Supabase: Postgres, Auth, Storage, RLS (`@supabase/ssr`) |
-| Pagos | Stripe (Checkout, Billing, Customer Portal, Webhooks) |
+| Pagos | Catálogo y suscripciones en SQL; integración Stripe pendiente |
 | IA | SDKs oficiales `@anthropic-ai/sdk` y `openai` detrás de `src/lib/ai` |
 | PDF | HTML print con Chromium headless, usando el mismo renderer React (ver ADR-007) |
-| Matemáticas | KaTeX (subconjunto LaTeX, `trust: false`) |
+| Matemáticas | Texto y figuras deterministas del renderer; KaTeX no está instalado |
 | Tests | Vitest (unit/integración), Playwright (E2E), PGlite + stub de Supabase (esquema, RLS y funciones SQL) |
 | Hosting | Vercel (Fluid Compute, Node.js 24) + Supabase en región UE |
 
 ## Estructura del repositorio
+
+El árbol siguiente es la propuesta inicial; contiene módulos y rutas todavía no construidos (`admin`, `billing`, `analytics`, `material-renderer`). El renderer actual está en `src/components/material` y `src/lib/render`; el editor en `src/lib/editor`. No deducir disponibilidad de una función por aparecer en este árbol.
 
 ```
 src/

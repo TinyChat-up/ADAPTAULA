@@ -1,5 +1,18 @@
 # Registro de desarrollo
 
+## 2026-10-20 — Auditoría transversal y limpieza de prototipos obsoletos
+
+- Base verificada: `origin/main` en `8a7e327`, PR #48 integrada; rama `codex/auditoria-limpieza-documentos`, [PR #49](https://github.com/TinyChat-up/ADAPTAULA/pull/49) abierta sin merge. La PR histórica #20 permanece abierta y no se modifica.
+- [Informe y capturas actuales](qa/auditoria-2026-10-20/README.md): arquitectura, permisos, Storage, cuotas, datos, pedagogía, PDF, interfaz, dependencias y operación. Revisión local de módulos críticos y grafo de imports del código versionado; no certificación exhaustiva ni inspección de producción.
+- Retirados `adaptation/corrections.ts`, `visuals/contracts.ts` y `ImageBriefSchema` antiguo, sin consumidores del producto y sustituidos por editor/ilustraciones actuales. Se retiran solo sus pruebas exclusivas. No se eliminan migraciones, prompts publicados, fixtures adversariales útiles, documentos, recursos de usuarios ni dependencias con uso legítimo.
+- Corregidas afirmaciones de documentación que daban por implementados CSP global, cookies HttpOnly, Google, KaTeX, facturación/admin y CI. No se simula haber implementado esos controles.
+- Riesgos pendientes: carrera de limpieza de Storage frente a finalización de una subida antigua (intercalación de código, sin incidente remoto observado); PDF en Vercel; capacidad/tiempo total de render; coherencia de figuras y etiquetas que los mocks no prueban. Una célula mock pide números que no están dibujados: prueba técnica útil, no evidencia pedagógica.
+- Pruebas: 98/98 en primer lote de regresiones; 97/97 en integración/cuotas/Auth; 78/78 en contratos/visuales tras limpieza (con solapamientos). PDF real local 39/39; navegador 16/16 en escritorio/móvil con PGlite y proveedor simulado. Typecheck, build y escáner de secretos correctos; lint sin errores, un aviso previo. No se repite toda la suite.
+- Navegador estándar no descargable por 403; E2E con Chromium serverless 153 ya disponible y argumentos seguros, configuración temporal fuera del repo. Un primer intento con aislamiento deshabilitado falló por ausencia de Origin y se descartó; no se debilitó el guard del producto.
+- Dependencias: 0 advisories de producción; `braces@3.0.3` en herramientas de desarrollo presenta un aviso alto sin parche publicado. No se fuerza una actualización incompatible.
+- Recomendados skills de ideación y aplicación a CLARO, más checklist pedagógico específico; Drive/Dropbox/Box son opcionales para archivos y no mejoran por sí mismos la pedagogía. No se instala ni activa ningún conector ni se llama a modelos pagados. Supabase/Vercel remoto, Stripe y producción intactos.
+- Siguiente acción precisa: revisar esta PR; corregir A1 con prueba de concurrencia/recuperación antes de avanzar a la validación de infraestructura autorizada. No hay merge automático.
+
 ## 2026-10-20 — Descarga PDF recuperable ante una conexión interrumpida
 
 - Base original: `origin/main` (`e37951a`), rama `codex/pdf-descarga-interrumpida`, [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48). Integrada después la PR #47 en `main` (`400fc96`) mediante resolución de conflictos de documentación; no se modificó su rama.

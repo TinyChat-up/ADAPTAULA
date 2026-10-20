@@ -8,8 +8,6 @@ import { DraftBlockSchema } from "./material-document";
 
 export { ADAPTATION_TYPES, AdaptationTypeSchema, OBJECTIVES_MAY_CHANGE, type AdaptationType } from "./adaptation-type";
 
-const Text = z.string().trim().min(1).max(1000);
-
 /**
  * Step D — material_generator. The generator does NOT write the whole sheet: what is kept is copied deterministically from
  * the analysis (`adaptation/skeleton.ts`). It writes only the blocks of the targets that a decision changes or supports.
@@ -81,19 +79,3 @@ export type DraftGeneratedSegments = z.infer<typeof DraftGeneratedSegmentsSchema
 // block_reviser: one block in, the same block (same id and trace) out.
 export const RevisedBlockSchema = z.object({ block: DraftBlockSchema });
 export type RevisedBlock = z.infer<typeof RevisedBlockSchema>;
-
-// image_brief (images are not implemented; kept as the contract a future visual request turns into)
-export const ImageBriefSchema = z.object({
-  pedagogical_purpose: Text,
-  target_age: z.string().max(40),
-  concept: Text,
-  objects: z.array(z.string().max(120)).min(1).max(12),
-  composition: Text,
-  background: z.string().max(200),
-  complexity: z.enum(["minimal", "simple", "moderate"]),
-  labels: z.array(z.string().max(60)).max(12),
-  prohibited_elements: z.array(z.string().max(120)).max(15),
-  accessibility_notes: Text,
-  alt_text: z.string().trim().min(1).max(300),
-});
-export type ImageBrief = z.infer<typeof ImageBriefSchema>;

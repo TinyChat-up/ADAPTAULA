@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { GeneratedSegmentsSchema, ImageBriefSchema, RevisedBlockSchema } from "./ai-contracts";
+import { GeneratedSegmentsSchema, RevisedBlockSchema } from "./ai-contracts";
 import { AdaptationPlanSchema, DraftAdaptationPlanSchema } from "./adaptation-plan";
 import { BlockIdSchema, DraftMaterialDocumentSchema, MaterialDocumentSchema, createBlockId, finalizeDocument, type DraftMaterialDocument } from "./material-document";
 import { AiReviewDraftSchema, PedagogicalReviewSchema } from "./pedagogical-review";
@@ -79,6 +79,5 @@ describe("the other versioned contracts parse their minimal valid shape", () => 
     expect(AiReviewDraftSchema.safeParse({ checks: [{ check: "age_appropriate", status: "PASS", targets: [], detail: "" }] }).success).toBe(true);
     expect(GeneratedSegmentsSchema.safeParse({ segments: [{ target: "act_1", decision_ids: ["dec_1"], blocks: [choiceActivity], new_item_answers: [] }], change_summary: ["Instrucción en pasos"] }).success).toBe(true);
     expect(RevisedBlockSchema.safeParse({ block: choiceActivity }).success).toBe(true);
-    expect(ImageBriefSchema.safeParse({}).success).toBe(false);
   });
 });

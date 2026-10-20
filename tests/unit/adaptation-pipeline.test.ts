@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyBlockEdit, applyDecisionOverride, applyInstructionEdit, applyProtectedOverlay, applyReviewOverride, blocksOfDecision, TeacherCorrectionSchema } from "@/lib/adaptation/corrections";
 import { sequentialIds } from "@/lib/adaptation/document";
 import { answerSignatures, leakedSignature } from "@/lib/adaptation/text";
 import { answersOf, materialNumbers } from "@/lib/adaptation/facts";
 import { createMockGenerator, createMockPlanner, createMockReviewer, mockPlanDraft } from "@/lib/adaptation/mock";
 import { runAdaptation } from "@/lib/adaptation/pipeline";
-import { checkOf, verdictOf } from "@/lib/adaptation/review";
+import { checkOf } from "@/lib/adaptation/review";
 import { summarizeCost, type AdaptationPlanner, type StageRunRecord } from "@/lib/adaptation/services";
 import { studentText } from "@/lib/adaptation/document-text";
 import { allBlocks } from "@/lib/schemas/material-document";
@@ -92,49 +91,6 @@ describe("C · plan validation with one repair: whatever still blocks is dropped
     expect(result.plan.decisions).toEqual([]);
     expect(result.validation.issues.some((i) => i.flag === "required_data_removed" && i.severity === "block")).toBe(true);
     expect(allBlocks(result.document).some((b) => b.trace.source_refs.includes("vis_1"))).toBe(true);
-  });
-});
-
-describe("J · teacher corrections are local", () => {
-  it("editing one block changes only that block, keeps its id and marks it as edited", async () => {
-    const { document } = await run();
-    const target = allBlocks(document).find((b) => b.type === "activity")!;
-    const edited = applyInstructionEdit(document, target.id, "Consigna corregida por el docente: calcula el crecimiento entre 2012 y 2022.");
-    const before = allBlocks(document);
-    const after = allBlocks(edited);
-    expect(after.find((b) => b.id === target.id)).toMatchObject({ prompt: expect.stringMatching(/corregida/), trace: { teacher_edited: true } });
-    expect(after.filter((b) => b.id !== target.id)).toEqual(before.filter((b) => b.id !== target.id));
-    expect(() => applyBlockEdit(document, "blk_9999", target)).toThrow(/No existe/);
-  });
-
-  it("overriding a decision marks only its blocks for regeneration", async () => {
-    const { document, plan } = await run();
-    const decision = plan.decisions.find((d) => d.action === "add_support")!;
-    const affected = blocksOfDecision(document, decision.id);
-    expect(affected.length).toBeGreaterThan(0);
-    expect(affected.length).toBeLessThan(allBlocks(document).length / 2);
-    const discarded = applyDecisionOverride(plan, { kind: "decision_override", decision_id: decision.id, discard: true });
-    expect(discarded.decisions.map((d) => d.id)).not.toContain(decision.id);
-    expect(discarded.decisions).toHaveLength(plan.decisions.length - 1);
-  });
-
-  it("a protected element reinterpreted by the teacher is an overlay; the stored analysis is untouched", () => {
-    const analysis = geographyAnalysis();
-    const corrections = [TeacherCorrectionSchema.parse({ kind: "protected_reinterpretation", protected_id: "prt_8", importance: "essential" }), TeacherCorrectionSchema.parse({ kind: "protected_reinterpretation", protected_id: "prt_2", dismissed: true })];
-    const overlaid = applyProtectedOverlay(analysis, corrections);
-    expect(overlaid.protected_elements.find((p) => p.id === "prt_8")?.importance).toBe("essential");
-    expect(overlaid.protected_elements.some((p) => p.id === "prt_2")).toBe(false);
-    expect(analysis.protected_elements.find((p) => p.id === "prt_8")?.importance).toBe("important");
-  });
-
-  it("accepting a review warning keeps the original status for audit and changes the verdict", async () => {
-    const { review } = await run(argumentationAnalysis(), PROFILES.visualLoad);
-    const warned = review.checks.filter((c) => c.status === "WARN");
-    expect(review.verdict).toBe("approved_with_warnings");
-    let accepted = review;
-    for (const c of warned) accepted = applyReviewOverride(accepted, c.check, "Revisado en clase");
-    expect(accepted.checks.find((c) => c.check === warned[0]!.check)).toMatchObject({ status: "WARN", teacher_override: { accepted: true } });
-    expect(verdictOf(accepted.checks)).toBe("approved");
   });
 });
 
