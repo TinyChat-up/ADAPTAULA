@@ -672,7 +672,7 @@ Registro compartido entre Codex y Claude Code. Añadir una entrada por bloque: b
 
 ## 2026-10-20 — Integridad de originales: corrección focalizada de A1
 
-- Base `origin/main` / `8a7e327`; rama independiente `codex/integridad-originales`. La PR #49 seguía abierta: no se modifica ni fusiona. Su informe se leyó desde su rama local. [Detalle de implementación, pruebas y despliegue](qa/integridad-originales/README.md).
+- Base `origin/main` / `8a7e327`; rama independiente `codex/integridad-originales`, [PR #50](https://github.com/TinyChat-up/ADAPTAULA/pull/50) abierta sin merge. La PR #49 seguía abierta: no se modifica ni fusiona. Su informe se leyó desde su rama local. [Detalle de implementación, pruebas y despliegue](qa/integridad-originales/README.md).
 - Reproducción previa determinista sobre el cron real: falla al conservar `uploaded` pero borrar el objeto y contar una eliminación inexistente. La prueba pasa después del cambio.
 - Migración 029: ventana técnica de dos horas y tabla privada de reclamaciones/rutas, RPC de finalización atómica y cleanup con lease/token. PostgreSQL resuelve el ganador bajo el lock del material; Storage siempre se llama fuera de esa transacción. Triggers impiden publicar o reutilizar identidades/rutas reclamadas. No se altera ningún original ni dato educativo de los fixtures.
 - El worker conserva intentos/rutas ante fallos, verifica ausencia tras DELETE, cuenta solo filas confirmadas y recupera leases. Lápidas persistentes permiten barrer PUT tardíos sin doble conteo ni un plazo de retención inventado. Los rechazos de validación dejan seguimiento en lugar de borrar ciegamente; los materiales pendientes siguen ocultos en biblioteca.

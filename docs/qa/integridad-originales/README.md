@@ -1,7 +1,7 @@
 # Integridad de originales: finalización y limpieza de subidas
 
-Fecha: 20/10/2026. Base `main` / `8a7e327`. Rama independiente `codex/integridad-originales`.
-La PR #49 seguía abierta al iniciar: no se fusiona ni se modifica; su informe A1 se leyó desde su rama local. Esta entrega implementa ese hallazgo, sin una nueva auditoría ni rediseño. Product Design no requiere generar una interfaz para corregir esta operación de backend.
+Fecha: 20/10/2026. Base `main` / `8a7e327`. Rama independiente `codex/integridad-originales`. [PR #50](https://github.com/TinyChat-up/ADAPTAULA/pull/50), abierta sin merge.
+La combinación con la rama de #49 se comprobó con `git merge-tree`, sin conflictos y sin modificar ninguna de las dos ramas. La PR #49 seguía abierta al iniciar: no se fusiona ni se modifica; su informe A1 se leyó desde su rama local. Esta entrega implementa ese hallazgo, sin una nueva auditoría ni rediseño. Product Design no requiere generar una interfaz para corregir esta operación de backend.
 
 ## Causa y reproducción previa
 
@@ -51,7 +51,7 @@ Caducar un token no permite afirmar que todos los PUT remotos iniciados antes ha
 | Escritura remota termina después del primer barrido | La ruta sigue en la lápida | Revisiones posteriores; no se vuelve a dar de alta ese material. |
 | Se agota el tiempo disponible del cron | Reclamaciones no procesadas mantienen su lease | Recuperación al caducar, sin borrar las filas por haber sido seleccionadas. |
 
-El worker tiene un presupuesto blando de 20 s por lote y espera como máximo 8 s por operación de borrado/confirmación. Un timeout local no garantiza cancelar una operación remota ya aceptada: la seguridad depende de la reclamación irreversible y la recuperación, no de que la red se detenga. El cron procesa hasta 20 reclamaciones por ejecución; requiere vigilar el backlog. Los reintentos se vuelven elegibles al minuto, pero el cron actual es diario: no se promete eliminación inmediata ni una latencia fija. No se modifica el procesador de IA.
+El worker tiene un presupuesto blando de 20 s por lote y espera como máximo 8 s por secuencia remota de borrado y verificación. Un timeout local no garantiza cancelar una operación remota ya aceptada: la seguridad depende de la reclamación irreversible y la recuperación, no de que la red se detenga. El cron procesa hasta 20 reclamaciones por ejecución; requiere vigilar el backlog. Los reintentos se vuelven elegibles al minuto, pero el cron actual es diario: no se promete eliminación inmediata ni una latencia fija. No se modifica el procesador de IA.
 
 ## Pruebas deterministas A–L
 
