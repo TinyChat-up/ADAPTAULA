@@ -2,7 +2,7 @@
 
 > **Etapa 5A, primera entrega (2026-10-17):** exportación personal y solicitud de eliminación comprobables. Para cerrar la fase falta un procesador duradero de baja que bloquee jobs, limpie todos los buckets, borre Auth y respete obligaciones de conservación definidas jurídicamente. [Detalle](qa/adaptaula-2-etapa-5a/README.md). No activar borrado automático mientras falte esa infraestructura.
 
-> **Etapa 5B, tras integrar #46:** validar en staging el estado real de 025–028, confirmación de correo, recuperación y enlaces de Auth, PDF Chromium en Vercel, Storage privado, cuotas Free y fallos seguros con diagnósticos sin contenido sensible. No aplicar migraciones ni cambiar secretos sin autorización. La eliminación física completa es una entrega separada con conservación definida y limpieza recuperable.
+> **Etapa 5B:** #46 integrada en `e37951a`. Fase A: preparar y probar localmente inspección SQL, permisos reales y sonda PDF autenticada; [procedimiento](qa/adaptaula-2-etapa-5b/README.md). Fase B pendiente de autorización expresa: validar en staging 025–028, Auth/correo, PDF Chromium en Vercel, Storage privado, cuotas Free y fallos seguros. No aplicar migraciones ni cambiar secretos ahora. La eliminación física es una entrega separada con conservación definida y limpieza recuperable.
 
 > Etapa 4B: portada y demostración pública sintética, «Cómo funciona», acceso y primera experiencia. [Alcance y pruebas](qa/adaptaula-2-etapa-4b/README.md). #44 está fusionada; no se ha aplicado migración remota.
 

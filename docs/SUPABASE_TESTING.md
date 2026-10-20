@@ -1,5 +1,7 @@
 # Pruebas contra un proyecto Supabase real
 
+> Para la validación operativa de staging con **confirmación de correo activa** y migraciones 025–028, seguir el [procedimiento 5B](qa/adaptaula-2-etapa-5b/README.md). Este documento describe un proyecto desechable de pruebas E2E que desactiva la confirmación; esa configuración no demuestra la entrega real de correo y no debe trasladarse sin más a staging.
+
 ## Por qué hace falta
 
 La suite local usa un backend de pruebas (`tests/e2e/fake-supabase.mjs`) que ejecuta **las migraciones reales** sobre PGlite (Postgres embebido): RLS, permisos por columna, triggers y funciones SQL son los de verdad. Eso da mucha confianza en el esquema, pero **no prueba** lo que solo hace Supabase: el servicio de Autenticación (GoTrue), el servicio de Storage (políticas, tipos MIME, límites, URLs firmadas), el gateway y la configuración del proyecto. Antes de usar datos reales hay que repetir las pruebas clave contra un proyecto real.

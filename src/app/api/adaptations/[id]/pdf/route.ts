@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { apiError, getApiContext } from "@/lib/api/context";
+import { logger } from "@/lib/logger";
 import { serviceDeps } from "@/lib/adaptation/orchestration/server";
 import type { Actor } from "@/lib/adaptation/orchestration/service";
 import { getSupabase } from "@/lib/auth/session";
@@ -30,20 +32,31 @@ const ERRORS: Record<PdfExportError, { status: number; message: string }> = {
  * never cached by anyone.
  */
 export async function GET(request: Request, { params }: RouteContext<"/api/adaptations/[id]/pdf">) {
+  const requestId = randomUUID();
+  const started = performance.now();
+  const withRequestId = <T extends Response>(response: T): T => {
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  };
   const auth = await getApiContext(request, { mutating: false });
-  if ("response" in auth) return auth.response;
+  if ("response" in auth) return withRequestId(auth.response);
   const { id } = await params;
-  if (!z.uuid().safeParse(id).success) return apiError(404, "not_found", ERRORS.not_found.message);
+  if (!z.uuid().safeParse(id).success) return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
 
   const supabase = await getSupabase();
   const rawDraft = new URL(request.url).searchParams.get("borrador");
   const draftRevision = rawDraft === null ? undefined : Number(rawDraft);
-  if (draftRevision !== undefined && (!Number.isInteger(draftRevision) || draftRevision < 1)) return apiError(404, "not_found", ERRORS.not_found.message);
+  if (draftRevision !== undefined && (!Number.isInteger(draftRevision) || draftRevision < 1)) return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
   const actor: Actor = { userId: auth.ctx.user.id, workspaceId: auth.ctx.workspace.id, canWrite: hasRole(auth.ctx.role, WRITE_ROLES) };
   const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision);
-  if (!result.ok) return apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message);
+  if (!result.ok) {
+    logger.warn("pdf_request", { requestId, outcome: result.code, durationMs: Math.round(performance.now() - started) });
+    return withRequestId(apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message));
+  }
 
-  return new Response(Buffer.from(result.pdf), {
+  logger.info("pdf_request", { requestId, outcome: "ready", durationMs: Math.round(performance.now() - started), pages: result.pageCount, bytes: result.pdf.byteLength });
+
+  return withRequestId(new Response(Buffer.from(result.pdf), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": result.contentDisposition,
@@ -52,5 +65,5 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
       "X-Content-Type-Options": "nosniff",
       Vary: "Cookie",
     },
-  });
+  }));
 }

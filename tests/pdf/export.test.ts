@@ -67,6 +67,7 @@ describe("product PDF export (real Chromium)", () => {
     expect(res.headers.get("Content-Disposition")).not.toContain(world.id);
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
     expect(Number(res.headers.get("Content-Length"))).toBe(pdf.length);
     expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
     const v = await validatePdf(pdf, { fontPrefix: "Inter", minImages: 2, minPages: 1 });
