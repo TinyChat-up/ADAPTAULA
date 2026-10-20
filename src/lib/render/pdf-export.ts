@@ -24,7 +24,7 @@ import type { DraftReader } from "@/lib/editor/store";
 // PostScript name of the embedded faces (`Inter-Regular`…), not the CSS family the sheet declares.
 const PDF_FONT_PREFIX = "Inter";
 
-export type PdfExportError = "not_found" | "not_ready" | "resource_pending" | "not_renderable" | "render_failed";
+export type PdfExportError = "not_found" | "not_ready" | "resource_pending" | "not_renderable" | "render_failed" | "version_changed";
 
 export type PdfExportResult =
   | { ok: true; pdf: Uint8Array; filename: string; contentDisposition: string; pageCount: number; timings: PdfRenderResult["timings"] & { prepareMs: number; validateMs: number } }
@@ -39,12 +39,14 @@ export interface PdfExportDeps {
   drafts?: DraftReader;
 }
 
-export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, adaptationId: string, draftRevision?: number): Promise<PdfExportResult> {
+export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, adaptationId: string, draftRevision?: number, expectedVersion?: number): Promise<PdfExportResult> {
   const started = performance.now();
   const loaded = await loadRenderInputWith(deps.service, actor, adaptationId, deps.visuals, { pin: true, ...(deps.resources ? { resources: deps.resources } : {}), ...(deps.generated ? { generated: deps.generated } : {}) });
   if (loaded.kind === "not_found") return { ok: false, code: "not_found" };
   if (loaded.kind === "not_ready") return { ok: false, code: "not_ready" };
   if (loaded.kind === "invalid_document") return { ok: false, code: "not_renderable" };
+  // A saved revision belongs to a particular generated base. Never substitute another base after an editor was opened.
+  if (expectedVersion !== undefined && loaded.version.version !== expectedVersion) return { ok: false, code: "version_changed" };
 
   // Explicit saved revision only: never silently substitute the generated sheet or a newer draft.
   if (draftRevision !== undefined) {

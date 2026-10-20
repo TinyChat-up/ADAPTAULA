@@ -13,6 +13,7 @@ import { generatedDeps } from "@/lib/render/generated";
 import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/pdf-export";
 import { pdfEngine } from "@/lib/render/print/server";
 import { draftStore } from "@/lib/editor/store";
+import { PDF_HEADERS, pdfRevision } from "@/lib/render/pdf-contract";
 
 // The first PDF of a new instance unpacks Chromium (≈2–3 s); a render is well under a second after that.
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ const ERRORS: Record<PdfExportError, { status: number; message: string }> = {
   resource_pending: { status: 409, message: "Falta completar un recurso de la ficha (una imagen). Complétalo en la ficha y podrás descargar el PDF." },
   not_renderable: { status: 409, message: "Esta ficha todavía no se puede descargar completa. Revisa la vista docente para ver qué falta." },
   render_failed: { status: 503, message: "No hemos podido preparar el PDF. Inténtalo de nuevo en unos minutos." },
+  version_changed: { status: 409, message: "La ficha generada ha cambiado. Recarga la ficha para abrir la versión actual antes de preparar el PDF." },
 };
 
 /**
@@ -47,8 +49,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
   const rawDraft = new URL(request.url).searchParams.get("borrador");
   const draftRevision = rawDraft === null ? undefined : Number(rawDraft);
   if (draftRevision !== undefined && (!Number.isInteger(draftRevision) || draftRevision < 1)) return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
+  const rawVersion = new URL(request.url).searchParams.get("version");
+  const expectedVersion = rawVersion === null ? undefined : Number(rawVersion);
+  if (expectedVersion !== undefined && !z.number().int().positive().safeParse(expectedVersion).success) return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
   const actor: Actor = { userId: auth.ctx.user.id, workspaceId: auth.ctx.workspace.id, canWrite: hasRole(auth.ctx.role, WRITE_ROLES) };
-  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision);
+  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision, expectedVersion);
   if (!result.ok) {
     logger.warn("pdf_request", { requestId, outcome: result.code, durationMs: Math.round(performance.now() - started) });
     return withRequestId(apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message));
@@ -61,6 +66,9 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
       "Content-Type": "application/pdf",
       "Content-Disposition": result.contentDisposition,
       "Content-Length": String(result.pdf.byteLength),
+      [PDF_HEADERS.pages]: String(result.pageCount),
+      [PDF_HEADERS.bytes]: String(result.pdf.byteLength),
+      [PDF_HEADERS.revision]: pdfRevision(draftRevision),
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
       Vary: "Cookie",

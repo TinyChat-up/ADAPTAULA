@@ -42,7 +42,10 @@ describe("PDF file name", () => {
 });
 
 describe("fetchAdaptationPdf (browser)", () => {
-  const pdfResponse = () => new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), { headers: { "Content-Type": "application/pdf", "Content-Disposition": pdfContentDisposition("Mi ficha").header } });
+  const pdfResponse = () => {
+    const bytes = new TextEncoder().encode("%PDF-1.7\nsynthetic\n%%EOF\n");
+    return new Response(bytes, { headers: { "Content-Type": "application/pdf", "Content-Disposition": pdfContentDisposition("Mi ficha").header, "X-PDF-Page-Count": "1", "X-PDF-Byte-Length": String(bytes.length), "X-PDF-Revision": "generated" } });
+  };
 
   it("a PDF answer gives the file and the server's name; the request is same-origin and never cached", async () => {
     let seen: RequestInit | undefined;
@@ -67,7 +70,28 @@ describe("fetchAdaptationPdf (browser)", () => {
         controller.enqueue(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
         controller.error(new Error("connection closed"));
       },
-    }), { headers: { "Content-Type": "application/pdf" } });
+    }), { headers: { "Content-Type": "application/pdf", "X-PDF-Page-Count": "1", "X-PDF-Byte-Length": "80", "X-PDF-Revision": "generated" } });
     expect(await fetchAdaptationPdf("x", async () => interrupted)).toEqual({ ok: false, message: PDF_GENERIC_ERROR });
+  });
+});
+
+describe("validated PDF preview contract", () => {
+  const bytes = new TextEncoder().encode("%PDF-1.7\nsynthetic\n%%EOF\n");
+  const response = (headers: Record<string, string> = {}) => new Response(bytes, { headers: {
+    "Content-Type": "application/pdf", "X-PDF-Page-Count": "11", "X-PDF-Byte-Length": String(bytes.length), "X-PDF-Revision": "generated", ...headers,
+  } });
+  it("carries physical pages, never logical pages, and the complete bytes", async () => {
+    const result = await fetchAdaptationPdf("id", async () => response());
+    expect(result).toMatchObject({ ok: true, pageCount: 11 });
+    if (result.ok) expect(new Uint8Array(await result.blob.arrayBuffer())).toEqual(bytes);
+  });
+  it("refuses missing or invalid metadata, a truncated body and another saved revision", async () => {
+    const invalid: Record<string, string>[] = [
+      { "X-PDF-Page-Count": "" }, { "X-PDF-Page-Count": "0" }, { "X-PDF-Page-Count": "1.5" },
+      { "X-PDF-Byte-Length": String(bytes.length + 2) }, { "X-PDF-Revision": "draft:2" },
+    ];
+    for (const headers of invalid) expect(await fetchAdaptationPdf("id", async () => response(headers))).toMatchObject({ ok: false });
+    expect(await fetchAdaptationPdf("id", async () => response({ "X-PDF-Revision": "draft:3" }), 3)).toMatchObject({ ok: true, pageCount: 11 });
+    expect(await fetchAdaptationPdf("id", async () => response({ "X-PDF-Revision": "draft:4" }), 3)).toMatchObject({ ok: false });
   });
 });

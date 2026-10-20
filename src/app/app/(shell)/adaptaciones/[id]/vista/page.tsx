@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { PdfDownload } from "@/components/material/pdf-download";
+import { PdfPreview } from "@/components/material/pdf-preview";
 import { MaterialSheet } from "@/components/material/sheet";
 import { TeacherPanel } from "@/components/material/teacher-panel";
 import { VisualNeedsPanel } from "@/components/material/visual-needs-panel";
@@ -72,7 +73,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
           </LinkButton>
         </nav>
         {/* The PDF is always the student's sheet; a sheet the student view cannot show is not offered for download. */}
-        {readiness.printable ? <PdfDownload adaptationId={id} /> : null}
+        {readiness.printable ? <div className="space-y-3"><PdfPreview adaptationId={id} baseVersion={loaded.version.version} editHref={canWrite ? `/app/adaptaciones/${id}/editar` : undefined} /><PdfDownload adaptationId={id} /></div> : null}
       </div>
 
       {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} manual={manual} editHref={`${here}?editar=1`} />}

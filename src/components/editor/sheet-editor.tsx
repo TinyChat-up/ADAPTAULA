@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
 import { ActionBar } from "@/components/ui/action-bar";
 import { PdfDownload } from "@/components/material/pdf-download";
+import { PdfPreview } from "@/components/material/pdf-preview";
 import { applyEditorChanges, emptyChanges, type EditorChanges, type SavedDraft } from "@/lib/editor/changes";
 import { historyOf, changeHistory, undoHistory, redoHistory } from "@/lib/editor/history";
 import { sheetModel, type SheetInput } from "@/lib/render/sheet-model";
@@ -123,7 +124,9 @@ export function SheetEditor({ adaptationId, baseVersion, input, saved }: {
         <div className="space-y-3">
           <Button variant="ghost" disabled={saving || !lastSaved || !dirty} onClick={() => { change(lastSaved!.changes); setAcknowledged(lastSaved!.contentAcknowledged); }}>Recuperar último guardado</Button>
           <p className="text-sm text-muted-foreground">Se conserva cada revisión guardada. Recuperar no cambia la ficha generada.</p>
-          {lastSaved ? <><p className="text-sm font-medium">PDF del borrador · revisión {lastSaved.revision}{dirty ? " · guarda los cambios para descargar" : ""}</p><PdfDownload key={lastSaved.revision} adaptationId={adaptationId} draftRevision={lastSaved.revision} disabled={dirty || saving || !preview.valid || preview.validation.status === "not_renderable"} /></> : null}
+          {lastSaved ? <><p className="text-sm font-medium">PDF del borrador · revisión {lastSaved.revision}{dirty ? " · guarda los cambios para previsualizar o descargar" : ""}</p>
+            <PdfPreview adaptationId={adaptationId} baseVersion={baseVersion} draftRevision={lastSaved.revision} inEditor disabled={dirty || saving || !preview.valid || preview.validation.status === "not_renderable"} />
+            <PdfDownload key={lastSaved.revision} adaptationId={adaptationId} draftRevision={lastSaved.revision} disabled={dirty || saving || !preview.valid || preview.validation.status === "not_renderable"} /></> : null}
           <p className="text-sm text-muted-foreground">Guarda los cambios para descargar el PDF actualizado. Solo se imprime la ficha del alumnado.</p>
         </div>
       </div>

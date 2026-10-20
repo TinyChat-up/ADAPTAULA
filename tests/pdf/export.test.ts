@@ -53,6 +53,9 @@ async function exportNow(name: string) {
   expect(res.status, await res.clone().text().then((t) => t.slice(0, 200))).toBe(200);
   const pdf = new Uint8Array(await res.arrayBuffer());
   const pages = await analyzePdf(pdf);
+  expect(Number(res.headers.get("X-PDF-Page-Count"))).toBe(pages.length);
+  expect(Number(res.headers.get("X-PDF-Byte-Length"))).toBe(pdf.length);
+  expect(res.headers.get("X-PDF-Revision")).toBe("generated");
   mkdirSync(path.join(OUT_DIR, `export_${name}`), { recursive: true });
   writeFileSync(path.join(OUT_DIR, `export_${name}`, "sheet.pdf"), pdf);
   report.push({ case: name, pages: pages.length, kb: Math.round(pdf.length / 1024), requestMs: ms });
@@ -112,7 +115,7 @@ describe("product PDF export (real Chromium)", () => {
     const tenPages = Array.from({ length: 10 }, (_, i) => [heading(`Página ${i + 1}`), ...(i === 0 ? [image("vis_1", "Tiras"), image("vis_2", "Recta")] : []), paragraph(SPANISH), table(`Tabla ${i + 1}`, 4), lines(String(i + 1), "Responde.", 6)]);
     await replaceDocument(db, world.id, document(tenPages, "Diez páginas"));
     const { pdf, pages } = await exportNow("diez_paginas");
-    expect(pages.length).toBeGreaterThanOrEqual(10);
+    expect(pages.length).toBe(11); // ten logical pages, eleven physical sheets: never count model.pages in the preview
     expect((await validatePdf(pdf, { fontPrefix: "Inter", minImages: 2, minPages: 10 })).issues).toEqual([]);
   });
 
