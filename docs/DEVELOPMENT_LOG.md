@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-20 — Descarga PDF recuperable ante una conexión interrumpida
+
+- Base original: `origin/main` (`e37951a`), rama `codex/pdf-descarga-interrumpida`, [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48). Integrada después la PR #47 en `main` (`400fc96`) mediante resolución de conflictos de documentación; no se modificó su rama.
+- Defecto reproducido: el servidor podía responder con cabeceras PDF y cerrarse la conexión antes de completar el cuerpo; `response.blob()` rechazaba y la interfaz quedaba en «Preparando el PDF…».
+- Corrección: la lectura del cuerpo devuelve un error comprensible y el componente captura fallos inesperados del navegador para liberar el estado de espera. El renderer, CLARO, documentos y contratos PDF no cambian.
+- Verificación local: prueba focalizada falló antes y pasó después (8/8); ESLint focalizado, typecheck, build y `git diff --check` correctos. No se repitió la suite completa ni se consumieron APIs de IA.
+- Pendiente: ejecutar el PDF real de CLARO en Vercel con una ficha sintética cuando exista staging autorizado; esta corrección no lo valida.
+
 ## 2026-10-17 — Adaptaula 2.0, etapa 5B fase A
 
 - Base `origin/main` en `e37951a` tras verificar #46 fusionada; rama `codex/adaptaula-2-staging-5b`. No se ejecutó la fase B: sin consultas a Supabase/Vercel de staging, migraciones remotas, correos ni llamadas de IA.

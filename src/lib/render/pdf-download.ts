@@ -35,5 +35,10 @@ export async function fetchAdaptationPdf(adaptationId: string, fetcher: typeof f
     const message = typeof body?.error?.message === "string" ? body.error.message : PDF_GENERIC_ERROR;
     return { ok: false, message, ...(typeof body?.error?.code === "string" ? { code: body.error.code } : {}) };
   }
-  return { ok: true, blob: await response.blob(), filename: filenameFromDisposition(response.headers.get("Content-Disposition")) };
+  try {
+    return { ok: true, blob: await response.blob(), filename: filenameFromDisposition(response.headers.get("Content-Disposition")) };
+  } catch {
+    // A connection can close after the PDF headers arrive. Never report a partial download as successful.
+    return { ok: false, message: PDF_GENERIC_ERROR };
+  }
 }
