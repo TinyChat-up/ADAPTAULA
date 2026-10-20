@@ -401,3 +401,9 @@ La acción prepara solo a petición, evita dobles clics y limita la espera del c
 El editor solo abre revisiones guardadas, con cambios pendientes bloqueados y sin sustitución por la generada. `borrador=N` conserva la revisión, y `version=N` fija su base generada: una base cambiada devuelve 409 `version_changed` antes de imprimir. El PDF preparado no cambia cuando aparece otra revisión. Se mantienen loader/RLS y controles de recursos, sin mutaciones de documentos, cuota ni IA. El consumidor anterior sin `version` conserva la exportación de la base actual.
 
 El visor controla zoom y páginas según navegador; ausencia de soporte ofrece descarga accesible del mismo archivo. Los controles y anotaciones nativos no son parte del editor CLARO. [Contrato, pruebas, capturas y límites](qa/vista-previa-pdf/README.md). Vercel, Safari/iOS físico y la validación semántica permanecen pendientes.
+
+## ADR-037 — Coherencia verificable y composición de figuras CLARO (2026-10-20)
+
+Se conserva un renderer compartido, versionado `material_renderer@v5`. La proyección valida la VisualSpec efectiva antes de describirla/dibujarla. `withAdjacentFigures` agrupa recursos visuales anteriores de uso exclusivo dentro de una página lógica por `resource_block_ids`; no infiere relaciones por texto ni cambia documentos persistidos. Las rectas densas alternan rótulos sobre/bajo el eje, sin modificar posiciones, datos o respuestas. Las especificaciones no permiten denominador cero.
+
+Se distinguen tres evidencias: consistencia intrínseca de datos del producto, comparación contra referencias manuales en `evals/claro-quality`, y semántica de imágenes que permanece sin verificar. El aviso docente no cambia la política de aceptación de imágenes ni el pipeline. No se añaden campos persistidos de supuesto aval pedagógico. Los tests y ocho fichas sintéticas no sustituyen evaluación humana. [Alcance, límites y resultados](qa/claro-calidad/README.md).

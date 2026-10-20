@@ -20,6 +20,10 @@ describe("Referencias independientes: adversarios acotados, nunca aprobación pe
     if (b.type !== "image") throw Error("fixture");
     b.source = { kind: "figure", provenance: "reconstruction", spec: { spec_version: 1, kind: "number_line", start: { n: 1, d: 1 }, end: { n: 3, d: 1 }, divisions: 2, labels: [{ tick: 0, text: "1" }, { tick: 1, text: "2" }] } };
     b.alt_text = "Los números 1, 2 y 3";
+    const task = c.document.pages[0]!.blocks.find(b => b.type === "activity")!;
+    if (task.type !== "activity") throw Error("fixture");
+    task.prompt = "Identifica las marcas señaladas con los números 1, 2 y 3.";
+    c.reference.tasks[0]!.instruction = "Identifica las marcas señaladas con los números 1, 2 y 3.";
     c.reference.figures = [{ id: b.id, markers: ["1", "2", "3"] }];
     expect(failed(c).some(f => f.property.endsWith(":markers"))).toBe(true);
   });
@@ -32,8 +36,8 @@ describe("Referencias independientes: adversarios acotados, nunca aprobación pe
     const c = structuredClone(qualityCorpus.find(c => c.id === "05-clasificacion")!);
     const b = c.document.pages[0]!.blocks.find(b => b.type === "table")!;
     if (b.type !== "table") throw Error("fixture");
-    b.unit = "kg";
-    c.reference.tables[0]!.unit = "m";
+    b.headers = ["Trayecto", "Longitud"]; b.rows = [["Camino", "250"]]; b.unit = "kg";
+    c.reference.tables = [{ id: b.id, headers: ["Trayecto", "Longitud"], rows: [["Camino", "250"]], unit: "m" }];
     expect(failed(c).some(f => f.property.endsWith(":unit"))).toBe(true);
   });
   it("detecta una figura inexistente y una respuesta colocada en el texto", () => {

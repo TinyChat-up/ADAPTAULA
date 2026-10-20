@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Calidad visual y coherencia CLARO (2026-10-20):** #49–#51 confirmadas integradas; base `3e9dfd2`. Rama `codex/claro-coherencia-visual`: rectas sin rótulos solapados, figuras exclusivas junto a consignas, rechazo de `0/0` y de especificaciones resueltas incoherentes. Ocho fichas manuales con referencias, cuatro de reserva, PDF antes/después y resultados en [QA](qa/claro-calidad/README.md). El aviso de imagen sin verificación semántica no modifica su aceptación ni acredita pedagogía. Sin IA pagada ni servicios remotos. PR pendiente de registrar.
+
 > **Vista previa del PDF definitivo (2026-10-20):** base `ef8c1bf`, #49 y #50 integradas. [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) abierta sin merge. Nueva acción en ficha entregada y editor con revisión guardada: PDF real bajo demanda, contador físico de `validatePdf`, visor nativo y descarga del mismo Blob sin regeneración. Cambios pendientes bloqueados; base generada fijada y revisión explícita. [Contrato, pruebas, capturas y límites](qa/vista-previa-pdf/README.md). Sin nuevo renderer, dependencias, migraciones ni cambios pedagógicos/comerciales. Vercel y dispositivos físicos siguen sin verificar.
 
 > **Auditoría y limpieza (2026-10-20):** #48 integrada en `8a7e327`. Revisión transversal local y [resultados](qa/auditoria-2026-10-20/README.md): dos módulos y un contrato de imagen antiguos, sin consumidores de producto, retirados con sus pruebas exclusivas. Editor y pipeline activos conservados. 39 pruebas PDF y 16 E2E escritorio/móvil correctos, además de las regresiones focalizadas. A1 se corrigió después en #50; quedan la aplicación segura de 029, la validación de infraestructura desplegada y la coherencia semántica de visuales. No declarar el MVP listo para producción por estos resultados. Sin servicios Supabase/Vercel, migraciones ni IA pagada.
@@ -14,7 +16,7 @@
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-20. Base de esta entrega: `origin/main` en `ef8c1bf`, PR #38–#50 integradas.
+Actualizado: 2026-10-20. Base de esta entrega: `origin/main` en `3e9dfd2`, PR #38–#51 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar

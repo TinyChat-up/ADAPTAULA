@@ -1,0 +1,744 @@
+[
+  {
+    "id": "01-fracciones",
+    "split": "development",
+    "course": "3-primaria",
+    "objective": "Leer fracciones como partes iguales de un todo y justificar una comparación.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 46.33069599999999,
+      "contentMs": 150.41606000000002,
+      "readyMs": 45.95452,
+      "pdfMs": 23.516781000000037,
+      "totalMs": 266.21805700000004
+    },
+    "peakChromiumRssMb": 163,
+    "sourceSha256": "6cf804a7ecf51a3f6c071d46450633db37f448c458d927280f37a27d491719f1",
+    "pdfSha256": "bbd7aec04e262768977382ba3dea3e62a63369cdf4c0b95a77b80ca091693aa7",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_bar1:exists",
+        "status": "pass",
+        "detail": "Figura referenciada existente."
+      },
+      {
+        "property": "blk_bar1:structure",
+        "status": "pass",
+        "detail": "Rangos, unicidad y valores de marcas."
+      },
+      {
+        "property": "blk_bar1:reference",
+        "status": "pass",
+        "detail": "Mismas divisiones, valores, posiciones y sombreado que la referencia manual; no equivalencia inferida."
+      },
+      {
+        "property": "preserve:mitad",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-11",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-12",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Adecuación de la explicación y del espacio para 3.º; no se resuelve la comparación."
+      }
+    ]
+  },
+  {
+    "id": "02-problemas",
+    "split": "reserve",
+    "course": "4-primaria",
+    "objective": "Organizar datos, decidir operaciones y expresar resultados con unidades.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 28.410548000000063,
+      "contentMs": 152.916788,
+      "readyMs": 48.14128800000003,
+      "pdfMs": 16.082506000000194,
+      "totalMs": 245.55113000000028
+    },
+    "peakChromiumRssMb": 158,
+    "sourceSha256": "4f182b938886f60c34ce5f398cbeb46238c02df0cbb6cb3024265e2735ae6f87",
+    "pdfSha256": "6511fc5cba0ea74e9338498aab0ee53026bd14353e24fa52096664389cbb7548",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "preserve:6 bolsas",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:12 kg",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:45 kg",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:18 L",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:7 L",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:30 L",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-13",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-14",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Demanda de razonamiento y claridad de los datos; la revisión automática no juzga estrategias."
+      }
+    ]
+  },
+  {
+    "id": "03-rectas",
+    "split": "development",
+    "course": "5-primaria",
+    "objective": "Interpretar intervalos iguales y distancias sin alterar escala ni unidades.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 46.5208419999999,
+      "contentMs": 87.61368300000004,
+      "readyMs": 41.82792700000027,
+      "pdfMs": 12.74475799999982,
+      "totalMs": 188.70721000000003
+    },
+    "peakChromiumRssMb": 150,
+    "sourceSha256": "5fbd549ec41c8c83019b0c52b669942cfe99c4c4f04cf5840ad887a90b5cbb58",
+    "pdfSha256": "2f952c203435b8b6790d67a015af9ad4af23fa8e9f71ff7a18b85a69e4ef0bd0",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_line:exists",
+        "status": "pass",
+        "detail": "Figura referenciada existente."
+      },
+      {
+        "property": "blk_line:structure",
+        "status": "pass",
+        "detail": "Rangos, unicidad y valores de marcas."
+      },
+      {
+        "property": "blk_line:reference",
+        "status": "pass",
+        "detail": "Mismas divisiones, valores, posiciones y sombreado que la referencia manual; no equivalencia inferida."
+      },
+      {
+        "property": "preserve:metros",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:103",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:117",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:108",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:9 m",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-15",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-16",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Legibilidad de la escala densa y pertinencia curricular; no confundir un valor de escala con una respuesta revelada."
+      }
+    ]
+  },
+  {
+    "id": "04-lectura",
+    "split": "reserve",
+    "course": "3-primaria",
+    "objective": "Localizar información, ordenar hechos e inferir una intención apoyándose en el relato.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 23.58280999999988,
+      "contentMs": 84.89587800000027,
+      "readyMs": 34.93328199999996,
+      "pdfMs": 10.221475999999711,
+      "totalMs": 153.63344599999982
+    },
+    "peakChromiumRssMb": 153,
+    "sourceSha256": "82fa311666093f1850766ed4ca3aa87cf88ec535fb7dc397e8707ccddf7aa088",
+    "pdfSha256": "ddbb77aa41239c1130e416ad8f04c49cd75b0ce7c2101447673132453647da4f",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "preserve:El martes, Nora",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:Cada pareja sembró tres semillas.",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:Nos vendrán bien si tenemos que volver a intentarlo",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-10",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-11",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Relato íntegro, inferencia abierta y ausencia de pistas que anticipen la conclusión."
+      }
+    ]
+  },
+  {
+    "id": "05-clasificacion",
+    "split": "development",
+    "course": "5-primaria",
+    "objective": "Distinguir sustantivos, adjetivos y verbos a partir de su uso en una oración.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 22.671530000000075,
+      "contentMs": 112.89924299999984,
+      "readyMs": 46.54672100000016,
+      "pdfMs": 49.12912700000015,
+      "totalMs": 231.24662100000023
+    },
+    "peakChromiumRssMb": 164,
+    "sourceSha256": "4c88078263339fc87d32b41a097968c5cdc46f475c07edc439c3319ec3e8f48b",
+    "pdfSha256": "c03e2284ab6d83454efc83da3a2bfb3067a8c46cfa79fd1649bf54b87227e83d",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_table:table",
+        "status": "pass",
+        "detail": "Celdas y cabeceras literales conservadas, incluidas celdas de respuesta vacías."
+      },
+      {
+        "property": "blk_table:unit",
+        "status": "pass",
+        "detail": "Unidad exacta declarada en la referencia; no conversión supuesta."
+      },
+      {
+        "property": "preserve:La jardinera paciente cuida las flores pequeñas.",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "preserve:jardinera, paciente, cuida, flores, pequeñas, cantan, viento, suave, mueve",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-11",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Adecuación lingüística y espacio real para escribir tres palabras por categoría."
+      }
+    ]
+  },
+  {
+    "id": "06-planta",
+    "split": "development",
+    "course": "3-primaria",
+    "objective": "Identificar raíz, tallo y hojas y explicar una función sin rótulos resolutivos.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 36.31723299999976,
+      "contentMs": 133.67945099999997,
+      "readyMs": 56.59223100000008,
+      "pdfMs": 25.12941499999988,
+      "totalMs": 251.7183299999997
+    },
+    "peakChromiumRssMb": 170,
+    "sourceSha256": "a82dacf3762b0e0d7157e674e295c6aa46463a11edad027d7d2eee4e2da78e6c",
+    "pdfSha256": "2df985a212a7ed12e75d8d5c780f1a7d88625e7829eaeecc5f444719c456fe11",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_plant:exists",
+        "status": "pass",
+        "detail": "Figura referenciada existente."
+      },
+      {
+        "property": "blk_plant:pixels",
+        "status": "unverified",
+        "detail": "Ni el brief, ni el alt, ni una revisión simulada demuestran los marcadores o la identidad de los píxeles."
+      },
+      {
+        "property": "preserve:1, 2 y 3",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-10",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-11",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-12",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Identidad botánica, destino de las líneas y claridad de los marcadores: siempre sin verificar automáticamente."
+      }
+    ]
+  },
+  {
+    "id": "07-informacion",
+    "split": "reserve",
+    "course": "4-primaria",
+    "objective": "Leer una tabla de distancias y justificar decisiones sin confundir unidades.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 28.749618000000282,
+      "contentMs": 132.82364299999972,
+      "readyMs": 27.04312200000004,
+      "pdfMs": 9.882616000000326,
+      "totalMs": 198.49899900000037
+    },
+    "peakChromiumRssMb": 147,
+    "sourceSha256": "9620d76f5f2ec5a638fffe057b76ae57501a5a113ac574113526babb7886cf53",
+    "pdfSha256": "0b3212b703b030978816ec917cd95a82a89ccd90e3910a5c274fef57fc629045",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_distances:table",
+        "status": "pass",
+        "detail": "Celdas y cabeceras literales conservadas, incluidas celdas de respuesta vacías."
+      },
+      {
+        "property": "blk_distances:unit",
+        "status": "pass",
+        "detail": "Unidad exacta declarada en la referencia; no conversión supuesta."
+      },
+      {
+        "property": "preserve:700 m",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-10",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-11",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Comprensión de la condición y justificación; tabla no representa un mapa ni un recorrido real."
+      }
+    ]
+  },
+  {
+    "id": "08-cuadricula",
+    "split": "reserve",
+    "course": "6-primaria",
+    "objective": "Relacionar fracciones, áreas discretas y operaciones conservando el mismo todo.",
+    "pages": 1,
+    "renderMs": {
+      "launchMs": 23.42652599999974,
+      "contentMs": 103.2418459999999,
+      "readyMs": 53.995032000000265,
+      "pdfMs": 10.198660999999902,
+      "totalMs": 190.8620649999998
+    },
+    "peakChromiumRssMb": 158,
+    "sourceSha256": "52f3e6fed6f32c66abaab008963e761cfae032687e9648a4e21e8af3250289d0",
+    "pdfSha256": "30fbd057e529b240a18a540c70b92e53511e948e3651f5b669205037a53a6e2f",
+    "findings": [
+      {
+        "property": "schema",
+        "status": "pass",
+        "detail": "Contrato de datos y referencias existentes; no juicio pedagógico."
+      },
+      {
+        "property": "blk_task1:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task1:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task1:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_task2:instruction",
+        "status": "pass",
+        "detail": "Consigna literal de la referencia manual."
+      },
+      {
+        "property": "blk_task2:resources",
+        "status": "pass",
+        "detail": "Vínculos explícitos con los recursos, sin inferirlos por palabras clave."
+      },
+      {
+        "property": "blk_task2:space",
+        "status": "pass",
+        "detail": "Espacio mínimo fijado para este caso; suficiencia didáctica pendiente de docente."
+      },
+      {
+        "property": "blk_grid:exists",
+        "status": "pass",
+        "detail": "Figura referenciada existente."
+      },
+      {
+        "property": "blk_grid:structure",
+        "status": "pass",
+        "detail": "Rangos, unicidad y valores de marcas."
+      },
+      {
+        "property": "blk_grid:reference",
+        "status": "pass",
+        "detail": "Mismas divisiones, valores, posiciones y sombreado que la referencia manual; no equivalencia inferida."
+      },
+      {
+        "property": "blk_circle:exists",
+        "status": "pass",
+        "detail": "Figura referenciada existente."
+      },
+      {
+        "property": "blk_circle:structure",
+        "status": "pass",
+        "detail": "Rangos, unicidad y valores de marcas."
+      },
+      {
+        "property": "blk_circle:reference",
+        "status": "pass",
+        "detail": "Mismas divisiones, valores, posiciones y sombreado que la referencia manual; no equivalencia inferida."
+      },
+      {
+        "property": "preserve:2 m²",
+        "status": "pass",
+        "detail": "Dato requerido de la referencia manual."
+      },
+      {
+        "property": "answer-absence-14",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "answer-absence-15",
+        "status": "pass",
+        "detail": "Respuesta concreta del caso ausente del texto visible. No prueba ausencia de paráfrasis ni respuestas en píxeles."
+      },
+      {
+        "property": "pedagogy",
+        "status": "unverified",
+        "detail": "Adecuación del razonamiento sobre equivalencia y áreas; no basta con que los datos coincidan."
+      }
+    ]
+  }
+]

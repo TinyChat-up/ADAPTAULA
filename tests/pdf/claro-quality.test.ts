@@ -2,16 +2,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { checkReference } from "../../evals/claro-quality/check";
 import { plantAsset } from "../../evals/claro-quality/plant";
 import { createHash } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chromium, type Browser } from "playwright-core";
+import { describe, expect, it } from "vitest";
+import { chromium } from "playwright-core";
 import { buildRenderModel } from "@/lib/render/model";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import { qualityCorpus } from "../../evals/claro-quality/corpus";
 import { printPdf } from "./harness";
 
-let browser: Browser;
-beforeAll(async () => { browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"], headless: true }); });
-afterAll(async () => { await browser?.close(); });
 
 describe("CLARO: papel real y legibilidad", () => {
   for (const c of qualityCorpus.filter(c => process.env.CLARO_INCLUDE_RESERVE === "1" || c.split === "development")) {
@@ -55,6 +52,7 @@ describe("CLARO: papel real y legibilidad", () => {
     const c = qualityCorpus.find(c => c.id === "03-rectas")!;
     const { model } = buildRenderModel(c.document, { mode: "student", design: "claro" });
     const html = await renderPrintHtml(model, []);
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"], headless: true });
     const page = await browser.newPage();
     try {
       await page.setContent(html.html);
@@ -66,6 +64,6 @@ describe("CLARO: papel real y legibilidad", () => {
       const collisions = boxes.flatMap((a, i) => boxes.slice(i + 1).filter(b => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top));
       expect(collisions).toEqual([]);
       expect(boxes.every(b => b.height >= 14)).toBe(true);
-    } finally { await page.close(); }
+    } finally { await browser.close(); }
   });
 });
