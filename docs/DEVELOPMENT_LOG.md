@@ -2,7 +2,7 @@
 
 ## 2026-10-20 — Auditoría transversal y limpieza de prototipos obsoletos
 
-- Base verificada: `origin/main` en `8a7e327`, PR #48 integrada; rama `codex/auditoria-limpieza-documentos`. La PR histórica #20 permanece abierta y no se modifica.
+- Base verificada: `origin/main` en `8a7e327`, PR #48 integrada; rama `codex/auditoria-limpieza-documentos`, [PR #49](https://github.com/TinyChat-up/ADAPTAULA/pull/49) abierta sin merge. La PR histórica #20 permanece abierta y no se modifica.
 - [Informe y capturas actuales](qa/auditoria-2026-10-20/README.md): arquitectura, permisos, Storage, cuotas, datos, pedagogía, PDF, interfaz, dependencias y operación. Revisión local de módulos críticos y grafo de imports del código versionado; no certificación exhaustiva ni inspección de producción.
 - Retirados `adaptation/corrections.ts`, `visuals/contracts.ts` y `ImageBriefSchema` antiguo, sin consumidores del producto y sustituidos por editor/ilustraciones actuales. Se retiran solo sus pruebas exclusivas. No se eliminan migraciones, prompts publicados, fixtures adversariales útiles, documentos, recursos de usuarios ni dependencias con uso legítimo.
 - Corregidas afirmaciones de documentación que daban por implementados CSP global, cookies HttpOnly, Google, KaTeX, facturación/admin y CI. No se simula haber implementado esos controles.

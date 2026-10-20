@@ -1,6 +1,6 @@
 # Auditoría transversal de Adaptaula — 20 de octubre de 2026
 
-Base: `main` en `8a7e327` (#48 integrada). Rama: `codex/auditoria-limpieza-documentos`.
+Base: `main` en `8a7e327` (#48 integrada). Rama: `codex/auditoria-limpieza-documentos`. [PR #49](https://github.com/TinyChat-up/ADAPTAULA/pull/49), abierta sin merge.
 
 **Conclusión:** el producto conserva una arquitectura coherente, un único renderer y un recorrido local funcional hasta el PDF. La limpieza de esta entrega es integrable; no acredita que el MVP esté preparado para publicar en producción. Quedan riesgos operativos, una carrera en la limpieza de subidas y validación pedagógica real pendiente. La apariencia del documento puede mejorarse dentro de CLARO, sin sustituir su motor.
 
