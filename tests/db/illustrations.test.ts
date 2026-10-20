@@ -36,7 +36,11 @@ let db: PGlite;
 beforeAll(async () => {
   db = await createTestDb();
 }, 120_000);
-beforeEach(() => db.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'"));
+beforeEach(async () => {
+  await db.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'");
+  // Policy 026 keeps images disabled in every real plan. Enable the dormant path only in this local fixture.
+  await db.query("update public.plans set monthly_images = 50, features = features || '{\"image_generation\":true}'::jsonb where slug = 'max'");
+});
 const q = <T>(sql: string, params: unknown[] = []) => db.query<T>(sql, params).then((r) => r.rows);
 const asService = <T>(fn: () => Promise<T>) => as(db, "service_role", null, fn);
 const BUCKET = "generated-assets";
@@ -255,7 +259,7 @@ describe("migration 024: the illustration row, its isolation and its accounting"
     await expect(as(db, "authenticated", t.user.id, () => q("update public.generated_assets set alt_text = 'x' where id = $1", [row.id]))).rejects.toThrow(/permission denied/i);
   });
 
-  it("the `image` quota: Free has none, Max has its monthly units; a repeated key never charges twice; a refund gives it back", async () => {
+  it("the `image` quota: Free has none, fixture Max has units; a repeated key never charges twice; a refund gives it back", async () => {
     const free = await createUser(db, `illustrations-free-${++n}@example.com`);
     const consume = (ws: string, key: string) => asService(() => q<{ r: { allowed: boolean; duplicate?: boolean; limit: number } }>("select public.consume_quota($1, 'image', 1, null, null, $2) as r", [ws, key])).then((r) => r[0]!.r);
     expect(await consume(free.workspaceId, `k-${n}-a`)).toMatchObject({ allowed: false, limit: 0 });

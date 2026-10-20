@@ -2,11 +2,19 @@
 
 ## 2026-10-20 — Descarga PDF recuperable ante una conexión interrumpida
 
-- Base: `origin/main` (`e37951a`), rama `codex/pdf-descarga-interrumpida`. GitHub mostraba la PR #47 abierta; no se modificó su rama.
+- Base original: `origin/main` (`e37951a`), rama `codex/pdf-descarga-interrumpida`, [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48). Integrada después la PR #47 en `main` (`400fc96`) mediante resolución de conflictos de documentación; no se modificó su rama.
 - Defecto reproducido: el servidor podía responder con cabeceras PDF y cerrarse la conexión antes de completar el cuerpo; `response.blob()` rechazaba y la interfaz quedaba en «Preparando el PDF…».
 - Corrección: la lectura del cuerpo devuelve un error comprensible y el componente captura fallos inesperados del navegador para liberar el estado de espera. El renderer, CLARO, documentos y contratos PDF no cambian.
 - Verificación local: prueba focalizada falló antes y pasó después (8/8); ESLint focalizado, typecheck, build y `git diff --check` correctos. No se repitió la suite completa ni se consumieron APIs de IA.
 - Pendiente: ejecutar el PDF real de CLARO en Vercel con una ficha sintética cuando exista staging autorizado; esta corrección no lo valida.
+
+## 2026-10-17 — Adaptaula 2.0, etapa 5B fase A
+
+- Base `origin/main` en `e37951a` tras verificar #46 fusionada; rama `codex/adaptaula-2-staging-5b`. No se ejecutó la fase B: sin consultas a Supabase/Vercel de staging, migraciones remotas, correos ni llamadas de IA.
+- `scripts/staging/inspect-schema.sql` comprueba en solo lectura borradores 025, cuotas 026, RLS y baja 027/028, firma vulnerable ausente y buckets privados. Tres tests PGlite prueban estado sano, 027 heredada antes/después de 028 y deriva comercial. Historia de migraciones se consulta aparte si existe; los objetos efectivos mandan.
+- `scripts/staging/pdf-probe.mjs` prepara una descarga autenticada en Vercel con dos identidades ficticias y PDF sintético entregado; sin bandera/autorización/variables no conecta. Verifica 401/200/404, PDF A4, páginas, texto sintético, cabeceras y duración sin guardar contenido. La ruta PDF añade ID de solicitud y logs técnicos acotados; se retiró el detalle libre de errores de Chromium de logs.
+- Prueba RLS real ampliada para denegar RPC directa de baja; **preparada, no ejecutada**. El procedimiento de staging cubre correo/redirects, Storage, cuotas, exportación y canales de baja. En la suite general aparecieron 8 fallos preexistentes: la prueba de ilustraciones suponía imágenes Max activas contra la política 026, y una prueba UI interpretaba una clase de hover como estilo principal. Se corrigieron **solo las fixtures/expectativas de test**, sin activar imágenes ni cambiar producto.
+- Verificación local: typecheck, lint, build, escáner de secretos, 1803 pruebas aprobadas (13 omitidas), `smoke:raster` y `smoke:pdf` (39 pruebas, ruta PDF real local). Traza PDF: 343 ficheros/116,6 MB; pico RSS de Chromium local 170 MB entre 21 fixtures, duración de render máxima 215 ms. Son medidas de esta máquina, no de Vercel. Fase B y eliminación física pendientes. [Detalle](qa/adaptaula-2-etapa-5b/README.md).
 
 ## 2026-10-17 — Adaptaula 2.0, etapa 5A: exportación y solicitud de baja
 

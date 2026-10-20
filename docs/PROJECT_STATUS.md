@@ -1,16 +1,16 @@
 # Estado compartido de Adaptaula
 
-> **PDF, descarga interrumpida (2026-10-20):** entrega pequeña desde `origin/main` (`e37951a`): la descarga muestra un error recuperable si falla la lectura del archivo después de recibir las cabeceras, y el botón abandona el estado de espera ante fallos inesperados del navegador. Prueba de regresión, typecheck y build locales correctos. No cambia CLARO ni acredita el runtime PDF en Vercel. La PR #47 de preparación de staging seguía abierta al comprobar GitHub en esta sesión; la validación remota permanece pendiente.
+> **PDF, descarga interrumpida (2026-10-20):** [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48): la descarga muestra un error recuperable si falla la lectura del archivo después de recibir las cabeceras, y el botón abandona el estado de espera ante fallos inesperados del navegador. Prueba de regresión, typecheck y build locales correctos. No cambia CLARO ni acredita el runtime PDF en Vercel. #47 ya está integrada en `main`; la validación remota permanece pendiente.
 
-> **Etapa 5A (2026-10-17):** #45 fusionada en `5317031`; [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) abierta desde `codex/adaptaula-2-datos-5a`. Exportación personal JSON y solicitud de baja verificada con contraseña. La RPC de baja queda reservada al servidor por 027 corregida + 028 compensatoria. El borrado efectivo de Auth, filas y Storage **sigue pendiente**. Migraciones probadas localmente, sin consulta ni aplicación remota. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
+> **Etapa 5B, fase A (2026-10-17):** [PR #46](https://github.com/TinyChat-up/ADAPTAULA/pull/46) fusionada en `e37951a`. Rama `codex/adaptaula-2-staging-5b`: inspección SQL de solo lectura, prueba RLS real preparada y sonda autenticada de PDF para staging; CLARO y Chromium comprobados **solo localmente**. No se han consultado servicios de staging ni ejecutado la fase B. [Procedimiento y estados](qa/adaptaula-2-etapa-5b/README.md).
+
+> **Etapa 5A (2026-10-17):** exportación personal JSON y solicitud de baja verificada con contraseña, integradas mediante #46. RPC reservada al servidor por 027 corregida + 028 compensatoria. El borrado efectivo de Auth, filas y Storage **sigue pendiente**. No consta aplicación remota de estas migraciones. [Alcance y QA](qa/adaptaula-2-etapa-5a/README.md).
 
 > **Etapa 4B (2026-10-17):** #44 fusionada en `c925c33`; rama `codex/adaptaula-2-publica-4b`. Landing con demostración sintética interactiva, recorrido de cinco pasos, formularios y onboarding en una pantalla. [Alcance y QA](qa/adaptaula-2-etapa-4b/README.md). Sin despliegue ni migración remota.
 
-La PR #44 está fusionada en `c925c33` (verificado en GitHub). Etapa 4B en rama `codex/adaptaula-2-publica-4b`, sin merge.
-
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `5317031`, PR #38–#45 integradas.
+Actualizado: 2026-10-17. Base de esta entrega: `origin/main` en `e37951a`, PR #38–#46 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
@@ -46,7 +46,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Adaptaula 2.0, etapa 5A (primera entrega)**, rama `codex/adaptaula-2-datos-5a` desde `5317031`. Exportación personal acotada y solicitud autenticada de baja. No existe aún eliminación efectiva ni purga por retención: Storage, jobs, Auth y decisiones jurídicas requieren una segunda entrega específica. [QA y capturas](qa/adaptaula-2-etapa-5a/README.md). No se modifican cuotas, pipeline, CLARO, Stripe ni datos remotos.
+**Adaptaula 2.0, etapa 5B (fase A)**: herramientas y procedimiento para inspeccionar migraciones, Auth, Storage, PDF y cuotas en staging una vez autorizada la fase B. [QA 5B](qa/adaptaula-2-etapa-5b/README.md). Nada se declara verificado en staging. La eliminación física sigue siendo una entrega separada.
 
 
 ## Antecedente — entrega del editor de #38 (ya integrada)

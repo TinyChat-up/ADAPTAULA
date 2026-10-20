@@ -79,9 +79,9 @@ export async function exportAdaptationPdf(deps: PdfExportDeps, actor: Actor, ada
   try {
     result = await deps.engine.render(print.html, { fontFamily: print.fontFamily, fontWeights: print.fontWeights });
   } catch (error) {
-    // The engine's detail is technical (a launch error, a timeout, a count): never the sheet's content.
     const reason = error instanceof PdfEngineError ? error.code : error instanceof Error ? error.name : "unknown";
-    logger.error("pdf_export_failed", { adaptationId, stage: "engine", reason, ...(error instanceof PdfEngineError && error.detail ? { detail: error.detail.slice(0, 200) } : {}) });
+    // Engine error messages may contain a URL, local path or document text; only emit the fixed code.
+    logger.error("pdf_export_failed", { adaptationId, stage: "engine", reason, totalMs: Math.round(performance.now() - started) });
     return { ok: false, code: "render_failed" };
   }
 
