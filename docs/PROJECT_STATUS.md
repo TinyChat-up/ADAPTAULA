@@ -1,6 +1,8 @@
 # Estado compartido de Adaptaula
 
-> **Auditoría y limpieza (2026-10-20):** #48 integrada en `8a7e327`. Revisión transversal local y [resultados](qa/auditoria-2026-10-20/README.md): dos módulos y un contrato de imagen antiguos, sin consumidores de producto, retirados con sus pruebas exclusivas. Editor y pipeline activos conservados. 39 pruebas PDF y 16 E2E escritorio/móvil correctos, además de las regresiones focalizadas. Pendientes principales: carrera entre limpieza de subidas y finalización (A1), validación de infraestructura desplegada y coherencia semántica de visuales. No declarar el MVP listo para producción por estos resultados. Sin servicios Supabase/Vercel, migraciones ni IA pagada.
+> **Vista previa del PDF definitivo (2026-10-20):** base `ef8c1bf`, #49 y #50 integradas. [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) abierta sin merge. Nueva acción en ficha entregada y editor con revisión guardada: PDF real bajo demanda, contador físico de `validatePdf`, visor nativo y descarga del mismo Blob sin regeneración. Cambios pendientes bloqueados; base generada fijada y revisión explícita. [Contrato, pruebas, capturas y límites](qa/vista-previa-pdf/README.md). Sin nuevo renderer, dependencias, migraciones ni cambios pedagógicos/comerciales. Vercel y dispositivos físicos siguen sin verificar.
+
+> **Auditoría y limpieza (2026-10-20):** #48 integrada en `8a7e327`. Revisión transversal local y [resultados](qa/auditoria-2026-10-20/README.md): dos módulos y un contrato de imagen antiguos, sin consumidores de producto, retirados con sus pruebas exclusivas. Editor y pipeline activos conservados. 39 pruebas PDF y 16 E2E escritorio/móvil correctos, además de las regresiones focalizadas. A1 se corrigió después en #50; quedan la aplicación segura de 029, la validación de infraestructura desplegada y la coherencia semántica de visuales. No declarar el MVP listo para producción por estos resultados. Sin servicios Supabase/Vercel, migraciones ni IA pagada.
 
 > **PDF, descarga interrumpida (2026-10-20):** [PR #48](https://github.com/TinyChat-up/ADAPTAULA/pull/48): la descarga muestra un error recuperable si falla la lectura del archivo después de recibir las cabeceras, y el botón abandona el estado de espera ante fallos inesperados del navegador. Prueba de regresión, typecheck y build locales correctos. No cambia CLARO ni acredita el runtime PDF en Vercel. #47 ya está integrada en `main`; la validación remota permanece pendiente.
 
@@ -12,12 +14,12 @@
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
 
-Actualizado: 2026-10-20. Base de esta entrega: `origin/main` en `8a7e327`, PR #38–#48 integradas.
+Actualizado: 2026-10-20. Base de esta entrega: `origin/main` en `ef8c1bf`, PR #38–#50 integradas.
 Los estados siguientes describen código inspeccionado; no implican validación de servicios externos.
 
 ## Lectura para continuar
 
-- **Integridad de originales, 029 (2026-10-20):** [implementación y despliegue](qa/integridad-originales/README.md), rama independiente `codex/integridad-originales`. Finalización/limpieza atómicas, leases recuperables y rutas persistidas tras borrar. Preparado y probado localmente; **no aplicado remotamente**. Requiere parar el cron antiguo durante migración/despliegue. Compatible con #49, que no se modifica ni fusiona aquí.
+- **Integridad de originales, 029 (2026-10-20):** [implementación y despliegue](qa/integridad-originales/README.md), [PR #50](https://github.com/TinyChat-up/ADAPTAULA/pull/50) integrada. Finalización/limpieza atómicas, leases recuperables y rutas persistidas tras borrar. Preparado y probado localmente; **no aplicado remotamente**. Requiere parar el cron antiguo durante migración/despliegue. #49 también integrada; ninguna migración remota se da por aplicada.
 - Prioridades y criterios de aceptación: [ROADMAP.md](ROADMAP.md). Es el equivalente a `NEXT_STEPS.md`.
 - Decisiones: ADR de [ARCHITECTURE.md](ARCHITECTURE.md). Es el equivalente a `DECISIONS.md`.
 - Trabajo y verificaciones de cada sesión: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).

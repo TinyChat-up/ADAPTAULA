@@ -1,5 +1,16 @@
 # Registro de desarrollo
 
+## 2026-10-20 — Vista previa del PDF definitivo
+
+- Base `origin/main` / `ef8c1bf`; comprobadas #49 y #50 fusionadas. Rama nueva `codex/vista-previa-pdf`; implementación `3d6379e`, [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) publicada y abierta, sin merge. [Contrato, comandos, resultados y capturas](qa/vista-previa-pdf/README.md).
+- Nueva acción «Vista previa de impresión» en ficha imprimible y editor guardado. Diálogo con PDF binario, contador físico, visor nativo y descarga del mismo Blob sin regenerar; vuelta a editar, preparación/error/reintento y alternativa de descarga sin visor. Sin automatizar preparación al entrar.
+- Ruta de exportación existente: cabeceras de páginas/bytes/revisión desde el resultado validado, con privacidad/permisos intactos. Guardado/revisión explícitos, bloqueo de cambios pendientes y comprobación opcional de base (`version`) que devuelve `version_changed`/409 si otra versión sustituye a la abierta. Se conserva la cadena CLARO→HTML→Chromium→validatePdf; sin segundo compositor, dependencias, cuotas ni cambios de prompts/modelos.
+- Integridad cliente: cuerpo completo, longitud, firma/cierre y revisión; una URL por vista, espera abortable acotada, liberación al cerrar/desmontar/cambiar y gracia de 60 s tras iniciar descarga. El abort del cliente no garantiza cancelar un render ya iniciado en servidor.
+- Pruebas: 75/75 focalizadas unitarias/PGlite; 33/33 PDF Chromium real y revalidaciones acotadas tras fijar base. Caso exacto diez páginas lógicas→once físicas, tablas/figuras/claves, borrador tipografía/espaciado, revisión anterior y sin consumo ni mutación del original.
+- Navegador Chromium 154 completo, motor PDF serverless 153: 16 casos escritorio/móvil verificados y uno tablet. Un fallo intermitente del caso previo de conflicto móvil al rellenar tras navegar se sincroniza con selección reactiva verificable: ambos tamaños pasan (2/2), sin cambiar la lógica del editor ni reintentos automáticos. Detalles de lotes/limitaciones en QA. Hash del Blob mostrado igual al descargado; navegación a hoja 11/zoom, recurso liberado y fallos inyectados. Capturas reales sin datos de alumnado.
+- Typecheck, lint sin errores (un aviso previo), build, escáner de secretos y diff correctos. No suite completa, IA pagada, Supabase/Vercel remoto, Stripe, migración ni despliegue de producción. La 029 no se aplica.
+- Límite: visor nativo dependiente del navegador; alternativa accesible comprobada, Safari/iOS y dispositivos físicos no comprobados. No validación pedagógica del generador ni del runtime Vercel. Siguiente acción: revisión/integración manual de esta PR y staging autorizado de PDF/infraestructura, sin merge automático.
+
 ## 2026-10-20 — Auditoría transversal y limpieza de prototipos obsoletos
 
 - Base verificada: `origin/main` en `8a7e327`, PR #48 integrada; rama `codex/auditoria-limpieza-documentos`, [PR #49](https://github.com/TinyChat-up/ADAPTAULA/pull/49) abierta sin merge. La PR histórica #20 permanece abierta y no se modifica.

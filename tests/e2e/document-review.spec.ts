@@ -183,7 +183,13 @@ test("dos pestañas conservan el conflicto de revisión sin sobrescribir", async
   test.setTimeout(180000);
   const w = await fixture(page);
   await page.goto(`/app/adaptaciones/${w.id}/editar`);
+  // Confirm a reactive selection before filling: an immediate fill during hydration can retain the server's textarea text.
+  await page.getByLabel("Elegir actividad", { exact: true }).selectOption("blk_task2");
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue("Elige una medida.");
+  await page.getByLabel("Elegir actividad", { exact: true }).selectOption("blk_task1");
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue(originalPrompt);
   await page.getByLabel("Enunciado", { exact: true }).fill("Edición local pendiente de otra pestaña.");
+  await expect(page.getByLabel("Enunciado", { exact: true })).toHaveValue("Edición local pendiente de otra pestaña.");
   await page.getByRole("checkbox", { name: /Entiendo que debo comprobar/ }).check();
   expect((await page.request.put(`/api/adaptations/${w.id}/draft`, { headers: { origin: new URL(page.url()).origin }, data: { baseVersion: 1, revision: 0, changes, acknowledged: true } })).ok()).toBe(true);
   const response = page.waitForResponse((r) => r.url().endsWith(`/api/adaptations/${w.id}/draft`) && r.request().method() === "PUT");

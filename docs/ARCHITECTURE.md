@@ -390,3 +390,14 @@ A1: una selección antigua del cron no autorizaba borrar Storage. La migración 
 La ventana técnica es de dos horas, confirmada después de emitir el token y antes de entregarlo. Las filas heredadas reciben una ventana completa al migrar. La limpieza irreversible copia rutas en `material_upload_cleanups`, reclama con lease/token y confirma el borrado de filas solo tras verificar ausencia remota. Los resultados parciales, caídas y tokens antiguos conservan recuperación y contadores honestos. Las rutas persisten como lápidas con barridos posteriores para PUT tardíos; no se establece una purga jurídica automática.
 
 Se descartan aumentar el antiguo plazo de 60 minutos sin exclusión, una segunda lectura de estado, borrar metadatos antes de Storage sin seguimiento y locks durante red. [Contrato, pruebas y procedimiento](qa/integridad-originales/README.md). La migración y el despliegue compatible deben realizarse con el cron antiguo parado y sus ejecuciones drenadas; no se han aplicado remotamente. Esta decisión no cambia el pipeline, CLARO, cuotas ni comportamiento pedagógico.
+
+
+## ADR-036 — Vista previa binaria y versión de impresión explícita (2026-10-20)
+
+El contador de páginas lógicas del editor no predice los saltos físicos de Chromium. Se mantiene la exportación única y privada `exportAdaptationPdf` y se muestran sus bytes validados en un iframe Blob con el visor nativo. No se añade composición CSS, rasterizado para el visor ni PDF.js al cliente. Las cabeceras `X-PDF-Page-Count`, `X-PDF-Byte-Length` y `X-PDF-Revision` corresponden al archivo validado. El cliente comprueba cuerpo completo, firma/cierre, longitud y revisión antes de habilitar vista/descarga.
+
+La acción prepara solo a petición, evita dobles clics y limita la espera del cliente a 75 s. Una sesión de vista posee una única URL; su enlace de descarga consume esa misma URL sin volver a exportar. Se aborta la espera y se revoca al cerrar/cambiar/desmontar, con gracia de 60 s si se acaba de descargar. No hay persistencia ni caché pública. El servidor puede terminar un render ya iniciado aunque el cliente aborte.
+
+El editor solo abre revisiones guardadas, con cambios pendientes bloqueados y sin sustitución por la generada. `borrador=N` conserva la revisión, y `version=N` fija su base generada: una base cambiada devuelve 409 `version_changed` antes de imprimir. El PDF preparado no cambia cuando aparece otra revisión. Se mantienen loader/RLS y controles de recursos, sin mutaciones de documentos, cuota ni IA. El consumidor anterior sin `version` conserva la exportación de la base actual.
+
+El visor controla zoom y páginas según navegador; ausencia de soporte ofrece descarga accesible del mismo archivo. Los controles y anotaciones nativos no son parte del editor CLARO. [Contrato, pruebas, capturas y límites](qa/vista-previa-pdf/README.md). Vercel, Safari/iOS físico y la validación semántica permanecen pendientes.

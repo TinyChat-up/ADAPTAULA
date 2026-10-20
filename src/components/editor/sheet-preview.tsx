@@ -54,6 +54,6 @@ export function SheetPreview({ model, selection, page: controlledPage, onPageCha
       <p role="status" className="p-3 text-sm text-muted-foreground">Página {page} de la vista CLARO</p>
       <div style={{ zoom: scale * zoom / 100 }}><MaterialSheet model={model} visiblePage={page} selection={selection} /></div>
     </div>
-    <p className="text-xs text-muted-foreground">Páginas de la vista CLARO. Los saltos de hoja definitivos se ajustan al descargar el PDF.</p>
+    <p className="text-xs text-muted-foreground">Páginas de la vista CLARO. Usa «Vista previa de impresión» para comprobar las hojas definitivas de la revisión guardada.</p>
   </div>;
 }

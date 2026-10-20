@@ -1,6 +1,8 @@
 # Roadmap de implementación
 
-> **Auditoría 2026-10-20, base #48 integrada:** [hallazgos y limpieza](qa/auditoria-2026-10-20/README.md). Próximo defecto prioritario: reclamación atómica y recuperación para limpieza de subidas abandonadas frente a finalización concurrente; conservar siempre originales legítimos. Después, PDF definitivo con paginación física visible y recursos didácticos deterministas. No crear otro renderer ni interpretar pruebas de mocks como validación semántica. Staging y revisión jurídica siguen pendientes.
+> **PDF definitivo (2026-10-20):** vista previa implementada sobre la exportación CLARO existente: hojas físicas, PDF completo, revisión guardada y descarga binaria idéntica. [Alcance y QA](qa/vista-previa-pdf/README.md). Revisar [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) y después validar Chromium/PDF en staging expresamente autorizado. Esta fase no certifica calidad pedagógica ni producción; no activar OCR ni imágenes IA.
+
+> **Auditoría 2026-10-20, base #48 integrada:** [hallazgos y limpieza](qa/auditoria-2026-10-20/README.md). A1 corregido e integrado en #50 con migración 029 y limpieza recuperable; aplicación remota pendiente. La vista previa física se implementa en la entrega actual. Los recursos didácticos deterministas requieren un encargo posterior. No crear otro renderer ni interpretar pruebas de mocks como validación semántica. Staging y revisión jurídica siguen pendientes.
 
 > **Etapa 5A, primera entrega (2026-10-17):** exportación personal y solicitud de eliminación comprobables. Para cerrar la fase falta un procesador duradero de baja que bloquee jobs, limpie todos los buckets, borre Auth y respete obligaciones de conservación definidas jurídicamente. [Detalle](qa/adaptaula-2-etapa-5a/README.md). No activar borrado automático mientras falte esa infraestructura.
 
@@ -12,7 +14,7 @@
 
 Regla: **una fase no termina hasta que `pnpm check` (typecheck + lint + unit + build) y los tests de la fase pasan.** No se construye sobre código roto. Cada fase se cierra con un resumen de decisiones y pendientes.
 
-**Corrección focalizada A1 (2026-10-20):** [integridad de originales](qa/integridad-originales/README.md), migración 029 local. Cierra la carrera de cron/finalización con decisión atómica y limpieza recuperable; no se activa con una simple publicación de código. Pendiente revisar/integrar su PR y ejecutar después el procedimiento autorizado de staging: pausa de cron antiguo, copia de seguridad, esquema, despliegue compatible y validación con identidades ficticias. No se cambia el siguiente roadmap pedagógico.
+**Corrección focalizada A1 (2026-10-20):** [integridad de originales](qa/integridad-originales/README.md), migración 029 local. Cierra la carrera de cron/finalización con decisión atómica y limpieza recuperable; no se activa con una simple publicación de código. PR #50 integrada. Pendiente ejecutar el procedimiento autorizado de staging: pausa de cron antiguo, copia de seguridad, esquema, despliegue compatible y validación con identidades ficticias. No se cambia el siguiente roadmap pedagógico.
 
 ## Continuidad 2026-10-17 — etapa 3B
 

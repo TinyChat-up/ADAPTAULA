@@ -1,5 +1,7 @@
 # UX, arquitectura de información y sistema de diseño
 
+> **Impresión definitiva (2026-10-20):** en ficha entregada y editor guardado, «Vista previa de impresión» abre el PDF binario real y muestra sus hojas físicas. La descarga del diálogo reutiliza ese archivo; cambios pendientes requieren guardar primero. La vista CLARO sigue siendo lógica, distinta del PDF físico. [Uso, capturas y límites del visor](qa/vista-previa-pdf/README.md).
+
 > Etapa 4B: portada y demostración pública sintética, «Cómo funciona», acceso y primera experiencia. [Alcance y pruebas](qa/adaptaula-2-etapa-4b/README.md). #44 está fusionada; no se ha aplicado migración remota.
 
 > **Etapa 4A (2026-10-17):** #43 integrada en `5867d30`. Nueva política persistida mediante migración 026, precios con tres planes y avisos de consumo. Pro sin contratación, Max en preparación, imágenes desactivadas. Suscripciones anteriores conservadas; no se aplica SQL remoto. [Alcance, compatibilidad y QA](qa/adaptaula-2-etapa-4a/README.md). 4B debe esperar a integrar 4A.
