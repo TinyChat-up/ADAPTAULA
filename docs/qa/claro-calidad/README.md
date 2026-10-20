@@ -1,6 +1,6 @@
 # CLARO: coherencia verificable y legibilidad en papel
 
-20-10-2026. Base `3e9dfd2`, PR #49, #50 y #51 confirmadas integradas en GitHub. Rama `codex/claro-coherencia-visual`. Entrega local sin llamadas IA, migraciones, Supabase remoto ni cambios comerciales. **Las pruebas automáticas no sustituyen la revisión pedagógica humana.**
+20-10-2026. Base `3e9dfd2`, PR #49, #50 y #51 confirmadas integradas en GitHub. Rama `codex/claro-coherencia-visual`. [PR #52](https://github.com/TinyChat-up/ADAPTAULA/pull/52) abierta, sin merge. Entrega local sin llamadas IA, migraciones, Supabase remoto ni cambios comerciales. **Las pruebas automáticas no sustituyen la revisión pedagógica humana.**
 
 ## Defectos demostrados y alcance de la corrección
 
