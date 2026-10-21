@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
 import { deterministicChecks } from "@/lib/adaptation/review";
 import { visualNeedsOf } from "@/lib/adaptation/presentation/visual-needs";
-import { applyVisualResolution, danglingPictureReferences, refersToPicture, stoppedByPlan, unresolvedEssential, visualNeedsOfDocument, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
+import { applyVisualResolution, danglingPictureReferences, refersToPicture, stoppedByPlan, unresolvedEssential, visualStopCode, visualNeedsOfDocument, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
 import { resolveMagicVisuals, type MagicVisualDeps } from "@/lib/materials/visuals/auto/policy";
 import type { VisualAssistants } from "@/lib/materials/visuals/auto/assistants";
 import type { IllustrationOutcome, IllustrationRequest } from "@/lib/materials/visuals/illustrate/service";
@@ -109,6 +109,28 @@ describe("case B · the scheme of the cell, not in the PDF and not an exact figu
     expect(stoppedByPlan(unresolvedEssential(await service.resolve()))).toBe(false);
     // Over the adaptation's spending ceiling: not the plan either.
     expect(stoppedByPlan(unresolvedEssential(await cell(true, { ok: false, reason: "budget_exhausted", detail: [] }).resolve()))).toBe(false);
+  });
+
+  it("fichas 06/07: illustrations switched off for everyone never blame the plan; each reason has its own stop", async () => {
+    const off = cell(false);
+    off.deps.illustrationsWithheld = "disabled";
+    const disabled = await off.resolve();
+    expect(outcome(disabled, "vis_1").resolution).toEqual({ action: "unresolved", reason: "illustration_unavailable" });
+    expect(stoppedByPlan(unresolvedEssential(disabled))).toBe(false);
+    expect(visualStopCode(unresolvedEssential(disabled))).toBe("visual_unavailable");
+    const none = cell(false);
+    none.deps.illustrationsWithheld = "not_offered";
+    expect(visualStopCode(unresolvedEssential(await none.resolve()))).toBe("visual_unavailable");
+    const free = cell(false);
+    free.deps.illustrationsWithheld = "plan";
+    expect(visualStopCode(unresolvedEssential(await free.resolve()))).toBe("visual_plan");
+    const quota = cell(false);
+    quota.deps.illustrationsWithheld = "quota";
+    expect(visualStopCode(unresolvedEssential(await quota.resolve()))).toBe("visual_quota");
+    expect(visualStopCode(unresolvedEssential(await cell(true, { ok: false, reason: "quota_exhausted", detail: [] }).resolve()))).toBe("visual_quota");
+    const service = cell(false);
+    service.deps.illustrationsWithheld = "service";
+    expect(visualStopCode(unresolvedEssential(await service.resolve()))).toBe("visual");
   });
 
   it("an illustration that is never approved leads to the same honest stop (its unit was given back by the pipeline)", async () => {

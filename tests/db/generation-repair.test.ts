@@ -108,8 +108,11 @@ describe("«Hacer magia»: bounded automatic repair of a generation that fails i
     const repaired = reviews[1]!.payload.entries;
     expect(repaired.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "approved", restrictions: [expect.stringMatching(/solo los apoyos que autoriza/)] });
     expect(repaired.every((e) => e.action !== "rejected")).toBe(true); // nothing of the plan was left out
-    expect(t.spy.generatorInputs[1]!.decisions).toContain("dec_4");
+    // Localized: the repair asks the model ONLY for the decision that failed; the five valid ones are kept from the first draft.
+    expect(t.spy.generatorInputs[1]!.decisions).toEqual(["dec_4"]);
     expect([t.spy.planner, t.spy.generator, t.spy.reviewer]).toEqual([1, 2, 1]);
+    const generations = await q<{ payload: { reused_from?: string; regenerated?: string[] } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'generation' order by created_at", [id]);
+    expect(generations.at(-1)!.payload).toMatchObject({ reused_from: expect.any(String), regenerated: ["dec_4"] });
     // Same adaptation, one reservation, one consumption.
     expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
     expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);

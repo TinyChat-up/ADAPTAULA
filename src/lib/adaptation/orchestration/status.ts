@@ -2,6 +2,7 @@ import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { ADAPTATION_ERROR_CODES, FAILURE_KIND, type AdaptationErrorCode, type FailureKind } from "./errors";
 import type { CreationMode, PipelineSnapshot } from "./store";
 import { isDelivered, type AdaptationStatus } from "./state-machine";
+import { VISUAL_STOP_CODES, type VisualStopCode } from "../visual-policy";
 
 /**
  * Stable status DTO for the web layer's polling. The server is the authority: the client never infers rules from status strings,
@@ -18,7 +19,7 @@ export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | 
  * covers; `quality`: the quality review found a problem with no safe automatic correction (or the generations ran out);
  * `generation_refused`: the cost guards refused another generation.
  */
-export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | "visual" | "visual_plan";
+export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | VisualStopCode;
 
 export interface StatusArtifacts {
   planValidation?: { counts: { valid: number; review: number; blocked: number } } | null;
@@ -206,7 +207,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       }
       if (automatic) {
         // A visual nothing could resolve is its own honest stop (no automatic correction is attempted for it).
-        ({ phase, progress, nextAction, automaticStop } = stopped(artifacts.automaticStop === "visual" || artifacts.automaticStop === "visual_plan" ? artifacts.automaticStop : "quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
+        ({ phase, progress, nextAction, automaticStop } = stopped(artifacts.automaticStop && VISUAL_STOP_CODES.has(artifacts.automaticStop) ? (artifacts.automaticStop as VisualStopCode) : "quality", cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
         break;
       }
       phase = "blocked";

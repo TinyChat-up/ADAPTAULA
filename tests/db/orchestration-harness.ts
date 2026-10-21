@@ -117,7 +117,7 @@ export function scriptedServices(spy: Spy, script: Scripted = {}): OrchestratorD
       generator: {
         generate: async (input) => {
           spy.generator += 1;
-          spy.generatorInputs.push({ decisions: buildGeneratorInputV2(input.reviewed, input.analysis, input.context).approved.decisions.map((d) => d.id) });
+          spy.generatorInputs.push({ decisions: buildGeneratorInputV2(input.reviewed, input.analysis, input.context, input.only).approved.decisions.map((d) => d.id) });
           const out = await (script.generator?.(generator, spy.generator, input) ?? generator.generate(input));
           return { ...out, runs: [stageRun("generate", v.generator, "material_generator")] };
         },

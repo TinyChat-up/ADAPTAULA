@@ -43,7 +43,7 @@ export interface MagicVisualDeps {
   /** Illustrations this adaptation may get (the plan's `features.illustrations_per_adaptation`); never above the hard limit. */
   maxIllustrations?: number;
   /** Why `illustrate` is absent: the workspace's plan does not include illustrations, or the service is not set up. */
-  illustrationsWithheld?: "plan" | "service" | null;
+  illustrationsWithheld?: IllustrationWithheld | null;
   recordAiRun?(run: AIRunRecord): Promise<void>;
 }
 
@@ -225,10 +225,11 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
    * Needs an illustration would have resolved but the plan stopped: its plan has none, or this month's are used up. If nothing else
    * resolves them, the stop says so («your plan»), never a sheet with a gap.
    */
-  const planLimited = new Map<string, "illustration_not_in_plan" | "illustration_quota_exhausted">();
+  const planLimited = new Map<string, "illustration_not_in_plan" | "illustration_quota_exhausted" | "illustration_unavailable">();
   /** One illustration for a need: within the adaptation's limit, with the activities' own words and answers. */
   const illustrate = async (needKey: string, activities: readonly AnalysisActivity[], missing: string | null, purpose: string): Promise<IllustrationOutcome | null> => {
-    if (!deps.illustrate && deps.illustrationsWithheld === "plan" && activities.length > 0) planLimited.set(needKey, "illustration_not_in_plan");
+    const withheld = deps.illustrationsWithheld;
+    if (!deps.illustrate && activities.length > 0 && withheld && withheld !== "service") planLimited.set(needKey, withheld === "plan" ? "illustration_not_in_plan" : withheld === "quota" ? "illustration_quota_exhausted" : "illustration_unavailable");
     const limit = Math.min(ILLUSTRATION_LIMITS.perAdaptation, deps.maxIllustrations ?? ILLUSTRATION_LIMITS.perAdaptation);
     if (!deps.illustrate || illustrations >= limit || activities.length === 0) return null;
     illustrations += 1;
@@ -428,3 +429,10 @@ async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRe
   }
   return { activities: out, spec };
 }
+
+/**
+ * Why a workspace gets no new illustrations: switched off in Adaptaula (`disabled`), offered by no plan of the catalogue
+ * (`not_offered`), not in this workspace's plan (`plan`), this month's used up (`quota`), or not set up / temporarily down
+ * (`service`, retried later, never blamed on the plan).
+ */
+export type IllustrationWithheld = "disabled" | "not_offered" | "plan" | "quota" | "service";

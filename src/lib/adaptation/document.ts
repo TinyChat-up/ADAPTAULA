@@ -5,6 +5,7 @@ import { MATERIAL_DOCUMENT_SCHEMA_VERSION, MaterialDocumentSchema, createBlockId
 import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { statedAnswer } from "@/lib/analysis/answers";
 import { comparisonFromText } from "@/lib/visuals/comparison";
+import { pruneRedundantSupports } from "./support-policy";
 import { activityStructure, readingParagraphs } from "./structure";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
@@ -260,6 +261,12 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
       after.set(segment.target, [...(after.get(segment.target) ?? []), ...blocks.filter((b) => !isExample(b))]);
     }
   }
+
+  // One functional need, printed once: a support that only restates another one is folded into it (its decisions stay traced).
+  const pruning = pruneRedundantSupports(head, after);
+  head.splice(0, head.length, ...pruning.head);
+  after.clear();
+  for (const [ref, blocks] of pruning.after) after.set(ref, blocks);
 
   // The visual part of each decision (docs/VISUAL_RESOURCES.md): an original visual is linked to its activity; a visual the
   // original does not have gets its place (an `image` of source `requested`) right before its target, for the teacher to fill.
