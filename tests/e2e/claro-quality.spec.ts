@@ -1,0 +1,44 @@
+import { readFileSync } from "node:fs";
+import AxeBuilder from "@axe-core/playwright";
+import { test, expect } from "@playwright/test";
+import { createReviewedAdaptation, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf, makePdf } from "./helpers";
+import { requireVisuals, seedReadyDocument } from "./adaptation-seed";
+import { qualityCorpus } from "../../evals/claro-quality/corpus";
+
+test("CLARO: recta legible, ficha privada, editor compartido y PDF real", async ({ page }, info) => {
+  test.setTimeout(180000);
+  const email = uniqueEmail();
+  await signUpAndOnboard(page, email);
+  await page.getByLabel("Alias o iniciales").fill("Perfil de prueba");
+  await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
+  await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
+  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/alumnos/);
+  const material = await uploadAndOpen(page, { name: "Original sintético.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: email }) });
+  await waitForAnalysis(page);
+  const id = await createReviewedAdaptation(page, `/app/materiales/${material}`, "Perfil de prueba");
+  const c = qualityCorpus.find(c => c.id === "03-rectas")!;
+  await seedReadyDocument(page, await workspaceOf(page, email), id, c.document);
+  await requireVisuals(page, id, []);
+  await page.goto(`/app/adaptaciones/${id}/vista`);
+  const labels = page.locator('.ms-spec[data-spec="number_line"] text');
+  await expect(labels).toHaveCount(25);
+  await page.evaluate(() => document.fonts.ready);
+  const overlaps = await labels.evaluateAll(nodes => {
+    const boxes = nodes.map(n => n.getBoundingClientRect());
+    return boxes.some((a, i) => boxes.slice(i + 1).some(b => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top));
+  });
+  expect(overlaps).toBe(false);
+  for (const answer of c.reference.forbidden) await expect(page.locator(".ms-sheet")).not.toContainText(answer);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect((await new AxeBuilder({ page }).include(".ms-stage").analyze()).violations.filter(v => v.impact === "serious" || v.impact === "critical")).toEqual([]);
+  await page.screenshot({ path: info.outputPath("ficha.png"), fullPage: true, style: "nextjs-portal { display:none }" });
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Descargar PDF", exact: true }).click();
+  const pdf = await download;
+  expect(readFileSync((await pdf.path())!).subarray(0, 5).toString()).toBe("%PDF-");
+  await page.goto(`/app/adaptaciones/${id}/editar`);
+  await expect(labels).toHaveCount(25);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.screenshot({ path: info.outputPath("editor.png"), fullPage: true, style: "nextjs-portal { display:none }" });
+});

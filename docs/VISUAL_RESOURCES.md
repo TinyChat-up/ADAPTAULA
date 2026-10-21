@@ -677,3 +677,9 @@ Alcance exacto en ADR-023: tablas rectangulares pequeñas con capa de texto, val
 **Entrega:** una figura imprescindible sin resolver bloquea Hacer magia y la descarga, sin consumir la cuota reservada. El PDF de célula verifica selección manual; no demuestra localización automática. La RLS de Storage continúa limitando por workspace; estos controles de calidad pertenecen a los servicios de la aplicación, no revocan acceso autorizado a objetos históricos.
 
 **Pruebas del cierre:** 149 focalizadas, 3 PDF, typecheck y lint sin errores. Se conservan adversarios como evidencia histórica, dos integraciones reales de decoración/actividad ajena y regresiones de SHA, referencias, RLS, caché, corrección humana y exportación. No suite completa ni servicios de pago/remotos. Fase funcional, escaneos reales y Vercel siguen sin validar.
+
+## Coherencia estructural y límites semánticos (2026-10-20)
+
+CLARO v5 comprueba la especificación resuelta antes de dibujarla, rechaza denominadores cero en etiquetas y mantiene figuras exclusivas junto a la consigna por sus enlaces explícitos dentro de la página lógica. Las rectas densas conservan todos sus valores y separan rótulos sin reducir letra. Barras, círculos y cuadrículas se reutilizan. [PDFs y adversarios](qa/claro-calidad/README.md).
+
+`visual_semantics_unverified` avisa en la vista docente cuando se imprimen píxeles. Un brief, alt o revisión simulada no demuestra etiquetas, exactitud científica ni correspondencia de una imagen. Se conserva la célula mock sin números como caso negativo: su test de impresión no es aprobación pedagógica. Los criterios actuales de aceptación de ilustraciones no cambian; la generación sigue sin activarse. Los contrastes con referencias manuales del corpus no autorizan imágenes de usuarios ni ocultan propiedades sin verificar.

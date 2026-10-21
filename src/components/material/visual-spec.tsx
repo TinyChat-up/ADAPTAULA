@@ -10,25 +10,26 @@ import { COMPARISON, LINE, barGeometry, comparisonGeometry, numberLineGeometry, 
 const SHADE = "#767676";
 const STROKE = 0.4;
 const FONT = 3.6;
+const LINE_FONT = 4.2;
 const DIGIT = { fontSize: FONT, textAnchor: "middle" as const, fill: "currentColor" };
 
 /** A fraction as printed in school: numerator over a bar over denominator; an integer stays on one line. */
-function Stacked({ value, x, y }: { value: Fraction; x: number; y: number }) {
+function Stacked({ value, x, y, font = FONT }: { value: Fraction; x: number; y: number; font?: number }) {
   if (value.d === 1) {
     return (
-      <text x={x} y={y + FONT * 0.35} {...DIGIT}>
+      <text x={x} y={y + font * 0.35} {...DIGIT} fontSize={font}>
         {value.n}
       </text>
     );
   }
-  const half = Math.max(String(value.n).length, String(value.d).length) * FONT * 0.32 + 0.6;
+  const half = Math.max(String(value.n).length, String(value.d).length) * font * 0.32 + 0.6;
   return (
     <g>
-      <text x={x} y={y - 0.9} {...DIGIT}>
+      <text x={x} y={y - 0.9} {...DIGIT} fontSize={font}>
         {value.n}
       </text>
       <line x1={x - half} x2={x + half} y1={y} y2={y} stroke="currentColor" strokeWidth={0.3} />
-      <text x={x} y={y + FONT * 0.95} {...DIGIT}>
+      <text x={x} y={y + font * 0.95} {...DIGIT} fontSize={font}>
         {value.d}
       </text>
     </g>
@@ -57,16 +58,23 @@ function Bar({ spec, label }: { spec: Extract<VisualSpec, { kind: "fraction_bar"
 
 function NumberLine({ spec, label }: { spec: Extract<VisualSpec, { kind: "number_line" }>; label: string }) {
   const g = numberLineGeometry(spec);
-  const axisY = LINE.tick + 1;
+  // A three-digit label can be wider than an interval. Alternate above/below the axis instead of shrinking,
+  // dropping or moving values horizontally. Bounds use the maximum Inter digit width plus a breathing gap.
+  const labeled = g.ticks.filter(t => t.label);
+  const halfWidth = (v: Fraction) => Math.max(String(v.n).length, v.d === 1 ? 0 : String(v.d).length) * LINE_FONT * .36 + .7;
+  const crowded = labeled.some((t, i) => i > 0 && t.x - labeled[i - 1]!.x < halfWidth(t.label!) + halfWidth(labeled[i - 1]!.label!) + 1);
+  const above = new Set(crowded ? labeled.filter((_, i) => i % 2 === 0).map(t => t.x) : []);
+  const axisY = crowded ? 13 : LINE.tick + 1;
+  const labelY = (x: number) => above.has(x) ? axisY - LINE.tick - 5.6 : axisY + LINE.tick + 5.6;
   const first = g.ticks[0]!.x;
   const last = g.ticks.at(-1)!.x;
   return (
-    <Frame width={g.width} height={axisY + LINE.tick + 10} label={label} kind={spec.kind}>
+    <Frame width={g.width} height={axisY + LINE.tick + 11} label={label} kind={spec.kind}>
       <line x1={first} x2={last} y1={axisY} y2={axisY} stroke="currentColor" strokeWidth={STROKE} />
       {g.ticks.map((t, i) => (
         <g key={i} data-tick={i}>
           <line x1={t.x} x2={t.x} y1={axisY - LINE.tick} y2={axisY + LINE.tick} stroke="currentColor" strokeWidth={STROKE} />
-          {t.label ? <Stacked value={t.label} x={t.x} y={axisY + LINE.tick + 4.6} /> : null}
+          {t.label ? <Stacked value={t.label} x={t.x} y={labelY(t.x)} font={LINE_FONT} /> : null}
         </g>
       ))}
     </Frame>

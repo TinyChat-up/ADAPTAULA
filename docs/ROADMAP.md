@@ -1,5 +1,7 @@
 # Roadmap de implementación
 
+> **CLARO: primera mejora pedagógica/visual verificable (2026-10-20):** #49–#51 integradas. [PR #52](https://github.com/TinyChat-up/ADAPTAULA/pull/52), abierta sin merge: implementación acotada y ocho fichas de evaluación en [QA](qa/claro-calidad/README.md): legibilidad de rectas, agrupación de figuras y defensa estructural. Las referencias manuales del corpus no se presentan como evidencia de materiales reales. Siguiente: revisión docente de las fichas y diseño de referencias verificadas por versión antes de ampliar automatismos. No activar imágenes ni OCR; staging sigue pendiente de autorización.
+
 > **PDF definitivo (2026-10-20):** vista previa implementada sobre la exportación CLARO existente: hojas físicas, PDF completo, revisión guardada y descarga binaria idéntica. [Alcance y QA](qa/vista-previa-pdf/README.md). Revisar [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) y después validar Chromium/PDF en staging expresamente autorizado. Esta fase no certifica calidad pedagógica ni producción; no activar OCR ni imágenes IA.
 
 > **Auditoría 2026-10-20, base #48 integrada:** [hallazgos y limpieza](qa/auditoria-2026-10-20/README.md). A1 corregido e integrado en #50 con migración 029 y limpieza recuperable; aplicación remota pendiente. La vista previa física se implementa en la entrega actual. Los recursos didácticos deterministas requieren un encargo posterior. No crear otro renderer ni interpretar pruebas de mocks como validación semántica. Staging y revisión jurídica siguen pendientes.

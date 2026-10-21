@@ -866,3 +866,9 @@ Desde la vista de una ficha entregada, «Editar ficha» abre el borrador más re
 Deshacer/rehacer funciona durante la sesión; guardar crea una revisión independiente. Recuperar restaura el último guardado y sigue siendo deshacible. Recargar abre esa última revisión. Sin autosave ni selección de revisiones antiguas en V1. El PDF del editor fija su número de revisión; queda desactivado mientras hay cambios sin guardar. La vista normal y su PDF continúan mostrando la ficha generada.
 
 Todos los cambios de enunciado requieren reconocer que se comprobarán datos, unidades, relaciones y ausencia de respuestas. El reconocimiento no es una revisión pedagógica ni cambia el veredicto original. La vista A4 usa `sheetModel`/`MaterialSheet` compartidos; muestra páginas lógicas, mientras Chromium decide los saltos físicos finales. No se llama a IA ni se consume cuota al editar o exportar.
+
+## Coherencia y legibilidad de CLARO — renderer v5 (2026-10-20)
+
+[Entrega y evidencias](qa/claro-calidad/README.md). Se mantienen MaterialDocument, MaterialSheet y el motor PDF. Las figuras anteriores de uso exclusivo en una página lógica se agrupan con su actividad aunque haya bloques intermedios; no se duplican compartidas ni se cruzan páginas lógicas. Las rectas densas separan rótulos por encima/debajo del eje y mantienen escala, marcas y valores. No se reduce letra ni contenido para encajar.
+
+Las especificaciones efectivas se validan antes de dibujar; denominadores cero son inválidos. Una imagen disponible añade el aviso docente de semántica sin verificar: los píxeles no se certifican por metadatos. No cambia el gate de ilustraciones ni la política de Hacer magia. Las comprobaciones contra consignas, unidades y soluciones de referencia pertenecen al corpus manual de evaluación, no a un supuesto oráculo universal de producción. Evaluación humana pendiente.

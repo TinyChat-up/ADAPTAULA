@@ -1,5 +1,14 @@
 # Registro de desarrollo
 
+## 2026-10-20 — CLARO: coherencia estructural y legibilidad educativa
+
+- Base `3e9dfd2`, #49, #50 y #51 confirmadas MERGED. Rama nueva `codex/claro-coherencia-visual`; [PR #52](https://github.com/TinyChat-up/ADAPTAULA/pull/52) abierta sin merge. Se congelaron ocho fichas sintéticas y sus referencias manuales en `017fe9e`; implementación fijada en `b203e69` antes de ejecutar cuatro fichas de reserva, sin adaptar reglas a sus resultados.
+- Fallos antes/después: `0/0` aceptado en la marca cero; especificación resuelta con celda fuera de rango dibujada; figura separada de su consigna por un título (en el adversario PDF, hojas distintas); diez pares de etiquetas solapadas en recta densa. Tres unitarias y dos pruebas Chromium fallaron antes. La entrada inválida al renderer es una defensa adicional, no evidencia de un bypass de los loaders remotos.
+- Se reutilizan MaterialSheet, SVG y CSS existentes, versión de renderer v5. Validación antes de dibujar, agrupación por referencias de uso exclusivo y rótulos de recta mayores alternados sobre/bajo el eje. Barras, cuadrículas, círculos, contenido, escala, sombreados y respuestas originales conservados. Sin cambio de modelo, prompt, política de aceptación de ilustraciones ni pipeline de Hacer magia.
+- La célula mock sin números sigue como caso negativo explícito. Aviso docente `visual_semantics_unverified` para píxeles disponibles: disponibilidad técnica no prueba contenido. Evaluador de referencias manuales solo en `evals/claro-quality`, sin aprobar semántica de imágenes por alt, brief o revisión simulada. La comparación exacta no detecta toda respuesta parafraseada.
+- Verificación local: 185 pruebas focalizadas (12 archivos), segundo lote 51 (cinco archivos, con solapamiento); 21 PDF reales, incluidos ocho documentos A4; repetición del corpus 10/10 para aislar medición de memoria; 10/10 E2E escritorio/móvil (visor, editor, comparación, conflictos, permisos y PDF), typecheck/build, lint sin errores (un aviso previo), escáner de secretos y diff-check. No suite completa ni Supabase/Vercel remoto.
+- [QA, informe por ficha, PDFs antes/después y capturas](qa/claro-calidad/README.md). Las pruebas técnicas y las referencias escritas por el desarrollador no sustituyen revisión por docentes ni validan el generador real. Siguiente: evaluación docente de escala, espacios y esquema numerado; referencias verificadas por versión antes de ampliar aceptación automática. Sin merge.
+
 ## 2026-10-20 — Vista previa del PDF definitivo
 
 - Base `origin/main` / `ef8c1bf`; comprobadas #49 y #50 fusionadas. Rama nueva `codex/vista-previa-pdf`; implementación `3d6379e`, [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) publicada y abierta, sin merge. [Contrato, comandos, resultados y capturas](qa/vista-previa-pdf/README.md).

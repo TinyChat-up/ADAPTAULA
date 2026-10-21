@@ -71,7 +71,7 @@ export const reduce = (f: Fraction): Fraction => {
 export function parseLabel(text: string): Fraction | null {
   if (!LABEL_PATTERN.test(text)) return null;
   const [n, d] = text.split("/");
-  return { n: Number(n), d: d === undefined ? 1 : Number(d) };
+  return d !== undefined && Number(d) === 0 ? null : { n: Number(n), d: d === undefined ? 1 : Number(d) };
 }
 export const fractionText = (f: Fraction) => (f.d === 1 ? String(f.n) : `${f.n}/${f.d}`);
 
@@ -82,7 +82,7 @@ export function tickValue(spec: Pick<NumberLineSpec, "start" | "end" | "division
   return reduce({ n: s.n * e.d * k + i * (e.n * s.d - s.n * e.d), d: s.d * e.d * k });
 }
 
-/** The rules a spec must meet to be drawn at all (also applied by the schema). Empty = verified. */
+/** The rules a spec must meet to be drawn at all (also applied by the schema). Empty = internally consistent; this does not verify identity or pedagogical suitability. */
 export function specIssues(spec: { kind: string } & Record<string, unknown>): string[] {
   const issues: string[] = [];
   const s = spec as VisualSpec;
