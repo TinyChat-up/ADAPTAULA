@@ -54,7 +54,10 @@ test("visual necesario: no renderizable → localizar en el original → recorte
   await expect(page.getByText("Esta ficha todavía no se puede mostrar completa.")).toBeVisible();
   await page.goto(`/app/adaptaciones/${id}/vista`);
   await expect(page.getByText("todavía no se ha señalado dónde está en el original").first()).toBeVisible();
-  await page.getByRole("link", { name: "Localizar en el original" }).click();
+  // Every original visual not located yet gets its own link; the required one (vis_2) is the one this sheet waits for.
+  const locate = page.getByRole("link", { name: "Localizar en el original" });
+  expect(await locate.count()).toBeGreaterThanOrEqual(1);
+  await locate.and(page.locator(`a[href*="/visuales/vis_2?"]`)).click();
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}/visuales/vis_2\\?volver=`));
   await expect(page.getByRole("heading", { name: "Localizar en el original", level: 1 })).toBeVisible();
   if (mobile) await expect(page.getByText("Para seleccionar con precisión, abre esta herramienta en una pantalla más grande.")).toBeVisible();

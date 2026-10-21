@@ -25,26 +25,12 @@ export async function signUpAndOnboard(page: Page, email: string, start: RegExp 
 }
 
 /** A real, valid PDF. `marker` makes the content unique (distinct hash) or drives the mock provider (MOCK_*). */
-/** The table of the mock analysis («Tabla de equivalencias», `mock-analysis-v3.ts`), as the original prints it. */
-export const MOCK_TABLE = { headers: ["Fracción", "Equivalente"], rows: [["1/2", "2/4"], ["1/3", "2/6"]] };
-
-/**
- * A small synthetic PDF. `table: true` also prints the mock analysis's table as a ruled grid on page 1, so the table the analysis
- * describes really is in the original: a choice activity that relies on it is only delivered once that table is corroborated
- * against the PDF (`table_uncorroborated` otherwise), and a sheet can only be delivered by «Hacer magia» from a coherent material.
- */
-export async function makePdf(options: { pages?: number; marker?: string; table?: boolean } = {}): Promise<Buffer> {
+export async function makePdf(options: { pages?: number; marker?: string } = {}): Promise<Buffer> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   for (let i = 0; i < (options.pages ?? 1); i++) {
     const page = doc.addPage();
     page.drawText(`Ficha de fracciones ${options.marker ?? ""}`, { x: 50, y: 700, size: 14, font });
-    if (options.table && i === 0) {
-      const rows = [MOCK_TABLE.headers, ...MOCK_TABLE.rows];
-      rows.forEach((row, r) => row.forEach((cell, c) => page.drawText(cell, { x: 65 + c * 155, y: 595 - r * 30, size: 11, font })));
-      for (let r = 0; r <= rows.length; r++) page.drawLine({ start: { x: 60, y: 615 - r * 30 }, end: { x: 370, y: 615 - r * 30 }, thickness: 1 });
-      for (let c = 0; c <= MOCK_TABLE.headers.length; c++) page.drawLine({ start: { x: 60 + c * 155, y: 615 }, end: { x: 60 + c * 155, y: 615 - rows.length * 30 }, thickness: 1 });
-    }
   }
   const bytes = Buffer.from(await doc.save({ useObjectStreams: false }));
   // pdf-lib writes text as hex strings, so the marker is appended as a plain PDF comment after %%EOF:

@@ -103,3 +103,34 @@ export async function seedBlockedMagic(page: Page, workspaceId: string, id: stri
   await artifact(page, workspaceId, id, "pedagogical_review", { review: blocked, pending: [] });
   await setStatus(page, id, { status: "blocked", creation_mode: "automatic" });
 }
+
+export interface SeededPlan {
+  slug: string;
+  monthly_adaptations: number;
+  max_profiles: number;
+  features: { monthly_analyses?: number; max_pages_per_material?: number };
+}
+
+/** The plans rows the public pricing page reads (so a spec checks what the database says, not a copy of an old policy). */
+export async function seededPlans(page: Page, slugs: string[]): Promise<SeededPlan[]> {
+  const response = await page.request.get(`${FAKE}/rest/v1/plans?select=slug,monthly_adaptations,max_profiles,features&slug=in.(${slugs.join(",")})`, { headers });
+  await ok(response);
+  return (await response.json()) as SeededPlan[];
+}
+
+/**
+ * The mock analysis links its single-choice activity to the «Tabla de equivalencias», and a choice that relies on a table is only
+ * delivered by «Hacer magia» through a model-made equivalent activity (ADR-023): with the mock provider there is none, so that
+ * sheet always stops honestly (`table_source_unverifiable` / `table_uncorroborated`, covered in tests/db and tests/unit). A spec
+ * that must reach the DELIVERED sheet unlinks that choice from the table in the stored analysis (the activity keeps its own
+ * printed options, «a) 2/4  b) 2/3  c) 3/4»), so it tests delivery and not that stop.
+ */
+export async function unlinkChoicesFromTables(page: Page, materialId: string) {
+  type Stored = { visuals: Array<{ id: string; table?: unknown; kind: string }>; activities: Array<{ response_format: string; resource_ids: string[] }> };
+  const rows = (await (await page.request.get(`${FAKE}/rest/v1/materials?select=analysis&id=eq.${materialId}`, { headers })).json()) as Array<{ analysis: Stored }>;
+  const analysis = rows[0]!.analysis;
+  const tables = new Set(analysis.visuals.filter((v) => v.table || v.kind === "table").map((v) => v.id));
+  const activities = analysis.activities.map((a) => (a.response_format === "select_option" ? { ...a, resource_ids: a.resource_ids.filter((r) => !tables.has(r)) } : a));
+  expect(activities.some((a, i) => a.resource_ids.length !== analysis.activities[i]!.resource_ids.length)).toBe(true);
+  await ok(await page.request.patch(`${FAKE}/rest/v1/materials?id=eq.${materialId}`, { headers, data: { analysis: { ...analysis, activities } } }));
+}

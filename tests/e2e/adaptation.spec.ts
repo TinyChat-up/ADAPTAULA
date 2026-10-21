@@ -37,7 +37,9 @@ test("material analizado → elegir perfil → Revisar antes de crear → la pro
 
   await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
   const url = page.url();
-  await expect(page.getByRole("heading", { name: "Adaptación", level: 1 })).toBeVisible();
+  // The page is named after the material (h1), with what it is and for whom above it (editorial header since 6bfd4e6).
+  await expect(page.getByText("Adaptación · Perfil M.R.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/Anthropic|Claude|OpenAI|GPT|token|diagn/i)).toHaveCount(0);
 

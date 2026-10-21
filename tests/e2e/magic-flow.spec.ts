@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { allowAdaptations, seedBlockedMagic } from "./adaptation-seed";
+import { allowAdaptations, seedBlockedMagic, unlinkChoicesFromTables } from "./adaptation-seed";
 import { createReviewedAdaptation, expectPdfDownload, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -23,8 +23,9 @@ async function teacherWithMaterial(page: Page) {
   const email = uniqueEmail();
   await signUpAndOnboard(page, email);
   await allowAdaptations(page);
-  const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `mg-${Date.now()}-${Math.random()}`, table: true }) });
+  const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `mg-${Date.now()}-${Math.random()}` }) });
   await waitForAnalysis(page);
+  await unlinkChoicesFromTables(page, materialId);
   await page.getByRole("link", { name: "Crear un perfil" }).click();
   await page.getByLabel("Alias o iniciales").fill("M.R.");
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });

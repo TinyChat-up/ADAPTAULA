@@ -188,9 +188,16 @@ test("listado, filtros y borrado (con el archivo)", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Fracciones equivalentes" })).toBeVisible();
   await expect(page.getByRole("listitem").getByText("Analizado", { exact: true })).toBeVisible();
 
+  // The filters live in a closed disclosure («Filtros y orden»): opened as a teacher would, again after each filtered reload.
+  const openFilters = async () => {
+    const filters = page.locator("details", { has: page.locator("summary", { hasText: "Filtros y orden" }) });
+    if (!(await filters.evaluate((d) => (d as HTMLDetailsElement).open))) await filters.locator("summary").click();
+  };
+  await openFilters();
   await page.getByLabel("Asignatura").selectOption({ label: "Matemáticas" });
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page.getByRole("link", { name: "Fracciones equivalentes" })).toBeVisible();
+  await openFilters();
   await page.getByLabel("Asignatura").selectOption({ label: "Música" });
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page.getByText("No hay materiales con estos filtros")).toBeVisible();
