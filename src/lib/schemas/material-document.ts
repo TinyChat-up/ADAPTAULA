@@ -41,7 +41,7 @@ export type Trace = z.infer<typeof TraceSchema>;
 
 const Choice = z.object({ id: ItemId, text: ShortText });
 
-export const RESPONSE_KINDS = ["lines", "box", "grid", "table_cells", "choice", "fill_blank", "match", "order", "true_false", "oral_or_alternative", "none", "comparison"] as const;
+export const RESPONSE_KINDS = ["lines", "box", "grid", "table_cells", "choice", "fill_blank", "match", "order", "true_false", "oral_or_alternative", "none", "comparison", "fields", "sequence"] as const;
 export const CLOSED_RESPONSE_KINDS = ["choice", "fill_blank", "match", "order", "true_false"] as const;
 
 const RESPONSE_VARIANTS = [
@@ -64,7 +64,20 @@ const ResponseSchema = z.discriminatedUnion("kind", RESPONSE_VARIANTS);
  * What a stored document may hold: also the answer areas only the server builds from the original's printed words. `comparison`:
  * one EMPTY box between the two numbers of each item («2/3 ☐ 3/5»), drawn by our own renderer; the sign is never stored.
  */
-const StoredResponseSchema = z.discriminatedUnion("kind", [...RESPONSE_VARIANTS, z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema })]);
+const StoredResponseSchema = z.discriminatedUnion("kind", [
+  ...RESPONSE_VARIANTS,
+  z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema }),
+  /**
+   * The labelled answer fields the original prints («Sujeto:» / «Predicado:», «Operaciones y unidades:» / «Respuesta:»): each label
+   * with its own space (lines, or a box to calculate in). Built by the server from the original's words, never by a model.
+   */
+  z.object({
+    kind: z.literal("fields"),
+    fields: z.array(z.object({ label: Text(60), space: z.enum(["lines", "box"]), lines: z.number().int().min(1).max(12) })).min(1).max(12),
+  }),
+  /** The items of an ordering task in their PRINTED order, one empty box each for the number: the order is the student's work. */
+  z.object({ kind: z.literal("sequence"), items: z.array(ShortText).min(2).max(12) }),
+]);
 export type ResponseSpec = z.infer<typeof StoredResponseSchema>;
 
 const IMAGE_SOURCE_VARIANTS = [

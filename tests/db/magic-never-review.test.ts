@@ -232,7 +232,8 @@ describe("magic + revealed answer: only the offending support is regenerated", (
     await t.visit(id);
     const end = await t.status(id);
     expect(end).toMatchObject({ status: "blocked", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, delivered: false, generationsUsed: MAX_GENERATION_CYCLES, regenerationAvailable: false, nextAction: "none" });
-    expect([t.spy.generator, t.spy.reviewer]).toEqual([MAX_GENERATION_CYCLES, MAX_GENERATION_CYCLES]);
+    // Round 3 only leaves dec_2 out: the valid output of round 2 is reused (no generator call), and the sheet is reviewed again.
+    expect([t.spy.generator, t.spy.reviewer]).toEqual([MAX_GENERATION_CYCLES - 1, MAX_GENERATION_CYCLES]);
     neverMandatory(t.seen);
     const calls = [t.spy.generator, t.spy.reviewer];
     await t.visit(id);

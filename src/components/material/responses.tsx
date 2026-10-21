@@ -95,6 +95,30 @@ export function Response({ response }: { response: RenderResponse }) {
           ))}
         </ul>
       );
+    case "sequence":
+      // The printed items, in their printed order, each with an empty box for the number the student writes.
+      return (
+        <ol className="ms-options ms-sequence">
+          {response.items.map((o, i) => (
+            <li key={i}>
+              <span className="ms-box ms-box-write" aria-hidden />
+              <span>{o}</span>
+            </li>
+          ))}
+        </ol>
+      );
+    case "fields":
+      // Every labelled field of the original keeps its label and its own space: lines to write, a box to calculate in.
+      return (
+        <div className="ms-fields">
+          {response.fields.map((f, i) => (
+            <div key={i} className={f.space === "box" ? "ms-field ms-field-box" : f.lines > 1 ? "ms-field ms-field-lines" : "ms-field ms-field-line"}>
+              <p className="ms-field-label">{f.label}:</p>
+              {f.space === "box" ? <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${f.lines})` }} aria-hidden /> : <Lines count={f.lines} />}
+            </div>
+          ))}
+        </div>
+      );
     case "true_false":
       return (
         <ul className="ms-options">

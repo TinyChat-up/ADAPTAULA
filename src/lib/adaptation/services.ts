@@ -42,6 +42,11 @@ export interface GeneratorInput {
   analysis: MaterialAnalysis;
   /** The raw plan, the validator's verdict, the review and the effective plan. The generator only executes the effective one. */
   reviewed: ReviewedPlan;
+  /**
+   * A localized repair («Hacer magia» 2.0): only these decisions are sent to the model; everything else that was valid is kept from
+   * the previous generation by the server. Absent: every decision the plan asks to write.
+   */
+  only?: readonly string[];
 }
 
 export interface ReviewerInput {

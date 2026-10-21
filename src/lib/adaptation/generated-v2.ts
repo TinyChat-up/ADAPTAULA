@@ -10,6 +10,7 @@ import type { GenerationIssue, NormalizedGeneration } from "./generated";
 import type { ReviewedPlan } from "./plan-review";
 import { instructionNeedsRewrite, supportBudgetWords } from "./proportion";
 import { NEAR_DUPLICATE_OVERLAP, overlap, sentencesOf } from "./redundancy";
+import { activityStructure } from "./structure";
 import { criticalTokens, describeToken, hasToken, normalizeText, wordCount } from "./text";
 
 /**
@@ -238,7 +239,11 @@ export function normalizeGeneratedV2(draft: DraftGeneratedSegmentsV2, reviewed: 
         const original = `${activity.instruction} ${activity.context ?? ""}`;
         const missing = criticalTokens(original).filter((t) => !hasToken(rewritten, t)).map(describeToken);
         const missingQuotes = quotedReferences(original).filter((q) => !rewritten.includes(normalizeText(q)));
+        // The items to order and the labelled fields are drawn by the answer area: a rewrite that prints them again doubles them.
+        const structure = activityStructure(activity);
+        const drawn = [...(structure.sequence ?? []), ...(structure.fields ?? []).filter((f) => wordCount(f.label) >= 2).map((f) => f.label)].map(normalizeText);
         if (rewritten === normalizeText(original)) issue("rewrite_copies_original", decision.id, "La reescritura es una copia de la consigna: se conserva la original");
+        else if (drawn.some((d) => d.length >= 8 && rewritten.includes(d))) issue("rewrite_restates_structure", decision.id, "La reescritura repite los elementos o los campos que ya dibuja la zona de respuesta: se conserva la consigna original");
         else if (missing.length > 0 || missingQuotes.length > 0) issue("rewrite_lost_requirements", decision.id, `La reescritura pierde ${[...missing, ...missingQuotes.map((q) => `«${q}»`)].join(", ")}: se conserva la original`);
         else {
           blocks.push({

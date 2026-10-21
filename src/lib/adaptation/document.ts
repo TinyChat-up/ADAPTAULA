@@ -5,6 +5,8 @@ import { MATERIAL_DOCUMENT_SCHEMA_VERSION, MaterialDocumentSchema, createBlockId
 import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { statedAnswer } from "@/lib/analysis/answers";
 import { comparisonFromText } from "@/lib/visuals/comparison";
+import { pruneRedundantSupports } from "./support-policy";
+import { activityStructure, readingParagraphs } from "./structure";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
 /**
@@ -33,6 +35,10 @@ export function responseFor(activity: AnalysisActivity): ResponseSpec {
   // «Escribe >, < o = en cada casilla»: one empty box per printed pair, never a writing area (it would hide what is compared).
   const comparison = comparisonFromText(activity.instruction, activity.context);
   if (comparison) return { kind: "comparison", spec: comparison.spec };
+  // The answer structure the original prints (labelled fields, items to order) is kept whatever the answer area says.
+  const structure = activityStructure(activity);
+  if (structure.sequence) return { kind: "sequence", items: structure.sequence };
+  if (structure.fields) return { kind: "fields", fields: structure.fields };
   if (answeredOnFigure(activity)) return { kind: "none" };
   switch (area.type) {
     case "line":
@@ -62,12 +68,25 @@ export function responseFor(activity: AnalysisActivity): ResponseSpec {
  * Open answer formats the assembler sets by itself on an activity (`responseForDecision`): a shorter answer area, the keyboard or an
  * oral/alternative answer. Nothing is written for them, so no model is needed. The closed formats need an answer key: none.
  */
+/**
+ * The literal prompt of an activity: its instruction and the context the answer area does not draw (labelled fields and the items
+ * to order are drawn by the response, so they are never printed twice).
+ */
+export function activityPrompt(activity: AnalysisActivity, drawnContext = false): string {
+  if (drawnContext) return activity.instruction;
+  const structure = activityStructure(activity);
+  return structure.context ? `${structure.instruction}\n\n${structure.context}` : structure.instruction;
+}
+
 export const DETERMINISTIC_RESPONSES = ["write_text_short", "keyboard", "oral_or_alternative"] as const satisfies readonly NonNullable<Decision["response_target"]>[];
 export const isDeterministicResponse = (decision: Pick<Decision, "action" | "response_target">) =>
   decision.action === "change_response_format" && decision.response_target !== undefined && (DETERMINISTIC_RESPONSES as readonly string[]).includes(decision.response_target);
 
 export function responseForDecision(activity: AnalysisActivity, target: Decision["response_target"]): ResponseSpec {
   const lines = activity.answer_area.lines ?? 3;
+  // A shorter answer area never removes the fields or the items the original prints: they are the structure of the task.
+  const printed = responseFor(activity);
+  if ((printed.kind === "fields" || printed.kind === "sequence") && (target === undefined || target === "write_text_short" || target === "table_completion")) return printed;
   if (target === "keyboard") return { kind: "oral_or_alternative", mode: "keyboard", lines };
   if (target === "oral_or_alternative") return { kind: "oral_or_alternative", mode: "oral", lines: 0 };
   if (target === "write_text_short") return { kind: "lines", lines: Math.max(1, Math.ceil(lines / 2)) };
@@ -78,7 +97,7 @@ export function responseForDecision(activity: AnalysisActivity, target: Decision
 function textBlock(t: AnalysisText, id: string): Block {
   const trace = { origin: "original" as const, source_refs: [t.id], decision_ids: [] };
   if (t.kind === "heading") return { id, type: "heading", level: 2, text: t.text.slice(0, 300), trace };
-  if (t.kind === "reading_text") return { id, type: "reading_text", paragraphs: t.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean), literal: true, trace };
+  if (t.kind === "reading_text") return { id, type: "reading_text", paragraphs: readingParagraphs(t.text), literal: true, trace };
   if (t.kind === "instruction") return { id, type: "instruction", text: t.text, trace };
   return { id, type: "paragraph", text: t.text, trace };
 }
@@ -142,7 +161,7 @@ function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, ne
     const resource_block_ids = a.resource_ids.map((r) => visualIds.get(r) ?? textIds.get(r)).filter((x): x is string => x !== undefined);
     // The printed pairs of a comparison are drawn by its answer area: the prompt keeps the instruction, never the pairs twice.
     const drawnContext = a.context !== null && comparisonFromText(a.instruction, a.context)?.pairsOnly === true;
-    const prompt = a.context && !drawnContext ? `${a.instruction}\n\n${a.context}` : a.instruction;
+    const prompt = activityPrompt(a, drawnContext);
     units.push({
       ref: a.id,
       page: a.page,
@@ -242,6 +261,12 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
       after.set(segment.target, [...(after.get(segment.target) ?? []), ...blocks.filter((b) => !isExample(b))]);
     }
   }
+
+  // One functional need, printed once: a support that only restates another one is folded into it (its decisions stay traced).
+  const pruning = pruneRedundantSupports(head, after);
+  head.splice(0, head.length, ...pruning.head);
+  after.clear();
+  for (const [ref, blocks] of pruning.after) after.set(ref, blocks);
 
   // The visual part of each decision (docs/VISUAL_RESOURCES.md): an original visual is linked to its activity; a visual the
   // original does not have gets its place (an `image` of source `requested`) right before its target, for the teacher to fill.

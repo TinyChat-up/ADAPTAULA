@@ -85,6 +85,17 @@ ul.ms-list { list-style: disc; }
 .ms-options, .ms-checklist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5em; }
 .ms-options li, .ms-checklist li { display: flex; gap: .7em; align-items: center; min-width: 0; }
 .ms-options li > span:last-child, .ms-checklist li > span:last-child { min-width: 0; }
+/* Labelled answer fields of the original: a one-line field keeps its label on the line; a box or several lines go below it. */
+.ms-fields { display: flex; flex-direction: column; gap: .6em; }
+.ms-field { break-inside: avoid; }
+.ms-field-label { margin: 0; font-weight: 600; }
+.ms-field-line { display: flex; align-items: flex-end; gap: .8em; }
+.ms-field-line .ms-field-label { flex: 0 0 auto; max-width: 45%; padding-bottom: .15em; }
+.ms-field-line .ms-lines { flex: 1 1 auto; }
+.ms-field-box .ms-box-area, .ms-field-lines .ms-lines { margin-top: .3em; }
+/* Items to order: each on its own line with the box where the number goes, never run together in one sentence. */
+.ms-sequence li { align-items: flex-start; }
+.ms-sequence .ms-box-write { flex: none; margin-top: .1em; }
 .ms-tf { flex: none; display: inline-flex; align-items: center; gap: .3em; font-weight: 700; margin-right: .3em; }
 .ms-tf .ms-box + .ms-box { margin-left: .5em; }
 .ms-fill p { margin: 0; line-height: 2.3; white-space: pre-wrap; }

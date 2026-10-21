@@ -872,3 +872,34 @@ Todos los cambios de enunciado requieren reconocer que se comprobarán datos, un
 [Entrega y evidencias](qa/claro-calidad/README.md). Se mantienen MaterialDocument, MaterialSheet y el motor PDF. Las figuras anteriores de uso exclusivo en una página lógica se agrupan con su actividad aunque haya bloques intermedios; no se duplican compartidas ni se cruzan páginas lógicas. Las rectas densas separan rótulos por encima/debajo del eje y mantienen escala, marcas y valores. No se reduce letra ni contenido para encajar.
 
 Las especificaciones efectivas se validan antes de dibujar; denominadores cero son inválidos. Una imagen disponible añade el aviso docente de semántica sin verificar: los píxeles no se certifican por metadatos. No cambia el gate de ilustraciones ni la política de Hacer magia. Las comprobaciones contra consignas, unidades y soluciones de referencia pertenecen al corpus manual de evaluación, no a un supuesto oráculo universal de producción. Evaluación humana pendiente.
+
+## «Hacer magia» 2.0 — recuperación localizada y estructura del original (2026-10-21)
+
+Evidencia: prueba real v3 (3/8 entregadas). Las causas, los cambios, los resultados simulados y la próxima prueba están en [QA](qa/hacer-magia-2/README.md).
+
+### Recuperación localizada
+- **Criba y aislamiento.** Antes del ensamblado se cribran los bloques que incumplen el contrato (`screenGeneration`, issue `invalid_block_dropped`). Si el ensamblado falla, se aísla la decisión que lo rompe.
+- **Reparación determinista** (`repairLocally`), sin modelo:
+  - se repone el área de respuesta del original;
+  - se quitan los vínculos a decisiones no efectivas;
+  - se descartan segmentos escritos sobre unidades intactas.
+
+  Se acepta solo si es estrictamente mejor.
+- **Fragmento por IA** (`GeneratorInput.only`). Solo las decisiones restringidas van al modelo, y el servidor fusiona con el borrador anterior (`reused_from`, `regenerated`). Si la reparación es solo un descarte, se reutiliza sin llamada.
+- **Validación.** Las comprobaciones no se relajan: todo se vuelve a ensamblar y auditar desde cero.
+- **Diagnóstico** (`diagnoseGeneration`). Cada fallo lleva categoría, regla, decisiones y unidades. Una parada lo guarda en `execution_report`, solo con ids.
+- **Sin progreso.** Una firma de fallos (regla@decisiones) que ya se vio no pide otra regeneración: queda descartar sin perder cobertura o parar.
+
+### Estructura del original (`src/lib/adaptation/structure.ts`)
+- **Saltos de línea.** Solo son estructurales con evidencia en el texto: marcador, diálogo, etiqueta de campo o lista de oraciones. El render los dibuja como `<br>`. Sin evidencia no se inventa estructura.
+- **Campos etiquetados** (`fields`, solo servidor). «Operaciones…» lleva caja de cálculo, «Explica…» varias líneas y «Respuesta» dos.
+- **Ordenación** (`sequence`, solo servidor). Una casilla por elemento, en el orden impreso, dibujado una vez.
+- **Rewrites.** Un rewrite que repite la estructura se rechaza (`rewrite_restates_structure`).
+
+### Apoyos sin sobrecarga y lo evaluado
+- **Redundancia** (`support-policy.ts`). Un apoyo que repite íntegramente otro (de la hoja o anterior de la misma actividad) se pliega en él y sus decisiones pasan al que queda.
+- **Lo evaluado** (`assessment-safety.ts`). Un apoyo que define dos o más de las categorías que la actividad pide clasificar falla la auditoría (`answer_leak`) y se atribuye a su decisión.
+
+### Figuras imprescindibles
+- **Motivo de la parada** (`visualStopCode`). Distingue función desactivada o no ofrecida (`visual_unavailable`), plan sin ilustraciones (`visual_plan`), cupo del mes (`visual_quota`) y no construible o servicio (`visual`).
+- **Página original completa como anexo.** Estudiada y no implementada (ADR-038).

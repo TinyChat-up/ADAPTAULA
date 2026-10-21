@@ -52,7 +52,10 @@ export type GenerationIssueCode =
   | "support_over_budget"
   | "support_condensed"
   | "support_out_of_budget"
-  | "planner_label_restates";
+  | "planner_label_restates"
+  // Hacer magia 2.0
+  | "rewrite_restates_structure"
+  | "invalid_block_dropped";
 
 /** The model proposed something its decisions do not authorise (counted as non-compliance; the server already dropped it). */
 export const UNAUTHORIZED_CODES: readonly GenerationIssueCode[] = ["unapproved_decision", "target_mismatch", "unauthorized_block", "multiple_activity_blocks", "unauthorized_support"];
@@ -63,7 +66,7 @@ export const UNAUTHORIZED_CODES: readonly GenerationIssueCode[] = ["unapproved_d
  */
 export const DISCARDED_REWRITE_CODES: readonly GenerationIssueCode[] = ["rewrite_not_needed"];
 /** The model wrote something redundant or lossy that the server dropped or replaced by the original. */
-export const REDUNDANCY_CODES: readonly GenerationIssueCode[] = ["rewrite_lost_requirements", "rewrite_copies_original", "redundant_support_dropped", "duplicate_item_dropped"];
+export const REDUNDANCY_CODES: readonly GenerationIssueCode[] = ["rewrite_lost_requirements", "rewrite_copies_original", "redundant_support_dropped", "duplicate_item_dropped", "rewrite_restates_structure"];
 
 export interface GenerationIssue {
   code: GenerationIssueCode;

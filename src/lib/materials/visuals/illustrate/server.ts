@@ -14,6 +14,7 @@ import { getFlags } from "@/lib/config/flags";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callStructured } from "../auto/assistants";
+import type { IllustrationWithheld } from "../auto/policy";
 import { ILLUSTRATION_BUDGET, type IllustrationDeps, type StoredIllustration } from "./service";
 
 /**
@@ -30,21 +31,28 @@ const COLUMNS = "id, sha256, width, height, alt_text";
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const toStored = (row: { id: string; sha256: string; width: number; height: number; alt_text: string | null }): StoredIllustration => ({ id: row.id, sha256: row.sha256, width: row.width, height: row.height, alt: row.alt_text ?? "Ilustración de la actividad" });
 
-/** Why an adaptation cannot have illustrations: its plan does not include them, or the service is not set up (flag, models, keys). */
-export type IllustrationAvailability = { available: true; deps: IllustrationDeps; perAdaptation: number | null } | { available: false; reason: "plan" | "service" };
+/** Why an adaptation cannot have illustrations (`IllustrationWithheld`): never «your plan» when the feature is off for everyone. */
+export type IllustrationAvailability = { available: true; deps: IllustrationDeps; perAdaptation: number | null } | { available: false; reason: IllustrationWithheld };
 
 const ILLUSTRATION_PURPOSES = ["image_brief", "image", "image_review"] as const;
 
 export async function illustrationAvailability(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
+  // Switched off in Adaptaula: true for every plan, so the stop must not suggest changing plans (fichas 06/07 of the real run).
+  if (!getFlags().aiImagesEnabled) return { available: false, reason: "disabled" };
   const admin = createAdminClient();
-  // The plan first: «your plan does not include illustrations» is true whatever the service's state.
   const { data: plan } = await admin.rpc("workspace_plan", { ws: ids.workspaceId });
   const effective = (plan as { features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
-  if (effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: "plan" };
+  if (effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: (await anyPlanOffersIllustrations(admin)) ? "plan" : "not_offered" };
   const planBudget = Number(effective.features?.illustration_budget_usd);
   const deps = await illustrationDeps(ids, Number.isFinite(planBudget) && planBudget > 0 ? planBudget : ILLUSTRATION_BUDGET.perAdaptationUsd);
   const perAdaptation = Number(effective.features?.illustrations_per_adaptation);
   return deps ? { available: true, deps, perAdaptation: Number.isInteger(perAdaptation) && perAdaptation >= 0 ? perAdaptation : null } : { available: false, reason: "service" };
+}
+
+/** Whether some active plan of the catalogue includes illustrations (an unknown answer says no: never an upgrade that may not exist). */
+async function anyPlanOffersIllustrations(admin: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  const { data, error } = await admin.from("plans").select("id").eq("active", true).eq("features->>image_generation", "true").gt("monthly_images", 0).limit(1);
+  return !error && (data?.length ?? 0) > 0;
 }
 
 async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number): Promise<IllustrationDeps | null> {

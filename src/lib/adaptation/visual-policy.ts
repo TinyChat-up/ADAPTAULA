@@ -175,6 +175,23 @@ export const unresolvedEssential = (plan: VisualResolutionPlan | null) => (plan 
 export const PLAN_LIMITED_REASONS: ReadonlySet<string> = new Set(["illustration_not_in_plan", "illustration_quota_exhausted"]);
 export const stoppedByPlan = (unresolved: readonly VisualNeedOutcome[]) => unresolved.length > 0 && unresolved.every((n) => n.resolution.action === "unresolved" && PLAN_LIMITED_REASONS.has(n.resolution.reason));
 
+/**
+ * The precise reason an essential visual stopped a sheet (docs/ADAPTATION.md § Figuras imprescindibles), so the teacher is never
+ * told «your plan» when no plan could help: new illustrations are switched off in Adaptaula (`illustration_unavailable`), the
+ * workspace's plan has none while another plan does (`illustration_not_in_plan`), this month's are used up
+ * (`illustration_quota_exhausted`), or nothing valid could be built from the material (any other reason → `visual`).
+ */
+export type VisualStopCode = "visual" | "visual_plan" | "visual_quota" | "visual_unavailable";
+export function visualStopCode(unresolved: readonly VisualNeedOutcome[]): VisualStopCode {
+  const reasons = new Set(unresolved.map((n) => (n.resolution.action === "unresolved" ? n.resolution.reason : "")));
+  if (reasons.size === 0) return "visual";
+  const only = (r: string) => reasons.size === 1 && reasons.has(r);
+  if (only("illustration_unavailable")) return "visual_unavailable";
+  if (only("illustration_quota_exhausted")) return "visual_quota";
+  return stoppedByPlan(unresolved) ? "visual_plan" : "visual";
+}
+export const VISUAL_STOP_CODES: ReadonlySet<string> = new Set<VisualStopCode>(["visual", "visual_plan", "visual_quota", "visual_unavailable"]);
+
 const STRUCTURED = /\b(barra|recta|tabla|grafico|grafica|cuadricula)\b/;
 
 /** The contract of one decided need (pure: from its origin, its outcome and the analysis's kind of visual). */

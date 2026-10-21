@@ -135,8 +135,9 @@ export interface GeneratorPromptInputV2 {
   material: Array<{ decision_id: string; source: unknown; preserves: Array<{ id: string; type: string; importance: string; value: string }> }>;
 }
 
-export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: AdaptationContext): GeneratorPromptInputV2 {
-  const writing = new Set(decisionsToGenerateV2(reviewed.effective.decisions, analysis, context).map((d) => d.id));
+export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: AdaptationContext, only?: readonly string[]): GeneratorPromptInputV2 {
+  // `only`: a localized repair asks for the affected decisions alone; the policies (who rewrites, budgets) still read the whole plan.
+  const writing = new Set(decisionsToGenerateV2(reviewed.effective.decisions, analysis, context).map((d) => d.id).filter((id) => !only || only.includes(id)));
   const applied = appliedDecisions(reviewed).filter((rd) => writing.has(rd.id));
   const activityOf = (target: string) => analysis.activities.find((a) => a.id === target);
   return {
@@ -189,6 +190,8 @@ export interface GeneratorCallParams {
   maxOutputTokens: number;
   /** Prompt + contract version. Defaults to the active one (v1 until v2 is validated). */
   version?: number;
+  /** v2 only: a localized repair sends just these decisions. */
+  only?: readonly string[];
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -196,11 +199,11 @@ export interface GeneratorCallParams {
 export const GENERATOR_TIMEOUT_MS = 150_000;
 
 /** The messages of a generator request, for the version asked for. Exposed so the evals and tests inspect exactly what a model would receive. */
-export function generatorRequestParts(params: Pick<GeneratorCallParams, "analysis" | "context" | "reviewed" | "version">) {
+export function generatorRequestParts(params: Pick<GeneratorCallParams, "analysis" | "context" | "reviewed" | "version" | "only">) {
   const version = params.version ?? ACTIVE_ADAPTATION_PROMPT_VERSIONS.material_generator;
   if (version === 2) {
     const prompt = getMaterialGenerator(2);
-    const input = buildGeneratorInputV2(params.reviewed, params.analysis, params.context);
+    const input = buildGeneratorInputV2(params.reviewed, params.analysis, params.context, params.only);
     return { prompt, input, parts: (prompt as typeof import("@prompts/material-generator/v2").MATERIAL_GENERATOR_V2).buildUserParts(input) };
   }
   const prompt = getMaterialGenerator(1);
@@ -276,8 +279,8 @@ export function normalizeGeneration(version: number, draft: unknown, reviewed: R
 /** `MaterialGenerator` backed by a real model, for the pipeline. A rejected answer throws; there is no repair here. */
 export function createModelGenerator(deps: { selection: ModelSelection; provider: AIProvider; maxOutputTokens: number; version?: number }): MaterialGenerator {
   return {
-    generate: async ({ context, analysis, reviewed }) => {
-      const { response, run } = await callGenerator({ ...deps, analysis, context, reviewed });
+    generate: async ({ context, analysis, reviewed, only }) => {
+      const { response, run } = await callGenerator({ ...deps, analysis, context, reviewed, ...(only ? { only } : {}) });
       const parsed = parseGeneratorResponse(response, deps.version ?? 1);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";

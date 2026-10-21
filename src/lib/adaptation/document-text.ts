@@ -23,7 +23,11 @@ export function studentText(block: Block): string {
               ? [r.text, ...(r.word_bank ?? [])]
               : r.kind === "comparison"
                 ? r.spec.items.map((i) => `${fractionText(i.left)} ☐ ${fractionText(i.right)}`)
-                : [];
+                : r.kind === "fields"
+                  ? r.fields.map((f) => `${f.label}:`)
+                  : r.kind === "sequence"
+                    ? r.items
+                    : [];
       return [block.label ?? "", block.prompt, ...(block.steps ?? []), ...(block.requirements ?? []), ...response].join("\n");
     }
     case "list":
