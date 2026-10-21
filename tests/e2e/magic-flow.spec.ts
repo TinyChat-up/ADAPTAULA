@@ -23,7 +23,7 @@ async function teacherWithMaterial(page: Page) {
   const email = uniqueEmail();
   await signUpAndOnboard(page, email);
   await allowAdaptations(page);
-  const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `mg-${Date.now()}-${Math.random()}` }) });
+  const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `mg-${Date.now()}-${Math.random()}`, table: true }) });
   await waitForAnalysis(page);
   await page.getByRole("link", { name: "Crear un perfil" }).click();
   await page.getByLabel("Alias o iniciales").fill("M.R.");

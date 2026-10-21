@@ -39,7 +39,7 @@ export function mockAnalysisDraftV3(): MaterialAnalysisDraftInput {
         role: "informative",
         title: "Tabla de equivalencias",
         description: "",
-        table: { headers: ["Fracción", "Equivalente"], rows: [["1/2", "2/4"], ["1/3", ""]] },
+        table: { headers: ["Fracción", "Equivalente"], rows: [["1/2", "2/4"], ["1/3", "2/6"]] },
       },
       { id: "v2", kind: "image", page: 1, role: "informative", description: "Dibujo de una pizza dividida en doce porciones." },
       { id: "v3", kind: "decorative", page: 1, role: "decorative", description: "Marco decorativo alrededor de la ficha." },
