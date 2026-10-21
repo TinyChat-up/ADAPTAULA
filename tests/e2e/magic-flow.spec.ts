@@ -17,7 +17,7 @@ const service = { apikey: KEY, authorization: `Bearer ${KEY}`, "content-type": "
 const INTERNAL = /planner|generator|reviewer|revisor|\bjob\b|\bcola\b|queue|schema|pipeline|Anthropic|Claude|OpenAI|GPT|token|\d+ ?%/i;
 /** What the teacher reads in `main`, without the zoom readout of the original's viewer («100 %» is a zoom level, not progress). */
 const mainText = async (page: Page) => {
-  const zooms = await page.locator('main [role="status"][aria-label="Zoom del original"]').allInnerTexts();
+  const zooms = await page.locator("main").getByRole("status", { name: "Zoom del original" }).allInnerTexts();
   return zooms.reduce((text, zoom) => text.replace(zoom, ""), await page.locator("main").innerText());
 };
 
