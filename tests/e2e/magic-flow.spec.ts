@@ -101,7 +101,10 @@ test("Hacer magia y la revisión bloquea: no se entrega, se explica sin tecnicis
   await seedBlockedMagic(page, workspaceId, id);
   await page.reload();
 
-  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toBeVisible();
+  // «Hacer magia» never says «La ficha necesita una revisión»: it stops with the reason and offers editing (docs/UX.md).
+  await expect(page.getByText("No hemos podido completar automáticamente esta ficha")).toBeVisible();
+  await expect(page.getByText("Al comprobar el resultado hemos encontrado algo que no podemos corregir automáticamente sin perder lo que el perfil necesita.")).toBeVisible();
+  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Descargar PDF" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Ver la ficha" })).toHaveCount(0);
   expect(await page.locator("main").innerText()).not.toMatch(INTERNAL);
@@ -110,10 +113,10 @@ test("Hacer magia y la revisión bloquea: no se entrega, se explica sin tecnicis
 
   // Nothing runs again by itself: reloading keeps it blocked.
   await page.reload();
-  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toBeVisible();
+  await expect(page.getByText("No hemos podido completar automáticamente esta ficha")).toBeVisible();
 
-  // «Revisar adaptación» → the review, already set to the recommendation → correct → «Crear ficha» → the sheet.
-  await page.getByRole("button", { name: "Revisar adaptación" }).click();
+  // «Revisar y editar» (only an option, only when clicked) → the review, set to the recommendation → correct → «Crear ficha».
+  await page.getByRole("button", { name: "Revisar y editar" }).click();
   await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible();
   await expect(page.getByText("Corrige lo que necesites y vuelve a crear la ficha.")).toBeVisible();
   const first = page.locator("form ol > li > fieldset").first();
