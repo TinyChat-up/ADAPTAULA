@@ -15,6 +15,11 @@ const KEY = process.env.FAKE_SERVICE_KEY ?? "sb_secret_fakefakefakefakefake";
 const service = { apikey: KEY, authorization: `Bearer ${KEY}`, "content-type": "application/json" };
 /** Machinery words that must never reach the teacher (plus vendors, money and fake percentages). */
 const INTERNAL = /planner|generator|reviewer|revisor|\bjob\b|\bcola\b|queue|schema|pipeline|Anthropic|Claude|OpenAI|GPT|token|\d+ ?%/i;
+/** What the teacher reads in `main`, without the zoom readout of the original's viewer («100 %» is a zoom level, not progress). */
+const mainText = async (page: Page) => {
+  const zooms = await page.locator('main [role="status"][aria-label="Zoom del original"]').allInnerTexts();
+  return zooms.reduce((text, zoom) => text.replace(zoom, ""), await page.locator("main").innerText());
+};
 
 const serious = async (page: Page) => (await new AxeBuilder({ page }).analyze()).violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -76,7 +81,7 @@ test("Hacer magia: material + perfil → progreso → ficha final → PDF, sin a
   }
   await expect(page).toHaveURL(new RegExp(`${adaptationUrl}/vista$`), { timeout: 60_000 });
   await expect(page.locator(".ms-sheet").first()).toBeVisible();
-  expect(await page.locator("main").innerText()).not.toMatch(INTERNAL);
+  expect(await mainText(page)).not.toMatch(INTERNAL);
   expect(await noOverflow(page)).toBe(true);
   await downloadPdf(page);
 
@@ -107,7 +112,7 @@ test("Hacer magia y la revisión bloquea: no se entrega, se explica sin tecnicis
   await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Descargar PDF" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Ver la ficha" })).toHaveCount(0);
-  expect(await page.locator("main").innerText()).not.toMatch(INTERNAL);
+  expect(await mainText(page)).not.toMatch(INTERNAL);
   expect(await serious(page)).toEqual([]);
   expect(await noOverflow(page)).toBe(true);
 
