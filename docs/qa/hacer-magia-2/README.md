@@ -140,4 +140,4 @@ El kit v4:
 - **Unidad y BD.** `pnpm test`: 131 archivos, 1869 pruebas correctas y 13 omitidas (RLS real sin credenciales). Incluye las nuevas `tests/unit/real-run-v3-matrix.test.ts` (10), `tests/unit/structure-preservation.test.ts` (8), la regresión de ilustraciones y la regeneración localizada en `tests/db/generation-repair.test.ts`.
 - **PDF real.** Chromium del producto → PDF → pdf.js, con disposición medida en Chromium: `tests/pdf/real-run-v3-matrix.test.ts` (4).
 - **Calidad.** Typecheck y lint correctos (un aviso previo ajeno). El build se registra en el registro de desarrollo.
-- **E2E de escritorio y móvil.** Ver el registro: el navegador de Playwright que fija el proyecto no coincide con el instalado en este entorno.
+- **E2E de escritorio y móvil**, con el Chromium del entorno: 2 correctas y 4 fallidas por causas previas a esta rama. Una es la copia de fases de `magic-flow`, desfasada respecto a `main`; la otra, el nombre de descarga con un Chromium distinto del que fija el proyecto. Detalle en el registro.

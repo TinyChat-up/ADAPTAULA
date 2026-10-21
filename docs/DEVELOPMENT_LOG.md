@@ -22,7 +22,7 @@
   - `pnpm test`: 131 archivos, 1869 correctas y 13 omitidas;
   - PDF Chromium `tests/pdf/real-run-v3-matrix.test.ts`: 4/4;
   - typecheck correcto; lint sin errores (un aviso previo ajeno); `pnpm build` correcto.
-  - E2E: ver la entrada de verificación final más abajo.
+  - E2E (`magic-flow`, `adaptation-states`, `render`; escritorio y móvil) con el Chromium instalado (`/opt/pw-browsers/chromium`, configuración temporal no versionada): 2 pruebas correctas, 4 fallidas y 4 sin ejecutar. Los fallos no proceden de esta rama. `magic-flow` espera las fases «Revisando el resultado»/«Lista», pero la copia de `main` dice «Comprobando el resultado»/«Ficha lista»; esta rama no toca esas fases. En `render`, el nombre de la descarga llega como «download» con este Chromium, que no es el que fija el proyecto. No se corrigen aquí.
 - **Kit real v4, fuera de Git:**
   - una caché por modo y ejecución;
   - SHA-256 y rutas comprobados antes de gastar;
