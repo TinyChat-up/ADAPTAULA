@@ -18,7 +18,7 @@ test("precios: solo diferencias reales y verificables, valores de lanzamiento y 
   for (const text of ["50 recursos visuales al mes", "Hasta 10 clases", "Hasta 30 clases", "Sin clases", "Varios perfiles a la vez", "Historial completo", "Historial de 30 días"]) {
     await expect(page.getByText(text, { exact: true })).toHaveCount(0);
   }
-  await expect(page.getByText("Precios y límites de lanzamiento: pueden ajustarse antes de que se activen los planes de pago.")).toBeVisible();
+  await expect(page.getByText("Precios provisionales, IVA incluido. Pendientes de validar costes y demanda.")).toBeVisible();
   await expect(page.getByText(/todavía no están disponibles y no forman parte de ningún plan/)).toBeVisible();
   const serious = (await new AxeBuilder({ page }).analyze()).violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => v.id)).toEqual([]);

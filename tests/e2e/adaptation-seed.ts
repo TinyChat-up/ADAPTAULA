@@ -125,12 +125,23 @@ export async function seededPlans(page: Page, slugs: string[]): Promise<SeededPl
  * that must reach the DELIVERED sheet unlinks that choice from the table in the stored analysis (the activity keeps its own
  * printed options, «a) 2/4  b) 2/3  c) 3/4»), so it tests delivery and not that stop.
  */
-export async function unlinkChoicesFromTables(page: Page, materialId: string) {
-  type Stored = { visuals: Array<{ id: string; table?: unknown; kind: string }>; activities: Array<{ response_format: string; resource_ids: string[] }> };
-  const rows = (await (await page.request.get(`${FAKE}/rest/v1/materials?select=analysis&id=eq.${materialId}`, { headers })).json()) as Array<{ analysis: Stored }>;
-  const analysis = rows[0]!.analysis;
+type StoredAnalysis = { visuals: Array<{ id: string; table?: unknown; kind: string; activity_ids: string[] }>; activities: Array<{ id: string; response_format: string; resource_ids: string[] }> };
+
+/** The analysis with every single-choice activity unlinked from the tables, on both sides of the relation (the schema checks it). */
+export function withoutChoiceTableLinks<T extends StoredAnalysis>(analysis: T): T {
   const tables = new Set(analysis.visuals.filter((v) => v.table || v.kind === "table").map((v) => v.id));
-  const activities = analysis.activities.map((a) => (a.response_format === "select_option" ? { ...a, resource_ids: a.resource_ids.filter((r) => !tables.has(r)) } : a));
-  expect(activities.some((a, i) => a.resource_ids.length !== analysis.activities[i]!.resource_ids.length)).toBe(true);
-  await ok(await page.request.patch(`${FAKE}/rest/v1/materials?id=eq.${materialId}`, { headers, data: { analysis: { ...analysis, activities } } }));
+  const choices = new Set(analysis.activities.filter((a) => a.response_format === "select_option").map((a) => a.id));
+  return {
+    ...analysis,
+    activities: analysis.activities.map((a) => (choices.has(a.id) ? { ...a, resource_ids: a.resource_ids.filter((r) => !tables.has(r)) } : a)),
+    visuals: analysis.visuals.map((v) => (tables.has(v.id) ? { ...v, activity_ids: v.activity_ids.filter((id) => !choices.has(id)) } : v)),
+  };
+}
+
+export async function unlinkChoicesFromTables(page: Page, materialId: string) {
+  const rows = (await (await page.request.get(`${FAKE}/rest/v1/materials?select=analysis&id=eq.${materialId}`, { headers })).json()) as Array<{ analysis: StoredAnalysis }>;
+  const analysis = rows[0]!.analysis;
+  const unlinked = withoutChoiceTableLinks(analysis);
+  expect(JSON.stringify(unlinked)).not.toBe(JSON.stringify(analysis));
+  await ok(await page.request.patch(`${FAKE}/rest/v1/materials?id=eq.${materialId}`, { headers, data: { analysis: unlinked } }));
 }

@@ -472,7 +472,7 @@ async function handleStorage(req, res, url, auth, rawBody) {
 // Servidor
 // ---------------------------------------------------------------------------
 
-http
+const server = http
   .createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204, CORS);
@@ -562,3 +562,7 @@ http
     }
   })
   .listen(PORT, "127.0.0.1", () => console.log(`fake-supabase (PGlite + migraciones reales) en ${PORT}`));
+// Node closes an idle keep-alive socket after 5 s; a client (the app, Playwright's request context) that reuses it at that moment
+// gets «socket hang up». Keep idle sockets longer than any client does, so a long spec never races the server's timeout.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;

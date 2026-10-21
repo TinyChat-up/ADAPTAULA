@@ -91,8 +91,8 @@ test("visual necesario: no renderizable → localizar en el original → recorte
   // 4 · Confirm: the server crops the original and the viewer comes back with the visual ready.
   await page.getByRole("button", { name: "Confirmar selección" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/adaptaciones/${id}/vista$`), { timeout: 60_000 });
-  await expect(page.getByText(/localizada a mano en la página 2 \(revisión 1\)/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Corregir la localización" })).toBeVisible();
+  await expect(page.getByText("Imagen del documento original incluida (seleccionada en la página 2).").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Cambiar la selección" }).first()).toBeVisible();
 
   // 5 · Student view: renderable, the crop loads from the authorised route, keeps its aspect ratio and fits the sheet.
   await page.goto(`/app/adaptaciones/${id}/vista?modo=alumno`);

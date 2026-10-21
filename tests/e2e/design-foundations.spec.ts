@@ -70,12 +70,13 @@ test("navegación plegable, contexto, teclado y preferencias visuales", async ({
   }
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
 
+  // Media emulated through CDP applies asynchronously: the computed styles are polled, never read once.
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-transparency", value: "reduce" }, { name: "prefers-reduced-motion", value: "reduce" }] });
-  expect(await page.locator(".app-topbar").evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
-  expect(await page.locator(".nav-link").first().evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration))).toBeLessThan(.001);
+  await expect.poll(() => page.locator(".app-topbar").evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
+  await expect.poll(() => page.locator(".nav-link").first().evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration))).toBeLessThan(.001);
   await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-contrast", value: "more" }] });
-  expect(await page.locator(".app-topbar").evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
+  await expect.poll(() => page.locator(".app-topbar").evaluate((el) => getComputedStyle(el).backdropFilter)).toBe("none");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.emulateMedia({ forcedColors: "active" });
   const account = page.getByRole("link", { name: /Plan Free/ }).filter({ visible: true }).first();
