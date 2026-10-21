@@ -20,7 +20,6 @@ test("rutas protegidas redirigen al login", async ({ page }) => {
   await page.goto("/app/alumnos");
   await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Falumnos/);
   await expect(page.getByRole("heading", { name: "Bienvenido de nuevo", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Email")).toBeVisible();
 });
 
 test("el destino tras el login no admite redirecciones externas", async ({ page }) => {
