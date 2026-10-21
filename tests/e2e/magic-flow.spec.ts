@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { allowAdaptations, seedBlockedMagic } from "./adaptation-seed";
-import { createReviewedAdaptation, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { createReviewedAdaptation, expectPdfDownload, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -40,12 +39,11 @@ async function teacherWithMaterial(page: Page) {
   return { email, materialId, workspaceId: await workspaceOf(page, email) };
 }
 
-async function downloadPdf(page: Page) {
-  const downloading = page.waitForEvent("download", { timeout: 60_000 });
-  await page.getByRole("button", { name: "Descargar PDF" }).first().click();
-  const download = await downloading;
-  expect(readFileSync((await download.path())!).subarray(0, 5).toString("latin1")).toBe("%PDF-");
-}
+const adaptationIdOf = (page: Page) => /\/app\/adaptaciones\/([0-9a-f-]{36})/.exec(page.url())![1]!;
+const downloadPdf = (page: Page) => expectPdfDownload(page, adaptationIdOf(page), () => page.getByRole("button", { name: "Descargar PDF" }).first().click());
+
+/** The stages the progress list shows, by their label only (each item also carries its state: «(hecho)», «(en curso)»…). */
+const MAGIC_STAGES = ["Analizando el material", "Preparando la adaptación", "Organizando las actividades", "Creando la ficha", "Comprobando el resultado", "Ficha lista"];
 
 test("Hacer magia: material + perfil → progreso → ficha final → PDF, sin aprobar nada", async ({ page }) => {
   test.setTimeout(300_000);
@@ -66,11 +64,11 @@ test("Hacer magia: material + perfil → progreso → ficha final → PDF, sin a
   if (!page.url().endsWith("/vista")) {
     const stages = page.getByRole("list", { name: "Fases de la adaptación" });
     if (await stages.isVisible()) {
-      const text = await stages.innerText();
-      expect(text).toContain("Analizando el material");
-      expect(text).toMatch(/Preparando la adaptación[\s\S]*Creando la ficha[\s\S]*Revisando el resultado[\s\S]*Lista/);
-      expect(text).not.toContain("Tu revisión");
-      expect(text).not.toMatch(INTERNAL);
+      const items = (await stages.getByRole("listitem").allInnerTexts()).map((t) => t.split("\n")[0]!.trim());
+      // Every stage of the automatic route, in order; the teacher's review is never one of them.
+      expect(items.filter((label) => MAGIC_STAGES.includes(label))).toEqual(MAGIC_STAGES);
+      expect(items).not.toContain("Tu revisión");
+      expect((await stages.innerText())).not.toMatch(INTERNAL);
       // Refreshing in the middle resumes it; nothing is created twice.
       await page.reload();
     }
