@@ -193,9 +193,10 @@ describe("«Hacer magia» after a quality review that fails", () => {
     const id = await t.magic();
     await t.runAll(id);
     expect(await t.status(id)).toMatchObject({ status: "blocked", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, regenerationAvailable: false, nextAction: "none", generationsUsed: MAX_GENERATION_CYCLES });
-    expect([t.spy.generator, t.spy.reviewer]).toEqual([MAX_GENERATION_CYCLES, MAX_GENERATION_CYCLES]);
+    // Hacer magia 2.0: the cycle that only leaves a decision out reuses the valid output (no generator call); every cycle is reviewed.
+    expect([t.spy.generator, t.spy.reviewer]).toEqual([MAX_GENERATION_CYCLES - 1, MAX_GENERATION_CYCLES]);
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
-    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES - 1);
     expect(await entitlement(id)).toBe("reserved");
   });
 

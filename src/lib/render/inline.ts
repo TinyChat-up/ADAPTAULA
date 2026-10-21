@@ -1,8 +1,11 @@
+import { structuralLines } from "@/lib/adaptation/structure";
 /** The restricted inline markup of `RichText` fields (`**bold**`, `_italic_`), parsed into runs. Never HTML: text stays text. */
 export interface Run {
   text: string;
   bold?: true;
   italic?: true;
+  /** A line break the original prints (a numbered sentence, a dialogue line, a list item): `text` is "\n". */
+  break?: true;
 }
 
 const TOKEN = /\*\*([^*]+)\*\*|(?<![A-Za-z0-9])_([^_]+)_(?![A-Za-z0-9])/g;
@@ -19,13 +22,16 @@ export function parseInline(text: string): Run[] {
   return runs.length > 0 ? runs : [{ text }];
 }
 
-/** Paragraphs of a long prompt (blank-line separated), each as runs. */
+/**
+ * Paragraphs of a long prompt (blank-line separated), each as runs. Inside a paragraph, the line breaks the original marks as
+ * structure (numbered sentences, list items, dialogue, labelled fields) are kept as breaks; a break inside a sentence is a wrap.
+ */
 export const parseParagraphs = (text: string): Run[][] =>
   text
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map(parseInline);
+    .map((p) => structuralLines(p).flatMap((line, i) => (i === 0 ? parseInline(line) : [{ text: "\n", break: true as const }, ...parseInline(line)])));
 
 export type BlankPart = { text: string } | { blank: true };
 

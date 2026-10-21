@@ -150,7 +150,8 @@ describe("«Hacer magia»: bounded automatic repair of a generation that fails i
     const reviews = await planReviews(id);
     expect(reviews[1]!.payload.entries.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "approved" });
     expect(reviews[2]!.payload.entries.find((e) => e.decision_id === "dec_4")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/volvió a fallar tras corregirlo.*siguen cubiertas/) });
-    expect(t.spy.generator).toBe(3);
+    // Hacer magia 2.0: the third generation only leaves dec_4 out, so nothing is asked of the model: the valid output is reused.
+    expect(t.spy.generator).toBe(2);
   });
 
   it("a genuine failure that no decision explains is NOT repaired silently: no sheet, an honest stop, the unit kept", async () => {
@@ -164,15 +165,21 @@ describe("«Hacer magia»: bounded automatic repair of a generation that fails i
     expect(await entitlement(id)).toBe("reserved");
   });
 
-  it("the limit holds: at most three generations, then an honest stop; refreshing never generates again", async () => {
-    // Each generation gets one decision wrong (the first one it carries); every need stays covered by another decision.
-    const t = await teacher(generator((d, _call, input) => unauthorizedOn([...input.reviewed.effective.decisions].sort((a, b) => a.id.localeCompare(b.id)).find((x) => ["dec_1", "dec_4", "dec_6"].includes(x.id))!.id)(d)));
+  it("no progress: the same failures on the same decisions stop after two generations (never a third identical one), diagnosed", async () => {
+    // Every decision the model is asked for comes back with an unauthorised support, again and again (dec_2, dec_3 and dec_5 are
+    // the only cover of their needs, so leaving them out is never allowed).
+    const breakAll = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: d.segments.map((s) => ({ ...s, supports: [...s.supports, { kind: "glossary" as const, items: [{ term: "fracción", definition: "Partes iguales de un todo." }] }] })) });
+    const t = await teacher(generator(breakAll));
     const id = await t.start("automatic");
     await t.runAll(id);
-    expect(await t.status(id)).toMatchObject({ status: "failed", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, generationsUsed: MAX_GENERATION_CYCLES, delivered: false });
-    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+    expect(await t.status(id)).toMatchObject({ status: "failed", phase: "automatic_incomplete", automaticStop: { reason: "quality" }, delivered: false });
+    expect((await t.status(id)).generationsUsed).toBeLessThanOrEqual(MAX_GENERATION_CYCLES);
+    expect(t.spy.generator).toBe(2);
+    // The stop is explained by rule and decision (never only «generator_validation»).
+    const diagnosis = (await q<{ payload: { diagnosis?: { failures: Array<{ category: string; rule: string; decisions: string[]; repair: string }> } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'execution_report' and payload ? 'diagnosis'", [id])).at(-1)?.payload.diagnosis;
+    expect(diagnosis?.failures.some((f) => f.category === "unauthorized_block" && f.decisions.length > 0)).toBe(true);
     expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
-    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+    expect(t.spy.generator).toBe(2);
     expect(await entitlement(id)).toBe("reserved");
   });
 

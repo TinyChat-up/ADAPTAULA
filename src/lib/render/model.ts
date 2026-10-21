@@ -31,6 +31,8 @@ export type RenderResponse =
   | { kind: "fill_blank"; parts: BlankPart[]; wordBank: string[] }
   | { kind: "match"; left: string[]; right: string[] }
   | { kind: "order"; items: string[] }
+  | { kind: "fields"; fields: Array<{ label: string; space: "lines" | "box"; lines: number }> }
+  | { kind: "sequence"; items: string[] }
   | { kind: "true_false"; statements: string[] }
   | { kind: "oral"; mode: "oral" | "keyboard" | "other"; lines: number }
   /** One empty box between the two numbers of each printed pair (drawn by the VisualSpec renderer). */
@@ -279,6 +281,10 @@ function responseOf(spec: ResponseSpec, requirements: readonly string[], answers
       return { kind: "oral", mode: spec.mode, lines: spec.lines };
     case "comparison":
       return { kind: "comparison", spec: spec.spec };
+    case "fields":
+      return { kind: "fields", fields: spec.fields.map((f) => ({ label: f.label, space: f.space, lines: f.lines })) };
+    case "sequence":
+      return { kind: "sequence", items: spec.items };
     case "none":
       return { kind: "none" };
   }
@@ -294,7 +300,8 @@ function activityRows(prompt: Run[][], steps: readonly string[], requirements: r
     : response.kind === "box" || response.kind === "grid" ? response.rows
     : response.kind === "choice" ? response.options.length
     : response.kind === "match" ? Math.max(response.left.length, response.right.length)
-    : response.kind === "order" ? response.items.length
+    : response.kind === "order" || response.kind === "sequence" ? response.items.length
+    : response.kind === "fields" ? response.fields.reduce((n, f) => n + 1 + (f.space === "box" ? f.lines : f.lines > 1 ? f.lines : 0), 0)
     : response.kind === "true_false" ? response.statements.length
     : response.kind === "oral" ? response.lines
     : response.kind === "fill_blank" ? 3 + Math.ceil(response.wordBank.length / 6)

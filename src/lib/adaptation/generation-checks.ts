@@ -9,6 +9,7 @@ import { activityExpansion, type ActivityExpansion } from "./redundancy";
 import type { ReviewedPlan } from "./plan-review";
 import { checkOf } from "./review";
 import { visualTreatment } from "./visual-needs";
+import { supportsDefiningEvaluatedConcepts } from "./assessment-safety";
 
 /**
  * Deterministic audit of one generation against the reviewed plan (docs/ADAPTATION.md § Generador). It does not trust the
@@ -28,7 +29,20 @@ export interface AuditCheck {
    * original element that changed). What a bounded automatic repair may leave out; never shown to the teacher.
    */
   decisions?: string[];
+  /**
+   * The original units (`act_…`, `ctt_…`, `vis_…`) or generated block ids the failure is about: what a deterministic local repair
+   * acts on (docs/ADAPTATION.md § Recuperación localizada). Machine data, never shown.
+   */
+  refs?: string[];
 }
+
+/** Audit checks added by «Hacer magia» 2.0 (named so the repair can ask exactly what to fix). */
+export const INVALID_BLOCK_CHECK = "ningún bloque generado incumple el contrato del documento";
+export const CONCEPT_LEAK_CHECK = "ningún apoyo define las categorías que la actividad pide clasificar";
+export const MISSING_ACTIVITY_CHECK = "todas las actividades originales siguen presentes";
+export const RESPONSE_AREA_CHECK = "las zonas de respuesta coinciden con las del original (salvo decisión que las cambie)";
+export const LITERAL_COPY_CHECK = "lo que no tiene decisión efectiva se copia idéntico del análisis";
+export const NON_EFFECTIVE_CHECK = "ningún bloque procede de una decisión no aplicada (rechazada, bloqueada o sin revisar)";
 
 export interface GenerationAudit {
   checks: AuditCheck[];
@@ -67,15 +81,23 @@ export function auditGeneration(input: {
   const effectiveIds = new Set(reviewed.effective.decisions.map((d) => d.id));
   const blocks = allBlocks(document);
   const checks: AuditCheck[] = [];
-  const add = (name: string, ok: boolean, detail: string, decisions: readonly (string | null)[] = []) => checks.push({ name, ok, detail, ...(ok ? {} : { decisions: [...new Set(decisions.filter((d): d is string => d !== null && effectiveIds.has(d)))] }) });
+  const add = (name: string, ok: boolean, detail: string, decisions: readonly (string | null)[] = [], refs: readonly string[] = []) =>
+    checks.push({ name, ok, detail, ...(ok ? {} : { decisions: [...new Set(decisions.filter((d): d is string => d !== null && effectiveIds.has(d)))], ...(refs.length > 0 ? { refs: [...new Set(refs)] } : {}) }) });
+  /** Applied decisions that act on an original unit (what a lost activity or a changed area points at). */
+  const decisionsOn = (ref: string) => reviewed.effective.decisions.filter((d) => d.target === ref && d.action !== "keep").map((d) => d.id);
   /** Applied decisions that wrote blocks for an element of the original. */
   const writersOf = (ref: string) => blocks.filter((b) => b.trace.origin !== "original" && b.trace.source_refs.includes(ref)).flatMap((b) => b.trace.decision_ids);
 
   const missing = analysis.activities.filter((a) => !reviewed.effective.decisions.some((d) => d.target === a.id && d.action === "remove") && !blocks.some((b) => b.type === "activity" && b.trace.source_refs.includes(a.id)));
-  add("todas las actividades originales siguen presentes", missing.length === 0, missing.length === 0 ? `${analysis.activities.length} de ${analysis.activities.length}` : `faltan ${missing.map((a) => a.id).join(", ")}`);
+  add(MISSING_ACTIVITY_CHECK, missing.length === 0, missing.length === 0 ? `${analysis.activities.length} de ${analysis.activities.length}` : `faltan ${missing.map((a) => a.id).join(", ")}`, missing.flatMap((a) => decisionsOn(a.id)), missing.map((a) => a.id));
 
   const fromNonEffective = [...new Set(blocks.filter((b) => b.trace.decision_ids.some((id) => !effectiveIds.has(id))).map((b) => b.id))];
-  add("ningún bloque procede de una decisión no aplicada (rechazada, bloqueada o sin revisar)", fromNonEffective.length === 0, fromNonEffective.length === 0 ? "ninguno" : fromNonEffective.join(", "));
+  add(NON_EFFECTIVE_CHECK, fromNonEffective.length === 0, fromNonEffective.length === 0 ? "ninguno" : fromNonEffective.join(", "), [], fromNonEffective);
+
+  // A generated block that breaks the document contract was dropped by the server before assembly (it would make the whole sheet
+  // unbuildable): its decision is the one to regenerate, nothing else.
+  const invalid = generation.issues.filter((i) => i.code === "invalid_block_dropped");
+  add(INVALID_BLOCK_CHECK, invalid.length === 0, invalid.length === 0 ? "todos válidos" : invalid.map((i) => `${i.decision_id}: ${i.detail}`).join("; ").slice(0, 300), invalid.map((i) => i.decision_id));
 
   const unauthorized = generation.issues.filter((i) => UNAUTHORIZED_CODES.includes(i.code));
   add("el generador no propuso nada fuera de lo autorizado", unauthorized.length === 0, unauthorized.length === 0 ? "nada fuera de sus decisiones" : unauthorized.map((i) => `${i.code}${i.decision_id ? `(${i.decision_id})` : ""}`).join(", "), unauthorized.map((i) => i.decision_id));
@@ -105,7 +127,7 @@ export function auditGeneration(input: {
     const b = blocks.filter((x) => x.trace.source_refs.includes(ref) && x.trace.origin === "original").map(comparable);
     return a.length !== b.length || a.some((x, i) => x !== b[i]);
   });
-  add("lo que no tiene decisión efectiva se copia idéntico del análisis", differing.length === 0, differing.length === 0 ? `${refs.length} elementos intactos` : `difieren ${differing.join(", ")}`);
+  add(LITERAL_COPY_CHECK, differing.length === 0, differing.length === 0 ? `${refs.length} elementos intactos` : `difieren ${differing.join(", ")}`, differing.flatMap(writersOf), differing);
 
   const areas = analysis.activities.flatMap((a) => {
     const decision = reviewed.effective.decisions.find((d) => d.target === a.id && d.response_target);
@@ -115,7 +137,11 @@ export function auditGeneration(input: {
       return b.type === "activity" && lit?.type === "activity" && stableStringify(b.response) !== stableStringify(lit.response) ? [a.id] : [];
     });
   });
-  add("las zonas de respuesta coinciden con las del original (salvo decisión que las cambie)", areas.length === 0, areas.length === 0 ? "coinciden" : `cambian en ${areas.join(", ")}`);
+  add(RESPONSE_AREA_CHECK, areas.length === 0, areas.length === 0 ? "coinciden" : `cambian en ${areas.join(", ")}`, areas.flatMap(writersOf), areas);
+
+  // What the activity evaluates is never given away by a support (a glossary defining the categories to classify).
+  const leaks = supportsDefiningEvaluatedConcepts(document, analysis.activities);
+  add(CONCEPT_LEAK_CHECK, leaks.length === 0, leaks.length === 0 ? "ningún apoyo define lo evaluado" : leaks.map((l) => `${l.activityId}: ${l.categories.join(", ")}`).join("; "), leaks.flatMap((l) => l.decisionIds), leaks.map((l) => l.blockId));
 
   const expansion = activityExpansion(analysis, document);
   const exact = expansion.filter((e) => e.exactRepeats > 0);
