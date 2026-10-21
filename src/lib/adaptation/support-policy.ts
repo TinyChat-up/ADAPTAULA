@@ -46,7 +46,8 @@ export function pruneRedundantSupports(head: Block[], after: Map<string, Block[]
   const keptHead: Block[] = [];
   const merge = (list: Block[], block: Block): boolean => {
     if (!isSupport(block)) return false;
-    const i = list.findIndex((k) => isSupport(k) && restates(block, k));
+    // Same type only: the absorbed decision must still be traced to a block of a kind it authorises.
+    const i = list.findIndex((k) => isSupport(k) && k.type === block.type && restates(block, k));
     if (i < 0) return false;
     pruned.push({ dropped: block.id, keptIn: list[i]!.id, decisionIds: block.trace.decision_ids });
     list[i] = absorb(list[i]!, block);

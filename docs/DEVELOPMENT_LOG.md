@@ -1,5 +1,43 @@
 # Registro de desarrollo
 
+## 2026-10-21 — «Hacer magia» 2.0: recuperación localizada y estructura del original
+
+- **Base y rama.** `origin/main` `5476df9`; #37 y #49–#52 MERGED. Rama `claude/hacer-magia-2`. Evidencia: prueba real v3 sobre `da04cf1` (3/8, 0,6674 USD). Originales y resultados fuera de Git.
+- **Causas** (detalle en [QA](qa/hacer-magia-2/README.md)):
+  - 01: comprobaciones sin atribución, o un bloque inválido que rompía el ensamblado, y por eso no había reparación posible;
+  - 02, 04 y 05: el colapso de saltos simples en el render y la falta de campos y de ordenación;
+  - 03: no hay especificación de polígono;
+  - 06 y 07: `illustrationAvailability` devolvía «plan» con la función desactivada para todos;
+  - 08: regeneración completa repetida con los mismos fallos.
+- **Cambios:**
+  - `generation-recovery.ts` (diagnóstico, criba y reparación local);
+  - atribución en `generation-checks.ts`;
+  - regeneración localizada con fusión en el orquestador (`GeneratorInput.only`);
+  - guarda de firma sin progreso;
+  - `structure.ts`, con las áreas `fields` y `sequence` y `<br>` estructural;
+  - `support-policy.ts`, `assessment-safety.ts`;
+  - `IllustrationWithheld` y `visualStopCode`, con copias nuevas.
+- **Expectativas de pruebas cambiadas**, porque ahora menos generaciones son pagadas: «repair failed again» pasa a 2 generaciones; el límite de ciclos pasa a `[MAX-1, MAX]`; «the limit holds» se sustituye por «no progress… diagnosed».
+- **Pruebas:**
+  - `pnpm test`: 131 archivos, 1869 correctas y 13 omitidas;
+  - PDF Chromium `tests/pdf/real-run-v3-matrix.test.ts`: 4/4;
+  - typecheck correcto; lint sin errores (un aviso previo ajeno); `pnpm build` correcto.
+  - E2E: ver la entrada de verificación final más abajo.
+- **Kit real v4, fuera de Git:**
+  - una caché por modo y ejecución;
+  - SHA-256 y rutas comprobados antes de gastar;
+  - nunca reutiliza una salida;
+  - topes por ficha y máximo de generaciones;
+  - coste por etapa y comparación con 0,6674 USD.
+- **Riesgos:**
+  - la regla de evidencia de saltos puede unir líneas que el original separaba sin marca;
+  - la poda solo actúa con repetición íntegra (≥ 0,8 por oración);
+  - el borrador real de 01 no es recuperable, así que la mejora de 01 es probable, no demostrada.
+- **Siguiente:**
+  - prueba real con el kit v4, solo tras una autorización expresa;
+  - polígonos acotados para 03;
+  - decisión de producto sobre ilustraciones o entrega asistida para 06 y 07.
+
 ## 2026-10-20 — CLARO: coherencia estructural y legibilidad educativa
 
 - Base `3e9dfd2`, #49, #50 y #51 confirmadas MERGED. Rama nueva `codex/claro-coherencia-visual`; [PR #52](https://github.com/TinyChat-up/ADAPTAULA/pull/52) abierta sin merge. Se congelaron ocho fichas sintéticas y sus referencias manuales en `017fe9e`; implementación fijada en `b203e69` antes de ejecutar cuatro fichas de reserva, sin adaptar reglas a sus resultados.

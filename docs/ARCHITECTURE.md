@@ -407,3 +407,18 @@ El visor controla zoom y páginas según navegador; ausencia de soporte ofrece d
 Se conserva un renderer compartido, versionado `material_renderer@v5`. La proyección valida la VisualSpec efectiva antes de describirla/dibujarla. `withAdjacentFigures` agrupa recursos visuales anteriores de uso exclusivo dentro de una página lógica por `resource_block_ids`; no infiere relaciones por texto ni cambia documentos persistidos. Las rectas densas alternan rótulos sobre/bajo el eje, sin modificar posiciones, datos o respuestas. Las especificaciones no permiten denominador cero.
 
 Se distinguen tres evidencias: consistencia intrínseca de datos del producto, comparación contra referencias manuales en `evals/claro-quality`, y semántica de imágenes que permanece sin verificar. El aviso docente no cambia la política de aceptación de imágenes ni el pipeline. No se añaden campos persistidos de supuesto aval pedagógico. Los tests y ocho fichas sintéticas no sustituyen evaluación humana. [Alcance, límites y resultados](qa/claro-calidad/README.md).
+
+## ADR-038 — Recuperación localizada, estructura del original y causas visuales precisas (2026-10-21)
+
+**Reparación de la generación.** Es por fragmentos y determinista cuando se puede:
+- criba de bloques, aislamiento de la decisión que rompe el ensamblado y reparación local sin modelo;
+- regeneración solo de las decisiones atribuidas (`GeneratorInput.only`) con fusión del borrador previo en el servidor;
+- firma de fallos para no repetir una generación idéntica.
+
+Las comprobaciones de la auditoría no se relajan y nombran las decisiones responsables. No hay nueva versión de prompt.
+
+**Estructura del original.** Se lee del análisis con una regla de evidencia y se representa con dos áreas de respuesta de uso exclusivo del servidor (`fields`, `sequence`), compatibles con documentos anteriores. No se reduce la letra para ahorrar páginas.
+
+**Apoyos.** Un apoyo que repite otro se pliega con su trazabilidad. Un apoyo que define lo evaluado es un fallo `answer_leak`.
+
+**Figuras.** La parada visual distingue función desactivada o no ofrecida, plan, cupo y fallo temporal. **Decisión abierta:** la página original completa como anexo no se implementa. Puede llevar otras actividades y respuestas, no es accesible y exige verificar la identidad de la página. Además, no existe un contrato de entrega «asistida» (estado, copia, PDF y pruebas) que permita entregarla sin declararla completa. Si se retoma, requiere ese contrato primero. [QA](qa/hacer-magia-2/README.md).

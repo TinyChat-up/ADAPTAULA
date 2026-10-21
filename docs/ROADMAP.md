@@ -277,6 +277,24 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - ejecutores para formatos cerrados, simplificación y reorganización en magia (hoy `needs_decision`);
   - pictogramas con licencia comercial.
 
+## «Hacer magia» 2.0 — recuperación localizada (2026-10-21, ADR-038)
+- **Hecho (simulado y probado, sin llamadas de pago):**
+  - diagnóstico atribuido;
+  - criba, aislamiento y reparación determinista;
+  - regeneración solo de las decisiones afectadas;
+  - guarda sin progreso;
+  - estructura del original (líneas, párrafos, campos y ordenación);
+  - apoyos sin redundancia;
+  - fuga de lo evaluado;
+  - motivo preciso de las paradas visuales;
+  - matriz de 8 fichas sintéticas;
+  - kit de prueba real v4 fuera de Git.
+- **Aceptación pendiente:** nueva prueba real autorizada con el kit v4 y presupuesto por ficha. El objetivo experimental es ≥ 6/8 sin defectos críticos, sin prometerlo. Con esta entrega, 03, 06 y 07 siguen bloqueadas.
+- **Siguiente:**
+  - especificación determinista de polígonos acotados (ficha 03);
+  - decidir si se activan las ilustraciones o se crea un contrato de entrega «asistida» (06, 07);
+  - revisión docente de los campos y las casillas de ordenación.
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.

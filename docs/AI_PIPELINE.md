@@ -193,6 +193,15 @@ tiene precio) e `image_review`.
 Primaria: claro y amable sin infantilizar. Secundaria: sobria y de libro de texto. Sin texto en la imagen salvo los marcadores o
 etiquetas que la actividad necesita, y nunca la respuesta.
 
+### Reparación localizada de la generación («Hacer magia» 2.0)
+
+- **Una sola petición por fragmento.** Una reparación pide al modelo solo las decisiones afectadas (`only`). El resto del borrador válido se conserva y no se paga otra vez.
+- **Registro.** La llamada se registra en `ai_runs` con `callKind: "repair"`.
+- **Sin llamada.** Un descarte puro reutiliza el borrador sin llamar al modelo.
+- **Sin progreso.** Con la misma firma de fallos no se repite la generación.
+- **Sin prompt nuevo.** No hay nueva versión de prompt: la restricción viaja en las `restrictions` de la decisión, como antes.
+- Detalle en [ADAPTATION.md](ADAPTATION.md#hacer-magia-20--recuperación-localizada-y-estructura-del-original-2026-10-21).
+
 ## Varios perfiles a la vez
 
 Un job con N perfiles: un análisis (cacheado) y luego plan → generación → revisión por perfil, en paralelo con concurrencia limitada (3). Cada perfil es una `adaptation` independiente: si falla una, las demás se entregan (`status = partial`) y solo se devuelve la cuota de la fallida.

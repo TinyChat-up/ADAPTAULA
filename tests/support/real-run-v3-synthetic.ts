@@ -13,7 +13,7 @@ import { EXECUTIVE_EXPERIMENT_PROFILE } from "../../evals/adaptation/planner-lib
  * SYNTHETIC equivalents of the eight sheets of the real run v3 («Hacer magia» 2.0). The real sheets and their results stay outside
  * Git (private originals, SHA-256 verified apart); these are our own texts with the SAME structure that broke there: a story with
  * paragraphs and dialogue plus a four-item ordering (04), numbered sentences with Sujeto/Predicado (05), Operaciones y unidades /
- * Respuesta (02), a coordinate grid (06), arrows (07), labelled parts (03, geometry). They are NOT real results and are never
+ * Respuesta (02), labelled parts A–D of a plant (06), numbered arrows of the water cycle (07), a coordinate map with Escuela/Hospital/Mercado fields (08), an L-shaped figure with measures (03). They are NOT real results and are never
  * presented as such.
  */
 
@@ -87,25 +87,25 @@ export const SYNTHETIC_SHEETS: SyntheticSheet[] = [
     ]),
   },
   {
-    id: "06-cuadricula",
+    id: "06-planta",
     realDefect: "bloqueada por ilustraciones IA desactivadas con un mensaje que culpaba al plan",
-    analysis: analysisOf("Coordenadas", "primaria", "4-primaria", "Matemáticas", [
-      { id: "a1", label: "1", type: "short_answer", instruction: "Escribe las coordenadas de la estrella y del círculo en la cuadrícula.", response: "write_text", answer_area: "lines", answer_lines: 2, resources: ["v1"] },
-    ], [], [{ id: "v1", kind: "diagram", role: "required", description: "Cuadrícula con columnas A a F y filas 1 a 5 con una estrella y un círculo." }]),
-  },
-  {
-    id: "07-flechas",
-    realDefect: "bloqueada por ilustraciones IA desactivadas con un mensaje que culpaba al plan",
-    analysis: analysisOf("Recorridos", "primaria", "2-primaria", "Matemáticas", [
-      { id: "a1", label: "1", type: "short_answer", instruction: "Sigue las flechas 1 a 4 y escribe en qué casilla termina el robot.", response: "write_text", answer_area: "lines", answer_lines: 1, resources: ["v1"] },
-    ], [], [{ id: "v1", kind: "diagram", role: "required", description: "Tablero con un robot y cuatro flechas numeradas." }]),
-  },
-  {
-    id: "08-partes",
-    realDefect: "tres generaciones rechazadas por los mismos fallos",
     analysis: analysisOf("Las partes de la planta", "primaria", "3-primaria", "Ciencias de la Naturaleza", [
-      { id: "a1", label: "1", type: "short_answer", instruction: "Escribe qué parte de la planta indica cada letra.\nA:\nB:\nC:\nD:", response: "write_text", answer_area: "lines" },
-    ]),
+      { id: "a1", label: "1", type: "short_answer", instruction: "Observa el dibujo. Escribe qué parte de la planta indica cada letra.\nA:\nB:\nC:\nD:", response: "write_text", answer_area: "lines", resources: ["v1"] },
+    ], [], [{ id: "v1", kind: "diagram", role: "required", description: "Dibujo de una planta con cuatro partes señaladas con las letras A, B, C y D." }]),
+  },
+  {
+    id: "07-ciclo-agua",
+    realDefect: "bloqueada por ilustraciones IA desactivadas con un mensaje que culpaba al plan",
+    analysis: analysisOf("El ciclo del agua", "primaria", "4-primaria", "Ciencias de la Naturaleza", [
+      { id: "a1", label: "1", type: "short_answer", instruction: "Observa el esquema. Escribe qué ocurre en cada flecha numerada del 1 al 4.", response: "write_text", answer_area: "lines", answer_lines: 4, resources: ["v1"] },
+    ], [], [{ id: "v1", kind: "diagram", role: "required", description: "Esquema del ciclo del agua con cuatro flechas numeradas." }]),
+  },
+  {
+    id: "08-plano",
+    realDefect: "tres generaciones rechazadas por los mismos fallos",
+    analysis: analysisOf("El plano del barrio", "primaria", "5-primaria", "Ciencias Sociales", [
+      { id: "a1", label: "1", type: "short_answer", instruction: "Busca cada lugar en el plano y escribe sus coordenadas.", context: "Escuela: ____ Hospital: ____ Mercado: ____", response: "write_text", answer_area: "lines", resources: ["v1"] },
+    ], [], [{ id: "v1", kind: "diagram", role: "required", description: "Plano con una cuadrícula de columnas A a F y filas 1 a 5." }]),
   },
 ];
 

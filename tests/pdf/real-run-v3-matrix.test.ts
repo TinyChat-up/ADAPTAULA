@@ -69,9 +69,9 @@ describe("prueba real v3 · defectos estructurales sobre papel (sintéticos)", (
     expect(new Set(tops).size).toBe(3);
   });
 
-  it("08 · un campo por letra (A–D) y la consigna sin las etiquetas pegadas", async () => {
-    const { text } = await print("08-partes");
-    for (const l of ["A", "B", "C", "D"]) expect(text).toMatch(new RegExp(`\\b${l}\\b`));
-    expect(text).toContain("Escribe qué parte de la planta indica cada letra.");
+  it("08 · un campo por lugar (Escuela, Hospital, Mercado) y la consigna sin los campos pegados", async () => {
+    const { text } = await print("08-plano");
+    for (const l of ["Escuela", "Hospital", "Mercado"]) expect(text).toContain(l);
+    expect(text).toContain("Busca cada lugar en el plano y escribe sus coordenadas.");
   });
 });

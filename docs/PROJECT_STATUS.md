@@ -1,5 +1,11 @@
 # Estado compartido de Adaptaula
 
+> **«Hacer magia» 2.0 (2026-10-21):** rama `claude/hacer-magia-2` desde `5476df9` (#37 y #49–#52 integradas).
+> - **Cambios:** reparación localizada de la generación (criba, reparación sin modelo, regeneración solo de las decisiones afectadas, guarda sin progreso, diagnóstico); estructura del original conservada (líneas, párrafos, campos «Operaciones y unidades»/«Respuesta», Sujeto/Predicado, ordenación); apoyos sin redundancia; detección de definiciones que revelan lo evaluado; paradas visuales con el motivo correcto (ya no se culpa al plan cuando las ilustraciones están desactivadas).
+> - **Pruebas:** matriz sintética de las 8 fichas de la prueba real v3, en unidad y en Chromium. **Sin llamadas de pago.**
+> - **Siguen bloqueadas:** 03, 06 y 07.
+> - [QA y resultados simulados](qa/hacer-magia-2/README.md).
+
 > **Calidad visual y coherencia CLARO (2026-10-20):** #49–#51 confirmadas integradas; base `3e9dfd2`. Rama `codex/claro-coherencia-visual`: rectas sin rótulos solapados, figuras exclusivas junto a consignas, rechazo de `0/0` y de especificaciones resueltas incoherentes. Ocho fichas manuales con referencias, cuatro de reserva, PDF antes/después y resultados en [QA](qa/claro-calidad/README.md). El aviso de imagen sin verificación semántica no modifica su aceptación ni acredita pedagogía. Sin IA pagada ni servicios remotos. [PR #52](https://github.com/TinyChat-up/ADAPTAULA/pull/52) abierta, sin merge.
 
 > **Vista previa del PDF definitivo (2026-10-20):** base `ef8c1bf`, #49 y #50 integradas. [PR #51](https://github.com/TinyChat-up/ADAPTAULA/pull/51) abierta sin merge. Nueva acción en ficha entregada y editor con revisión guardada: PDF real bajo demanda, contador físico de `validatePdf`, visor nativo y descarga del mismo Blob sin regeneración. Cambios pendientes bloqueados; base generada fijada y revisión explícita. [Contrato, pruebas, capturas y límites](qa/vista-previa-pdf/README.md). Sin nuevo renderer, dependencias, migraciones ni cambios pedagógicos/comerciales. Vercel y dispositivos físicos siguen sin verificar.

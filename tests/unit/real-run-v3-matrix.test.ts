@@ -136,8 +136,14 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     expect(diagnoseGeneration({ audit: { checks: [{ name: CONCEPT_LEAK_CHECK, ok: false, detail: "", decisions: ["dec_9"], refs: ["blk_leak"] }] } })[0]).toMatchObject({ category: "answer_leak", repair: "ai_fragment" });
   });
 
+  it("06 · las letras A–D de la planta quedan como un campo por letra, la consigna sin las etiquetas pegadas", () => {
+    const a = activities(documentOf(sheet("06-planta")))[0]!;
+    expect(a.response).toMatchObject({ kind: "fields", fields: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }] });
+    expect(a.prompt).toBe("Observa el dibujo. Escribe qué parte de la planta indica cada letra.");
+  });
+
   it("06 y 07 · ilustraciones desactivadas para todos: la parada no culpa al plan ni propone cambiarlo", () => {
-    for (const id of ["06-cuadricula", "07-flechas"]) expect(allBlocks(documentOf(sheet(id))).some((b) => b.type === "image")).toBe(true);
+    for (const id of ["06-planta", "07-ciclo-agua"]) expect(allBlocks(documentOf(sheet(id))).some((b) => b.type === "image")).toBe(true);
     expect(visualStopCode([unresolved("illustration_unavailable")])).toBe("visual_unavailable");
     expect(`${AUTOMATIC_STOP_COPY.visual_unavailable.body} ${AUTOMATIC_STOP_COPY.visual_unavailable.hint}`).not.toMatch(/tu plan (no )?incluy|cuando tu plan/);
     expect(visualStopCode([unresolved("illustration_not_in_plan")])).toBe("visual_plan");
@@ -149,8 +155,8 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     const audit = (decisions: string[]) => ({ checks: [{ name: "el generador no propuso nada fuera de lo autorizado", ok: false, detail: "", decisions, refs: [] }] });
     expect(failureSignature(diagnoseGeneration({ audit: audit(["dec_2", "dec_1"]) }))).toBe(failureSignature(diagnoseGeneration({ audit: audit(["dec_1", "dec_2"]) })));
     expect(failureSignature(diagnoseGeneration({ audit: audit(["dec_1"]) }))).not.toBe(failureSignature(diagnoseGeneration({ audit: audit(["dec_2"]) })));
-    const doc = documentOf(sheet("08-partes"));
-    expect(activities(doc)[0]!.response).toMatchObject({ kind: "fields", fields: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }] });
-    expect(activities(doc)[0]!.prompt).toBe("Escribe qué parte de la planta indica cada letra.");
+    const doc = documentOf(sheet("08-plano"));
+    expect(activities(doc)[0]!.response).toMatchObject({ kind: "fields", fields: [{ label: "Escuela" }, { label: "Hospital" }, { label: "Mercado" }] });
+    expect(activities(doc)[0]!.prompt).toBe("Busca cada lugar en el plano y escribe sus coordenadas.");
   });
 });
