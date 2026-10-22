@@ -1,5 +1,40 @@
 # Registro de desarrollo
 
+## 2026-10-22 — Fase B: identidad editorial única y espacios de resolución (`answer_space@v1`, ADR-040)
+
+- **Base.** `main` con la #55 integrada (`9af6c6c`); rama `claude/fase-b-editorial`. Sin IA de pago ni migraciones, y sin tocar producción ni Stripe.
+- **Identidad:**
+  - CLARO por defecto en `buildRenderModel` y `standard` solo explícito;
+  - la materia nunca se imprime por su clave;
+  - casilla de cuadrícula como token de la etapa (7, 6 y 5 mm) y `roomy` (+20 %) para la motricidad fina o la letra grande.
+- **Motor `answer_space@v1`** (`src/lib/adaptation/answer-space.ts`):
+  - aplicado en `buildDocument` a las actividades literales y a las adaptadas;
+  - cuadrícula solo para el cálculo escrito, con filas por operaciones;
+  - problemas con datos, operaciones y respuesta (con hueco para la unidad) solo cuando hacen falta;
+  - líneas por resultado pedido, explicación por curso, extensión indicada en las redacciones y recuadro grande para dibujar;
+  - Sujeto/Predicado por oración;
+  - `line` con N líneas da N líneas.
+- **Estructura:**
+  - campos en línea («A:, B:, C:, D:», «Flecha 1, Flecha 2, …») reconocidos y fuera del contexto, sin duplicar;
+  - `marks.ts` reutiliza esa estructura.
+- **Render y paginación:**
+  - cuadrícula en SVG con casillas enteras;
+  - partes del problema unidas;
+  - el ejemplo previo ya no impide mantener junta la actividad;
+  - la regla de tabla posterior solo se aplica cuando la tabla va después;
+  - `heightMm` de los recortes;
+  - repetición de figuras pequeñas o comparadas de una hoja anterior.
+- **Contrato:** ampliado de forma opcional (`grid.rows`, `fields[].space = grid`, `unit`). El borrador de modelo no cambia.
+- **Pruebas:**
+  - unidad y BD: 1910 correctas y 13 omitidas;
+  - PDF: 64/64 (galería de 8 fichas con medidas físicas y grises);
+  - typecheck y lint correctos (un aviso previo ajeno);
+  - antes/después de 03, 06 y 07 reales en local ([QA](qa/fase-b-editorial/README.md)).
+- **Riesgos:**
+  - las estimaciones de hoja física y de filas son aproximadas;
+  - más hojas cuando el perfil limita las tareas por página.
+- **Siguiente:** validación con docentes y una prueba real limitada con generación (autorizada aparte).
+
 ## 2026-10-22 — Validación real de la PR #55: análisis de 03, 06 y 07 (0,0930 USD)
 
 - **Ejecución.**

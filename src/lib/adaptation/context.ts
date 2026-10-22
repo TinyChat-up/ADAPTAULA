@@ -79,6 +79,16 @@ function applicable(dimension: DimensionKey, analysis: MaterialAnalysis, math: b
   }
 }
 
+/**
+ * answer_space@v1: more room to write by hand (larger lines and squares) for a learner with a fine motor demand or large print. Only
+ * written when it changes something and only from policy 2 on, so a historical context (policy 1) is reproduced byte for byte.
+ */
+function answerSpaceFor(profile: FunctionalProfile): Presentation["answer_space"] {
+  const level = profile.supports;
+  const roomy = level.fine_motor_demand === "medium" || level.fine_motor_demand === "high" || (level.large_print ?? "none") !== "none" || level.font_size === "high";
+  return roomy ? "roomy" : undefined;
+}
+
 function presentationFor(profile: FunctionalProfile, stage: AdaptationContext["education"]["stage"]): Presentation {
   const s = profile.supports;
   const level = (key: DimensionKey) => s[key] ?? "none";
@@ -138,7 +148,8 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
   const rule = STAGE_RULES[stage];
 
   const policy = input.policy ?? DEFAULT_CONTEXT_POLICY;
-  const presentation = presentationFor(profile, stage);
+  const room = policy >= 2 ? answerSpaceFor(profile) : undefined;
+  const presentation: Presentation = { ...presentationFor(profile, stage), ...(room ? { answer_space: room } : {}) };
   const omitted: OmittedNeed[] = [];
   const needs: ContextNeed[] = [];
   for (const [dimension, level] of activeSupports(profile)) {

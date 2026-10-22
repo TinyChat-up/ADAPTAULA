@@ -62,18 +62,11 @@ function numbersIn(text: string): string[] {
   return n >= 2 ? numberRange(1, n) : [];
 }
 
-/** Answer fields printed inline in an activity's context: «A:, B:, C:, D:» or «Flecha 1, Flecha 2, Flecha 3, Flecha 4». */
-function inlineFields(context: string | null): string[] {
-  if (!context) return [];
-  const parts = context.split(/[,;\n]+/).map((p) => p.replace(/[:_.\s]+$/g, "").trim()).filter((p) => p.length > 0);
-  return parts.length >= 2 && parts.every((p) => /^(?:[A-H]|(?:flecha|paso|proceso)\s+\d)$/i.test(p)) ? parts : [];
-}
-
 /** The marks the analysis says the visual carries, or null when its words name none (the figure is then not located by marks). */
 export function expectedMarks(visual: Pick<AnalysisVisual, "title" | "description" | "text">, activities: readonly Pick<AnalysisActivity, "instruction" | "context" | "type" | "answer_area">[]): ExpectedMarks | null {
   const own = `${visual.title ?? ""}. ${visual.description}. ${visual.text ?? ""}`;
   const words = normalize(`${own} ${activities.map((a) => `${a.instruction} ${a.context ?? ""}`).join(" ")}`);
-  const fields = activities.flatMap((a) => [...(activityStructure(a).fields ?? []).map((f) => f.label.trim()), ...inlineFields(a.context)]);
+  const fields = activities.flatMap((a) => activityStructure(a).fields ?? []).map((f) => f.label.trim());
 
   let letters: string[] = [];
   if (/\bletras?\b/.test(words)) letters = lettersIn(own).length > 0 ? lettersIn(own) : activities.map((a) => lettersIn(`${a.instruction} ${a.context ?? ""}`)).find((l) => l.length > 0) ?? [];

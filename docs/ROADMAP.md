@@ -305,6 +305,20 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - comprobar si el analizador nombra las marcas;
   - si no lo hace, valorar un prompt `v<N+1>` que pida enumerar las marcas visibles, sin inventarlas.
 
+## Estándar editorial y espacios de resolución (Fase B, 2026-10-22, ADR-040)
+- **Hecho (probado localmente, sin IA):**
+  - CLARO como diseño único por defecto;
+  - `answer_space@v1`: cuadrícula, problemas por partes, unidad sin escribir, líneas por demanda, Sujeto/Predicado por oración y dibujo;
+  - campos en línea;
+  - `roomy` por perfil;
+  - paginación medida en el PDF;
+  - figuras a la vista al comparar.
+- **Pruebas:** galería de 8 fichas y antes/después de 03, 06 y 07 reales ([QA](qa/fase-b-editorial/README.md)).
+- **Siguiente:**
+  - validación con docentes;
+  - tablas de clasificación que el original no imprime;
+  - alternativa oral por perfil.
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.

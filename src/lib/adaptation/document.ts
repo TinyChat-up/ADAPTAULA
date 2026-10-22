@@ -6,6 +6,7 @@ import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis }
 import { statedAnswer } from "@/lib/analysis/answers";
 import { comparisonFromText } from "@/lib/visuals/comparison";
 import { pruneRedundantSupports } from "./support-policy";
+import { answerSpace, spaceContextOf } from "./answer-space";
 import { activityStructure, readingParagraphs } from "./structure";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
 
@@ -42,7 +43,8 @@ export function responseFor(activity: AnalysisActivity): ResponseSpec {
   if (answeredOnFigure(activity)) return { kind: "none" };
   switch (area.type) {
     case "line":
-      return { kind: "lines", lines: 1 };
+      // «line» with N lines: N one-line answers (four processes, four lines), not one.
+      return { kind: "lines", lines: area.lines ?? 1 };
     case "lines":
       return { kind: "lines", lines: area.lines ?? 3 };
     case "box":
@@ -329,6 +331,17 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     if (o.block.type !== "activity") continue;
     const extra = o.block.trace.source_refs.flatMap((ref) => linked.get(ref) ?? []);
     if (extra.length > 0) o.block = { ...o.block, resource_block_ids: [...new Set([...(o.block.resource_block_ids ?? []), ...extra])] };
+  }
+
+  // answer_space@v1: each activity gets the room it needs to be solved on paper (docs/EDITORIAL.md). Applied to the literal and to
+  // the adapted activities alike, so the response-area audit compares like with like; an answer format a decision chose is kept.
+  const space = spaceContextOf(analysis, context);
+  for (const o of ordered) {
+    if (o.block.type !== "activity") continue;
+    const activity = analysis.activities.find((a) => o.block.trace.source_refs.includes(a.id));
+    if (!activity) continue;
+    const decided = plan.decisions.some((d) => o.block.trace.decision_ids.includes(d.id) && d.response_target !== undefined);
+    o.block = { ...o.block, response: answerSpace(activity, o.block.response, space, decided).response };
   }
 
   // Original stated answers go to the teacher's key; inferred ones never do.

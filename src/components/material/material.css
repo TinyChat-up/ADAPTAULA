@@ -77,7 +77,10 @@ ul.ms-list { list-style: disc; }
 /* Zonas de respuesta: espacio real para escribir a mano. Líneas finas y grises (se ven al imprimir, no compiten con el texto). */
 .ms-lines > div { height: var(--ms-line); border-bottom: 1px solid var(--ms-write); }
 .ms-box-area { border: 1px solid var(--ms-write); border-radius: .3em; }
-.ms-grid-area { border: 1px solid var(--ms-write); background-image: linear-gradient(var(--ms-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ms-grid) 1px, transparent 1px); background-size: 6mm 6mm; background-position: -1px -1px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+/* Cuadrícula de cálculo (answer_space@v1): casillas enteras (el modelo calcula cuántas columnas caben en la columna de respuesta),
+   líneas vectoriales tenues; el borde exterior es la primera y la última línea. Se imprime en gris, nunca en color. */
+.ms-grid-area { display: block; max-width: 100%; overflow: hidden; outline: 1px solid var(--ms-write); outline-offset: -1px; break-inside: avoid; }
+.ms-grid-area .ms-grid-line { fill: none; stroke: var(--ms-grid); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .ms-box { flex: none; display: inline-block; width: var(--ms-box); height: var(--ms-box); border: 1.5px solid var(--ms-ink); border-radius: .15em; background: #fff; vertical-align: middle; }
 .ms-round { border-radius: 50%; }
 /* Una casilla donde se escribe (un número, una letra) tiene que admitir una cifra hecha a mano. */
@@ -93,7 +96,15 @@ ul.ms-list { list-style: disc; }
 .ms-answer-field-line { display: flex; align-items: flex-end; gap: .8em; }
 .ms-answer-field-line .ms-answer-field-label { flex: 0 0 auto; max-width: 45%; padding-bottom: .15em; }
 .ms-answer-field-line .ms-lines { flex: 1 1 auto; }
-.ms-answer-field-box .ms-box-area, .ms-answer-field-lines .ms-lines { margin-top: .3em; }
+.ms-answer-field-box .ms-box-area, .ms-answer-field-lines .ms-lines, .ms-answer-field-grid .ms-grid-area { margin-top: .3em; }
+/* Hueco para la unidad junto a la respuesta: vacío, más corto que la respuesta y con su etiqueta pequeña. */
+/* Las partes de un problema no se separan de sus operaciones: los datos y la cuadrícula, y la cuadrícula y la respuesta, juntas. */
+.ms-answer-field:has(+ .ms-answer-field-grid), .ms-answer-field-grid + .ms-answer-field { break-before: avoid; }
+.ms-answer-field:has(+ .ms-answer-field-grid) { break-after: avoid; }
+.ms-unit { flex: 0 0 auto; display: inline-flex; align-items: flex-end; gap: .4em; margin-left: .6em; }
+.ms-answer-field-lines .ms-unit { display: flex; margin: .3em 0 0; }
+.ms-unit-label { font-size: .85em; color: var(--ms-soft); padding-bottom: .15em; }
+.ms-unit-line { display: inline-block; width: 18mm; height: var(--ms-line); border-bottom: 1px solid var(--ms-write); }
 /* Items to order: each on its own line with the box where the number goes, never run together in one sentence. */
 .ms-sequence li { align-items: flex-start; }
 .ms-sequence .ms-box-write { flex: none; margin-top: .1em; }
@@ -137,7 +148,9 @@ ul.ms-list { list-style: disc; }
 .ms-math[role="math"] { font-size: 1.1em; }
 /* Los apoyos de una actividad van entre su enunciado y su espacio de respuesta, sin separarse de él al paginar. */
 /* Una actividad que se responde en una tabla de la ficha no se separa de ella al paginar. */
-.ms-activity[data-table-answer] { break-after: avoid; }
+/* Solo cuando la tabla va DESPUÉS de la actividad (documentos anteriores): si va dentro, entre sus figuras, ya viaja con ella, y
+   evitar el salto después la pegaría a la actividad siguiente. */
+.ms-activity[data-table-answer]:not(:has(> .ms-activity-figures)) { break-after: avoid; }
 .ms-activity-supports { margin-top: .55em; display: flex; flex-direction: column; gap: .5em; break-after: avoid; break-inside: avoid; }
 /* Al menos dos líneas de escritura acompañan al enunciado y a sus apoyos; el resto puede seguir en la página siguiente. */
 .ms-answer > .ms-lines > div:nth-child(-n+2) { break-before: avoid; }
@@ -188,7 +201,9 @@ ul.ms-list { list-style: disc; }
 /* An activity's example goes right before it and its figures right after its prompt: none of them is ever printed away from the
    task, and none of them takes a page of its own (docs/VISUAL_RESOURCES.md § Colocación). */
 .ms-activity-leads { display: flex; flex-direction: column; gap: .5em; break-inside: avoid; break-after: avoid; }
-.ms-activity-figures { margin-top: .55em; display: flex; flex-direction: column; gap: .5em; break-inside: avoid; break-after: avoid; }
+/* Varias figuras de una actividad (comparar A y B) se ponen una al lado de otra cuando caben; una tabla o un gráfico ocupan el ancho. */
+.ms-activity-figures { margin-top: .55em; display: flex; flex-flow: row wrap; align-items: flex-start; gap: .6em 1.4em; break-inside: avoid; break-after: avoid; }
+.ms-activity-figures > :is(.ms-tablewrap, .ms-chart) { flex: 1 1 100%; }
 .ms-activity-figures .ms-figure { align-items: flex-start; }
 .ms-activity-figures .ms-cue { display: none; }
 .ms-activity[data-numbered] > .ms-activity-figures { margin-left: calc(var(--ms-num-w) + var(--ms-num-gap)); }

@@ -442,3 +442,29 @@ Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que
 - Entregar la página completa.
 
 [VISUAL_RESOURCES.md](VISUAL_RESOURCES.md#figuras-con-marcas--recuperación-fiel-del-original-auto_visualsv6-2026-10-22).
+
+## ADR-040 — Identidad editorial única y espacios de resolución deterministas (`answer_space@v1`, 2026-10-22)
+
+**Decisión.**
+- **Diseño.** Sistema CLARO es el diseño por defecto y el único del producto. `standard` se conserva solo para renders históricos y comparaciones explícitas.
+- **Espacio de respuesta.** Lo decide el servidor al ensamblar el documento (`src/lib/adaptation/answer-space.ts`) con reglas deterministas y versionadas, a partir de:
+  - los campos estructurados del análisis (tipo, formato, área del original, dificultad y elementos protegidos);
+  - la etapa, el curso y las necesidades funcionales del contexto.
+- **Papel de las palabras.** Solo dimensionan (resultados, expresiones, datos, extensión indicada). La IA no fija tamaños, componentes ni estilos.
+- **Contrato.** El contrato guardado se amplía de forma opcional (`grid.rows`, campo `grid` y `unit`). Lo que puede escribir un modelo no cambia.
+- **Presentación.** `Presentation.answer_space = roomy` (solo con la política 2 y solo cuando cambia algo) amplía renglones y casillas para la motricidad fina o la letra grande.
+- **Composición.** El render dibuja la cuadrícula en SVG con casillas enteras, muestra otra vez junto a la actividad las figuras pequeñas o comparadas de una hoja anterior y mide la paginación en el PDF.
+
+**Alternativas descartadas:**
+- **Diez tipos de respuesta nuevos:** los existentes, ampliados, bastan.
+- **Que el modelo proponga tamaños o CSS:** no es reproducible y rompe la identidad.
+- **Una cuadrícula por defecto en Matemáticas:** pondría cuadrícula donde se marca o se dibuja.
+- **Un patrón de fondo CSS:** Chromium lo pierde en el PDF.
+- **Optimizar el número de hojas:** reduciría el espacio útil.
+
+**Consecuencias.**
+- Las adaptaciones nuevas tienen más espacio, y a veces más hojas.
+- Los documentos guardados se leen igual.
+- La línea base de tinta del *smoke* PDF se regenera para CLARO.
+
+Detalle en [EDITORIAL.md](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md).

@@ -158,7 +158,15 @@ describe("answer areas, planner and checklist are real writing and marking space
     const activity = model.pages.flatMap((p) => p.nodes).filter((n) => n.kind === "activity").at(-1)!;
     if (activity.kind !== "activity" || activity.response.kind !== "lines") throw new Error("fixture");
     expect(activity.response.lines).toBeGreaterThanOrEqual(Math.ceil(180 / 11));
-    expect(activity.response.fromExpectedLength).toBe(true);
+    // The assembler already sizes it from the activity's stated length (answer_space@v1); the renderer still widens a stored area
+    // that is shorter than what the requirements state (documents before v1).
+    const short = bachillerato();
+    const target = short.pages.flatMap((p) => p.blocks).filter((b) => b.type === "activity").at(-1)!;
+    const shortDoc = { ...short, pages: short.pages.map((p) => ({ blocks: p.blocks.map((b) => (b.id === target.id && b.type === "activity" ? { ...b, response: { kind: "lines" as const, lines: 3 } } : b)) })) };
+    const widened = build(shortDoc).model.pages.flatMap((p) => p.nodes).filter((n) => n.kind === "activity").at(-1)!;
+    if (widened.kind !== "activity" || widened.response.kind !== "lines") throw new Error("fixture");
+    expect(widened.response.fromExpectedLength).toBe(true);
+    expect(widened.response.lines).toBeGreaterThanOrEqual(Math.ceil(180 / 11));
     const stressActivity = build(stress()).model.pages.flatMap((p) => p.nodes).find((n) => n.kind === "activity" && n.label === "Z")!;
     if (stressActivity.kind !== "activity" || stressActivity.response.kind !== "lines") throw new Error("fixture");
     expect(stressActivity.response.lines).toBe(40);

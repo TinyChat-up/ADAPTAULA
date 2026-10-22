@@ -65,6 +65,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Fase B (2026-10-22).** Identidad única con CLARO por defecto y espacios de resolución deterministas (`answer_space@v1`, ADR-040): cuadrícula para el cálculo escrito, problemas por partes, campos en línea y paginación medida en el PDF. Detalle en [EDITORIAL](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md). Pendiente: validación docente.
+
 **Figuras originales (2026-10-22).** Las figuras con letras, flechas numeradas o medidas se recuperan del original sin redibujarlas (`auto_visuals@v6`, ADR-039). Detalle en [QA](qa/figuras-originales/README.md). Validado con el análisis real de 03, 06 y 07 (0,0930 USD; [validación](qa/figuras-originales/VALIDACION-REAL.md)): las cuatro figuras se recuperan tras ampliar el parser de marcas.
 
 **Auditoría transversal y limpieza:** resultados y recomendaciones en [QA](qa/auditoria-2026-10-20/README.md). La fase A de 5B ya está integrada: sus herramientas y procedimiento permiten inspeccionar migraciones, Auth, Storage, PDF y cuotas en staging cuando se autorice la fase B. [QA 5B](qa/adaptaula-2-etapa-5b/README.md). Nada se declara verificado en staging. La eliminación física sigue siendo una entrega separada.

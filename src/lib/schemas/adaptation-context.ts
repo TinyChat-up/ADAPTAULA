@@ -58,6 +58,11 @@ export const PresentationSchema = z.object({
   color_independent: z.boolean(),
   /** Charts carry a data table and images a description: nothing is understood only by looking. */
   text_alternatives_for_visuals: z.boolean(),
+  /**
+   * answer_space@v1: `roomy` = larger writing lines and squares for a learner who needs more room to write by hand (fine motor
+   * demand, large print). Absent (contexts and documents before v1) = `standard`. The renderer turns it into millimetres.
+   */
+  answer_space: z.enum(["standard", "roomy"]).optional(),
 });
 export type Presentation = z.infer<typeof PresentationSchema>;
 

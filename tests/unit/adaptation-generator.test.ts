@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { MATERIAL_GENERATOR_V1 } from "@prompts/material-generator/v1";
 import { ADAPTATION_PLANNER_V1 } from "@prompts/adaptation-planner/v1";
 import { z } from "zod";
-import { buildDocument, sequentialIds } from "@/lib/adaptation/document";
+import { answerSpace, spaceContextOf } from "@/lib/adaptation/answer-space";
+import { buildDocument, responseFor, sequentialIds } from "@/lib/adaptation/document";
 import { studentText, textOf } from "@/lib/adaptation/document-text";
 import { fingerprint, stableStringify } from "@/lib/adaptation/fingerprint";
 import { auditGeneration } from "@/lib/adaptation/generation-checks";
@@ -283,7 +284,9 @@ describe("the assembled MaterialDocument", () => {
   it("9 · no activity disappears: six in, six out, each with its own response area", () => {
     const activities = blocks.filter((b) => b.type === "activity");
     expect(activities.map((b) => b.trace.source_refs[0])).toEqual(["act_1", "act_2", "act_3", "act_4", "act_5", "act_6"]);
-    expect(activities.map((b) => (b.type === "activity" ? b.response : null))).toEqual(analysis.activities.map((a) => ({ kind: "lines", lines: a.answer_area.lines })));
+    // Each keeps the area the original gives it, sized by answer_space@v1 (docs/EDITORIAL.md): what a literal copy also gets.
+    const space = spaceContextOf(analysis, context);
+    expect(activities.map((b) => (b.type === "activity" ? b.response : null))).toEqual(analysis.activities.map((a) => answerSpace(a, responseFor(a), space).response));
   });
 
   it("13/14 · every generated block has a trace and it points to an effective decision (and its target)", () => {

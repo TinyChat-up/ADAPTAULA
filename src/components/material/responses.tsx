@@ -10,7 +10,26 @@ const Lines = ({ count }: { count: number }) => (
   </div>
 );
 
-const GRID_MM = 6;
+/** Height of a grid stored before answer_space@v1 (no rows): the 66 mm it always had, in whole squares of the sheet. */
+const LEGACY_GRID_MM = 66;
+const PX_PER_MM = 96 / 25.4;
+
+/**
+ * A squared area: `rows` × `columns` WHOLE squares of `cellMm` (the columns that fit the answer column), so a digit always has a
+ * whole square and the grid never ends in a cut row or column. Real vector lines inside its own box: they print crisp and faint in
+ * any PDF viewer and in greyscale (Chromium's PDF output dropped both a CSS background pattern and an SVG `<pattern>`).
+ */
+function Grid({ rows, cellMm, columns }: { rows: number | null; cellMm: number; columns: number }) {
+  const n = rows ?? Math.max(3, Math.floor(LEGACY_GRID_MM / cellMm));
+  const cell = cellMm * PX_PER_MM;
+  const [w, h] = [columns * cell, n * cell];
+  const d = [...Array.from({ length: n + 1 }, (_, i) => `M0 ${i * cell}H${w}`), ...Array.from({ length: columns + 1 }, (_, i) => `M${i * cell} 0V${h}`)].join("");
+  return (
+    <svg className="ms-grid-area" data-rows={n} data-columns={columns} data-cell-mm={cellMm} viewBox={`0 0 ${w} ${h}`} style={{ width: `${columns * cellMm}mm`, height: `${n * cellMm}mm` }} aria-hidden focusable="false">
+      <path d={d} className="ms-grid-line" />
+    </svg>
+  );
+}
 const LETTERS = "ABCDEFGHIJ";
 
 const MODE_LABEL = { oral: "Respuesta oral", keyboard: "Respuesta con teclado", other: "Respuesta alternativa" } as const;
@@ -26,8 +45,7 @@ export function Response({ response }: { response: RenderResponse }) {
     case "box":
       return <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${response.rows})` }} aria-hidden />;
     case "grid":
-      // Whole 6 mm squares: a squared area never ends in a cut row.
-      return <div className="ms-grid-area" style={{ height: `${GRID_MM * Math.round(response.rows * 1.1)}mm` }} aria-hidden />;
+      return <Grid rows={response.rows} cellMm={response.cellMm} columns={response.columns} />;
     case "table_cells":
       // The table of the sheet the activity points at is where the student writes: a second, empty box would only compete with it.
       return response.inTable ? null : <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${response.rows})` }} aria-hidden />;
@@ -108,13 +126,20 @@ export function Response({ response }: { response: RenderResponse }) {
         </ol>
       );
     case "fields":
-      // Every labelled field of the original keeps its label and its own space: lines to write, a box to calculate in.
+      // Every labelled field keeps its label and its own space: lines to write, a box or squares to calculate in. The answer of a
+      // quantity has an EMPTY slot for its unit (never the unit: it may be what is evaluated).
       return (
         <div className="ms-answer-fields">
           {response.fields.map((f, i) => (
-            <div key={i} className={f.space === "box" ? "ms-answer-field ms-answer-field-box" : f.lines > 1 ? "ms-answer-field ms-answer-field-lines" : "ms-answer-field ms-answer-field-line"}>
+            <div key={i} className={f.space === "grid" ? "ms-answer-field ms-answer-field-grid" : f.space === "box" ? "ms-answer-field ms-answer-field-box" : f.lines > 1 ? "ms-answer-field ms-answer-field-lines" : "ms-answer-field ms-answer-field-line"} data-unit={f.unit || undefined}>
               <p className="ms-answer-field-label">{f.label}:</p>
-              {f.space === "box" ? <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${f.lines})` }} aria-hidden /> : <Lines count={f.lines} />}
+              {f.space === "grid" ? <Grid rows={f.lines} cellMm={response.cellMm} columns={response.columns} /> : f.space === "box" ? <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${f.lines})` }} aria-hidden /> : <Lines count={f.lines} />}
+              {f.unit ? (
+                <span className="ms-unit">
+                  <span className="ms-unit-label">Unidad:</span>
+                  <span className="ms-unit-line" aria-hidden />
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
