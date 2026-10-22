@@ -35,9 +35,14 @@ Continuación de [«Hacer magia» 2.0](README.md). La [PR #53](https://github.co
 | `visual-locator` | Hay un enlace «Localizar en el original» por cada visual sin localizar, y la copia vigente es «Imagen del documento original incluida (seleccionada en la página 2).». | Test | Se sigue el enlace de `vis_2` con la copia vigente. |
 | `design-foundations` (intermitente) | El media emulado por CDP se aplica de forma asíncrona y se leía una sola vez. | Test | Se sondean los estilos calculados. |
 | `render` móvil: «socket hang up» (intermitente) | Carrera de keep-alive: Node cierra un socket inactivo a los 5 s mientras un cliente lo reutiliza. | Infraestructura de test | `fake-supabase` mantiene el keep-alive más tiempo que los clientes. |
-| Análisis que «no termina» (intermitente) | El primer análisis de un `next dev` en frío compila rutas y librerías PDF (47,6 s medidos) y la espera era de 45 s. Aparte, una caché `.next` compilada en otro commit dejó la app inservible tras cambiar de commit. | Infraestructura de test | `waitForAnalysis` espera 90 s, para cubrir la compilación y no la latencia del producto. Tras cambiar de commit hay que limpiar `.next`. |
+| Análisis que «no termina» y página del original que no se muestra (en bloque) | La caché `.next-e2e` estaba compilada con código de otros commits y la compartía un `next dev` huérfano de una ejecución anterior. La app no podía renderizar páginas ni analizar. Con la caché limpia y sin procesos previos no se reproduce. Aparte, el primer análisis de un `next dev` en frío tarda 47,6 s y la espera era de 45 s. | Infraestructura de test | Caché `.next-e2e` limpia y servidores controlados. `waitForAnalysis` espera 90 s, para cubrir la compilación y no la latencia del producto. |
 
-**Problemas del producto:** ninguno. La cabecera es correcta, la interfaz muestra el nombre del servidor y un navegador con locale UTF-8 guarda el PDF con su nombre exacto (verificado). El docente descarga el archivo correcto.
+**Problemas del producto:**
+
+- **La descarga no lo es.** La cabecera es correcta, la interfaz muestra el nombre del servidor y un navegador con locale UTF-8 guarda el PDF con su nombre exacto (verificado con Chromium lanzado a mano). El docente descarga el archivo correcto.
+- **Regresión de la PR #53, encontrada al repetir las pruebas PDF (`tests/pdf/export.test.ts`, «one sheet of paper»).** Las reglas nuevas de los campos de respuesta usaban las clases `.ms-fields`, `.ms-field` y `.ms-field-line`, que ya eran las del encabezado de la ficha (nombre y fecha). El encabezado pasaba a columna y una ficha de una hoja salía en dos. Es correcta en `5476df9` y falla desde `60ff140`. Corregida: los campos de respuesta usan su propio espacio de nombres (`.ms-answer-field…`) y un test unitario comprueba que el encabezado conserva sus clases únicas.
+
+**Otro fallo previo de infraestructura:** `tests/pdf/claro-quality.test.ts` fijaba `/usr/bin/chromium`. Ahora un resolutor común (`localChromium()`) usa `E2E_CHROMIUM_PATH` o la primera ruta que exista.
 
 ## Resultado final
 
@@ -49,4 +54,8 @@ Pendiente de la última ejecución (ver el registro de desarrollo).
 E2E_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm test:e2e
 ```
 
-Tras cambiar de commit, borra `.next` antes de ejecutar: el servidor de desarrollo reutiliza su caché.
+Antes de ejecutar:
+- **Al cambiar de commit, borra `.next-e2e`.** Es la caché del servidor de desarrollo de las E2E (`NEXT_DIST_DIR`), no `.next`.
+- **Comprueba que no queda ningún `next dev` de una ejecución anterior.** Dos servidores sobre la misma caché la corrompen y la app deja de renderizar páginas y analizar materiales.
+
+Para tener los logs del servidor, se pueden levantar `fake-supabase` y `next dev` a mano (con las variables de `playwright.config.ts`) y ejecutar `E2E_BASE_URL=http://localhost:3100 E2E_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm test:e2e`.
