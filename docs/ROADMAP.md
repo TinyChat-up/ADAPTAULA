@@ -295,6 +295,15 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - decidir si se activan las ilustraciones o se crea un contrato de entrega «asistida» (06, 07);
   - revisión docente de los campos y las casillas de ordenación.
 
+## Estándar editorial y espacio de resolución (Fase B, requisitos 2026-10-22)
+- **Estado:** requisitos documentados en [EDITORIAL.md](EDITORIAL.md), sin implementar. Se hará en una PR independiente después de decidir sobre la #55.
+- **Objetivo:** una identidad única de Adaptaula sobre CLARO, y un espacio de respuesta decidido en el servidor con reglas deterministas según la tarea, el curso y las necesidades funcionales.
+- **Primeros defectos medidos:**
+  - `line` con N líneas se convierte en 1 línea;
+  - los campos en línea no se reconocen;
+  - los cálculos no tienen cuadrícula;
+  - la paginación deja demasiado blanco.
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.
