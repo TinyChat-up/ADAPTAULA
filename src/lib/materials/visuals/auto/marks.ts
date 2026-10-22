@@ -6,7 +6,7 @@ import { isLabel } from "./page-model";
  * The printed marks a figure carries and the activity is about (docs/VISUAL_RESOURCES.md § Figuras con marcas): the letters that
  * point at its parts (A–D), the numbers of its arrows (1–4), the measures written on its sides (8 cm). They are read ONLY from the
  * analysis's own words about the visual and from the activities that use it (their instruction and the answer fields they print,
- * «A:» … «D:», «Flecha 1:» …), never from a model. A figure is only located by them when every expected mark is printed, once, on
+ * «A:» … «D:», «Flecha 1:» …, one per line or inline), never from a model. A figure is only located by them when every expected mark is printed, once, on
  * that drawing (`locate.ts`): the marks are evidence of identity, not of pedagogical correctness.
  */
 
@@ -38,27 +38,42 @@ const range = (from: string, to: string, alphabet: string) => {
 };
 const numberRange = (from: number, to: number) => (to > from && to - from <= 9 ? Array.from({ length: to - from + 1 }, (_, i) => String(from + i)) : []);
 
-/** «A, B, C y D», «A–D», «A a D», «de la A a la D». */
+/** «A, B, C y D», «A–D», «A a D», «de la A a la D», «las letras D (flor), C (hoja), B (tallo) y A (raíz)». */
 function lettersIn(text: string): string[] {
   const r = /\b(?:de la\s+)?([A-H])\s*(?:[–—-]|\s+a\s+(?:la\s+)?)\s*([A-H])\b/.exec(text);
   if (r) return range(r[1]!, r[2]!, LETTERS);
   const list = /\b([A-H](?:\s*,\s*[A-H])+\s+y\s+[A-H])\b/.exec(text);
-  return list ? list[1]!.split(/\s*,\s*|\s+y\s+/) : [];
+  if (list) return list[1]!.split(/\s*,\s*|\s+y\s+/);
+  // Each letter followed by the part it names, in brackets: only right after the word «letra(s)», so a stray capital never counts.
+  const named = /\bletras?\s+((?:[A-H]\s*\([^)]{1,40}\)\s*(?:,|\by\b)\s*)+[A-H]\s*\([^)]{1,40}\))/.exec(text);
+  return named ? [...named[1]!.replace(/\([^)]*\)/g, "").matchAll(/\b([A-H])\b/g)].map((m) => m[1]!) : [];
 }
 
-/** «1–4», «del 1 al 4», «1 a 4», «1, 2, 3 y 4». */
+/** «1–4», «del 1 al 4», «1 a 4», «1, 2, 3 y 4», «1 del mar al vapor, 2 del vapor a las nubes, 3 …». */
 function numbersIn(text: string): string[] {
   const r = /\b(?:del\s+)?(\d)\s*(?:[–—-]|\s+al?\s+)\s*(\d)\b/.exec(text);
   if (r) return numberRange(Number(r[1]), Number(r[2]));
   const list = /\b(\d(?:\s*,\s*\d)+\s+y\s+\d)\b/.exec(text);
-  return list ? list[1]!.split(/\s*,\s*|\s+y\s+/) : [];
+  if (list) return list[1]!.split(/\s*,\s*|\s+y\s+/);
+  // An enumeration whose items each START with their number (after «:», «,», «;» or «y»): only a run 1, 2, … n with n ≥ 2 counts.
+  const leading = [...text.matchAll(/(?:[:;,]|\by)\s*(\d)\s+(?!(?:mm|cm|dm|m|km)\b)(?=\p{L})/gu)].map((m) => Number(m[1]));
+  let n = 0;
+  while (leading[n] === n + 1) n++;
+  return n >= 2 ? numberRange(1, n) : [];
+}
+
+/** Answer fields printed inline in an activity's context: «A:, B:, C:, D:» or «Flecha 1, Flecha 2, Flecha 3, Flecha 4». */
+function inlineFields(context: string | null): string[] {
+  if (!context) return [];
+  const parts = context.split(/[,;\n]+/).map((p) => p.replace(/[:_.\s]+$/g, "").trim()).filter((p) => p.length > 0);
+  return parts.length >= 2 && parts.every((p) => /^(?:[A-H]|(?:flecha|paso|proceso)\s+\d)$/i.test(p)) ? parts : [];
 }
 
 /** The marks the analysis says the visual carries, or null when its words name none (the figure is then not located by marks). */
 export function expectedMarks(visual: Pick<AnalysisVisual, "title" | "description" | "text">, activities: readonly Pick<AnalysisActivity, "instruction" | "context" | "type" | "answer_area">[]): ExpectedMarks | null {
   const own = `${visual.title ?? ""}. ${visual.description}. ${visual.text ?? ""}`;
   const words = normalize(`${own} ${activities.map((a) => `${a.instruction} ${a.context ?? ""}`).join(" ")}`);
-  const fields = activities.flatMap((a) => activityStructure(a).fields ?? []).map((f) => f.label.trim());
+  const fields = activities.flatMap((a) => [...(activityStructure(a).fields ?? []).map((f) => f.label.trim()), ...inlineFields(a.context)]);
 
   let letters: string[] = [];
   if (/\bletras?\b/.test(words)) letters = lettersIn(own).length > 0 ? lettersIn(own) : activities.map((a) => lettersIn(`${a.instruction} ${a.context ?? ""}`)).find((l) => l.length > 0) ?? [];

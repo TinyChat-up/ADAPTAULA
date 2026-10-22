@@ -42,6 +42,22 @@ describe("marcas que nombra el análisis (nunca un modelo)", () => {
     expect(expectedMarks({ title: null, description: "Fotografía de un paisaje.", text: null }, [])).toBeNull();
   });
 
+  it("formas en que un analizador real enumera las marcas: letras con su parte, números al inicio de cada paso, campos en línea", () => {
+    const plant = { title: "Planta", description: "Cuatro líneas señalan partes con las letras D (flor), C (hoja), B (tallo) y A (raíz).", text: null };
+    expect(expectedMarks(plant, [])?.letters).toEqual(["D", "C", "B", "A"]);
+    const cycle = { title: "Ciclo del agua", description: "Cuatro cajas unidas por flechas numeradas en circuito: 1 del mar al vapor, 2 del vapor a las nubes, 3 de las nubes a la lluvia, 4 de la lluvia al mar.", text: null };
+    expect(expectedMarks(cycle, [])?.numbers).toEqual(["1", "2", "3", "4"]);
+    const short = (context: string) => [{ instruction: "Escribe.", context, type: "short_answer" as const, answer_area: { type: "lines" as const, lines: null } }];
+    const bare = { title: null, description: "Dibujo de una planta con sus partes.", text: null };
+    expect(expectedMarks(bare, short("A:, B:, C:, D:"))?.letters).toEqual(["A", "B", "C", "D"]);
+    expect(expectedMarks({ ...bare, description: "Esquema del ciclo del agua." }, short("Flecha 1, Flecha 2, Flecha 3, Flecha 4"))?.numbers).toEqual(["1", "2", "3", "4"]);
+    // Nothing invented: a capital outside a «letras …» enumeration, measures, a run that does not start at 1, prose in the context.
+    expect(expectedMarks({ title: null, description: "Naranja con vitamina C (ácido) y A (retinol).", text: null }, [])).toBeNull();
+    expect(expectedMarks({ title: null, description: "Flechas numeradas entre cajas.", text: "8 cm; 3 cm; 7 cm" }, [])?.numbers ?? []).toEqual([]);
+    expect(expectedMarks({ title: null, description: "Pasos numerados: 2 hervir, 3 enfriar.", text: null }, [])).toBeNull();
+    expect(expectedMarks(bare, short("A: la raíz, B: el tallo"))).toBeNull();
+  });
+
   it("una medida y una marca son marcas; el texto corrido no", () => {
     for (const m of ["8 cm", "3,5 m", "12 mm", "4 cm²", "?", "A", "1"]) expect(isMark(m)).toBe(true);
     for (const t of ["Solución: 24 cm", "Flecha 1:", "A:", "Escribe qué parte"]) expect(isMark(t)).toBe(false);

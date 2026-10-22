@@ -695,7 +695,7 @@ CLARO v5 comprueba la especificación resuelta antes de dibujarla, rechaza denom
 - «flechas numeradas del 1 al 4», o los campos «Flecha 1:» …;
 - «medidas», «cm».
 
-Nunca salen de un modelo ni de OCR. La figura tiene firma (0,30, el mismo peso que una recta o una barra) solo si **todas** esas marcas están impresas en el dibujo según la capa de texto del PDF, cada una **una sola vez**, y son legibles: altura ≥ 1,8 mm y figura de al menos 20 mm. Los umbrales de aceptación no cambian.
+También reconocen las formas en que el analizador real las escribe: «las letras D (flor), C (hoja)…», «1 del mar al vapor, 2 …» y campos en línea («A:, B:, C:, D:», «Flecha 1, Flecha 2, …»); ver [validación real](qa/figuras-originales/VALIDACION-REAL.md). Nunca salen de un modelo ni de OCR. La figura tiene firma (0,30, el mismo peso que una recta o una barra) solo si **todas** esas marcas están impresas en el dibujo según la capa de texto del PDF, cada una **una sola vez**, y son legibles: altura ≥ 1,8 mm y figura de al menos 20 mm. Los umbrales de aceptación no cambian.
 
 **Región exacta.**
 - **Crecimiento del recorte.** Desde el componente de tinta del dibujo, que incluye sus líneas indicadoras y flechas conectadas, el recorte crece con las marcas a su alcance: etiquetas y «?» a 4 mm, medidas a 6 mm.

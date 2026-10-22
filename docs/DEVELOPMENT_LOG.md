@@ -1,5 +1,30 @@
 # Registro de desarrollo
 
+## 2026-10-22 — Validación real de la PR #55: análisis de 03, 06 y 07 (0,0930 USD)
+
+- **Ejecución.**
+  - STANDARD `anthropic:claude-sonnet-5-5`, `material_analyzer@v3`, una llamada por ficha.
+  - Sin reintentos (SDK 0, reparación 0, regeneración 0), con tope de 10 000 tokens de salida y techo de 0,15 USD por llamada comprobado antes de llamar.
+  - Coste registrado: 0,0930 USD de 0,50.
+  - Sin PREMIUM, ilustraciones, adaptación, revisión de pago, OCR, Supabase remoto ni producción.
+- **Resultado** ([QA](qa/figuras-originales/VALIDACION-REAL.md)):
+  - el analizador identifica las 4 figuras, su página, su papel necesario y sus actividades, y nombra sus marcas;
+  - 03 A y 03 B se localizan directamente;
+  - 06 y 07 se perdían en `expectedMarks()`, que no reconocía letras con su parte entre paréntesis, números al inicio de cada paso ni campos en línea (fallo D, parser).
+- **Corrección.** `marks.ts`, con reglas acotadas y pruebas negativas; sin tocar umbrales ni renderer. Tras ella, las cuatro figuras se aceptan con 0,90:
+  - recortes idénticos al original;
+  - legibles (la marca mínima impresa mide 3,2 mm o más);
+  - junto a su consigna;
+  - «Hacer magia» no llama al generador.
+
+  La segunda pasada es en muestra.
+- **Detectado para la Fase B:**
+  - `answer_area: line` con `lines: 4` se convierte en 1 línea;
+  - campos en línea impresos como texto;
+  - cálculos sin cuadrícula;
+  - paginación con mucho blanco.
+- **Recomendación:** fusionar la #55. Confirmar con otra prueba real limitada sobre otras fichas.
+
 ## 2026-10-22 — Recuperación fiel de figuras originales (fichas 03, 06 y 07; `auto_visuals@v6`, ADR-039)
 
 - **Base.** `main` con la [PR #54](https://github.com/TinyChat-up/ADAPTAULA/pull/54) integrada; rama `claude/figuras-originales`.

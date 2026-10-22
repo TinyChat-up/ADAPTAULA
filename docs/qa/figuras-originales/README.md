@@ -60,7 +60,7 @@ La figura 07 es más ancha que la columna de CLARO. El renderer la reduce de for
 
 ## Casos sin resolver
 
-- **Redacción del análisis.** Sin marcas nombradas (letras, flechas numeradas, medidas), una figura genérica sigue igual de incierta que antes. Falta comprobarlo con la salida real del analizador.
+- **Redacción del análisis.** Sin marcas nombradas (letras, flechas numeradas, medidas), una figura genérica sigue igual de incierta que antes. Validado con la salida real del analizador en [VALIDACION-REAL.md](VALIDACION-REAL.md): las cuatro figuras se recuperan tras ampliar el parser de marcas.
 - **Figura delante de una actividad posterior.** Si no es la primera de su columna, no se atribuye a esa actividad, porque el motor no puede saber de cuál es.
 - **Figuras gemelas o marcas repetidas** en la misma zona: siguen inciertas.
 - **Escaneos y PDF sin capa de texto:** la identidad no es verificable sin OCR, que sigue desactivado.
