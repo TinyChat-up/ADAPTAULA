@@ -57,7 +57,9 @@ export async function uploadAndOpen(page: Page, file: { name: string; mimeType: 
 }
 
 export async function waitForAnalysis(page: Page) {
-  await expect(page.getByRole("heading", { name: "Adaptaula ha identificado" })).toBeVisible({ timeout: 45_000 });
+  // The first analysis a cold `next dev` serves compiles its routes and the PDF libraries (measured ~45 s here); later ones take
+  // seconds. The wait covers that compile, not the product's latency.
+  await expect(page.getByRole("heading", { name: "Adaptaula ha identificado" })).toBeVisible({ timeout: 90_000 });
 }
 
 /** Page alerts, excluding Next's route announcer (which is also role="alert"). */
