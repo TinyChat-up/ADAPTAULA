@@ -1,5 +1,44 @@
 # Registro de desarrollo
 
+## 2026-10-22 — Recuperación fiel de figuras originales (fichas 03, 06 y 07; `auto_visuals@v6`, ADR-039)
+
+- **Base.** `main` con la [PR #54](https://github.com/TinyChat-up/ADAPTAULA/pull/54) integrada; rama `claude/figuras-originales`.
+- **Problema.**
+  - Una figura genérica nunca superaba 0,60 sin un modelo de visión.
+  - El motor leía mal las dos columnas, las medidas y el texto de las cajas.
+  - Una figura que precedía a su consigna, o un contorno vacío, quedaban fuera.
+- **Cambios:**
+  - `auto/marks.ts`: marcas esperadas derivadas solo del análisis;
+  - `locate.ts`:
+    - firma por marcas completas, únicas y legibles;
+    - recorte que crece con sus marcas;
+    - segmentos por columna y zona previa;
+    - cajas propias por bordes finos;
+    - contornos vacíos con marcas;
+    - el candidato más interior gana;
+    - motivos `marks_incomplete` e `illegible`;
+  - `page-model.ts`: `textSegments`;
+  - `service.ts` (auto): motor v6 y `FigureVerification` (identidad, fidelidad, pedagogía);
+  - `AutoEvidenceSchema`: v6 y `marks.legible`.
+
+  No hay migración, y los umbrales no cambian.
+- **Pruebas:**
+  - nuevas: unidad 14, BD 7 y PDF 3;
+  - suite de unidad y BD: 1892 correctas y 13 omitidas;
+  - PDF con Chromium: 52/52;
+  - typecheck, lint (un aviso previo ajeno) y build correctos;
+  - comparación local con las fichas reales: 4/4 figuras con píxeles idénticos ([QA](qa/figuras-originales/README.md));
+  - E2E relevantes en escritorio y móvil (`visual-locator`, `magic-flow`, `render`, `document-workspace`): 13/14 a la primera.
+    - El fallo fue un desborde transitorio de la lista de progreso a 320 px, en `document-workspace` móvil.
+    - Al repetirlo una vez pasó. La rama no toca la UI.
+- **Riesgos.**
+  - El resultado depende de que el análisis nombre las marcas: la redacción real del analizador no está probada.
+  - Siguen inciertos:
+    - figuras que no son las primeras de su columna;
+    - figuras gemelas;
+    - escaneos.
+- **Siguiente:** prueba real autorizada de 03, 06 y 07 con el análisis real.
+
 ## 2026-10-22 — E2E de escritorio y móvil: fallos previos cerrados y una regresión de la PR #53 corregida
 
 - **Base.** La [PR #53](https://github.com/TinyChat-up/ADAPTAULA/pull/53) ya estaba integrada en `main` (`c1c1a96`): no admite commits. La rama `claude/hacer-magia-2` avanzó desde `main` y no se abrió una PR nueva sin autorización.

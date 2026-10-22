@@ -65,6 +65,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Figuras originales (2026-10-22).** Las figuras con letras, flechas numeradas o medidas se recuperan del original sin redibujarlas (`auto_visuals@v6`, ADR-039). Detalle en [QA](qa/figuras-originales/README.md). Pendiente: una prueba real con el análisis real.
+
 **Auditoría transversal y limpieza:** resultados y recomendaciones en [QA](qa/auditoria-2026-10-20/README.md). La fase A de 5B ya está integrada: sus herramientas y procedimiento permiten inspeccionar migraciones, Auth, Storage, PDF y cuotas en staging cuando se autorice la fase B. [QA 5B](qa/adaptaula-2-etapa-5b/README.md). Nada se declara verificado en staging. La eliminación física sigue siendo una entrega separada.
 
 

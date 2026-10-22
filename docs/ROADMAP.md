@@ -295,6 +295,16 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - decidir si se activan las ilustraciones o se crea un contrato de entrega «asistida» (06, 07);
   - revisión docente de los campos y las casillas de ordenación.
 
+## Recuperación fiel de figuras originales (2026-10-22, ADR-039)
+- **Hecho (probado localmente, sin llamadas de pago).** Las figuras genéricas se localizan por las marcas que nombra su análisis (`auto_visuals@v6`): letras, flechas numeradas y medidas.
+  - Las cuatro figuras reales de 03, 06 y 07 se recortan del original con confianza 0,90 y píxeles idénticos ([QA](qa/figuras-originales/README.md)).
+  - La verificación separa tres aspectos: identidad, fidelidad y pedagogía.
+  - «Hacer magia» usa el original sin generar ninguna ilustración.
+- **Aceptación pendiente:** prueba real autorizada con la salida real del analizador para 03, 06 y 07.
+- **Siguiente:**
+  - comprobar si el analizador nombra las marcas;
+  - si no lo hace, valorar un prompt `v<N+1>` que pida enumerar las marcas visibles, sin inventarlas.
+
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.
