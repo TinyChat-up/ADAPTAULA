@@ -9,6 +9,7 @@ import { loadSource, produceVisualAsset, type LocatorRow, type VisualDeps } from
 import { consistentWithActivities, contradicts, sameStructure, specFromAnalysis } from "@/lib/visuals/from-analysis";
 import type { NormalizedBounds } from "../geometry";
 import { SPEC_EXTRACTOR_VERSION, extractSpec } from "./extract";
+import { expectedMarks } from "./marks";
 import { candidates, locateVisuals, toBounds, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
 import { iou, type PageModel } from "./page-model";
 import { readPage } from "./read";
@@ -31,8 +32,12 @@ import type { VisionLocator } from "./vision";
  * for the essential visuals it lacks, honestly, as before.
  */
 
-/** v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions. */
-export const AUTO_ENGINE_VERSION = "auto_visuals@v5";
+/**
+ * v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions.
+ * v6: a generic figure is located by the marks its analysis names (letters, arrow numbers, measures), all printed on it, legibly;
+ *     column-aware zones and a lead zone for such figures; the text inside its own boxes belongs to it.
+ */
+export const AUTO_ENGINE_VERSION = "auto_visuals@v6";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -102,10 +107,14 @@ export function shapeOf(v: Pick<AnalysisVisual, "kind" | "title" | "description"
 export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { page: number; visual: AnalysisVisual }> {
   return analysis.visuals
     .filter((v) => (v.role === "required" || v.role === "informative") && v.kind !== "decorative" && !(v.table && v.table.rows.length > 0) && !v.chart)
-    .map((v) => ({ id: v.id, page: v.page, shape: shapeOf(v), activityIds: v.activity_ids, visual: v }));
+    .map((v) => {
+      const shape = shapeOf(v);
+      const users = analysis.activities.filter((a) => v.activity_ids.includes(a.id) || a.resource_ids.includes(v.id));
+      return { id: v.id, page: v.page, shape, activityIds: v.activity_ids, visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null };
+    });
 }
 
-const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision });
+const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision, ...(e.marks ? { marks: e.marks } : {}) });
 
 export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Promise<AutoRunSummary> {
   const targets = autoTargets(input.analysis);
@@ -243,7 +252,7 @@ export async function corroborateSpec(deps: Pick<AutoRunDeps, "admin">, input: {
   // A matching shape cannot prove which activity owns it on a textless page.
   if (model.texts.length === 0) return null;
   const matches: Array<{ crop: { x0: number; y0: number; x1: number; y1: number }; spec: VisualSpec }> = [];
-  for (const c of candidates(model)) {
+  for (const c of candidates(model).filter((c) => !c.hollow)) {
     const read = extractSpec(model, toBounds(model, c.crop), shape);
     if (!read.ok || !sameStructure(claim, read.spec)) continue;
     // A single drawing and the group it belongs to are the same figure.

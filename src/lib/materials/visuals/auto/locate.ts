@@ -1,5 +1,6 @@
 import { MIN_SIDE, type NormalizedBounds } from "../geometry";
-import { area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
+import { INK, area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, textSegments, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
+import { isMark, isMarkLine, isMeasure, type ExpectedMarks } from "./marks";
 import { barShape, numberLineShape } from "./shapes";
 
 /**
@@ -14,6 +15,12 @@ import { barShape, numberLineShape } from "./shapes";
  *
  * Accepted at ≥ 0.75. A hypothesis that lands on no region found here is never accepted (capped at 0.60): a rectangle is not
  * true because a model returned it. Thresholds are part of `AUTO_ENGINE_VERSION`: changing one is a new engine version.
+ *
+ * A generic figure whose analysis names the marks it carries (`marks.ts`: letters A–D, arrows 1–4, measures) has a signature
+ * too: EVERY expected mark is printed, once, on that drawing (the PDF's own text layer), legibly. Its crop then includes those
+ * marks (a measure written beside a side, the «?» of an unknown one) and the text enclosed in its own boxes; never an activity's
+ * instruction or a printed solution. Only for such a figure the page is read by columns (text segments, not full-width lines) and
+ * the figure may lead its activity (above the first instruction of its column), as real sheets print it. Thresholds unchanged.
  */
 
 export const ACCEPT = 0.75;
@@ -29,7 +36,13 @@ export interface VisualTarget {
   shape: VisualShape;
   /** Activities that use it, in order (the first one with a printed anchor gives its zone). */
   activityIds: string[];
+  /** The marks its analysis names (only generic figures): its signature, when all are printed on it. */
+  marks?: ExpectedMarks | null;
 }
+
+/** The smallest printed mark still legible on A4 (≈ 5 pt type) and the smallest side of a figure worth printing. */
+export const MIN_MARK_MM = 1.8;
+export const MIN_FIGURE_MM = 20;
 
 export interface ActivityText {
   id: string;
@@ -50,7 +63,9 @@ export interface Evidence {
   clean: boolean;
   anchor: string | null;
   vision: { used: boolean; agrees: boolean; confidence: number | null; iou: number | null };
-  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | "scan_identity_unverified" | "activity_unverified";
+  /** A figure located by its marks: what was expected and found on the crop, and whether they print legibly. */
+  marks?: { expected: string[]; found: string[]; measures: number; legible: boolean };
+  reason: "accepted" | "low_confidence" | "no_candidate" | "not_clean" | "hypothesis_not_snapped" | "conflict" | "scan_identity_unverified" | "activity_unverified" | "marks_incomplete" | "illegible";
 }
 
 export interface Located {
@@ -93,6 +108,33 @@ export function activityAnchors(lines: readonly TextLine[], activities: readonly
   return anchors;
 }
 
+/**
+ * Zones that follow the page's columns: anchors printed side by side (same row) split the width between them; each zone runs to
+ * the next anchor BELOW IT IN ITS COLUMN. The first anchor of a column also gets the area above it (its `lead`), where a sheet
+ * prints the figure its activity is about. Used only for figures located by their marks.
+ */
+export function columnZones(anchors: Map<string, TextLine>, model: PageModel): { zones: Map<string, Rect>; leads: Map<string, Rect> } {
+  const list = [...anchors.values()];
+  const sameRow = (a: TextLine, b: TextLine) => Math.abs((a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2) <= Math.max(a.y1 - a.y0, b.y1 - b.y0);
+  const column = (line: TextLine) => {
+    const mates = list.filter((o) => o !== line && sameRow(o, line));
+    const left = mates.filter((o) => o.x0 < line.x0).sort((a, b) => b.x0 - a.x0)[0];
+    const right = mates.filter((o) => o.x0 > line.x0).sort((a, b) => a.x0 - b.x0)[0];
+    return { x0: left ? (left.x1 + line.x0) / 2 : 0, x1: right ? (line.x1 + right.x0) / 2 : model.width };
+  };
+  const zones = new Map<string, Rect>();
+  const leads = new Map<string, Rect>();
+  for (const [id, line] of anchors) {
+    const col = column(line);
+    const inColumn = list.filter((o) => o !== line && (o.x0 + o.x1) / 2 >= col.x0 && (o.x0 + o.x1) / 2 <= col.x1);
+    const below = inColumn.filter((o) => o.y0 > line.y0 && !sameRow(o, line)).sort((a, b) => a.y0 - b.y0)[0];
+    const above = inColumn.some((o) => o.y0 < line.y0 && !sameRow(o, line));
+    zones.set(id, { x0: col.x0, y0: line.y0 - px(model, 1), x1: col.x1, y1: (below?.y0 ?? model.height) - px(model, 0.5) });
+    if (!above) leads.set(id, { x0: col.x0, y0: 0, x1: col.x1, y1: line.y0 });
+  }
+  return { zones, leads };
+}
+
 /** From an activity's anchor to the next anchor below it (or the end of the page). */
 export function activityZones(anchors: Map<string, TextLine>, model: PageModel): Map<string, Rect> {
   const sorted = [...anchors.entries()].sort((a, b) => a[1].y0 - b[1].y0);
@@ -102,23 +144,29 @@ export function activityZones(anchors: Map<string, TextLine>, model: PageModel):
 interface Candidate extends Rect {
   /** The region plus the printed labels that belong to it (`0`, `1/4`…), i.e. what would be cropped. */
   crop: Rect;
+  /** The region plus every printed mark that belongs to it (labels, measures, «?»): the crop of a figure located by its marks. */
+  markCrop: Rect;
   inkPx: number;
+  /** An empty outline (ink on its border only): a box to write in, or a drawn rectangle; only a figure with its marks may be one. */
+  hollow?: true;
 }
 
 /** Regions that can be a figure: single drawings and drawings close to each other, minus rules, frames, specks and empty boxes. */
 export function candidates(model: PageModel, mask = textMask(model)): Candidate[] {
   const all = components(model, mask);
   const page: Rect = { x0: 0, y0: 0, x1: model.width, y1: model.height };
-  const keep = (c: Component) => {
+  const shaped = (c: Component) => {
     const w = c.x1 - c.x0;
     const h = c.y1 - c.y0;
     if (w < px(model, 3) && h < px(model, 3)) return false;
     if (h <= px(model, 1.5) && w >= px(model, 10)) return false; // a rule or an answer line
     if (w >= 0.85 * model.width && h >= 0.5 * model.height) return false; // a page frame
-    if (area(c) > 0.6 * area(page)) return false;
-    return !hollow(model, mask, c);
+    return area(c) <= 0.6 * area(page);
   };
+  const keep = (c: Component) => shaped(c) && !hollow(model, mask, c);
   const singles = all.filter(keep);
+  // Empty outlines stay out of every group; they are offered apart, flagged, for a figure that carries its marks (a rectangle B).
+  const outlines = all.filter((c) => shaped(c) && hollow(model, mask, c)).map((c) => ({ ...c, hollow: true as const }));
   const merged: Component[] = [];
   for (const c of singles) {
     const near = merged.find((m) => gap(m, c) <= px(model, 4));
@@ -126,12 +174,12 @@ export function candidates(model: PageModel, mask = textMask(model)): Candidate[
     else merged.push({ ...c });
   }
   const seen = new Set<string>();
-  return [...singles, ...merged]
+  return [...singles, ...merged, ...outlines]
     .filter((c) => {
       const key = `${c.x0}:${c.y0}:${c.x1}:${c.y1}`;
       return !seen.has(key) && seen.add(key) !== undefined;
     })
-    .map((c) => ({ ...c, crop: withLabels(model, c) }));
+    .map((c) => ({ ...c, crop: withLabels(model, c), markCrop: withMarks(model, c) }));
 }
 
 /** An empty box (a frame to write in, a sign box): ink on its border only. */
@@ -155,6 +203,66 @@ function withLabels(model: PageModel, r: Rect): Rect {
     crop = grown;
   }
   return crop;
+}
+
+/**
+ * The marks printed within reach of a figure belong to its crop: labels and «?» within 4 mm, a measure within 6 mm (it is written
+ * beside the side it measures), and the marks touching those. Running text never does.
+ */
+function withMarks(model: PageModel, r: Rect): Rect {
+  let crop = r;
+  const marks = model.texts.filter((t) => isMark(t.text));
+  for (let pass = 0; pass < 3; pass++) {
+    const grown = marks.reduce((c, t) => (gap(c, t) <= px(model, pass === 0 ? (isMeasure(t.text) ? 6 : 4) : 1) ? union(c, t) : c), crop);
+    if (area(grown) === area(crop)) break;
+    crop = grown;
+  }
+  return crop;
+}
+
+const centreInside = (t: Rect, r: Rect) => (t.x0 + t.x1) / 2 >= r.x0 && (t.x0 + t.x1) / 2 <= r.x1 && (t.y0 + t.y1) / 2 >= r.y0 && (t.y0 + t.y1) / 2 <= r.y1;
+
+/** The expected marks printed on the crop (each once), how many measures it carries, and whether they are legible on A4. */
+function marksOn(model: PageModel, crop: Rect, marks: ExpectedMarks): { ok: boolean; found: string[]; measures: number; legible: boolean } {
+  const inside = model.texts.filter((t) => isMark(t.text) && centreInside(t, crop));
+  const tokens = inside.flatMap((t) => (isMeasure(t.text) ? [] : t.text.trim().split(/\s+/)));
+  const count = (mark: string) => tokens.filter((x) => x === mark).length;
+  const expected = [...marks.letters, ...marks.numbers];
+  const found = expected.filter((m) => count(m) === 1);
+  const measures = inside.filter((t) => isMeasure(t.text)).length;
+  const ok = found.length === expected.length && (!marks.measures || measures >= 2) && (expected.length > 0 || marks.measures);
+  const relevant = inside.filter((t) => isMeasure(t.text) || expected.includes(t.text.trim()));
+  const minMark = relevant.length > 0 ? Math.min(...relevant.map((t) => (t.y1 - t.y0) * model.mmPerPx)) : 0;
+  const side = Math.min(crop.x1 - crop.x0, crop.y1 - crop.y0) * model.mmPerPx;
+  return { ok, found, measures, legible: ok && minMark >= MIN_MARK_MM && side >= MIN_FIGURE_MM };
+}
+
+/** Words that mark a printed solution or answer key: never part of a figure's crop. */
+const SOLUTION = /\b(soluci[oó]n|soluciones|respuestas?\s+correctas?|clave|solucionario)\b/i;
+
+/**
+ * A text line inside one of the figure's own boxes (the label of a box of a diagram): a drawn component of the page encloses it,
+ * and that component is a part of the crop (at most half of it), never the crop's own outer frame or a card around activities.
+ */
+function boxed(model: PageModel, boxes: readonly Rect[], line: Rect, crop: Rect): boolean {
+  const m = px(model, 0.5);
+  return boxes.some((b) => b.x0 <= line.x0 - m && b.y0 <= line.y0 - m && b.x1 >= line.x1 + m && b.y1 >= line.y1 + m
+    && b.x0 >= crop.x0 && b.y0 >= crop.y0 && b.x1 <= crop.x1 && b.y1 <= crop.y1 && area(b) <= 0.5 * area(crop));
+}
+
+/**
+ * Clean crop of a figure located by its marks: as `isClean`, but its marks and the text inside its own boxes belong to it. Any
+ * line of an activity's instruction (its anchor or a continuation) and any printed solution make it unclean.
+ */
+function isCleanFigure(model: PageModel, boxes: readonly Rect[], lines: readonly TextLine[], instruction: (l: TextLine) => boolean, crop: Rect): boolean {
+  if (area(crop) > 0.5 * model.width * model.height) return false;
+  if (inkFraction(model, crop) < 0.004) return false;
+  return !lines.some((l) => {
+    if (area(intersection(l, crop)) <= 0.15 * area(l)) return false;
+    if (instruction(l) || SOLUTION.test(l.text)) return true;
+    if (isMarkLine(l.text)) return false;
+    return !(centreInside(l, crop) && boxed(model, boxes, l, crop));
+  });
 }
 
 function signatureOf(model: PageModel, mask: Uint8Array, shape: VisualShape, c: Candidate): { score: number; ok: boolean } {
@@ -194,6 +302,8 @@ interface Scored {
   candidate: Candidate;
   score: number;
   evidence: Evidence;
+  /** A figure located by its marks: every expected mark is on this crop (legible or not). */
+  complete: boolean;
 }
 
 /**
@@ -212,25 +322,50 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
   const anchors = activityAnchors(lines, activities);
   const zones = activityZones(anchors, model);
   const regions = candidates(model, mask);
+  // Figures located by their marks read the page by columns: segments (not full-width lines) give their anchors and their crops.
+  const segments = textSegments(model);
+  const segmentAnchors = activityAnchors(segments, activities);
+  const byColumn = columnZones(segmentAnchors, model);
+  const anchorLines = new Set(segmentAnchors.values());
+  const instructions = activities.map((a) => normalize(stripLabel(a.instruction))).filter((t) => t.length >= 8);
+  const isInstruction = (l: TextLine) => {
+    if (anchorLines.has(l)) return true;
+    const text = normalize(stripLabel(l.text));
+    return text.length >= 8 && instructions.some((i) => i.includes(text));
+  };
+  const boxes = components(model, mask);
 
   const scored: Scored[] = [];
   for (const target of targets) {
-    const anchor = target.activityIds.find((id) => zones.has(id)) ?? null;
-    const zone = anchor ? zones.get(anchor)! : null;
+    const byMarks = target.shape === "figure" && !!target.marks;
+    const anchor = target.activityIds.find((id) => (byMarks ? segmentAnchors : zones).has(id)) ?? null;
+    const zone = anchor && !byMarks ? zones.get(anchor)! : null;
+    const column = anchor && byMarks ? [byColumn.zones.get(anchor), byColumn.leads.get(anchor)].filter((r): r is Rect => r !== undefined) : [];
     const hypothesis = hypotheses.get(target.id);
-    const rows = regions.map((candidate) => {
-      const signature = signatureOf(model, mask, target.shape, candidate);
+    const rows = regions.filter((candidate) => byMarks || !candidate.hollow).map((candidate) => {
+      const crop = byMarks ? candidate.markCrop : candidate.crop;
+      const marks = byMarks ? marksOn(model, crop, target.marks!) : null;
+      const signature = marks ? { score: marks.legible ? W.signature : 0, ok: marks.legible } : signatureOf(model, mask, target.shape, candidate);
+      const cx = (candidate.x0 + candidate.x1) / 2;
       const cy = (candidate.y0 + candidate.y1) / 2;
-      const placement = zone !== null && cy >= zone.y0 && cy <= zone.y1;
-      const clean = isClean(model, lines, candidate.crop);
-      const overlap = hypothesis ? iou(candidate.crop, fromBounds(model, hypothesis.bounds)) : null;
+      const placement = byMarks ? column.some((z) => cx >= z.x0 && cx <= z.x1 && cy >= z.y0 && cy <= z.y1) : zone !== null && cy >= zone.y0 && cy <= zone.y1;
+      const clean = byMarks ? isCleanFigure(model, boxes, segments, isInstruction, crop) : isClean(model, lines, candidate.crop);
+      const overlap = hypothesis ? iou(crop, fromBounds(model, hypothesis.bounds)) : null;
       const agrees = hypothesis !== undefined && overlap !== null && overlap >= HYPOTHESIS_IOU && hypothesis.confidence >= HYPOTHESIS_CONFIDENCE;
       const score = signature.score + (placement ? W.placement : 0) + (clean ? W.clean : 0) + (agrees ? W.vision : 0);
-      const evidence: Evidence = { shape: target.shape, signature: signature.ok, placement, unique: false, clean, anchor, vision: { used: hypothesis !== undefined, agrees, confidence: hypothesis?.confidence ?? null, iou: overlap === null ? null : Math.round(overlap * 1000) / 1000 }, reason: "low_confidence" };
-      return { target, candidate, score, evidence };
+      const evidence: Evidence = {
+        shape: target.shape, signature: signature.ok, placement, unique: false, clean, anchor,
+        vision: { used: hypothesis !== undefined, agrees, confidence: hypothesis?.confidence ?? null, iou: overlap === null ? null : Math.round(overlap * 1000) / 1000 },
+        ...(marks ? { marks: { expected: [...target.marks!.letters, ...target.marks!.numbers, ...(target.marks!.measures ? ["medidas"] : [])], found: marks.found, measures: marks.measures, legible: marks.legible } } : {}),
+        reason: "low_confidence",
+      };
+      return { target, candidate: byMarks ? { ...candidate, crop } : candidate, score, evidence, complete: marks?.ok ?? false };
     });
-    // Uniqueness among the regions of its zone (or the page) that carry its signature.
-    const rivals = rows.filter((r) => r.evidence.signature && r.evidence.clean && (zone === null || r.evidence.placement)).sort((a, b) => b.score - a.score);
+    // Uniqueness among the regions of its zone (or the page) that carry its signature. A figure and the frame around it that carry
+    // the same marks are ONE figure: the innermost complete region stands for both (never a frame and its drawing as two rivals).
+    const contains = (a: Rect, b: Rect) => a.x0 <= b.x0 && a.y0 <= b.y0 && a.x1 >= b.x1 && a.y1 >= b.y1 && area(a) > area(b);
+    const signed = rows.filter((r) => r.evidence.signature && r.evidence.clean && (byMarks ? r.evidence.placement : zone === null || r.evidence.placement));
+    const rivals = (byMarks ? signed.filter((r) => !signed.some((o) => o !== r && contains(r.candidate.crop, o.candidate.crop))) : signed).sort((a, b) => b.score - a.score);
     for (const r of rows) {
       const ahead = rivals[0] === r && (rivals.length === 1 || r.score - rivals[1]!.score >= 0.15);
       if (ahead) {
@@ -255,7 +390,8 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
     if (out.has(target.id)) continue;
     const best = scored.filter((s) => s.target === target).sort((a, b) => b.score - a.score)[0];
     const hypothesis = hypotheses.get(target.id);
-    const anchor = target.activityIds.find((id) => zones.has(id)) ?? null;
+    const byMarks = target.shape === "figure" && !!target.marks;
+    const anchor = target.activityIds.find((id) => (byMarks ? segmentAnchors : zones).has(id)) ?? null;
     if (hypothesis && !scored.some((s) => s.target === target && s.evidence.vision.agrees)) {
       out.set(target.id, { visualId: target.id, bounds: null, confidence: round3(Math.min(AI_ONLY_CAP, hypothesis.confidence)), accepted: false, evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor, vision: { used: true, agrees: false, confidence: hypothesis.confidence, iou: null }, reason: "hypothesis_not_snapped" } });
       continue;
@@ -264,7 +400,10 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
       out.set(target.id, { visualId: target.id, bounds: null, confidence: 0, accepted: false, evidence: { shape: target.shape, signature: false, placement: false, unique: false, clean: false, anchor, vision: { used: hypothesis !== undefined, agrees: false, confidence: hypothesis?.confidence ?? null, iou: null }, reason: "no_candidate" } });
       continue;
     }
-    const reason: Evidence["reason"] = !best.evidence.clean ? "not_clean" : !best.evidence.placement || !anchor ? "activity_unverified" : best.score >= ACCEPT ? "conflict" : "low_confidence";
+    const complete = scored.filter((s) => s.target === target && s.complete);
+    const reason: Evidence["reason"] = byMarks && complete.length === 0 ? "marks_incomplete"
+      : byMarks && complete.every((s) => s.evidence.marks && !s.evidence.marks.legible) ? "illegible"
+      : !best.evidence.clean ? "not_clean" : !best.evidence.placement || !anchor ? "activity_unverified" : best.score >= ACCEPT ? "conflict" : "low_confidence";
     out.set(target.id, { visualId: target.id, bounds: null, confidence: round3(Math.min(1, best.score)), accepted: false, evidence: { ...best.evidence, reason } });
   }
   return targets.map((t) => out.get(t.id)!);
