@@ -42,8 +42,22 @@ export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
 
+/**
+ * Three separate verifications of a recovered original figure (docs/VISUAL_RESOURCES.md § Identidad, fidelidad y validez):
+ *   identity  the crop comes from THIS original (its SHA-256) and the same page box the locator saw;
+ *   fidelity  the crop is the original's pixels of that region, by a fixed recipe, stored under its own SHA-256 (never redrawn);
+ *   pedagogy  that its content is right for the activity: never verified automatically (an alt text, a prompt or a confidence is
+ *             not evidence). A person's locator carries none here: its asset is verified when the sheet is resolved.
+ */
+export interface FigureVerification {
+  identity: "verified" | "unverified";
+  fidelity: "verified" | "unverified";
+  pedagogy: "unverified";
+}
+
 export interface VisualOutcome {
   choice: VisualResolution;
+  verification?: FigureVerification;
   reason: string;
   confidence: number | null;
   method: "human" | "auto" | null;
@@ -138,19 +152,22 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
     const shapes = new Map(targets.map((t) => [t.id, t.shape]));
 
     const finish = async (row: LocatorRow, located?: Located): Promise<VisualOutcome> => {
+      // A person's locator is kept as it is; its asset is produced (and verified) when the sheet is resolved, not here.
       if (row.method === "human") return { choice: "A", reason: "kept_human", confidence: null, method: "human", spec: null };
       const base = { confidence: typeof row.confidence === "number" ? row.confidence : (located?.confidence ?? null), method: "auto" as const, ...(located ? { signals: signalsOf(located.evidence) } : {}) };
       const produced = await produceVisualAsset(deps, row.id, source);
-      if (!produced.ok) return { ...base, choice: "D", reason: produced.failure, spec: null };
+      if (!produced.ok) return { ...base, choice: "D", reason: produced.failure, spec: null, verification: { identity: produced.failure === "source_missing" || produced.failure === "invalid_bounds" ? "unverified" : "verified", fidelity: "unverified", pedagogy: "unverified" } };
+      // Produced: same original bytes and page box (identity), its pixels cropped by the recipe and stored by hash (fidelity).
+      const verified: FigureVerification = { identity: "verified", fidelity: "verified", pedagogy: "unverified" };
       const shape = shapes.get(row.visual_id) ?? "figure";
-      if (shape === "figure") return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null };
+      if (shape === "figure") return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, verification: verified };
       const extracted = extractSpec(await pageAt200(row.page), { x: row.x, y: row.y, w: row.w, h: row.h }, shape);
-      if (!extracted.ok) return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, spec_reason: extracted.reason };
+      if (!extracted.ok) return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, spec_reason: extracted.reason, verification: verified };
       const sha256 = fingerprint(extracted.spec);
       if (!(await deps.specs.exists(row.id, SPEC_EXTRACTOR_VERSION))) {
         await deps.specs.insert({ workspace_id: row.workspace_id, material_id: row.material_id, locator_id: row.id, visual_id: row.visual_id, spec_version: 1, extractor_version: SPEC_EXTRACTOR_VERSION, kind: extracted.spec.kind, spec: extracted.spec, spec_sha256: sha256, checks: extracted.checks });
       }
-      return { ...base, choice: "C", reason: located ? "accepted" : "kept_auto", spec: { kind: extracted.spec.kind, sha256 } };
+      return { ...base, choice: "C", reason: located ? "accepted" : "kept_auto", spec: { kind: extracted.spec.kind, sha256 }, verification: verified };
     };
 
     for (const page of [...new Set(targets.map((t) => t.page))].sort((a, b) => a - b)) {
