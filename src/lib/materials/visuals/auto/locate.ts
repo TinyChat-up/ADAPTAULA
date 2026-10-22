@@ -1,5 +1,5 @@
 import { MIN_SIDE, type NormalizedBounds } from "../geometry";
-import { INK, area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, textSegments, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
+import { area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, textSegments, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
 import { isMark, isMarkLine, isMeasure, type ExpectedMarks } from "./marks";
 import { barShape, numberLineShape } from "./shapes";
 
@@ -241,27 +241,52 @@ function marksOn(model: PageModel, crop: Rect, marks: ExpectedMarks): { ok: bool
 const SOLUTION = /\b(soluci[oó]n|soluciones|respuestas?\s+correctas?|clave|solucionario)\b/i;
 
 /**
- * A text line inside one of the figure's own boxes (the label of a box of a diagram): a drawn component of the page encloses it,
- * and that component is a part of the crop (at most half of it), never the crop's own outer frame or a card around activities.
+ * A text line inside one of the figure's own boxes (the label of a box of a diagram): on each side there is a straight edge of
+ * ink that spans it (a row covering ≥ 90 % of its width above and below, a column covering its height left and right), and the box
+ * those edges make is a part of the crop (at most half of it), never the crop's own outer frame or a card around activities.
  */
-function boxed(model: PageModel, boxes: readonly Rect[], line: Rect, crop: Rect): boolean {
-  const m = px(model, 0.5);
-  return boxes.some((b) => b.x0 <= line.x0 - m && b.y0 <= line.y0 - m && b.x1 >= line.x1 + m && b.y1 >= line.y1 + m
-    && b.x0 >= crop.x0 && b.y0 >= crop.y0 && b.x1 <= crop.x1 && b.y1 <= crop.y1 && area(b) <= 0.5 * area(crop));
+function boxed(model: PageModel, mask: Uint8Array, line: Rect, crop: Rect): boolean {
+  // A box's border may be a light grey (luma ≈ 225) that anti-aliasing lifts above the ink threshold: an edge is any thin
+  // straight line darker than EDGE with paper (or a lighter fill) outside it. A tinted fill is not an edge (it is not thin).
+  const dark = (x: number, y: number) => x >= 0 && y >= 0 && x < model.width && y < model.height && model.gray[y * model.width + x]! < EDGE && !mask[y * model.width + x];
+  const x0 = Math.floor(line.x0), x1 = Math.ceil(line.x1), y0 = Math.floor(line.y0), y1 = Math.ceil(line.y1);
+  const rowCover = (y: number) => {
+    let n = 0;
+    for (let x = x0; x < x1; x++) if (dark(x, y)) n++;
+    return n / Math.max(1, x1 - x0);
+  };
+  const colCover = (x: number) => {
+    let n = 0;
+    for (let y = y0; y < y1; y++) if (dark(x, y)) n++;
+    return n / Math.max(1, y1 - y0);
+  };
+  const t = px(model, 0.8);
+  const find = (from: number, to: number, cover: (i: number) => number) => {
+    const step = from <= to ? 1 : -1;
+    for (let i = from; step > 0 ? i <= to : i >= to; i += step) if (cover(i) >= 0.9 && cover(i + step * t) < 0.5) return i;
+    return null;
+  };
+  const top = find(y0 - 1, Math.ceil(crop.y0), rowCover);
+  const bottom = find(y1 + 1, Math.floor(crop.y1) - 1, rowCover);
+  const left = find(x0 - 1, Math.ceil(crop.x0), colCover);
+  const right = find(x1 + 1, Math.floor(crop.x1) - 1, colCover);
+  if (top === null || bottom === null || left === null || right === null) return false;
+  return area({ x0: left, y0: top, x1: right, y1: bottom }) <= 0.5 * area(crop);
 }
+const EDGE = 238;
 
 /**
  * Clean crop of a figure located by its marks: as `isClean`, but its marks and the text inside its own boxes belong to it. Any
  * line of an activity's instruction (its anchor or a continuation) and any printed solution make it unclean.
  */
-function isCleanFigure(model: PageModel, boxes: readonly Rect[], lines: readonly TextLine[], instruction: (l: TextLine) => boolean, crop: Rect): boolean {
+function isCleanFigure(model: PageModel, mask: Uint8Array, lines: readonly TextLine[], instruction: (l: TextLine) => boolean, crop: Rect): boolean {
   if (area(crop) > 0.5 * model.width * model.height) return false;
   if (inkFraction(model, crop) < 0.004) return false;
   return !lines.some((l) => {
     if (area(intersection(l, crop)) <= 0.15 * area(l)) return false;
     if (instruction(l) || SOLUTION.test(l.text)) return true;
     if (isMarkLine(l.text)) return false;
-    return !(centreInside(l, crop) && boxed(model, boxes, l, crop));
+    return !(centreInside(l, crop) && boxed(model, mask, l, crop));
   });
 }
 
@@ -333,7 +358,6 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
     const text = normalize(stripLabel(l.text));
     return text.length >= 8 && instructions.some((i) => i.includes(text));
   };
-  const boxes = components(model, mask);
 
   const scored: Scored[] = [];
   for (const target of targets) {
@@ -349,7 +373,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
       const cx = (candidate.x0 + candidate.x1) / 2;
       const cy = (candidate.y0 + candidate.y1) / 2;
       const placement = byMarks ? column.some((z) => cx >= z.x0 && cx <= z.x1 && cy >= z.y0 && cy <= z.y1) : zone !== null && cy >= zone.y0 && cy <= zone.y1;
-      const clean = byMarks ? isCleanFigure(model, boxes, segments, isInstruction, crop) : isClean(model, lines, candidate.crop);
+      const clean = byMarks ? isCleanFigure(model, mask, segments, isInstruction, crop) : isClean(model, lines, candidate.crop);
       const overlap = hypothesis ? iou(crop, fromBounds(model, hypothesis.bounds)) : null;
       const agrees = hypothesis !== undefined && overlap !== null && overlap >= HYPOTHESIS_IOU && hypothesis.confidence >= HYPOTHESIS_CONFIDENCE;
       const score = signature.score + (placement ? W.placement : 0) + (clean ? W.clean : 0) + (agrees ? W.vision : 0);
