@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import type { RenderModel } from "@/lib/render/model";
 import type { PinnedAsset } from "@/lib/render/print/pinned-assets";
-import { GALLERY, galleryModel } from "../support/editorial-gallery";
+import { GALLERY, LIMIT_CASES, galleryModel } from "../support/editorial-gallery";
 import { OUT_DIR, localChromium, printPdf } from "./harness";
 
 /**
@@ -22,7 +22,8 @@ interface Layout {
   pageWidthMm: number;
   masthead: { brand: string; meta: string } | null;
   font: string;
-  grids: Array<{ widthMm: number; heightMm: number; cellMm: number; columns: number; rows: number; whole: boolean }>;
+  /** Every zone of squares (`continued`: it carries on the area above it, so one area may be several zones). */
+  grids: Array<{ widthMm: number; heightMm: number; cellMm: number; columns: number; rows: number; whole: boolean; continued: boolean }>;
   lines: Array<{ pitchMm: number; count: number }>;
   fields: Array<{ label: string; space: string; unit: boolean }>;
   overflow: string[];
@@ -50,7 +51,7 @@ async function layoutOf(model: RenderModel, pins: PinnedAsset[]): Promise<Layout
         const cell = cellOf(g);
         const columns = r.width / cell;
         const rows = r.height / cell;
-        return { widthMm: mm(r.width), heightMm: mm(r.height), cellMm: mm(cell), columns: Math.round(columns * 100) / 100, rows: Math.round(rows * 100) / 100, whole: Math.abs(columns - Math.round(columns)) < 0.02 && Math.abs(rows - Math.round(rows)) < 0.02 };
+        return { continued: g.hasAttribute("data-continued"), widthMm: mm(r.width), heightMm: mm(r.height), cellMm: mm(cell), columns: Math.round(columns * 100) / 100, rows: Math.round(rows * 100) / 100, whole: Math.abs(columns - Math.round(columns)) < 0.02 && Math.abs(rows - Math.round(rows)) < 0.02 };
       });
       const lines = [...document.querySelectorAll(".ms-lines")].map((l) => {
         const rows = [...l.children].map((c) => c.getBoundingClientRect());
@@ -137,15 +138,18 @@ async function inkReach(png: Uint8Array): Promise<number> {
 }
 
 /** What each sheet must offer to be solved on paper (docs/EDITORIAL.md § Criterios de aceptación). */
+/** Calculation areas (a long one is several zones). */
+const areas = (l: Layout) => l.grids.filter((g) => !g.continued);
+
 const EXPECT: Record<string, (l: Layout) => void> = {
-  "mat3-operaciones": (l) => expect(l.grids).toHaveLength(3),
+  "mat3-operaciones": (l) => expect(areas(l)).toHaveLength(3),
   "mat4-problemas": (l) => {
-    expect(l.grids).toHaveLength(3);
+    expect(areas(l)).toHaveLength(3);
     expect(l.fields.filter((f) => f.label === "Datos y razonamiento")).toHaveLength(2);
     expect(l.fields.filter((f) => f.unit).map((f) => f.label)).toEqual(["Respuesta", "Respuesta"]);
   },
   "mat5-geometria": (l) => {
-    expect(l.grids.length).toBeGreaterThanOrEqual(3);
+    expect(areas(l).length).toBeGreaterThanOrEqual(3);
     // The comparison sees the figure again on its own sheet: the crop is printed more than once.
     expect(l.repeated).toBeGreaterThanOrEqual(3);
   },
@@ -163,7 +167,7 @@ const EXPECT: Record<string, (l: Layout) => void> = {
   },
   "cs4-tablas": (l) => expect(l.grids).toEqual([]),
   "mat6-operaciones-problemas": (l) => {
-    expect(l.grids).toHaveLength(4);
+    expect(areas(l)).toHaveLength(4);
     expect(l.fields.some((f) => f.label === "Datos y razonamiento")).toBe(true);
   },
 };
@@ -214,4 +218,60 @@ describe("galería editorial: ocho fichas, una identidad, espacios para resolver
     writeFileSync(path.join(dir, "report.json"), JSON.stringify(reports, null, 2));
     expect(Object.keys(reports)).toHaveLength(GALLERY.length);
   });
+});
+
+describe("garantía en papel: casos límite", () => {
+  it("ocho operaciones: 33 filas en zonas enteras de hasta 12 que siguen en la hoja siguiente; la división, con sus restos", async () => {
+    const { model, pins } = await galleryModel(LIMIT_CASES[0]!);
+    const printed = await printPdf("limit-eight-operations", model, pins);
+    expect(printed.validation.issues).toEqual([]);
+    const layout = await layoutOf(model, pins);
+    // Zones of whole squares: 11 + 11 + 11 for the eight operations; the division keeps at least the 66 mm its stored grid had
+    // (10 squares of 7 mm), more than its 7 rows of demand.
+    expect(layout.grids.map((g) => Math.round(g.rows))).toEqual([11, 11, 11, 10]);
+    for (const g of layout.grids) expect(g.whole).toBe(true);
+    // Every square printed (the lines of each zone reach the paper), and nothing is cut: the zones continue on the next sheet.
+    const rows = (await Promise.all(printed.pages.map((p) => faintLineRows(p.png)))).reduce((a, b) => a + b, 0);
+    expect(rows).toBeGreaterThanOrEqual(33 - 3 + 7 - 1);
+    // The instruction never travels without the start of its squares.
+    const first = printed.pages.findIndex((p) => p.text.replace(/\s+/g, "").includes("Calcula:12"));
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(await faintLineRows(printed.pages[first]!.png)).toBeGreaterThan(5);
+  }, 180_000);
+
+  it("originales amplios con perfil de motricidad fina: 12 y 20 líneas intactas, el recuadro grande no pierde altura, dibujo y operaciones", async () => {
+    const { model, pins, document } = await galleryModel(LIMIT_CASES[1]!);
+    const printed = await printPdf("limit-wide-originals", model, pins);
+    expect(printed.validation.issues).toEqual([]);
+    const layout = await layoutOf(model, pins);
+    const responses = document.pages.flatMap((p) => p.blocks).filter((b) => b.type === "activity").map((b) => (b.type === "activity" ? b.response : null));
+    expect(responses[0]).toEqual({ kind: "lines", lines: 12 });
+    expect(responses[1]).toEqual({ kind: "lines", lines: 20 });
+    // Physical heights on paper (roomy: 12 mm lines, 8.5 mm squares): the large box was 12 lines = 144 mm.
+    const lineSets = layout.lines.filter((l) => l.count >= 12);
+    expect(lineSets.map((l) => l.count)).toEqual([12, 20]);
+    for (const l of lineSets) expect(l.pitchMm).toBeGreaterThanOrEqual(11.9);
+    const boxGrid = layout.grids.filter((_, i, all) => i === 0 || all[i]!.continued).reduce((mm, g) => mm + g.heightMm, 0);
+    expect(boxGrid).toBeGreaterThanOrEqual(144 - 0.5);
+    // Geometry that asks to draw: its own surface to draw (≥ 70 mm) besides the squares to calculate.
+    expect(layout.fields.map((f) => f.label)).toEqual(expect.arrayContaining(["Dibujo", "Operaciones", "Respuesta"]));
+    expect(layout.overflow).toEqual([]);
+  }, 180_000);
+
+  it("la actividad que pasa de hoja lleva su figura y su respuesta no se separa de la unidad (la forma de la ficha 03)", async () => {
+    const { model, pins } = await galleryModel(LIMIT_CASES[2]!);
+    const printed = await printPdf("limit-drawing-and-unit", model, pins, pins.length);
+    expect(printed.validation.issues).toEqual([]);
+    const flat = printed.pages.map((p) => p.body.replace(/\s+/g, ""));
+    // The activity that asks to divide the figure sees it on its own page (repeated when it starts on a later sheet).
+    const divide = flat.findIndex((t) => t.includes("Muestracómohasdivididolafigura"));
+    expect(divide).toBeGreaterThanOrEqual(0);
+    expect(flat[divide]).toMatch(/FiguraA/i);
+    // Every answer here carries a unit slot: a «Respuesta» whose lines and unit went on to the next page shows as a page with more
+    // labels than units (the real 03 printed «Respuesta:» at the foot of a page and its lines on the next).
+    for (const t of flat) expect((t.match(/Respuesta:/g) ?? []).length).toBe((t.match(/Unidad:/g) ?? []).length);
+    expect(flat.join("").match(/Respuesta:/g)).toHaveLength(2);
+    // No sheet is only its header and no labelled field is left without its space.
+    expect(printed.pages.every((p) => p.contentInk > 0)).toBe(true);
+  }, 180_000);
 });

@@ -1,5 +1,8 @@
 import type { Presentation } from "@/lib/schemas/adaptation-context";
 
+/** Whole squares printed together in one zone of a long grid: a longer grid is split between zones that may continue on the next page. */
+export const GRID_ZONE_ROWS = 12;
+
 /**
  * Design tokens of the printed sheet. They live here, not in `MaterialDocument` (which only carries semantic presentation
  * settings) and not in the app's design system: the sheet is its own surface, neutral and printable. The document says

@@ -4,7 +4,7 @@ import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
 import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferred";
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
 import { composeMath, type MathPart } from "./math";
-import { renderTokens, type RenderTokens } from "./tokens";
+import { GRID_ZONE_ROWS, renderTokens, type RenderTokens } from "./tokens";
 import { withAdjacentFigures } from "./figure-order";
 import { MATERIAL_RENDERER_VERSION } from "./version";
 
@@ -241,6 +241,25 @@ function estimatedMm(n: RenderNode): number {
   if (FIGURE_KINDS.has(n.kind)) return n.kind === "image" && n.heightMm ? Math.min(n.heightMm, MAX_FIGURE_MM) + 8 : figureRows(n) * MM_PER_ROW;
   if (n.kind === "heading") return n.level === 1 ? 14 : 9;
   return Math.max(1, textsOf(n).reduce((r, t) => r + Math.ceil(t.length / 90), 0)) * 7 + 6;
+}
+
+/**
+ * The start of an activity that never splits (its prompt, its figures and the first part of its answer: the first zone of squares,
+ * the first field, the first two lines): where the browser must find room on a sheet or carry the whole start to the next one.
+ */
+function leadMm(n: RenderNode): number {
+  if (n.kind !== "activity") return Math.min(estimatedMm(n), 40);
+  const r = n.response;
+  const zone = (rows: number, cellMm: number) => Math.min(rows, GRID_ZONE_ROWS) * cellMm;
+  const first = r.kind === "fields" ? r.fields[0] : undefined;
+  const answer =
+    r.kind === "grid" ? zone(r.rows ?? LEGACY_GRID_ROWS, r.cellMm)
+    : r.kind === "fields" && first ? MM_PER_ROW + (first.space === "grid" ? zone(first.lines, r.cellMm) : first.space === "box" ? first.lines * MM_PER_ROW : Math.min(first.lines, 2) * MM_PER_ROW)
+    : r.kind === "lines" || r.kind === "oral" ? Math.min(r.lines, 2) * MM_PER_ROW
+    : 0;
+  const head = activityRows(n.prompt, n.steps, n.requirements, { kind: "none" }) * MM_PER_ROW + n.leads.reduce((mm, l) => mm + leadRows(l) * MM_PER_ROW, 0);
+  const figures = n.figures.reduce((mm, f) => mm + (f.kind === "image" && f.heightMm ? Math.min(f.heightMm, MAX_FIGURE_MM) + 8 : figureRows(f) * MM_PER_ROW), 0);
+  return Math.max(40, head + figures + answer + 6);
 }
 
 /** Every node of a sheet, including those inside an activity (its leads, figures and supports), in reading order. */
@@ -543,9 +562,13 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   // fit opens the next; a long one that may split carries its overflow on.
   let sheet = 0;
   let used = HEADER_MM;
+  // The sheet before each node was placed: a figure or an example that then moves INSIDE its activity is counted there, not twice.
+  const before = new WeakMap<RenderNode, { sheet: number; used: number }>();
+  let pageStart = 0;
   const place = (n: RenderNode, keep: boolean): number => {
+    before.set(n, { sheet, used });
     const mm = estimatedMm(n);
-    if (used > 0 && used + mm > PAGE_MM && (keep || used + Math.min(mm, 40) > PAGE_MM)) {
+    if (used > 0 && used + mm > PAGE_MM && (keep || used + Math.min(mm, leadMm(n)) > PAGE_MM)) {
       sheet += 1;
       used = 0;
     }
@@ -567,6 +590,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
         pages.push({ number: pages.length + 1, nodes: current });
         sheet += 1;
         used = 0;
+        pageStart = sheet;
       }
       current = [];
       tasks = 0;
@@ -591,6 +615,8 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
           current.pop();
           sources.pop();
           blockIds.pop();
+          const was = before.get(previous);
+          if (was && was.sheet >= pageStart) ({ sheet, used } = was);
           if (figure) moved.unshift(id);
           (figure ? node.figures : node.leads).unshift(previous);
         }
@@ -640,7 +666,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
       if (node.kind === "activity" && block.type === "activity") {
         // A figure it asks about that is printed on an earlier sheet (a comparison of A and B after both were used): shown again here,
         // so the student never has to turn back. Only available images: a missing one is reported once, where it belongs.
-        const starts = used + Math.min(estimatedMm(node), 40) > PAGE_MM || (node.keepTogether && used + estimatedMm(node) > PAGE_MM) ? sheet + 1 : sheet;
+        const starts = used + Math.min(estimatedMm(node), leadMm(node)) > PAGE_MM || (node.keepTogether && used + estimatedMm(node) > PAGE_MM) ? sheet + 1 : sheet;
         // A large figure is repeated only for an activity that compares several: turning back once costs less than a second half page.
         const images = (block.resource_block_ids ?? []).filter((ref) => figureHome.get(ref)?.node.kind === "image").length;
         const repeated: string[] = [];

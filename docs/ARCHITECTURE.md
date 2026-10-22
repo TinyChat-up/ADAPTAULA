@@ -454,6 +454,9 @@ Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que
 - **Contrato.** El contrato guardado se amplía de forma opcional (`grid.rows`, campo `grid` y `unit`). Lo que puede escribir un modelo no cambia.
 - **Presentación.** `Presentation.answer_space = roomy` (solo con la política 2 y solo cuando cambia algo) amplía renglones y casillas para la motricidad fina o la letra grande.
 - **Composición.** El render dibuja la cuadrícula en SVG con casillas enteras, muestra otra vez junto a la actividad las figuras pequeñas o comparadas de una hoja anterior y mide la paginación en el PDF.
+- **Garantía física.** Ninguna propuesta del motor da menos superficie que el original, medida en mm con el renglón y la casilla del perfil (`capacityMm`, `atLeastOriginal`). Los topes solo limitan lo añadido.
+- **Cuadrícula por demanda.** No tiene tope pedagógico (solo el de seguridad del contrato, 60 filas). Una cuadrícula larga se imprime en zonas de hasta 12 filas enteras, que pueden continuar en otra hoja. Los cálculos que piden dibujar o explicar tienen además su campo «Dibujo» o «Explicación».
+- **Versión del renderer.** `material_renderer@v6`: cambia el contrato de lo impreso. No es clave de caché ni huella y no se guarda en los documentos, así que los históricos se leen igual.
 
 **Alternativas descartadas:**
 - **Diez tipos de respuesta nuevos:** los existentes, ampliados, bastan.
@@ -461,6 +464,8 @@ Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que
 - **Una cuadrícula por defecto en Matemáticas:** pondría cuadrícula donde se marca o se dibuja.
 - **Un patrón de fondo CSS:** Chromium lo pierde en el PDF.
 - **Optimizar el número de hojas:** reduciría el espacio útil.
+- **Comparar por número de filas:** una fila de cuadrícula (7 mm), un renglón (10 mm) y un recuadro no miden lo mismo.
+- **Un máximo de 12 filas en Primaria:** dejaba ocho operaciones sin sitio.
 
 **Consecuencias.**
 - Las adaptaciones nuevas tienen más espacio, y a veces más hojas.

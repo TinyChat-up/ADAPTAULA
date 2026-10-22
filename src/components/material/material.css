@@ -80,6 +80,9 @@ ul.ms-list { list-style: disc; }
 /* Cuadrícula de cálculo (answer_space@v1): casillas enteras (el modelo calcula cuántas columnas caben en la columna de respuesta),
    líneas vectoriales tenues; el borde exterior es la primera y la última línea. Se imprime en gris, nunca en color. */
 .ms-grid-area { display: block; max-width: 100%; overflow: hidden; outline: 1px solid var(--ms-write); outline-offset: -1px; break-inside: avoid; }
+/* Una cuadrícula larga: zonas seguidas, sin hueco; el salto de página solo cae entre zonas, nunca dentro de una. */
+.ms-grid-zones { display: flex; flex-direction: column; }
+.ms-grid-zones > .ms-grid-area[data-continued] { margin-top: -1px; }
 .ms-grid-area .ms-grid-line { fill: none; stroke: var(--ms-grid); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .ms-box { flex: none; display: inline-block; width: var(--ms-box); height: var(--ms-box); border: 1.5px solid var(--ms-ink); border-radius: .15em; background: #fff; vertical-align: middle; }
 .ms-round { border-radius: 50%; }
@@ -92,6 +95,8 @@ ul.ms-list { list-style: disc; }
    Own namespace: `.ms-fields` / `.ms-field` are the sheet header's name and date fields. */
 .ms-answer-fields { display: flex; flex-direction: column; gap: .6em; }
 .ms-answer-field { break-inside: avoid; }
+/* Una cuadrícula en zonas se corta entre zonas: si también se evitara, el navegador cortaría dentro de la parte siguiente (la respuesta). */
+.ms-answer-field-grid:has(> .ms-grid-zones) { break-inside: auto; }
 .ms-answer-field-label { margin: 0; font-weight: 600; }
 .ms-answer-field-line { display: flex; align-items: flex-end; gap: .8em; }
 .ms-answer-field-line .ms-answer-field-label { flex: 0 0 auto; max-width: 45%; padding-bottom: .15em; }

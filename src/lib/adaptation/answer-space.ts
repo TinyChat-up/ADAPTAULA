@@ -2,6 +2,7 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { AnalysisActivity, AnalysisProtected, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { ResponseSpec } from "@/lib/schemas/material-document";
+import { renderTokens } from "@/lib/render/tokens";
 
 /**
  * answer_space@v1 (docs/EDITORIAL.md § Espacios de resolución): how much room, and of which kind, an activity needs to be solved on
@@ -17,7 +18,9 @@ import type { ResponseSpec } from "@/lib/schemas/material-document";
  *    for; a problem with data to organise or a unit to give gets the optional parts it needs (data, operations, answer).
  * 3. Explanations, short answers and compositions get lines by what they ask for and the grade; a drawing gets a box.
  * 4. Otherwise (unknown or ambiguous), the original's area as it is: never a guess.
- * It never gives less room than the original printed, and never adds a calculation area where the task asks for something else.
+ * It never gives less room than the original printed — measured PHYSICALLY, in millimetres of the sheet (lines, boxes and squares
+ * are different components: their row counts are not comparable) — and never adds a calculation area where the task asks for
+ * something else. Bounds only limit what it ADDS; a long area is split by the renderer across pages, never cut.
  */
 
 export const ANSWER_SPACE_VERSION = "answer_space@v1";
@@ -31,13 +34,17 @@ export interface SpaceContext {
   mathematical: boolean;
   needs: ReadonlyMap<DimensionKey, "low" | "medium" | "high">;
   protectedOf: (activityId: string) => AnalysisProtected[];
+  /** The sheet's physical units for this stage and presentation (the renderer's tokens): a writing line and a square, in mm. */
+  lineMm: number;
+  cellMm: number;
 }
 
 const MATH_SUBJECT = /matem|mathem|aritm|c[aá]lculo/i;
 const CLOSED = new Set<ResponseSpec["kind"]>(["choice", "fill_blank", "match", "order", "true_false", "comparison", "sequence", "oral_or_alternative", "table_cells", "none"]);
 const NOT_WRITTEN = new Set<AnalysisActivity["response_format"]>(["select_option", "mark", "fill_blanks", "match", "order"]);
 
-export function spaceContextOf(analysis: Pick<MaterialAnalysis, "protected_elements">, context: Pick<AdaptationContext, "education" | "needs">): SpaceContext {
+export function spaceContextOf(analysis: Pick<MaterialAnalysis, "protected_elements">, context: Pick<AdaptationContext, "education" | "needs" | "presentation">): SpaceContext {
+  const tokens = renderTokens(context.presentation, context.education.stage, "claro");
   const grade = /^(\d)-(primaria|eso|bachillerato)$/.exec(context.education.grade ?? "");
   const year = grade ? Number(grade[1]) + (grade[2] === "eso" ? 6 : grade[2] === "bachillerato" ? 10 : 0) : null;
   const needs = new Map(context.needs.map((n) => [n.dimension, n.level] as const));
@@ -47,6 +54,8 @@ export function spaceContextOf(analysis: Pick<MaterialAnalysis, "protected_eleme
     mathematical: MATH_SUBJECT.test(context.education.subject ?? ""),
     needs,
     protectedOf: (id) => analysis.protected_elements.filter((p) => p.activity_ids.includes(id)),
+    lineMm: tokens.answerLineMm,
+    cellMm: tokens.gridCellMm,
   };
 }
 
@@ -85,6 +94,10 @@ export function requestedResults(activity: Pick<AnalysisActivity, "instruction" 
 }
 
 const NUMERALS: Record<string, number> = { dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 };
+/** The activity asks to draw or to show a figure's construction («Dibuja», «Representa», «Muestra cómo has dividido la figura»). */
+const DRAW = /\b(dibuja|representa|traza|construye|muestra c[oó]mo (?:has|la|lo|se)|dibujo)\b/i;
+/** The activity asks to justify in words («Explica…», «Justifica…», «Razona…», «¿Por qué…?»). */
+const EXPLAIN = /\b(explica|justifica|razona)\b|¿\s*por qu[eé]/i;
 
 /** «8 cm», «750 ml», «12 €», «3 kg», «2 h»: quantities the answer is expressed in. */
 const UNIT = /\b\d+(?:[.,]\d+)?\s?(?:mm|cm|dm|m|km|cm²|m²|ml|cl|dl|l|g|kg|mg|h|min|s|€|euros?|grados|°)(?![\p{L}])/iu;
@@ -95,8 +108,15 @@ const NUMBER = /\b\d+(?:[.,]\d+)?(?:\/\d+)?\b/g;
 const ROWS_PER_OPERATION = 4;
 /** A division also writes its remainders under the dividend: two more squares each («has dividido la figura» is not one). */
 const DIVISION = /\d\s*[:÷]\s*\d|\bdivide\b|\bdivisi[oó]n/i;
-/** The tallest calculation area: Primaria keeps it within a third of the page, older students may need longer workings. */
-const maxRows = (ctx: SpaceContext) => (ctx.year !== null && ctx.year <= 6 ? 12 : 14);
+/** Rows a calculation area may ADD before it is reasonable to ask more than the original (a stored area is never cut by it). */
+const MAX_GRID_ROWS = 60;
+/** Lines an open answer may ADD by itself (a longer original keeps all of its own). */
+const MAX_SHORT_LINES = 8;
+const MAX_EXPLANATION_LINES = 12;
+/** Height of a squared area stored before answer_space@v1 (no rows), as the renderer has always drawn it. */
+export const LEGACY_GRID_MM = 66;
+/** Surface to draw or sketch a figure next to its calculations (the medium box): 70 mm. */
+const DRAWING_MM = 70;
 
 /** Lines of an explanation by grade (Primaria 1–2 shorter, ESO and Bachillerato longer). */
 const explanationLines = (ctx: SpaceContext) => (ctx.year === null ? 3 : ctx.year <= 2 ? 2 : ctx.year <= 6 ? 3 : ctx.year <= 10 ? 4 : 5);
@@ -114,7 +134,55 @@ export function statedLines(activity: Pick<AnalysisActivity, "instruction" | "co
   return words ? Math.ceil(Number(words[2] ?? words[3] ?? words[1]) / WORDS_PER_LINE) : null;
 }
 
-const linesOf = (spec: ResponseSpec): number => (spec.kind === "lines" ? spec.lines : spec.kind === "box" ? (spec.size === "small" ? 4 : spec.size === "medium" ? 7 : 12) : 0);
+const BOX_LINES = { small: 4, medium: 7, large: 12 } as const;
+const linesOf = (spec: ResponseSpec): number => (spec.kind === "lines" ? spec.lines : spec.kind === "box" ? BOX_LINES[spec.size] : 0);
+
+/**
+ * The writing surface an answer area gives, in mm of height across the answer column: what the renderer draws for it (a line or a
+ * box row = `lineMm`, a square = `cellMm`, a stored grid without rows = its historical 66 mm). Closed formats have no free surface.
+ */
+export function capacityMm(spec: ResponseSpec, ctx: Pick<SpaceContext, "lineMm" | "cellMm">): number {
+  switch (spec.kind) {
+    case "lines":
+      return spec.lines * ctx.lineMm;
+    case "box":
+      return BOX_LINES[spec.size] * ctx.lineMm;
+    case "grid":
+      return spec.rows === undefined ? LEGACY_GRID_MM : spec.rows * ctx.cellMm;
+    case "fields":
+      return spec.fields.reduce((mm, f) => mm + f.lines * (f.space === "grid" ? ctx.cellMm : ctx.lineMm), 0);
+    case "oral_or_alternative":
+      return spec.lines * ctx.lineMm;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * The guarantee: the proposed area never offers less surface than the original did. A shortfall is added to its main workspace (the
+ * squares where it calculates, else its longest writing space), in whole lines or squares.
+ */
+export function atLeastOriginal(original: ResponseSpec, proposed: ResponseSpec, ctx: Pick<SpaceContext, "lineMm" | "cellMm">): ResponseSpec {
+  const missing = capacityMm(original, ctx) - capacityMm(proposed, ctx);
+  if (missing <= 0.01) return proposed;
+  switch (proposed.kind) {
+    case "lines":
+      return { kind: "lines", lines: Math.min(40, proposed.lines + Math.ceil(missing / ctx.lineMm)) };
+    case "grid":
+      return { kind: "grid", rows: Math.min(MAX_GRID_ROWS, (proposed.rows ?? Math.floor(LEGACY_GRID_MM / ctx.cellMm)) + Math.ceil(missing / ctx.cellMm)) };
+    case "box":
+      return original;
+    case "fields": {
+      const grid = proposed.fields.findIndex((f) => f.space === "grid");
+      const longest = proposed.fields.reduce((best, f, i) => (f.lines > proposed.fields[best]!.lines ? i : best), 0);
+      const at = grid >= 0 ? grid : longest;
+      const unit = proposed.fields[at]!.space === "grid" ? ctx.cellMm : ctx.lineMm;
+      return { kind: "fields", fields: proposed.fields.map((f, i) => (i === at ? { ...f, lines: Math.min(MAX_GRID_ROWS, f.lines + Math.ceil(missing / unit)) } : f)) };
+    }
+    default:
+      return proposed;
+  }
+}
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 export interface SpaceDecision {
@@ -129,33 +197,37 @@ export interface SpaceDecision {
 export function answerSpace(activity: AnalysisActivity, current: ResponseSpec, ctx: SpaceContext, decided = false): SpaceDecision {
   const need = spaceNeed(activity, ctx);
   if (decided || CLOSED.has(current.kind)) return { need: "keep", response: current };
-  if (current.kind === "fields") return { need, response: sizedFields(current, activity, ctx, need) };
-  if (current.kind === "grid") return { need: "calculation", response: { kind: "grid", rows: calculationRows(activity, ctx) } };
+  const proposed = proposeSpace(activity, current, ctx, need);
+  return { need, response: atLeastOriginal(current, proposed, ctx) };
+}
+
+function proposeSpace(activity: AnalysisActivity, current: ResponseSpec, ctx: SpaceContext, need: SpaceNeed): ResponseSpec {
+  if (current.kind === "fields") return sizedFields(current, activity, ctx, need);
+  if (current.kind === "grid") return { kind: "grid", rows: calculationRows(activity, ctx) };
 
   const original = linesOf(current);
+  // What the rules add is bounded; what the original already gave is never cut (Math.max with the original outside the bound).
   switch (need) {
     case "calculation":
-      return { need, response: problemOrGrid(activity, ctx, original) };
-    case "explanation": {
-      const extra = requestedResults(activity) - 1;
-      return { need, response: { kind: "lines", lines: clamp(Math.max(original, explanationLines(ctx) + extra), 1, 12) } };
-    }
+      return problemOrGrid(activity, ctx, original);
+    case "explanation":
+      return { kind: "lines", lines: Math.max(original, Math.min(MAX_EXPLANATION_LINES, explanationLines(ctx) + requestedResults(activity) - 1)) };
     case "short":
       // One line per result it asks for (four processes → four lines), never fewer than the original printed.
-      return { need, response: current.kind === "box" ? current : { kind: "lines", lines: clamp(Math.max(original, requestedResults(activity)), 1, 8) } };
+      return current.kind === "box" ? current : { kind: "lines", lines: Math.max(original, Math.min(MAX_SHORT_LINES, requestedResults(activity))) };
     case "composition": {
-      if (current.kind === "box") return { need, response: current };
+      if (current.kind === "box") return current;
       // The length the activity states («4-5 líneas», «60-80 palabras») or the room the original printed for it is the evidence;
       // only without either does the grade decide.
       const stated = statedLines(activity);
       const lines = stated ?? (original >= 4 ? original : Math.max(original, compositionLines(ctx)));
-      return { need, response: { kind: "lines", lines: clamp(Math.max(original, lines), 1, 40) } };
+      return { kind: "lines", lines: clamp(Math.max(original, lines), 1, 40) };
     }
     case "drawing":
       // A drawing needs a real surface: the large box (a third of a page), whatever smaller area the original printed.
-      return { need, response: { kind: "box", size: "large" } };
+      return { kind: "box", size: "large" };
     case "keep":
-      return { need, response: current };
+      return current;
   }
 }
 
@@ -171,13 +243,16 @@ export function operationsOf(activity: AnalysisActivity): number {
 }
 
 /** Squares for the operations of a calculation: by its operations, what it must show and the profile's need for steps. */
-export function calculationRows(activity: AnalysisActivity, ctx: SpaceContext): number {
+export function calculationRows(activity: AnalysisActivity, ctx: SpaceContext, drawnApart = false): number {
   const text = `${activity.instruction} ${activity.context ?? ""}`;
   const perOperation = ROWS_PER_OPERATION + (DIVISION.test(text) ? 2 : 0);
-  // A constraint that asks to show the procedure (how the figure was divided, the steps) needs room to draw or write it.
-  const show = ctx.protectedOf(activity.id).some((p) => p.type === "response_constraint" || p.type === "reasoning_constraint") ? 2 : 0;
+  // A constraint that asks to show the procedure (how the figure was divided, the steps) needs room to draw or write it, unless
+  // it already has its own drawing field (`drawnApart`): the same request is never counted twice.
+  const show = !drawnApart && ctx.protectedOf(activity.id).some((p) => p.type === "response_constraint" || p.type === "reasoning_constraint") ? 2 : 0;
   const steps = atLeast(ctx, "operation_steps", "medium") ? 2 : 0;
-  return clamp(operationsOf(activity) * perOperation + show + steps + 1, 5, maxRows(ctx));
+  // No ceiling that would leave operations without room (eight operations need their squares): the renderer splits a long grid
+  // into zones that may continue on the next page.
+  return clamp(operationsOf(activity) * perOperation + show + steps + 1, 5, MAX_GRID_ROWS);
 }
 
 /**
@@ -186,11 +261,20 @@ export function calculationRows(activity: AnalysisActivity, ctx: SpaceContext): 
  * and for a calculation whose result is a quantity, with an empty slot for the unit when there are units. Never the unit itself.
  */
 function problemOrGrid(activity: AnalysisActivity, ctx: SpaceContext, originalLines: number): ResponseSpec {
-  const rows = calculationRows(activity, ctx);
   const statement = `${activity.instruction} ${activity.context ?? ""}`;
   const units = UNIT.test(statement) || ctx.protectedOf(activity.id).some((p) => p.type === "units_or_magnitudes");
   // A bare calculation is answered in its squares; one whose result is a quantity with its unit also gets a place to state it.
-  if (activity.type !== "problem_solving" && !units) return { kind: "grid", rows };
+  const draw = DRAW.test(activity.instruction) || ctx.protectedOf(activity.id).some((p) => p.type === "response_constraint" && DRAW.test(p.value));
+  const rows = calculationRows(activity, ctx, draw);
+  const explain = EXPLAIN.test(activity.instruction);
+  // A calculation that also asks to draw (how the figure was divided) or to explain keeps a place for each: squares are no substitute.
+  const extra = [
+    ...(draw ? [{ label: "Dibujo", space: "grid" as const, lines: Math.ceil(DRAWING_MM / ctx.cellMm) }] : []),
+  ];
+  const after = explain ? [{ label: "Explicación", space: "lines" as const, lines: explanationLines(ctx) }] : [];
+  if (activity.type !== "problem_solving" && !units) {
+    return extra.length + after.length === 0 ? { kind: "grid", rows } : { kind: "fields", fields: [...extra, { label: "Operaciones", space: "grid" as const, lines: rows }, ...after] };
+  }
   const data = (statement.match(NUMBER) ?? []).length;
   const organise = activity.type === "problem_solving" && (data >= 3 || atLeast(ctx, "planning_support", "medium") || atLeast(ctx, "working_memory_support", "medium") || atLeast(ctx, "operation_steps", "medium"));
   const answerLines = clamp(Math.max(requestedResults(activity), originalLines > 3 ? 2 : 1), 1, 4);
@@ -198,7 +282,9 @@ function problemOrGrid(activity: AnalysisActivity, ctx: SpaceContext, originalLi
     kind: "fields",
     fields: [
       ...(organise ? [{ label: "Datos y razonamiento", space: "lines" as const, lines: 2 }] : []),
+      ...extra,
       { label: "Operaciones", space: "grid" as const, lines: rows },
+      ...after,
       { label: "Respuesta", space: "lines" as const, lines: answerLines, ...(units ? { unit: true } : {}) },
     ],
   };

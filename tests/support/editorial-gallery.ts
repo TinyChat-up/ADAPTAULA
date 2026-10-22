@@ -293,3 +293,73 @@ export async function galleryModel(s: GallerySheet, design: "claro" | "standard"
   const { model, validation } = buildRenderModel(document, { mode: "student", design, deferred: [], assets, requiredVisuals: required, subjectLabel: s.input.subjectName });
   return { model, pins, document, analysis, issues: validation.issues.filter((i) => i.severity === "error").map((i) => i.message) };
 }
+
+/**
+ * Limit cases of the physical guarantee (docs/EDITORIAL.md § Garantía): many operations, an original with a lot of room, a stored
+ * squared area without rows, geometry that asks to calculate and to draw, and the same with a fine-motor profile.
+ */
+export const LIMIT_CASES: GallerySheet[] = [
+  {
+    id: "limite-ocho-operaciones",
+    label: "Ocho operaciones y una división larga",
+    demand: "33 filas en zonas de 12 que continúan en otra hoja; la división con sus restos",
+    profile: profile({}),
+    profileLabel: "sin necesidades registradas",
+    input: {
+      title: "Muchas operaciones",
+      grade: "4-primaria",
+      subject: "matematicas",
+      subjectName: "Matemáticas",
+      activities: [
+        { id: "a1", type: "calculation", instruction: "Calcula: 12 + 5, 30 − 8, 6 × 7, 45 + 9, 100 − 37, 8 × 9, 64 + 18 y 90 − 45.", response: "calculate", answer_area: "lines", answer_lines: 2 },
+        { id: "a2", type: "calculation", instruction: "Divide: 7.452 : 36", response: "calculate", answer_area: "grid" },
+      ],
+    },
+  },
+  {
+    id: "limite-original-amplio",
+    label: "Originales con mucho espacio",
+    demand: "12 líneas, 20 de explicación y un recuadro grande que pasa a cuadrícula sin perder altura",
+    profile: profile({ fine_motor_demand: "medium" }),
+    profileLabel: "motricidad fina (medio)",
+    input: {
+      title: "Respuestas amplias",
+      grade: "5-primaria",
+      subject: "matematicas",
+      subjectName: "Matemáticas",
+      activities: [
+        { id: "a1", type: "short_answer", instruction: "Escribe lo que sabes de los triángulos.", response: "write_text", answer_area: "lines", answer_lines: 12 },
+        { id: "a2", type: "open_question", instruction: "Explica con detalle cómo mides tu clase.", response: "write_text", answer_area: "lines", answer_lines: 20 },
+        { id: "a3", type: "calculation", instruction: "Calcula 125 + 348.", response: "calculate", answer_area: "large_space" },
+        { id: "a4", type: "calculation", instruction: "Calcula el perímetro y el área de un rectángulo de 6 cm por 4 cm. Dibuja el rectángulo.", response: "calculate", answer_area: "lines", answer_lines: 2 },
+      ],
+    },
+  },
+  {
+    // The shape of the real sheet 03: a figure, then an activity whose start (prompt, drawing surface) does not fit what is left of
+    // the first page. Its figure must travel with it and its answer must not be cut from its unit.
+    id: "limite-dibujo-y-unidad",
+    label: "Dibujo, operaciones y respuesta con unidad tras una figura",
+    demand: "la actividad que pasa de hoja lleva su figura; la respuesta no se separa de su unidad",
+    profile: profile({}),
+    profileLabel: "sin necesidades registradas",
+    figures: { v1: "polygon" },
+    input: {
+      title: "Formas y medidas",
+      grade: "5-primaria",
+      subject: "matematicas",
+      subjectName: "Matemáticas",
+      visuals: [fig("v1", "polygon")],
+      activities: [
+        { id: "a0", type: "short_answer", instruction: "Escribe qué es el perímetro de una figura.", response: "write_text", answer_area: "lines", answer_lines: 5 },
+        { id: "a1", type: "calculation", instruction: POLYGON_INSTRUCTION, response: "write_number", answer_area: "lines", answer_lines: 2, resources: ["v1"] },
+        { id: "a2", type: "calculation", instruction: "Calcula el perímetro y el área de la figura. Muestra cómo has dividido la figura.", response: "calculate", answer_area: "lines", answer_lines: 2, resources: ["v1"], difficulty: "high" },
+        { id: "a3", type: "calculation", instruction: "Calcula el área de un cuadrado de 6 cm de lado e indica la unidad.", response: "calculate", answer_area: "lines", answer_lines: 2 },
+      ],
+      protected: [
+        { type: "units_or_magnitudes", importance: "essential", value: "Centímetros y centímetros cuadrados", activities: ["a2", "a3"] },
+        { type: "response_constraint", importance: "important", value: "Mostrar cómo se divide la figura", activities: ["a2"] },
+      ],
+    },
+  },
+];

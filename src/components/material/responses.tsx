@@ -1,4 +1,5 @@
 import type { RenderResponse } from "@/lib/render/model";
+import { GRID_ZONE_ROWS } from "@/lib/render/tokens";
 import { describeSpec } from "@/lib/visuals/spec";
 import { VisualSpecView } from "./visual-spec";
 
@@ -14,20 +15,36 @@ const Lines = ({ count }: { count: number }) => (
 const LEGACY_GRID_MM = 66;
 const PX_PER_MM = 96 / 25.4;
 
+/** One zone of squares: `rows` × `columns` WHOLE squares of `cellMm`, drawn as real vector lines inside its own box. */
+function GridZone({ rows, cellMm, columns, first }: { rows: number; cellMm: number; columns: number; first: boolean }) {
+  const cell = cellMm * PX_PER_MM;
+  const [w, h] = [columns * cell, rows * cell];
+  const d = [...Array.from({ length: rows + 1 }, (_, i) => `M0 ${i * cell}H${w}`), ...Array.from({ length: columns + 1 }, (_, i) => `M${i * cell} 0V${h}`)].join("");
+  return (
+    <svg className="ms-grid-area" data-rows={rows} data-columns={columns} data-cell-mm={cellMm} data-continued={first ? undefined : true} viewBox={`0 0 ${w} ${h}`} style={{ width: `${columns * cellMm}mm`, height: `${rows * cellMm}mm` }} aria-hidden focusable="false">
+      <path d={d} className="ms-grid-line" />
+    </svg>
+  );
+}
+
 /**
  * A squared area: `rows` × `columns` WHOLE squares of `cellMm` (the columns that fit the answer column), so a digit always has a
  * whole square and the grid never ends in a cut row or column. Real vector lines inside its own box: they print crisp and faint in
- * any PDF viewer and in greyscale (Chromium's PDF output dropped both a CSS background pattern and an SVG `<pattern>`).
+ * any PDF viewer and in greyscale (Chromium's PDF output dropped both a CSS background pattern and an SVG `<pattern>`). A long area
+ * is drawn as consecutive zones of up to 12 rows, without a gap: it may continue on the next page between zones, never inside one.
  */
 function Grid({ rows, cellMm, columns }: { rows: number | null; cellMm: number; columns: number }) {
   const n = rows ?? Math.max(3, Math.floor(LEGACY_GRID_MM / cellMm));
-  const cell = cellMm * PX_PER_MM;
-  const [w, h] = [columns * cell, n * cell];
-  const d = [...Array.from({ length: n + 1 }, (_, i) => `M0 ${i * cell}H${w}`), ...Array.from({ length: columns + 1 }, (_, i) => `M${i * cell} 0V${h}`)].join("");
+  // Balanced zones (15 → 8 + 7, 33 → 11 + 11 + 11): no stub of two rows left alone at the end.
+  const count = Math.ceil(n / GRID_ZONE_ROWS);
+  const zones = Array.from({ length: count }, (_, i) => Math.floor(n / count) + (i < n % count ? 1 : 0));
+  if (zones.length === 1) return <GridZone rows={n} cellMm={cellMm} columns={columns} first />;
   return (
-    <svg className="ms-grid-area" data-rows={n} data-columns={columns} data-cell-mm={cellMm} viewBox={`0 0 ${w} ${h}`} style={{ width: `${columns * cellMm}mm`, height: `${n * cellMm}mm` }} aria-hidden focusable="false">
-      <path d={d} className="ms-grid-line" />
-    </svg>
+    <div className="ms-grid-zones" data-rows={n}>
+      {zones.map((r, i) => (
+        <GridZone key={i} rows={r} cellMm={cellMm} columns={columns} first={i === 0} />
+      ))}
+    </div>
   );
 }
 const LETTERS = "ABCDEFGHIJ";

@@ -74,7 +74,7 @@ const StoredResponseSchema = z.discriminatedUnion("kind", [
    * the activity asks for; the square's size is the sheet's (tokens), never stored. Absent (documents before v1, what a model writes):
    * the renderer's default height.
    */
-  z.object({ kind: z.literal("grid"), rows: z.number().int().min(3).max(30).optional() }),
+  z.object({ kind: z.literal("grid"), rows: z.number().int().min(3).max(60).optional() }),
   ...OTHER_VARIANTS,
   z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema }),
   /**
@@ -85,7 +85,7 @@ const StoredResponseSchema = z.discriminatedUnion("kind", [
     kind: z.literal("fields"),
     // `grid` (answer_space@v1): a squared area under the label, `lines` = its rows of squares. `unit`: an empty slot for the unit
     // next to the answer (never the unit itself: it may be what the activity evaluates).
-    fields: z.array(z.object({ label: Text(60), space: z.enum(["lines", "box", "grid"]), lines: z.number().int().min(1).max(30), unit: z.boolean().optional() })).min(1).max(12),
+    fields: z.array(z.object({ label: Text(60), space: z.enum(["lines", "box", "grid"]), lines: z.number().int().min(1).max(60), unit: z.boolean().optional() })).min(1).max(12),
   }),
   /** The items of an ordering task in their PRINTED order, one empty box each for the number: the order is the student's work. */
   z.object({ kind: z.literal("sequence"), items: z.array(ShortText).min(2).max(12) }),

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { MaterialSheet } from "@/components/material/sheet";
-import { ANSWER_SPACE_VERSION, answerSpace, calculationRows, operationsOf, requestedResults, spaceContextOf, spaceNeed, statedLines, type SpaceContext } from "@/lib/adaptation/answer-space";
+import { ANSWER_SPACE_VERSION, LEGACY_GRID_MM, answerSpace, atLeastOriginal, capacityMm, calculationRows, operationsOf, requestedResults, spaceContextOf, spaceNeed, statedLines, type SpaceContext } from "@/lib/adaptation/answer-space";
 import { buildAdaptationContext } from "@/lib/adaptation/context";
 import { activityPrompt, responseFor } from "@/lib/adaptation/document";
 import { activityStructure, inlineFieldLabels } from "@/lib/adaptation/structure";
@@ -23,7 +23,7 @@ const activity = (over: Partial<AnalysisActivity>): AnalysisActivity => ({
   id: "act_1", section_id: null, page: 1, label: "1", type: "short_answer", instruction: "Responde.", context: null, resource_ids: [], objective_ids: [],
   response_format: "write_text", answer_area: { type: "lines", lines: 2 }, expected_answer: { basis: "not_inferable", value: null }, difficulty: "medium", confidence: 0.9, ...over,
 });
-const ctx = (over: Partial<SpaceContext> = {}): SpaceContext => ({ stage: "primaria", year: 4, mathematical: true, needs: new Map(), protectedOf: () => [], ...over });
+const ctx = (over: Partial<SpaceContext> = {}): SpaceContext => ({ stage: "primaria", year: 4, mathematical: true, needs: new Map(), protectedOf: () => [], lineMm: 10, cellMm: 7, ...over });
 const decide = (a: AnalysisActivity, c = ctx()) => answerSpace(a, responseFor(a), c).response;
 
 describe("campos en línea: forman la zona de respuesta y no se imprimen dos veces", () => {
@@ -74,8 +74,8 @@ describe("cuadrícula: cuándo y de qué tamaño", () => {
     expect(division).toBeGreaterThan(one);
     // «Calcula: 347» is not a division (a colon before a number is punctuation).
     expect(calculationRows(activity({ type: "calculation", instruction: "Calcula: 347 + 285" }), ctx({ year: 3 }))).toBe(one);
-    // Bounded: a calculation area never takes more than a third of a Primaria page.
-    expect(calculationRows(activity({ type: "calculation", instruction: "Calcula a, b, c. ¿x? ¿y? ¿z? ¿w?", difficulty: "high" }), ctx({ year: 5 }))).toBe(12);
+    // No ceiling that leaves operations without room: six requests need their squares (the renderer splits the area in zones).
+    expect(calculationRows(activity({ type: "calculation", instruction: "Calcula a, b, c. ¿x? ¿y? ¿z? ¿w?", difficulty: "high" }), ctx({ year: 5 }))).toBe(25);
   });
 
   it("un problema recibe solo las partes que necesita: datos si hay qué organizar, respuesta con hueco para la unidad si hay unidades", () => {
@@ -92,7 +92,8 @@ describe("cuadrícula: cuándo y de qué tamaño", () => {
 
   it("los campos impresos por el original conservan sus etiquetas; el de operaciones pasa a cuadrícula", () => {
     const printed = activity({ type: "problem_solving", response_format: "calculate", instruction: "Una botella tiene 750 ml. Cada vaso, 150 ml. ¿Cuántos vasos?", context: "Operaciones y unidades:\nRespuesta:", answer_area: { type: "box", lines: null } });
-    expect(decide(printed)).toEqual({ kind: "fields", fields: [{ label: "Operaciones y unidades", space: "grid", lines: 5 }, { label: "Respuesta", space: "lines", lines: 2, unit: true }] });
+    // The printed box was 5 writing lines (50 mm): its squares give at least as much (8 × 7 mm = 56 mm), never 5 × 7 = 35 mm.
+    expect(decide(printed)).toEqual({ kind: "fields", fields: [{ label: "Operaciones y unidades", space: "grid", lines: 8 }, { label: "Respuesta", space: "lines", lines: 2, unit: true }] });
   });
 });
 
@@ -189,5 +190,75 @@ describe("compatibilidad: contrato versionado y documentos guardados", () => {
     expect(subjectName("matematicas")).toBeNull();
     expect(subjectName("conocimiento-medio")).toBeNull();
     expect(subjectName("Matemáticas")).toBe("Matemáticas");
+  });
+});
+
+describe("garantía física: nunca menos superficie que el original (mm de la hoja, no recuentos de filas)", () => {
+  const mm = (spec: ResponseSpec, c = ctx()) => capacityMm(spec, c);
+
+  it("una cuadrícula guardada sin filas (66 mm) no baja a cinco filas (35 mm)", () => {
+    const legacy = activity({ type: "calculation", response_format: "calculate", instruction: "Calcula 347 + 285.", answer_area: { type: "grid", lines: null } });
+    const out = decide(legacy);
+    expect(out.kind).toBe("grid");
+    expect(mm(out)).toBeGreaterThanOrEqual(LEGACY_GRID_MM);
+  });
+
+  it("doce líneas de respuesta corta siguen siendo doce; veinte de explicación, veinte", () => {
+    expect(decide(activity({ type: "short_answer", answer_area: { type: "lines", lines: 12 } }), ctx({ mathematical: false }))).toEqual({ kind: "lines", lines: 12 });
+    expect(decide(activity({ type: "open_question", instruction: "Explica por qué.", answer_area: { type: "lines", lines: 20 } }), ctx({ mathematical: false }))).toEqual({ kind: "lines", lines: 20 });
+  });
+
+  it("un recuadro amplio que pasa a cuadrícula conserva su altura (120 mm → 18 casillas de 7 mm)", () => {
+    const wide = activity({ type: "calculation", response_format: "calculate", instruction: "Calcula 12 + 5.", answer_area: { type: "large_space", lines: null } });
+    const out = decide(wide);
+    expect(mm(out)).toBeGreaterThanOrEqual(120);
+    expect(out).toEqual({ kind: "grid", rows: 18 });
+  });
+
+  it("con letra grande o motricidad fina las casillas crecen y la superficie sigue cubriendo al original", () => {
+    const roomy = ctx({ lineMm: 12, cellMm: 8.5 });
+    const out = decide(activity({ type: "calculation", response_format: "calculate", instruction: "Calcula 347 + 285.", answer_area: { type: "box", lines: null } }), roomy);
+    expect(mm(out, roomy)).toBeGreaterThanOrEqual(mm({ kind: "box", size: "medium" }, roomy));
+  });
+
+  it("la garantía añade al espacio de trabajo principal, en líneas o casillas enteras", () => {
+    expect(atLeastOriginal({ kind: "lines", lines: 6 }, { kind: "grid", rows: 5 }, ctx())).toEqual({ kind: "grid", rows: 9 });
+    const fields = atLeastOriginal({ kind: "box", size: "large" }, { kind: "fields", fields: [{ label: "Operaciones", space: "grid", lines: 5 }, { label: "Respuesta", space: "lines", lines: 1 }] }, ctx());
+    expect(fields).toEqual({ kind: "fields", fields: [{ label: "Operaciones", space: "grid", lines: 16 }, { label: "Respuesta", space: "lines", lines: 1 }] });
+  });
+});
+
+describe("cuadrículas suficientes según la demanda (sin inflarlas)", () => {
+  const rows = (instruction: string, over: Partial<AnalysisActivity> = {}, c = ctx()) => calculationRows(activity({ type: "calculation", response_format: "calculate", instruction, ...over }), c);
+  it("una, tres y ocho operaciones; división larga; varios pasos", () => {
+    expect(rows("Calcula 347 + 285.")).toBe(5);
+    expect(rows("Calcula: 347 + 285, 602 − 178 y 36 × 4.")).toBe(13);
+    expect(rows("Calcula: 12 + 5, 30 − 8, 6 × 7, 45 + 9, 100 − 37, 8 × 9, 64 + 18 y 90 − 45.")).toBe(33);
+    expect(rows("Divide: 7.452 : 36")).toBe(7);
+    expect(rows("Una tienda vende 4 cajas de 24 lápices y 3 de 12. Regala 15. ¿Cuántos lápices le quedan?", { type: "problem_solving" })).toBe(17);
+  });
+
+  it("geometría con cálculo y dibujo: una superficie para dibujar además de las operaciones", () => {
+    const geo = activity({ type: "calculation", response_format: "calculate", instruction: "Calcula el perímetro y el área de A. Muestra cómo has dividido la figura." });
+    const out = decide(geo);
+    expect(out.kind).toBe("fields");
+    if (out.kind !== "fields") return;
+    expect(out.fields.map((f) => f.label)).toEqual(["Dibujo", "Operaciones"]);
+    expect(out.fields[0]!.lines * 7).toBeGreaterThanOrEqual(70);
+  });
+
+  it("mostrar cómo se divide la figura cuenta una vez: con su campo de dibujo, las operaciones no suman además sus filas", () => {
+    const shows: SpaceContext["protectedOf"] = () => [{ id: "prt_1", type: "response_constraint", importance: "important", value: "Mostrar cómo se divide la figura", activity_ids: ["act_1"], resource_ids: [] }];
+    const geo = activity({ type: "calculation", response_format: "calculate", instruction: "Calcula el perímetro y el área de A. Muestra cómo has dividido la figura." });
+    const out = decide(geo, ctx({ protectedOf: shows }));
+    expect(out.kind).toBe("fields");
+    if (out.kind !== "fields") return;
+    expect(out.fields.find((f) => f.label === "Operaciones")!.lines).toBe(calculationRows(geo, ctx({ protectedOf: shows })) - 2);
+    expect(out.fields.find((f) => f.label === "Dibujo")!.lines * 7).toBeGreaterThanOrEqual(70);
+  });
+
+  it("un cálculo que pide explicar conserva sus líneas para la explicación", () => {
+    const out = decide(activity({ type: "calculation", response_format: "calculate", instruction: "Calcula 3/4 + 1/4 y explica cómo lo has hecho." }));
+    expect(out).toMatchObject({ kind: "fields", fields: [{ label: "Operaciones", space: "grid" }, { label: "Explicación", space: "lines", lines: 3 }] });
   });
 });

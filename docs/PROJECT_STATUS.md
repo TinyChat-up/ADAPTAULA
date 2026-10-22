@@ -65,7 +65,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
-**Fase B (2026-10-22).** Identidad única con CLARO por defecto y espacios de resolución deterministas (`answer_space@v1`, ADR-040): cuadrícula para el cálculo escrito, problemas por partes, campos en línea y paginación medida en el PDF. Detalle en [EDITORIAL](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md). Pendiente: validación docente.
+**Fase B (2026-10-22).** Identidad única con CLARO por defecto y espacios de resolución deterministas (`answer_space@v1`, ADR-040): cuadrícula para el cálculo escrito, problemas por partes, campos en línea y paginación medida en el PDF. Cierre de calidad: nunca menos superficie que el original (medida en mm), cuadrículas por demanda en zonas que continúan de hoja y `material_renderer@v6`. Detalle en [EDITORIAL](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md). En la [PR #56](https://github.com/TinyChat-up/ADAPTAULA/pull/56), sin fusionar. Pendiente: validación docente.
 
 **Figuras originales (2026-10-22).** Las figuras con letras, flechas numeradas o medidas se recuperan del original sin redibujarlas (`auto_visuals@v6`, ADR-039). Detalle en [QA](qa/figuras-originales/README.md). Validado con el análisis real de 03, 06 y 07 (0,0930 USD; [validación](qa/figuras-originales/VALIDACION-REAL.md)): las cuatro figuras se recuperan tras ampliar el parser de marcas.
 

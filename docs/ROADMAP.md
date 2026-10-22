@@ -312,8 +312,9 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - campos en línea;
   - `roomy` por perfil;
   - paginación medida en el PDF;
-  - figuras a la vista al comparar.
-- **Pruebas:** galería de 8 fichas y antes/después de 03, 06 y 07 reales ([QA](qa/fase-b-editorial/README.md)).
+  - figuras a la vista al comparar;
+  - cierre de calidad: garantía física de espacio (mm), cuadrículas por demanda en zonas, «Dibujo» y «Explicación» en los cálculos que los piden y `material_renderer@v6`.
+- **Pruebas:** galería de 8 fichas, tres casos límite y antes/después de 03, 06 y 07 reales ([QA](qa/fase-b-editorial/README.md)).
 - **Siguiente:**
   - validación con docentes;
   - tablas de clasificación que el original no imprime;
