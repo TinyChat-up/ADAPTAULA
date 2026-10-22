@@ -144,10 +144,12 @@ const PageBoxSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pdf"), width_pt: z.number().positive(), height_pt: z.number().positive(), rotation: z.number().finite(), view: z.tuple([z.number(), z.number(), z.number(), z.number()]) }),
 ]);
 const AutoEvidenceSchema = z.object({
-  engine: z.enum(["auto_visuals@v1", "auto_visuals@v2", "auto_visuals@v3", "auto_visuals@v4", "auto_visuals@v5"]),
+  engine: z.enum(["auto_visuals@v1", "auto_visuals@v2", "auto_visuals@v3", "auto_visuals@v4", "auto_visuals@v5", "auto_visuals@v6"]),
   shape: z.enum(["bar", "number_line", "figure"]), signature: z.boolean(), unique: z.boolean(),
   placement: z.literal(true), clean: z.literal(true), anchor: z.string().regex(/^act_[0-9]{1,4}$/),
   vision: z.object({ used: z.boolean(), agrees: z.boolean(), confidence: z.number().min(0).max(1).nullable(), iou: z.number().min(0).max(1).nullable() }),
+  // v6: a figure located by its marks must have found every one, legibly (a stored locator that says otherwise is not trusted).
+  marks: z.object({ expected: z.array(z.string().max(20)).max(20), found: z.array(z.string().max(20)).max(20), measures: z.number().int().min(0), legible: z.literal(true) }).optional(),
 });
 
 /** Missing evidence is not evidence of safety. Human selections legitimately store null; automatic ones need an activity anchor. */

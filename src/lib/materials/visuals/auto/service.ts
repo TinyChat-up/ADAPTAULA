@@ -9,6 +9,7 @@ import { loadSource, produceVisualAsset, type LocatorRow, type VisualDeps } from
 import { consistentWithActivities, contradicts, sameStructure, specFromAnalysis } from "@/lib/visuals/from-analysis";
 import type { NormalizedBounds } from "../geometry";
 import { SPEC_EXTRACTOR_VERSION, extractSpec } from "./extract";
+import { expectedMarks } from "./marks";
 import { candidates, locateVisuals, toBounds, type Evidence, type Located, type VisualShape, type VisualTarget } from "./locate";
 import { iou, type PageModel } from "./page-model";
 import { readPage } from "./read";
@@ -31,14 +32,32 @@ import type { VisionLocator } from "./vision";
  * for the essential visuals it lacks, honestly, as before.
  */
 
-/** v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions. */
-export const AUTO_ENGINE_VERSION = "auto_visuals@v5";
+/**
+ * v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions.
+ * v6: a generic figure is located by the marks its analysis names (letters, arrow numbers, measures), all printed on it, legibly;
+ *     column-aware zones and a lead zone for such figures; the text inside its own boxes belongs to it.
+ */
+export const AUTO_ENGINE_VERSION = "auto_visuals@v6";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
 
+/**
+ * Three separate verifications of a recovered original figure (docs/VISUAL_RESOURCES.md § Identidad, fidelidad y validez):
+ *   identity  the crop comes from THIS original (its SHA-256) and the same page box the locator saw;
+ *   fidelity  the crop is the original's pixels of that region, by a fixed recipe, stored under its own SHA-256 (never redrawn);
+ *   pedagogy  that its content is right for the activity: never verified automatically (an alt text, a prompt or a confidence is
+ *             not evidence). A person's locator carries none here: its asset is verified when the sheet is resolved.
+ */
+export interface FigureVerification {
+  identity: "verified" | "unverified";
+  fidelity: "verified" | "unverified";
+  pedagogy: "unverified";
+}
+
 export interface VisualOutcome {
   choice: VisualResolution;
+  verification?: FigureVerification;
   reason: string;
   confidence: number | null;
   method: "human" | "auto" | null;
@@ -102,10 +121,14 @@ export function shapeOf(v: Pick<AnalysisVisual, "kind" | "title" | "description"
 export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { page: number; visual: AnalysisVisual }> {
   return analysis.visuals
     .filter((v) => (v.role === "required" || v.role === "informative") && v.kind !== "decorative" && !(v.table && v.table.rows.length > 0) && !v.chart)
-    .map((v) => ({ id: v.id, page: v.page, shape: shapeOf(v), activityIds: v.activity_ids, visual: v }));
+    .map((v) => {
+      const shape = shapeOf(v);
+      const users = analysis.activities.filter((a) => v.activity_ids.includes(a.id) || a.resource_ids.includes(v.id));
+      return { id: v.id, page: v.page, shape, activityIds: v.activity_ids, visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null };
+    });
 }
 
-const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision });
+const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision, ...(e.marks ? { marks: e.marks } : {}) });
 
 export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Promise<AutoRunSummary> {
   const targets = autoTargets(input.analysis);
@@ -129,19 +152,22 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
     const shapes = new Map(targets.map((t) => [t.id, t.shape]));
 
     const finish = async (row: LocatorRow, located?: Located): Promise<VisualOutcome> => {
+      // A person's locator is kept as it is; its asset is produced (and verified) when the sheet is resolved, not here.
       if (row.method === "human") return { choice: "A", reason: "kept_human", confidence: null, method: "human", spec: null };
       const base = { confidence: typeof row.confidence === "number" ? row.confidence : (located?.confidence ?? null), method: "auto" as const, ...(located ? { signals: signalsOf(located.evidence) } : {}) };
       const produced = await produceVisualAsset(deps, row.id, source);
-      if (!produced.ok) return { ...base, choice: "D", reason: produced.failure, spec: null };
+      if (!produced.ok) return { ...base, choice: "D", reason: produced.failure, spec: null, verification: { identity: produced.failure === "source_missing" || produced.failure === "invalid_bounds" ? "unverified" : "verified", fidelity: "unverified", pedagogy: "unverified" } };
+      // Produced: same original bytes and page box (identity), its pixels cropped by the recipe and stored by hash (fidelity).
+      const verified: FigureVerification = { identity: "verified", fidelity: "verified", pedagogy: "unverified" };
       const shape = shapes.get(row.visual_id) ?? "figure";
-      if (shape === "figure") return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null };
+      if (shape === "figure") return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, verification: verified };
       const extracted = extractSpec(await pageAt200(row.page), { x: row.x, y: row.y, w: row.w, h: row.h }, shape);
-      if (!extracted.ok) return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, spec_reason: extracted.reason };
+      if (!extracted.ok) return { ...base, choice: "B", reason: located ? "accepted" : "kept_auto", spec: null, spec_reason: extracted.reason, verification: verified };
       const sha256 = fingerprint(extracted.spec);
       if (!(await deps.specs.exists(row.id, SPEC_EXTRACTOR_VERSION))) {
         await deps.specs.insert({ workspace_id: row.workspace_id, material_id: row.material_id, locator_id: row.id, visual_id: row.visual_id, spec_version: 1, extractor_version: SPEC_EXTRACTOR_VERSION, kind: extracted.spec.kind, spec: extracted.spec, spec_sha256: sha256, checks: extracted.checks });
       }
-      return { ...base, choice: "C", reason: located ? "accepted" : "kept_auto", spec: { kind: extracted.spec.kind, sha256 } };
+      return { ...base, choice: "C", reason: located ? "accepted" : "kept_auto", spec: { kind: extracted.spec.kind, sha256 }, verification: verified };
     };
 
     for (const page of [...new Set(targets.map((t) => t.page))].sort((a, b) => a - b)) {
@@ -243,7 +269,7 @@ export async function corroborateSpec(deps: Pick<AutoRunDeps, "admin">, input: {
   // A matching shape cannot prove which activity owns it on a textless page.
   if (model.texts.length === 0) return null;
   const matches: Array<{ crop: { x0: number; y0: number; x1: number; y1: number }; spec: VisualSpec }> = [];
-  for (const c of candidates(model)) {
+  for (const c of candidates(model).filter((c) => !c.hollow)) {
     const read = extractSpec(model, toBounds(model, c.crop), shape);
     if (!read.ok || !sameStructure(claim, read.spec)) continue;
     // A single drawing and the group it belongs to are the same figure.

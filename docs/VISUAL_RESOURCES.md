@@ -683,3 +683,42 @@ Alcance exacto en ADR-023: tablas rectangulares pequeñas con capa de texto, val
 CLARO v5 comprueba la especificación resuelta antes de dibujarla, rechaza denominadores cero en etiquetas y mantiene figuras exclusivas junto a la consigna por sus enlaces explícitos dentro de la página lógica. Las rectas densas conservan todos sus valores y separan rótulos sin reducir letra. Barras, círculos y cuadrículas se reutilizan. [PDFs y adversarios](qa/claro-calidad/README.md).
 
 `visual_semantics_unverified` avisa en la vista docente cuando se imprimen píxeles. Un brief, alt o revisión simulada no demuestra etiquetas, exactitud científica ni correspondencia de una imagen. Se conserva la célula mock sin números como caso negativo: su test de impresión no es aprobación pedagógica. Los criterios actuales de aceptación de ilustraciones no cambian; la generación sigue sin activarse. Los contrastes con referencias manuales del corpus no autorizan imágenes de usuarios ni ocultan propiedades sin verificar.
+
+## Figuras con marcas — recuperación fiel del original (`auto_visuals@v6`, 2026-10-22)
+
+**Problema.** En la prueba real v3, las fichas 03 (polígono con medidas), 06 (esquema A–D) y 07 (flechas 1–4) se bloqueaban sin recuperar su figura. Hay dos causas:
+- **Peso de firma nulo.** Una figura genérica tenía peso de firma 0. Sin la confirmación de un modelo de visión no podía pasar de 0,60 (el umbral es 0,75).
+- **Lectura del motor.** Las medidas («8 cm»), los «?» y el texto de las cajas de un diagrama dejaban el recorte «sucio». Las zonas de actividad no distinguían columnas, y la figura impresa encima de su consigna quedaba fuera de su zona.
+
+**Firma por marcas.** Las marcas esperadas (`src/lib/materials/visuals/auto/marks.ts`) salen **solo** de las palabras del análisis sobre el visual y de las actividades que lo usan:
+- «letras A, B, C y D», o los campos «A:» … «D:»;
+- «flechas numeradas del 1 al 4», o los campos «Flecha 1:» …;
+- «medidas», «cm».
+
+También reconocen las formas en que el analizador real las escribe: «las letras D (flor), C (hoja)…», «1 del mar al vapor, 2 …» y campos en línea («A:, B:, C:, D:», «Flecha 1, Flecha 2, …»); ver [validación real](qa/figuras-originales/VALIDACION-REAL.md). Nunca salen de un modelo ni de OCR. La figura tiene firma (0,30, el mismo peso que una recta o una barra) solo si **todas** esas marcas están impresas en el dibujo según la capa de texto del PDF, cada una **una sola vez**, y son legibles: altura ≥ 1,8 mm y figura de al menos 20 mm. Los umbrales de aceptación no cambian.
+
+**Región exacta.**
+- **Crecimiento del recorte.** Desde el componente de tinta del dibujo, que incluye sus líneas indicadoras y flechas conectadas, el recorte crece con las marcas a su alcance: etiquetas y «?» a 4 mm, medidas a 6 mm.
+- **Limpieza.** El recorte es limpio si no contiene ninguna línea del enunciado de una actividad (su ancla o una continuación), ninguna solución impresa («Solución», «clave»…) ni texto corrido fuera de las cajas de la propia figura.
+- **Cajas propias.** Una caja propia se reconoce por cuatro bordes rectos y finos que encierran el texto (también en gris claro). El recuadro no puede pasar de la mitad del recorte, así que no valen el marco exterior ni una tarjeta de actividades.
+- **Columnas y zona previa.** Para estas figuras la página se lee por columnas (segmentos de texto), y la figura puede ir **encima** de la primera consigna de su columna.
+- **Marcos y contornos.** Entre una figura y su marco con las mismas marcas se elige la región más interior. Un contorno vacío (el rectángulo B) solo es candidato si lleva sus marcas.
+
+**Lo incierto sigue siendo incierto.** No se aceptan, y la causa queda registrada:
+- **dos figuras parecidas** en la misma zona;
+- una **figura atribuida a la actividad siguiente**;
+- una **etiqueta fuera de alcance** o **ausente** (`marks_incomplete`);
+- una **solución dentro del dibujo**;
+- una **figura ilegible** (`illegible`);
+- la **página equivocada**;
+- un **PDF sin capa de texto** (`scan_identity_unverified`);
+- una figura genérica **sin marcas nombradas**, que sigue igual que antes.
+
+**Identidad, fidelidad y validez pedagógica** (`FigureVerification`, en el resultado de cada ejecución):
+1. **Identidad:** el recorte procede del original por su SHA-256 y de la misma caja de página. Se verifica técnicamente.
+2. **Fidelidad:** el recorte son los píxeles del original en esa región, con receta fija y guardados con su propio SHA-256. Las pruebas PDF comprueban la igualdad byte a byte con la página renderizada y que Chromium incrusta la imagen con las mismas dimensiones, sin reescalarla. Se verifica técnicamente.
+3. **Validez pedagógica:** **nunca** se declara automáticamente. Ni un texto alternativo, ni un prompt, ni una confianza son evidencia. El docente ve el aviso `visual_semantics_unverified`.
+
+**Persistencia.** La evidencia del localizador añade `marks: { expected, found, measures, legible: true }`. El validador acepta `auto_visuals@v6` y rechaza un localizador guardado cuyas marcas no sean legibles. No hay migración: la columna es JSON y la restricción de confianza (≥ 0,75) no cambia.
+
+**«Hacer magia».** Un recurso recuperado así (elección B) se usa como figura original (`exact_original_visual`), sin llamar al generador de imágenes. Si no se localiza, se mantiene la parada visual con su causa precisa. Nunca se entrega la página entera como sustituto.

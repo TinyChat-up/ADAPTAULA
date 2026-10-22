@@ -422,3 +422,23 @@ Las comprobaciones de la auditoría no se relajan y nombran las decisiones respo
 **Apoyos.** Un apoyo que repite otro se pliega con su trazabilidad. Un apoyo que define lo evaluado es un fallo `answer_leak`.
 
 **Figuras.** La parada visual distingue función desactivada o no ofrecida, plan, cupo y fallo temporal. **Decisión abierta:** la página original completa como anexo no se implementa. Puede llevar otras actividades y respuestas, no es accesible y exige verificar la identidad de la página. Además, no existe un contrato de entrega «asistida» (estado, copia, PDF y pruebas) que permita entregarla sin declararla completa. Si se retoma, requiere ese contrato primero. [QA](qa/hacer-magia-2/README.md).
+
+## ADR-039 — Figuras genéricas localizadas por sus marcas (2026-10-22)
+
+**Decisión.** Una figura genérica tiene firma determinista cuando todas las marcas que su análisis nombra (letras, números de flechas, medidas) están impresas en ese dibujo, una vez y legibles. Esas marcas salen de las palabras del análisis y de las actividades, nunca de un modelo, y se comprueban con la capa de texto del PDF.
+
+**Alcance.** Solo para esas figuras:
+- la página se lee por columnas;
+- la figura puede preceder a su consigna;
+- el recorte incluye sus marcas y el texto de sus propias cajas.
+
+Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que antes. Los umbrales no cambian. El motor pasa a `auto_visuals@v6`, que invalida decisiones anteriores.
+
+**Verificaciones.** Se separan identidad y fidelidad (verificables técnicamente) de la validez pedagógica, que nunca se declara automáticamente.
+
+**Descartado.**
+- OCR o visión con modelo para estas marcas.
+- Redibujar figuras complejas.
+- Entregar la página completa.
+
+[VISUAL_RESOURCES.md](VISUAL_RESOURCES.md#figuras-con-marcas--recuperación-fiel-del-original-auto_visualsv6-2026-10-22).

@@ -90,6 +90,26 @@ export function textLines(texts: readonly TextBox[]): TextLine[] {
     .sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
 }
 
+/**
+ * Reading lines cut where the gap between two consecutive words is wider than `gapMm`: text printed side by side in different
+ * columns (two instructions, a figure's letter and an answer field) is not one line.
+ */
+export function textSegments(model: Pick<PageModel, "texts" | "mmPerPx">, gapMm = 6): TextLine[] {
+  const gapPx = gapMm / model.mmPerPx;
+  return textLines(model.texts).flatMap((line) => {
+    const boxes = model.texts
+      .filter((b) => b.x0 >= line.x0 - 0.5 && b.x1 <= line.x1 + 0.5 && Math.min(line.y1, b.y1) - Math.max(line.y0, b.y0) >= 0.5 * Math.min(b.y1 - b.y0, line.y1 - line.y0))
+      .sort((a, b) => a.x0 - b.x0);
+    const out: TextBox[][] = [];
+    for (const b of boxes) {
+      const last = out.at(-1);
+      if (last && b.x0 - Math.max(...last.map((x) => x.x1)) <= gapPx) last.push(b);
+      else out.push([b]);
+    }
+    return out.map((g) => ({ x0: Math.min(...g.map((b) => b.x0)), y0: Math.min(...g.map((b) => b.y0)), x1: Math.max(...g.map((b) => b.x1)), y1: Math.max(...g.map((b) => b.y1)), text: g.map((b) => b.text).join(" ").replace(/\s+/g, " ").trim() }));
+  }).sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+}
+
 /** A printed label of a figure (`0`, `1/4`, `A`), as opposed to running text. */
 export const isLabel = (text: string) => /^\s*([0-9]{1,3}(\s*\/\s*[0-9]{1,3})?|[A-Za-z])\s*$/.test(text);
 /** A line made only of labels (the row `0 1/4 1/2 3/4 1` under a number line). */

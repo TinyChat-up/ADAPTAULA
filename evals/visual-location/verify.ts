@@ -100,7 +100,7 @@ export function verifyProposal(input: VerifyInput): VerificationReport {
 
   // 4 · Snap to a region the server found itself; the crop is the server's.
   const mask = textMask(model);
-  const regions = candidates(model, mask);
+  const regions = candidates(model, mask).filter((c) => !c.hollow);
   const proposed = toPx(model, proposal.region);
   const best = regions.map((c) => ({ c, overlap: iou(c.crop, proposed) })).sort((a, b) => b.overlap - a.overlap)[0];
   if (!best || best.overlap < 0.5) {
