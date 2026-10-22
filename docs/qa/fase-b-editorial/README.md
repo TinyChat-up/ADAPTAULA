@@ -92,7 +92,7 @@ La primera versión de esta revisión encontró dos defectos, ya corregidos:
   - unidad y BD: 1919 correctas y 13 omitidas;
   - PDF: 64/64 (la línea base de tinta del *smoke* no cambia con v6);
   - typecheck correcto; lint con un aviso previo ajeno;
-  - E2E relevantes en escritorio y móvil: ver el registro.
+  - E2E completa, escritorio y móvil, en entorno limpio: 124/124 (62 en móvil).
 
 ## Límites conocidos
 

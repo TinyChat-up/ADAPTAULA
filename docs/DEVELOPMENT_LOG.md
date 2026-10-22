@@ -22,7 +22,7 @@
   - unidad y BD: 1919 correctas y 13 omitidas (garantía física y cuadrículas por demanda);
   - PDF: 64/64, con tres casos límite medidos en papel. El de la forma de 03 falla sin el arreglo;
   - typecheck y lint correctos (un aviso previo ajeno);
-  - E2E completa de escritorio y móvil: E2E_RESULT.
+  - E2E completa de escritorio y móvil en entorno limpio (`.next-e2e` y `test-results` borrados; app contra `fake-supabase` con migraciones reales sobre PGlite): 124/124 en 29,6 min, 62 en móvil, incluidos `pdf-preview`, `render`, `sheet-editor` y `visual-locator`.
 - **Revisión real** de 03, 06 y 07 (análisis reales, sin IA): ver [QA](qa/fase-b-editorial/README.md).
 - **Riesgos:** las estimaciones de hoja siguen siendo aproximadas, y 03 pasa a 5 hojas porque hay más espacio.
 - **Siguiente:** revisión y fusión de la #56 por una persona; después, validación docente.
