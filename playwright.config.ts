@@ -19,7 +19,14 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL: BASE_URL,
-    channel: process.env.CI ? undefined : "chrome",
+    // E2E_CHROMIUM_PATH: a Chromium already installed (e.g. /opt/pw-browsers/chromium in cloud sessions) instead of local Chrome.
+    channel: process.env.CI || process.env.E2E_CHROMIUM_PATH ? undefined : "chrome",
+    launchOptions: {
+      ...(process.env.E2E_CHROMIUM_PATH ? { executablePath: process.env.E2E_CHROMIUM_PATH } : {}),
+      // A UTF-8 locale for the browser: under the C locale Chromium cannot write a download name with accents («Geografía.pdf»)
+      // and offers «download» instead, whatever the server sends. A teacher's browser runs under a UTF-8 locale.
+      env: { ...process.env, LANG: process.env.LANG?.toLowerCase().includes("utf") ? process.env.LANG : "C.UTF-8" },
+    },
     trace: "retain-on-failure",
   },
   projects: [

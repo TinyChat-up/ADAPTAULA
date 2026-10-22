@@ -7,7 +7,7 @@ import { chromium } from "playwright-core";
 import { buildRenderModel } from "@/lib/render/model";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import { qualityCorpus } from "../../evals/claro-quality/corpus";
-import { printPdf } from "./harness";
+import { localChromium, printPdf } from "./harness";
 
 
 describe("CLARO: papel real y legibilidad", () => {
@@ -52,7 +52,7 @@ describe("CLARO: papel real y legibilidad", () => {
     const c = qualityCorpus.find(c => c.id === "03-rectas")!;
     const { model } = buildRenderModel(c.document, { mode: "student", design: "claro" });
     const html = await renderPrintHtml(model, []);
-    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"], headless: true });
+    const browser = await chromium.launch({ executablePath: localChromium(), args: ["--no-sandbox"], headless: true });
     const page = await browser.newPage();
     try {
       await page.setContent(html.html);

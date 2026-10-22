@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createChromiumPdfEngine, type PdfRenderResult } from "@/lib/render/print/engine";
 import { renderPrintHtml, type PrintHtml } from "@/lib/render/print/html";
@@ -71,3 +71,15 @@ export async function printPdf(name: string, model: RenderModel, pins: PinnedAss
   for (const page of pages) writeFileSync(path.join(dir, `page-${page.number}.png`), page.png);
   return { name, print, result, validation, pages, peakRssMb: peakMb, validationMs };
 }
+
+/**
+ * A full local Chromium for layout measurements (not the product's serverless engine): `E2E_CHROMIUM_PATH`, else the first that
+ * exists of the distribution's and the Playwright one installed in cloud sessions. Never a path only one machine has.
+ */
+export function localChromium(): string {
+  const candidates = [process.env.E2E_CHROMIUM_PATH, "/usr/bin/chromium", "/opt/pw-browsers/chromium"].filter((p): p is string => Boolean(p));
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) throw new Error(`No hay Chromium local para medir la disposición; define E2E_CHROMIUM_PATH (probados: ${candidates.join(", ")})`);
+  return found;
+}
+

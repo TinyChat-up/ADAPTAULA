@@ -142,7 +142,8 @@ test("cada análisis nuevo consume una unidad de la cuota mensual; reutilizar un
   await page.getByText("Más opciones del material", { exact: true }).click();
   await page.getByRole("button", { name: "Analizar" }).click();
   await expect(alertOf(page)).toContainText("Has utilizado los 2 análisis incluidos este mes. Se renuevan el");
-  await expect(page.getByText(/quota|límite excedido|403|402|429|analysis_quota/i)).toHaveCount(0);
+  // Only what the page says (the account email in the navigation is random digits and may contain «402»): no technical codes.
+  await expect(page.locator("main").getByText(/quota|límite excedido|\b40[23]\b|\b429\b|analysis_quota/i)).toHaveCount(0);
   expect(await analysisUnits(page, workspace)).toBe(2);
 });
 
@@ -188,9 +189,16 @@ test("listado, filtros y borrado (con el archivo)", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Fracciones equivalentes" })).toBeVisible();
   await expect(page.getByRole("listitem").getByText("Analizado", { exact: true })).toBeVisible();
 
+  // The filters live in a closed disclosure («Filtros y orden»): opened as a teacher would, again after each filtered reload.
+  const openFilters = async () => {
+    const filters = page.locator("details", { has: page.locator("summary", { hasText: "Filtros y orden" }) });
+    if (!(await filters.evaluate((d) => (d as HTMLDetailsElement).open))) await filters.locator("summary").click();
+  };
+  await openFilters();
   await page.getByLabel("Asignatura").selectOption({ label: "Matemáticas" });
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page.getByRole("link", { name: "Fracciones equivalentes" })).toBeVisible();
+  await openFilters();
   await page.getByLabel("Asignatura").selectOption({ label: "Música" });
   await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page.getByText("No hay materiales con estos filtros")).toBeVisible();

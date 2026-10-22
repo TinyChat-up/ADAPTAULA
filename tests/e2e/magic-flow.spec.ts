@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { allowAdaptations, seedBlockedMagic } from "./adaptation-seed";
-import { createReviewedAdaptation, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { allowAdaptations, seedBlockedMagic, unlinkChoicesFromTables } from "./adaptation-seed";
+import { createReviewedAdaptation, expectPdfDownload, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -16,6 +15,11 @@ const KEY = process.env.FAKE_SERVICE_KEY ?? "sb_secret_fakefakefakefakefake";
 const service = { apikey: KEY, authorization: `Bearer ${KEY}`, "content-type": "application/json" };
 /** Machinery words that must never reach the teacher (plus vendors, money and fake percentages). */
 const INTERNAL = /planner|generator|reviewer|revisor|\bjob\b|\bcola\b|queue|schema|pipeline|Anthropic|Claude|OpenAI|GPT|token|\d+ ?%/i;
+/** What the teacher reads in `main`, without the zoom readout of the original's viewer («100 %» is a zoom level, not progress). */
+const mainText = async (page: Page) => {
+  const zooms = await page.locator("main").getByRole("status", { name: "Zoom del original" }).allInnerTexts();
+  return zooms.reduce((text, zoom) => text.replace(zoom, ""), await page.locator("main").innerText());
+};
 
 const serious = async (page: Page) => (await new AxeBuilder({ page }).analyze()).violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -26,6 +30,7 @@ async function teacherWithMaterial(page: Page) {
   await allowAdaptations(page);
   const materialId = await uploadAndOpen(page, { name: "Ficha.pdf", mimeType: "application/pdf", buffer: await makePdf({ marker: `mg-${Date.now()}-${Math.random()}` }) });
   await waitForAnalysis(page);
+  await unlinkChoicesFromTables(page, materialId);
   await page.getByRole("link", { name: "Crear un perfil" }).click();
   await page.getByLabel("Alias o iniciales").fill("M.R.");
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
@@ -40,12 +45,11 @@ async function teacherWithMaterial(page: Page) {
   return { email, materialId, workspaceId: await workspaceOf(page, email) };
 }
 
-async function downloadPdf(page: Page) {
-  const downloading = page.waitForEvent("download", { timeout: 60_000 });
-  await page.getByRole("button", { name: "Descargar PDF" }).first().click();
-  const download = await downloading;
-  expect(readFileSync((await download.path())!).subarray(0, 5).toString("latin1")).toBe("%PDF-");
-}
+const adaptationIdOf = (page: Page) => /\/app\/adaptaciones\/([0-9a-f-]{36})/.exec(page.url())![1]!;
+const downloadPdf = (page: Page) => expectPdfDownload(page, adaptationIdOf(page), () => page.getByRole("button", { name: "Descargar PDF" }).first().click());
+
+/** The stages the progress list shows, by their label only (each item also carries its state: «(hecho)», «(en curso)»…). */
+const MAGIC_STAGES = ["Analizando el material", "Preparando la adaptación", "Organizando las actividades", "Creando la ficha", "Comprobando el resultado", "Ficha lista"];
 
 test("Hacer magia: material + perfil → progreso → ficha final → PDF, sin aprobar nada", async ({ page }) => {
   test.setTimeout(300_000);
@@ -66,18 +70,18 @@ test("Hacer magia: material + perfil → progreso → ficha final → PDF, sin a
   if (!page.url().endsWith("/vista")) {
     const stages = page.getByRole("list", { name: "Fases de la adaptación" });
     if (await stages.isVisible()) {
-      const text = await stages.innerText();
-      expect(text).toContain("Analizando el material");
-      expect(text).toMatch(/Preparando la adaptación[\s\S]*Creando la ficha[\s\S]*Revisando el resultado[\s\S]*Lista/);
-      expect(text).not.toContain("Tu revisión");
-      expect(text).not.toMatch(INTERNAL);
+      const items = (await stages.getByRole("listitem").allInnerTexts()).map((t) => t.split("\n")[0]!.trim());
+      // Every stage of the automatic route, in order; the teacher's review is never one of them.
+      expect(items.filter((label) => MAGIC_STAGES.includes(label))).toEqual(MAGIC_STAGES);
+      expect(items).not.toContain("Tu revisión");
+      expect((await stages.innerText())).not.toMatch(INTERNAL);
       // Refreshing in the middle resumes it; nothing is created twice.
       await page.reload();
     }
   }
   await expect(page).toHaveURL(new RegExp(`${adaptationUrl}/vista$`), { timeout: 60_000 });
   await expect(page.locator(".ms-sheet").first()).toBeVisible();
-  expect(await page.locator("main").innerText()).not.toMatch(INTERNAL);
+  expect(await mainText(page)).not.toMatch(INTERNAL);
   expect(await noOverflow(page)).toBe(true);
   await downloadPdf(page);
 
@@ -102,19 +106,22 @@ test("Hacer magia y la revisión bloquea: no se entrega, se explica sin tecnicis
   await seedBlockedMagic(page, workspaceId, id);
   await page.reload();
 
-  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toBeVisible();
+  // «Hacer magia» never says «La ficha necesita una revisión»: it stops with the reason and offers editing (docs/UX.md).
+  await expect(page.getByText("No hemos podido completar automáticamente esta ficha")).toBeVisible();
+  await expect(page.getByText("Al comprobar el resultado hemos encontrado algo que no podemos corregir automáticamente sin perder lo que el perfil necesita.")).toBeVisible();
+  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Descargar PDF" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Ver la ficha" })).toHaveCount(0);
-  expect(await page.locator("main").innerText()).not.toMatch(INTERNAL);
+  expect(await mainText(page)).not.toMatch(INTERNAL);
   expect(await serious(page)).toEqual([]);
   expect(await noOverflow(page)).toBe(true);
 
   // Nothing runs again by itself: reloading keeps it blocked.
   await page.reload();
-  await expect(page.getByText("La ficha necesita una revisión antes de estar lista")).toBeVisible();
+  await expect(page.getByText("No hemos podido completar automáticamente esta ficha")).toBeVisible();
 
-  // «Revisar adaptación» → the review, already set to the recommendation → correct → «Crear ficha» → the sheet.
-  await page.getByRole("button", { name: "Revisar adaptación" }).click();
+  // «Revisar y editar» (only an option, only when clicked) → the review, set to the recommendation → correct → «Crear ficha».
+  await page.getByRole("button", { name: "Revisar y editar" }).click();
   await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible();
   await expect(page.getByText("Corrige lo que necesites y vuelve a crear la ficha.")).toBeVisible();
   const first = page.locator("form ol > li > fieldset").first();

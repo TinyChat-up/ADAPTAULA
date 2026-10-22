@@ -54,7 +54,8 @@ test("revisar antes de crear: material → análisis → perfil → «Así prepa
   await expect(adapt).toBeVisible();
   // The next step comes before the details of the analysis.
   const adaptBox = await adapt.boundingBox();
-  const activitiesBox = await page.getByRole("heading", { name: "Actividades detectadas" }).boundingBox();
+  // The analysis details live in a closed disclosure («Actividades y elementos a conservar»), below the next step.
+  const activitiesBox = await page.locator("summary", { hasText: "Actividades y elementos a conservar" }).boundingBox();
   expect(adaptBox!.y).toBeLessThan(activitiesBox!.y);
   expect(await serious(page)).toEqual([]);
 
@@ -67,8 +68,8 @@ test("revisar antes de crear: material → análisis → perfil → «Así prepa
   await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/);
   const adaptationUrl = page.url();
   const adaptationId = adaptationUrl.split("/").pop()!;
-  await expect(page.getByRole("heading", { name: "Adaptación", level: 1 })).toBeVisible();
-  await expect(page.getByText("para M.R.")).toBeVisible();
+  await expect(page.getByText("Adaptación · Perfil M.R.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   // 6. The proposal is prepared by itself (reloading while it is prepared finds it again) and waits for the teacher.
   await page.reload();

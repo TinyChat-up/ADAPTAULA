@@ -40,5 +40,7 @@ test("Free: 1 adaptación al mes; la segunda se rechaza con un mensaje claro y e
   await page.goto("/app");
   await expect(page.getByText("1 de 1").first()).toBeVisible();
   await page.goto("/app/historial");
-  await expect(page.locator("main").getByRole("link", { name: /Ver ficha|Ver progreso|Revisar adaptación/ })).toHaveCount(1);
+  // Exactly one adaptation (the refused one created nothing): its row has one action link, «<acción>: <material>, para <perfil>»,
+  // whatever state the first one has reached by now (working, delivered, or stopped and waiting for the teacher).
+  await expect(page.locator("main").getByRole("link", { name: /^(Ver ficha|Ver progreso|Revisar adaptación|Revisar|Ver qué pasó|Crear ficha|Empezar): / })).toHaveCount(1);
 });

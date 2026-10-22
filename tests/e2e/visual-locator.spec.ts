@@ -54,7 +54,10 @@ test("visual necesario: no renderizable → localizar en el original → recorte
   await expect(page.getByText("Esta ficha todavía no se puede mostrar completa.")).toBeVisible();
   await page.goto(`/app/adaptaciones/${id}/vista`);
   await expect(page.getByText("todavía no se ha señalado dónde está en el original").first()).toBeVisible();
-  await page.getByRole("link", { name: "Localizar en el original" }).click();
+  // Every original visual not located yet gets its own link; the required one (vis_2) is the one this sheet waits for.
+  const locate = page.getByRole("link", { name: "Localizar en el original" });
+  expect(await locate.count()).toBeGreaterThanOrEqual(1);
+  await locate.and(page.locator(`a[href*="/visuales/vis_2?"]`)).click();
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}/visuales/vis_2\\?volver=`));
   await expect(page.getByRole("heading", { name: "Localizar en el original", level: 1 })).toBeVisible();
   if (mobile) await expect(page.getByText("Para seleccionar con precisión, abre esta herramienta en una pantalla más grande.")).toBeVisible();
@@ -88,8 +91,8 @@ test("visual necesario: no renderizable → localizar en el original → recorte
   // 4 · Confirm: the server crops the original and the viewer comes back with the visual ready.
   await page.getByRole("button", { name: "Confirmar selección" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/adaptaciones/${id}/vista$`), { timeout: 60_000 });
-  await expect(page.getByText(/localizada a mano en la página 2 \(revisión 1\)/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Corregir la localización" })).toBeVisible();
+  await expect(page.getByText("Imagen del documento original incluida (seleccionada en la página 2).").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Cambiar la selección" }).first()).toBeVisible();
 
   // 5 · Student view: renderable, the crop loads from the authorised route, keeps its aspect ratio and fits the sheet.
   await page.goto(`/app/adaptaciones/${id}/vista?modo=alumno`);

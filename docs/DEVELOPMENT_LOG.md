@@ -1,5 +1,28 @@
 # Registro de desarrollo
 
+## 2026-10-22 — E2E de escritorio y móvil: fallos previos cerrados y una regresión de la PR #53 corregida
+
+- **Base.** La [PR #53](https://github.com/TinyChat-up/ADAPTAULA/pull/53) ya estaba integrada en `main` (`c1c1a96`): no admite commits. La rama `claude/hacer-magia-2` avanzó desde `main` y no se abrió una PR nueva sin autorización.
+- **Reproducción, con Chromium 141.0.7390.37 (`/opt/pw-browsers/chromium`) y Playwright 1.63:**
+  - los 4 fallos iniciales aparecen en `main`;
+  - una línea base de `main` muestra 8 specs más con fallos previos;
+  - `magic-flow` se detiene igual en `5476df9`.
+- **Causas y correcciones:** ver [QA](qa/hacer-magia-2/E2E.md).
+  - **Nombre de descarga «download».** Con el locale C, Chromium no escribe nombres con tildes; se reproduce sin Playwright. El navegador de las E2E se lanza con `LANG=C.UTF-8`, y el contrato de descarga se comprueba entero: `Content-Disposition`, nombre mostrado, nombre en Chromium y PDF que abre.
+  - **Expectativas desfasadas** en `magic-flow`, `pricing`, `profiles`, `adaptation`, `teacher-workflow`, `materials` y `visual-locator`: etapas, cabecera editorial, desplegables, política 4A y copias.
+  - **Datos incoherentes en `magic-flow`.** Una elección apoyada en una tabla necesita un modelo (ADR-023); el test la desliga en el análisis guardado y un test unitario valida el resultado.
+  - **Carreras** (estilos emulados por CDP, keep-alive de `fake-supabase`).
+  - **Visor PDF nativo**, ausente en Chromium headless.
+  - **Caché `.next-e2e` obsoleta y compartida.**
+- **Producto.** La PR #53 había reutilizado las clases `.ms-fields`/`.ms-field` del encabezado Nombre/Fecha, con lo que una ficha de una hoja salía en dos. Los campos de respuesta usan ahora `.ms-answer-field…`, con un test de regresión.
+- **Pruebas:**
+  - unidad y BD: 1871 correctas y 13 omitidas;
+  - PDF real: 49/49;
+  - typecheck, lint (un aviso previo ajeno) y build correctos;
+  - E2E completas: 124/124 en escritorio y móvil (31,4 min; Chromium 141, `.next-e2e` limpia).
+- **Sin llamadas de pago ni servicios remotos.**
+- **Siguiente:** abrir una PR con estos ajustes cuando se autorice.
+
 ## 2026-10-21 — «Hacer magia» 2.0: recuperación localizada y estructura del original
 
 - **Base y rama.** `origin/main` `5476df9`; #37 y #49–#52 MERGED. Rama `claude/hacer-magia-2`. Evidencia: prueba real v3 sobre `da04cf1` (3/8, 0,6674 USD). Originales y resultados fuera de Git.

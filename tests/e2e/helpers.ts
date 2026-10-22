@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
 export const password = "contraseña-segura-123";
@@ -56,7 +57,9 @@ export async function uploadAndOpen(page: Page, file: { name: string; mimeType: 
 }
 
 export async function waitForAnalysis(page: Page) {
-  await expect(page.getByRole("heading", { name: "Adaptaula ha identificado" })).toBeVisible({ timeout: 45_000 });
+  // The first analysis a cold `next dev` serves compiles its routes and the PDF libraries (measured ~45 s here); later ones take
+  // seconds. The wait covers that compile, not the product's latency.
+  await expect(page.getByRole("heading", { name: "Adaptaula ha identificado" })).toBeVisible({ timeout: 90_000 });
 }
 
 /** Page alerts, excluding Next's route announcer (which is also role="alert"). */
@@ -101,4 +104,35 @@ export async function createReviewedAdaptation(page: Page, materialUrl: string, 
   await expect(page).toHaveURL(/\/app\/adaptaciones\/[0-9a-f-]{36}$/, { timeout: 60_000 });
   await expect(page.getByRole("heading", { name: "Así prepararemos esta ficha" })).toBeVisible({ timeout: 60_000 });
   return page.url().split("/").pop()!;
+}
+
+/**
+ * «Descargar PDF» end to end, by its functional contract: the server names the file (`Content-Disposition`, `filename*` UTF-8), the
+ * screen says that same name, the browser offers that same name, and the file saved is a complete PDF that opens. The name
+ * check needs the browser to run under a UTF-8 locale (playwright.config.ts): under the C locale Chromium cannot write a name with
+ * accents to disk and offers «download» instead, whatever the server sends.
+ */
+export async function expectPdfDownload(page: Page, adaptationId: string, click: () => Promise<void>) {
+  const downloading = page.waitForEvent("download", { timeout: 60_000 });
+  await click();
+  const download = await downloading;
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  expect(bytes.subarray(-1024).toString("latin1").trimEnd().endsWith("%%EOF")).toBe(true);
+
+  const announced = await page.getByText(/^Descarga iniciada: .+\.pdf$/).first().innerText();
+  const shown = announced.replace(/^Descarga iniciada: /, "");
+  const response = await page.request.get(`/api/adaptations/${adaptationId}/pdf`);
+  expect(response.status()).toBe(200);
+  const disposition = response.headers()["content-disposition"] ?? "";
+  expect(disposition).toMatch(/^attachment; filename="[^"\\/]+\.pdf"; filename\*=UTF-8''[^;\s]+\.pdf$/);
+  const serverName = decodeURIComponent(/filename\*=UTF-8''([^;\s]+)/.exec(disposition)![1]!);
+  expect(serverName).not.toMatch(/[\\/]/);
+  expect(serverName).not.toContain(adaptationId);
+  expect(shown).toBe(serverName);
+  expect(download.suggestedFilename()).toBe(serverName);
+  // The screen only says «Descarga iniciada» after checking the Blob against the announced size and the %%EOF; the file saved is
+  // also a PDF that opens, with pages.
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(1);
+  return { name: serverName, bytes };
 }
