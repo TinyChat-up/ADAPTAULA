@@ -4,7 +4,7 @@
 > - se cierran los fallos E2E previos (expectativas desfasadas, entorno sin locale UTF-8, caché `.next-e2e`);
 > - se corrige una regresión de #53: los campos de respuesta reutilizaban las clases del encabezado y una ficha de una hoja salía en dos.
 >
-> E2E completas: última pasada en curso. [QA](qa/hacer-magia-2/E2E.md).
+> E2E completas: 124/124 en escritorio y móvil (31,4 min; Chromium 141, `.next-e2e` limpia). [QA](qa/hacer-magia-2/E2E.md).
 
 > **«Hacer magia» 2.0 (2026-10-21):** rama `claude/hacer-magia-2` desde `5476df9` (#37 y #49–#52 integradas).
 > - **Cambios:** reparación localizada de la generación (criba, reparación sin modelo, regeneración solo de las decisiones afectadas, guarda sin progreso, diagnóstico); estructura del original conservada (líneas, párrafos, campos «Operaciones y unidades»/«Respuesta», Sujeto/Predicado, ordenación); apoyos sin redundancia; detección de definiciones que revelan lo evaluado; paradas visuales con el motivo correcto (ya no se culpa al plan cuando las ilustraciones están desactivadas).

@@ -19,7 +19,7 @@
   - unidad y BD: 1871 correctas y 13 omitidas;
   - PDF real: 49/49;
   - typecheck, lint (un aviso previo ajeno) y build correctos;
-  - E2E completas: última pasada en curso.
+  - E2E completas: 124/124 en escritorio y móvil (31,4 min; Chromium 141, `.next-e2e` limpia).
 - **Sin llamadas de pago ni servicios remotos.**
 - **Siguiente:** abrir una PR con estos ajustes cuando se autorice.
 

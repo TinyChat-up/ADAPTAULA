@@ -46,7 +46,17 @@ Continuación de [«Hacer magia» 2.0](README.md). La [PR #53](https://github.co
 
 ## Resultado final
 
-Pendiente de la última ejecución (ver el registro de desarrollo).
+- **E2E:** 124/124 correctas, todos los specs en escritorio y móvil (31,4 min). Incluye los cuatro de `magic-flow` y `render`, y las pruebas de `magic-flow` que antes no llegaban a ejecutarse («la revisión bloquea» y «solo lectura»). Se ejecutaron contra servidores levantados a mano, con la caché `.next-e2e` limpia y sin procesos previos.
+- **PDF real:** 49/49 (`vitest.pdf.config.mts`), incluida «one sheet of paper».
+- **Unidad y BD:** 1871 correctas y 13 omitidas (Supabase real sin credenciales).
+- **Calidad:** typecheck, lint (sin errores; un aviso previo ajeno) y build de producción correctos.
+
+**Pruebas críticas de Hacer magia**, repetidas en BD, unidad, PDF y E2E:
+- reparación localizada (el generador recibe solo la decisión afectada);
+- conservación de estructura (campos, ordenación, oraciones, párrafos);
+- ausencia de respuestas en la ficha del alumno;
+- un único consumo de cuota y una sola reserva;
+- PDF completo y descargable con su nombre.
 
 ## Cómo ejecutarlas aquí
 
