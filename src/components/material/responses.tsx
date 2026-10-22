@@ -110,10 +110,10 @@ export function Response({ response }: { response: RenderResponse }) {
     case "fields":
       // Every labelled field of the original keeps its label and its own space: lines to write, a box to calculate in.
       return (
-        <div className="ms-fields">
+        <div className="ms-answer-fields">
           {response.fields.map((f, i) => (
-            <div key={i} className={f.space === "box" ? "ms-field ms-field-box" : f.lines > 1 ? "ms-field ms-field-lines" : "ms-field ms-field-line"}>
-              <p className="ms-field-label">{f.label}:</p>
+            <div key={i} className={f.space === "box" ? "ms-answer-field ms-answer-field-box" : f.lines > 1 ? "ms-answer-field ms-answer-field-lines" : "ms-answer-field ms-answer-field-line"}>
+              <p className="ms-answer-field-label">{f.label}:</p>
               {f.space === "box" ? <div className="ms-box-area" style={{ height: `calc(var(--ms-line) * ${f.lines})` }} aria-hidden /> : <Lines count={f.lines} />}
             </div>
           ))}

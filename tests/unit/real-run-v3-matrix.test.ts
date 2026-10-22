@@ -78,7 +78,13 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     for (const a of activities(doc)) expect(a.response).toEqual({ kind: "fields", fields: [{ label: "Operaciones y unidades", space: "box", lines: 5 }, { label: "Respuesta", space: "lines", lines: 2 }] });
     const out = html(doc);
     expect(out.match(/Operaciones y unidades/g)).toHaveLength(2);
-    expect(out.match(/ms-field-box/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(out.match(/ms-answer-field-box/g)?.length).toBeGreaterThanOrEqual(2);
+    // The sheet header's name/date fields own `.ms-fields` / `.ms-field`: answer fields never reuse (and so never restyle) them.
+    // (Reusing them stacked «Nombre» and «Fecha» and pushed a one-sheet PDF onto two: tests/pdf/export.test.ts.)
+    expect(out).toContain('<p class="ms-answer-field-label">Operaciones y unidades:</p>');
+    const css = readFileSync("src/components/material/material.css", "utf8");
+    expect(css.match(/^\.ms-fields \{/gm)).toHaveLength(1);
+    expect(css.match(/^\.ms-field \{/gm)).toHaveLength(1);
   });
 
   it("02 · un apoyo repetido (hoja + cada actividad) se imprime una vez y conserva la trazabilidad de todas sus decisiones", () => {
