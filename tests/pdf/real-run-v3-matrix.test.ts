@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import { buildRenderModel } from "@/lib/render/model";
 import { documentOf, sheet } from "../support/real-run-v3-synthetic";
-import { printPdf } from "./harness";
+import { localChromium, printPdf } from "./harness";
 
 /**
  * The structural defects of the real run v3 on REAL paper (Chromium → PDF → pdf.js text): the synthetic equivalents of sheets 02,
@@ -22,7 +22,7 @@ const print = async (id: string) => {
 async function measure<T>(id: string, probe: () => T): Promise<T> {
   const { model } = buildRenderModel(documentOf(sheet(id)), { mode: "student", design: "claro", deferred: [] });
   const { html } = await renderPrintHtml(model, []);
-  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium", args: ["--no-sandbox"], headless: true });
+  const browser = await chromium.launch({ executablePath: localChromium(), args: ["--no-sandbox"], headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 794, height: 1123 } });
     await page.emulateMedia({ media: "print" });
