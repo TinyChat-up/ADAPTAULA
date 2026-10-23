@@ -1,6 +1,6 @@
 # Piloto aislado de recursos visuales Max
 
-Base `56c899f` de main, con #65 integrada. Rama `codex/max-visuales-piloto`. Sin modificaciones de 024, 026, seed, precios, Stripe o servicios remotos. No se ha generado ninguna imagen con un proveedor real.
+Base `56c899f` de main, con #65 integrada. Rama `codex/max-visuales-piloto`; [PR #66](https://github.com/TinyChat-up/ADAPTAULA/pull/66) abierta sin merge. Sin modificaciones de 024, 026, seed, precios, Stripe o servicios remotos. No se ha generado ninguna imagen con un proveedor real.
 
 ## Estado comprobado
 
