@@ -1,6 +1,6 @@
 # Estándar editorial y espacios de resolución (Fase B)
 
-Estado: **implementado** (`answer_space@v1`, ADR-040). Sin llamadas de IA: todo es determinista y se decide en el servidor. Las evidencias están en [QA de la Fase B](qa/fase-b-editorial/README.md), y el punto de partida en la [validación real de la #55](qa/figuras-originales/VALIDACION-REAL.md).
+Estado: **implementado** (`answer_space@v2`, ADR-040 y ajuste #64). Sin llamadas de IA: todo es determinista y se decide en el servidor. Las evidencias están en [QA de la Fase B](qa/fase-b-editorial/README.md), y el punto de partida en la [validación real de la #55](qa/figuras-originales/VALIDACION-REAL.md).
 
 ## 1. Principios
 
@@ -166,3 +166,14 @@ Una frase con comas, letras repetidas o números que no siguen no lo son. Cuando
 - espacio para dibujar sobre una figura;
 - una alternativa oral por perfil sin decisión del plan;
 - validación con docentes.
+
+
+## 10. Ajuste de maquetación #64 (2026-10-23)
+
+[Pruebas y PDF comparados](qa/maquetacion-pedagogica-64/README.md). El ensamblador utiliza el mismo `taskGroups` que el renderer: el límite de cuatro actividades ya no produce antes un reparto 4 + 1 que CLARO no podía equilibrar. Las páginas de origen y el máximo del perfil siguen siendo límites.
+
+`answer_space@v2` corrige el conteo: `3 / 4` es un dato; una barra de fracción no constituye otra operación. No reduce la superficie original ni la de documentos guardados. Los campos situados al final de la consigna se reconocen también cuando hay contexto separado.
+
+`material_renderer@v8` agrupa la unidad completa con ejemplo y comprobación final referenciados, sin cambiar el orden pedagógico. La estimación habilita mantener juntas las unidades que pueden caber; las extensas siguen por campos, líneas o zonas. Dos actividades finales cortas pueden viajar juntas si su altura estimada combinada es como máximo media hoja útil. La decisión final es de Chromium, no un número fijo de páginas.
+
+Esta regla amplía §7: el ejemplo ya forma parte de la unidad exterior, mientras la actividad interior conserva sus reglas de fragmentación. No se agrupa incondicionalmente una redacción de 40 líneas: eso añadía una hoja innecesaria y se comprueba como regresión. La muestra de cinco tareas conserva tres hojas, con el problema completo y la última compartida por recta y explicación. La cuantificación del espacio es comprobable; su adecuación individual requiere revisión docente.

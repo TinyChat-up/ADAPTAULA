@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Maquetación pedagógica #64 (2026-10-23):** trabajo desde `main` `fb314b2` (#62 integrada), rama `codex/64-maquetacion-pedagogica`. Corrección de conteo de fracciones, campos etiquetados con contexto, reparto compartido de actividades y unidad de paginación con ejemplo/comprobación; sin segundo renderer. [PDF antes/después, pruebas y límites](qa/maquetacion-pedagogica-64/README.md). Las menciones a PR abiertas en los antecedentes siguientes son históricas: #52–#62 ya están integradas. Sin merge, despliegue ni migraciones remotas.
+
 > **E2E y regresión de la PR #53 (2026-10-22):** la PR #53 está integrada. En `claude/hacer-magia-2`, sin PR nueva todavía:
 > - se cierran los fallos E2E previos (expectativas desfasadas, entorno sin locale UTF-8, caché `.next-e2e`);
 > - se corrige una regresión de #53: los campos de respuesta reutilizaban las clases del encabezado y una ficha de una hoja salía en dos.
