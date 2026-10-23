@@ -5,7 +5,7 @@
 SaaS español para docentes: transforma materiales educativos existentes en versiones adaptadas a necesidades funcionales de aprendizaje. El producto NO diagnostica y NO sustituye al profesional: genera propuestas editables.
 
 Documentación de referencia (leer antes de tocar el área correspondiente):
-`docs/PRODUCT.md` · `docs/ARCHITECTURE.md` · `docs/DATABASE.md` · `docs/AI_PIPELINE.md` · `docs/ADAPTATION.md` · `docs/PROMPTS.md` · `docs/SECURITY.md` · `docs/PRIVACY.md` · `docs/BILLING.md` · `docs/UX.md` · `docs/EDITORIAL.md` · `docs/ROADMAP.md`
+`docs/PRODUCT.md` · `docs/ARCHITECTURE.md` · `docs/DATABASE.md` · `docs/AI_PIPELINE.md` · `docs/ADAPTATION.md` · `docs/PROMPTS.md` · `docs/SECURITY.md` · `docs/PRIVACY.md` · `docs/BILLING.md` · `docs/UX.md` · `docs/EDITORIAL.md` · `docs/BRAND.md` · `docs/ROADMAP.md`
 
 Continuidad entre agentes: empezar por [PROJECT_STATUS.md](docs/PROJECT_STATUS.md), las prioridades de [ROADMAP.md](docs/ROADMAP.md) y [DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md). Seguir el protocolo de inicio/cierre de [AGENTS.md](AGENTS.md); las decisiones se mantienen en los ADR de [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -1,5 +1,46 @@
 # Registro de desarrollo
 
+## 2026-10-23 — Fase C: identidad visual corporativa (ADR-041, `material_renderer@v7`)
+
+- **Base:**
+  - rama `claude/fase-c-marca`, desde la cabeza de la #56 (`d04c73c`), que sigue abierta y sin fusionar. Esta PR depende de ella;
+  - sin IA de pago, sin tocar Supabase remoto, Stripe ni planes, y sin desplegar.
+- **Fuente:** las dos imágenes oficiales (símbolo y logotipo) que entregó la persona responsable de la marca. No se inventa ni se altera ninguna.
+- **Piezas** (`public/brand/`, `src/app/`):
+  - SVG trazados con fidelidad medida contra el original:
+    - logotipo: IoU de 0,996 o más por color, contorno con un error de ⅓ px o menos;
+    - símbolo: silueta de 0,9992 y degradados con un error medio de 2,6/255;
+  - logotipo horizontal, variantes en grises y en una tinta, PNG transparentes, favicon de 16, 32 y 48 px, `icon.svg`, `apple-icon` y manifiesto con 192 y 512 px.
+
+  Las herramientas de trazado se quedaron fuera del proyecto: sin dependencias nuevas.
+- **Plataforma:**
+  - `<Logo>` con las piezas oficiales en la landing, el pie, el acceso, la bienvenida, la barra lateral (solo el símbolo si está plegada) y la cabecera móvil;
+  - tokens: el azul marino de la marca como texto y primario fuerte, `#063f79` como primario, el azul de marca como acento y foco, y los colores de marca con variantes accesibles medidas;
+  - «CLARO» desaparece de los textos para el docente;
+  - la muestra de la landing lleva el símbolo, como la ficha real.
+- **Ficha:**
+  - `BrandSymbol`, en línea y vectorial en el PDF, sin URL y dentro de la CSP, a 6 mm en la cabecera CLARO;
+  - el acento CLARO pasa a ser el azul marino de la marca;
+  - renderer v7.
+- **Pruebas:**
+  - E2E nueva `brand-identity.spec.ts` (escritorio y móvil):
+    - piezas cargadas, con su proporción y su `alt`;
+    - favicon y manifiesto, axe sin infracciones graves y sin desbordes;
+    - el símbolo en la ficha;
+  - ajustadas con revisión explícita: la galería PDF, el diseño de la ficha y la CSP de impresión, para admitir solo los degradados propios del símbolo;
+  - unidad y BD: 1919 correctas y 13 omitidas;
+  - PDF: 64/64. Las ocho fichas conservan sus hojas, y la de Matemáticas no tiene ninguna imagen rasterizada;
+  - E2E completa: E2E_RESULT_C.
+- **Regresión encontrada y corregida:** el acento sobre su fondo suave daba 4,41:1 en «Próximamente». Pasa a `#0060eb` (4,73:1).
+- **Riesgos:**
+  - la dependencia de la #56;
+  - piezas trazadas desde imágenes rasterizadas (sustituibles por los originales vectoriales con los mismos nombres);
+  - pantallas poco frecuentes que no se han revisado a mano con los colores nuevos.
+- **Siguiente:**
+  - fusionar la #56 y después esta PR;
+  - la barra de la vista previa, con la descarga como acción principal;
+  - la tipografía de los titulares, con quien lleva la marca.
+
 ## 2026-10-22 — Fase B, cierre de calidad de la PR #56: nunca menos espacio, cuadrículas por demanda y `material_renderer@v6`
 
 - **Base.** La misma rama `claude/fase-b-editorial` y la [PR #56](https://github.com/TinyChat-up/ADAPTAULA/pull/56), sin fusionar. Sin IA de pago, sin tocar Supabase remoto, Stripe ni producción. CLARO sigue siendo el único diseño.

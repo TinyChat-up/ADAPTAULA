@@ -473,3 +473,39 @@ Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que
 - La línea base de tinta del *smoke* PDF se regenera para CLARO.
 
 Detalle en [EDITORIAL.md](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md).
+
+## ADR-041 — Identidad visual corporativa: piezas oficiales, tokens de marca y símbolo en la ficha (`material_renderer@v7`, 2026-10-23)
+
+**Contexto.** La plataforma tenía un icono provisional y la palabra en texto, y ningún color salía de la marca. La persona responsable entregó dos imágenes oficiales, el símbolo y el logotipo, como única fuente de verdad. No había originales vectoriales.
+
+**Decisión.**
+- **Piezas.**
+  - SVG fieles a las dos imágenes, con fidelidad medida contra el original: logotipo con IoU de 0,996 o más por color; símbolo con silueta de 0,9992 y error de color medio de 2,6/255;
+  - variantes en grises y en una tinta, rasterizados con fondo transparente, favicon, icono de Apple y manifiesto (`public/brand/`, `src/app/`).
+
+  Nunca se redibujan ni se recolorean.
+- **Interfaz.**
+  - `<Logo>`: el símbolo y el logotipo oficiales como imágenes estáticas en las proporciones del logotipo horizontal; con la barra plegada, solo el símbolo;
+  - el azul marino de la marca es el color de interfaz (`foreground` y `primary-strong`); `#063f79`, el del círculo del símbolo, es el primario interactivo; el azul de marca es el acento (`#0060eb`) y el foco (`#0067fd`);
+  - naranja, verde y cian, solo como acento puntual, con variantes accesibles medidas.
+
+  Los estados conservan sus propios colores.
+- **Ficha.**
+  - En la cabecera CLARO, el símbolo sustituye a la palabra, a 6 mm. Es SVG en línea (`BrandSymbol`, datos en `src/lib/brand/symbol.ts`): vectorial en el PDF, sin URL y dentro de la CSP de impresión, sin pasar por los recursos fijados del docente;
+  - el acento de la ficha pasa a ser el azul marino de la marca;
+  - el renderer sube a `material_renderer@v7`: el contenido, el espacio de respuesta y la paginación son los de la v6.
+
+**Alternativas descartadas:**
+- **Imitar el logotipo con texto y CSS:** no es el logotipo oficial.
+- **Vectorizar automáticamente sin medir:** deforma letras y curvas.
+- **El símbolo como `<img>` o `data:` en la ficha:** se rasteriza o añade una imagen al PDF. En línea es vectorial y no toca la canalización de recursos.
+- **El logotipo horizontal en la ficha:** compite con el contenido.
+- **Usar los colores de marca como estados.**
+
+**Consecuencias.**
+- Los documentos guardados se leen e imprimen igual. La versión del renderer no se guarda ni es clave de caché: nombra lo que se imprime.
+- Las huellas de modelo, CSS y HTML cambian, por la versión y por el símbolo.
+- Las ocho fichas de la galería conservan sus hojas.
+- Si aparecen los originales vectoriales del diseñador, sustituyen a estos SVG con los mismos nombres.
+
+Detalle en [BRAND.md](BRAND.md) y [QA](qa/fase-c-marca/README.md). Esta entrega depende de la #56 (Fase B), sobre la que se construye.

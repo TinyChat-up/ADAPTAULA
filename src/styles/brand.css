@@ -1,0 +1,42 @@
+/*
+ * Adaptaula · identidad corporativa (Fase C, docs/BRAND.md). Valores exactos medidos en los originales oficiales.
+ * La marca no es un color de estado: éxito, aviso y error siguen siendo --color-success, --color-warning y --color-danger.
+ */
+@theme {
+  /* Colores de marca: el logotipo (planos) y los extremos de los degradados del símbolo. */
+  --color-brand-navy: #05234b;
+  --color-brand-navy-light: #063f79;
+  --color-brand-orange: #fe8002;
+  --color-brand-green: #21c052;
+  --color-brand-blue: #0067fd;
+  --color-brand-cyan: #01b5dc;
+  /* Variantes accesibles del mismo tono para la interfaz, medidas sobre la superficie, el fondo y la superficie atenuada: «-ui» llega
+     a 3:1 (iconos, bordes) y «-ink» a 4,5:1 (texto). Sobre los fondos suaves de primario y acento solo el azul «-ink» llega a 4,5:1:
+     naranja, verde y cian no se usan como texto sobre ellos. El azul de marca ya llega a 3:1 tal cual. */
+  --color-brand-orange-ui: #db6e01;
+  --color-brand-orange-ink: #ae5701;
+  --color-brand-green-ui: #1ca145;
+  --color-brand-green-ink: #168037;
+  --color-brand-blue-ink: #0060eb;
+  --color-brand-cyan-ui: #0199ba;
+  --color-brand-cyan-ink: #017993;
+}
+
+/* Logotipo horizontal: símbolo y logotipo oficiales en las proporciones de public/brand/adaptaula-logo-horizontal.svg.
+   El logotipo mide 1em de alto; el símbolo, 1,018em, centrado sobre la altura de ascendente a línea base. */
+@layer components {
+  .brand-lockup { display: inline-flex; flex: none; align-items: flex-start; gap: 0.296em; padding-top: 0.1175em; border-radius: var(--radius-control); font-size: 1.5rem; line-height: 0; }
+  .brand-lockup--sm { font-size: 1.25rem; }
+  .brand-lockup--lg { font-size: 1.875rem; }
+  .brand-lockup img { display: block; width: auto; max-width: none; }
+  .brand-symbol { height: 1.0183em; margin-top: -0.1175em; }
+  .brand-wordmark { height: 1em; }
+  /* Solo el símbolo: más alto para que siga reconociéndose sin el nombre. */
+  .brand-lockup--symbol { padding-top: 0; }
+  .brand-lockup--symbol .brand-wordmark { display: none; }
+  .brand-lockup--symbol .brand-symbol { height: 2rem; margin-top: 0; }
+}
+@media (forced-colors: active) {
+  /* Los recursos oficiales se ven tal cual; el enlace sigue mostrando su foco del sistema. */
+  .brand-lockup img { forced-color-adjust: none; }
+}

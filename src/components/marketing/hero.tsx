@@ -13,7 +13,7 @@ export function Hero() {
             Tus materiales de siempre.<br /><span className="text-primary">Adaptados a cada forma de aprender.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-xl">
-            Sube una ficha, elige los apoyos funcionales y prepara una propuesta. Revísala con CLARO, ajusta lo necesario y descarga el PDF para tu aula.
+            Sube una ficha, elige los apoyos funcionales y prepara una propuesta. Revísala, ajusta lo necesario y descarga el PDF para tu aula.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <LinkButton href="/registro" size="lg">Empezar gratis<ArrowRight aria-hidden className="size-4" /></LinkButton>

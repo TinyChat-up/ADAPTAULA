@@ -2,7 +2,7 @@ export const STEPS = [
   { title: "Sube tu material", text: "Selecciona una ficha en PDF, JPG, PNG o WEBP. El archivo se guarda de forma privada y se comprueba antes de analizarlo." },
   { title: "Elige los apoyos", text: "Usa un perfil funcional con alias: lectura, organización, lenguaje o pasos matemáticos, según lo que necesite la actividad." },
   { title: "Prepara la adaptación", text: "Hacer magia analiza el material y prepara una propuesta. Si una figura o un contenido no se puede comprobar, te lo explica y se detiene." },
-  { title: "Revisa y edita", text: "Compara con el original. CLARO permite ajustar enunciados editables, presentación y espacio de respuesta en un borrador separado." },
+  { title: "Revisa y edita", text: "Compara con el original y ajusta enunciados, presentación y espacio de respuesta en un borrador separado." },
   { title: "Descarga el PDF", text: "Descarga la ficha generada o tu revisión guardada. Comprueba el resultado antes de entregarlo al alumnado." },
 ] as const;
 

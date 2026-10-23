@@ -26,7 +26,7 @@ export function AppShell({
       footer={<><SidebarSecondaryNav /><UserFooter name={user.name} email={user.email} usage={usage} /></>}
       header={<>
         <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-3 px-5 md:hidden">
-          <Logo href="/app" />
+          <Logo href="/app" size="sm" />
           <Link href="/app/uso" className="inline-flex min-h-11 items-center rounded-control px-2 text-xs font-medium text-muted-foreground hover:bg-primary-soft">
             Plan {usage.plan.name} · {usage.adaptations.used}/{usage.adaptations.limit}<span className="sr-only"> adaptaciones este mes</span>
           </Link>

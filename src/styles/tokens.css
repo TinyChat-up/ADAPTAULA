@@ -1,4 +1,5 @@
-/* Adaptaula 2.0 · interfaz docente. El papel y el PDF conservan los tokens --ms-* de CLARO. */
+/* Adaptaula 2.0 · interfaz docente. El papel y el PDF conservan los tokens --ms-* de CLARO.
+   Fase C: el azul marino de la marca es el color principal; el azul intenso, acento y foco (docs/BRAND.md). */
 @theme {
   --color-background: #f7f8fa;
   --color-surface: #ffffff;
@@ -6,19 +7,19 @@
   --color-surface-inset: #e8edf2;
   --color-border: #dce2e8;
   --color-control-border: #7d8b9c;
-  --color-foreground: #1e2e43;
+  --color-foreground: #05234b;
   --color-muted-foreground: #536379;
-  --color-primary: #285782;
-  --color-primary-strong: #1e4164;
+  --color-primary: #063f79;
+  --color-primary-strong: #05234b;
   --color-primary-foreground: #ffffff;
-  --color-primary-soft: #e6eef6;
-  --color-accent: #285782;
-  --color-accent-soft: #e6eef6;
+  --color-primary-soft: #e7edf5;
+  --color-accent: #0060eb;
+  --color-accent-soft: #e8f0fe;
   --color-success: #24623e;
   --color-success-strong: #1c5132;
   --color-warning: #925015;
   --color-danger: #b12828;
-  --color-focus: #285782;
+  --color-focus: #0067fd;
   --radius-control: 0.75rem;
   --radius-card: 1.25rem;
   --radius-panel: 1.5rem;

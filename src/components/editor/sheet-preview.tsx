@@ -51,9 +51,9 @@ export function SheetPreview({ model, selection, page: controlledPage, onPageCha
       <Button variant="ghost" size="sm" onClick={() => { setZoom(100); stage.current?.scrollTo({ left: 0 }); }}>Ajustar al ancho</Button>
     </ActionBar>
     <div ref={stage} className="sheet-viewport" role="region" aria-label="Hoja A4, desplazable" tabIndex={0}>
-      <p role="status" className="p-3 text-sm text-muted-foreground">Página {page} de la vista CLARO</p>
+      <p role="status" className="p-3 text-sm text-muted-foreground">Página {page} de la ficha</p>
       <div style={{ zoom: scale * zoom / 100 }}><MaterialSheet model={model} visiblePage={page} selection={selection} /></div>
     </div>
-    <p className="text-xs text-muted-foreground">Páginas de la vista CLARO. Usa «Vista previa de impresión» para comprobar las hojas definitivas de la revisión guardada.</p>
+    <p className="text-xs text-muted-foreground">Páginas de la ficha. Usa «Vista previa de impresión» para comprobar las hojas definitivas de la revisión guardada.</p>
   </div>;
 }

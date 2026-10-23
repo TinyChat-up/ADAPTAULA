@@ -21,7 +21,7 @@ Estado: **implementado** (`answer_space@v1`, ADR-040). Sin llamadas de IA: todo 
 | Componente | Regla | Dónde |
 |---|---|---|
 | Diseño | CLARO es el **valor por defecto** de `buildRenderModel` y el único que usa el producto (`PRODUCT_DESIGN`). `standard` queda como capa histórica y solo se imprime si se pide explícitamente (pruebas y comparación). | `src/lib/render/model.ts`, `sheet-model.ts` |
-| Cabecera | Una sola línea con la materia por su **nombre legible** y el curso («4.º Primaria»), la marca ADAPTAULA discreta a la derecha y Nombre y Fecha a mano. Una clave de catálogo (`conocimiento-medio`) no se imprime nunca. | `sheet.tsx`, `subjectName()` |
+| Cabecera | Una sola línea con la materia por su **nombre legible** y el curso («4.º Primaria»), el **símbolo oficial** de Adaptaula a la derecha (6 mm, vectorial, [BRAND.md §5](BRAND.md)) y Nombre y Fecha a mano. Una clave de catálogo (`conocimiento-medio`) no se imprime nunca. | `sheet.tsx`, `brand-symbol.tsx`, `subjectName()` |
 | Título, orientación y actividad | Mismo orden siempre: número «01» en la columna guía, consigna, figura o recurso, apoyos y zona de respuesta. | `nodes.tsx`, `material.css` (CLARO) |
 | Tokens | Tamaño por etapa (Primaria 12,5 pt), renglón (10 mm en Primaria), **casilla de cuadrícula** (7 mm en Primaria, 6 en ESO, 5 en Bachillerato), márgenes de 18 mm, un acento que se imprime como negro y grises que se ven en escala de grises. | `src/lib/render/tokens.ts` |
 | Numeración de páginas | «N / M» física, en el margen inferior. | `material.css` (`@page`) |
@@ -139,6 +139,7 @@ Una frase con comas, letras repetidas o números que no siguen no lo son. Cuando
 - **Lo que puede escribir un modelo no cambia:** el esquema del borrador y su orden de variantes son los mismos.
 - `Presentation.answer_space` y `AssetSource.heightMm` son opcionales. `ANSWER_SPACE_VERSION` documenta la versión del motor.
 - **`material_renderer@v6`** (antes v5). Lo impreso cambia de contrato: CLARO por defecto, cuadrículas SVG en zonas de casillas enteras, campos con etiqueta y hueco de unidad, paginación por altura física y figuras repetidas. La versión no se guarda en ningún documento ni es clave de caché o huella: nombra lo que imprime el renderer. Se usa en el modelo de render, en la comprobación de coherencia de `print/html.ts` (mismo proceso) y en el panel docente. Los documentos guardados se leen e imprimen igual que antes.
+- **`material_renderer@v7`** (Fase C, ADR-041). El símbolo oficial sustituye a la palabra en la cabecera y el acento es el azul marino de la marca (`#05234b`). El contenido, los espacios y la paginación son los de la v6.
 - No hay migraciones ni cambios en RLS, cuotas, privacidad, identidad de originales ni trazabilidad.
 - La línea base de tinta del *smoke* PDF se ha regenerado porque sus fixtures se imprimen ahora con CLARO (revisado a ojo).
 

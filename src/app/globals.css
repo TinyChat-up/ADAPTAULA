@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
+@import "../styles/brand.css";
 @import "../styles/chrome.css";
 @import "../styles/workspace.css";
 @import "../styles/document-review.css";
@@ -18,7 +19,7 @@ body {
 :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 main:focus { outline: none; }
 button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
-::selection { background: #c9d8e7; color: #192b40; }
+::selection { background: #cfdcee; color: #05234b; }
 
 .eyebrow { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
 .editorial-list { border-block: 1px solid var(--color-border); }
@@ -46,7 +47,7 @@ dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
   overflow-wrap: anywhere;
   padding: 1.4rem 1.2rem;
   background: #fff;
-  color: #192b40;
+  color: var(--color-brand-navy);
   border: 1px solid #b8c1c8;
   font-size: 0.75rem;
   line-height: 1.55;
@@ -55,7 +56,7 @@ dialog[open].sheet { animation: sheet-up 180ms var(--ease-out-soft); }
 .sample-paper table { width: 100%; table-layout: fixed; overflow-wrap: anywhere; border-collapse: collapse; font-size: 0.6875rem; margin-block: 0.75rem; }
 .sample-paper th, .sample-paper td { border: 1px solid #b8c1c8; padding: 0.35rem 0.25rem; text-align: left; }
 .sample-paper th { font-weight: 600; }
-.sample-paper--adapted { border-top: 3px solid #315a86; }
+.sample-paper--adapted { border-top: 3px solid var(--color-brand-navy); }
 .sample-paper--adapted th { background: #e7eef4; }
 .sample-paper--adapted td { padding-block: 0.55rem; }
 .sample-paper--original { font-family: Georgia, "Times New Roman", serif; }

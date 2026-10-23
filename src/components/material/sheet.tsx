@@ -1,3 +1,4 @@
+import { BrandSymbol } from "./brand-symbol";
 import { NodeView, type ActivitySelection } from "./nodes";
 import { tokenStyle } from "@/lib/render/tokens";
 import type { RenderModel } from "@/lib/render/model";
@@ -17,10 +18,11 @@ export function MaterialSheet({ model, visiblePage, selection }: { model: Render
           {index === 0 && (meta || header.fields.length > 0) ? (
             <header className="ms-header">
               {model.design === "claro" ? (
-                // Sistema CLARO: subject and course on the left, the Adaptaula mark on the right, very discreet. Nothing else.
+                // Sistema CLARO: subject and course on the left, the official symbol on the right, small. Nothing else: the brand lets a
+                // sheet be recognised and never takes room from the activities.
                 <div className="ms-masthead">
                   {meta ? <p className="ms-meta">{meta}</p> : <span />}
-                  <p className="ms-brand">Adaptaula</p>
+                  <BrandSymbol greyscale={model.tokens.contrast === "high"} />
                 </div>
               ) : meta ? (
                 <p className="ms-meta">{meta}</p>

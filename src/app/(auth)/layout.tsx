@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <aside className="hidden border-r border-border bg-surface-muted px-10 py-12 text-foreground lg:flex lg:flex-col lg:justify-between xl:px-16">
-        <Logo />
+        <Logo size="lg" />
         <div className="max-w-lg space-y-8">
           <p className="eyebrow text-primary">Del documento al aula</p>
           <p className="font-editorial text-5xl leading-[1.12] tracking-tight">Tus materiales de siempre. Más formas de aprender.</p>

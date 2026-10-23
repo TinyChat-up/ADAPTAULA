@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description:
     "Sube tus fichas y crea versiones adaptadas a las necesidades de aprendizaje de tu alumnado. Para docentes de Primaria, ESO y Bachillerato.",
 };
+
+export const viewport: Viewport = { themeColor: "#05234b" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
