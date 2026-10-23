@@ -13,11 +13,15 @@ import { formatDay } from "@/lib/format/date";
 import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { countActiveProfiles } from "@/lib/profiles/repository";
 import { updateAccountName } from "./actions";
+import { StripePilot } from "@/components/account/stripe-pilot";
+import { billingPilotConfig, loadBillingPilot } from "@/lib/billing/pilot";
 
 export const metadata: Metadata = { title: "Plan y cuenta" };
 
 export default async function UsagePage() {
   const ctx = await requireWorkspace();
+  const pilotConfig = ctx.role === 'owner' && ctx.workspace.type === 'personal' ? billingPilotConfig(ctx.workspace.id) : null;
+  const pilot = pilotConfig ? await loadBillingPilot(ctx.workspace.id) : null;
   const [usage, profiles, request] = await Promise.all([
     getWorkspaceUsage(ctx.workspace.id), countActiveProfiles(ctx.workspace.id),
     (await getSupabase()).from("account_deletion_requests").select("status").eq("user_id", ctx.user.id).maybeSingle(),
@@ -72,6 +76,8 @@ export default async function UsagePage() {
           </div>
         </div>
       </section>
+
+      {pilot && <StripePilot state={pilot.state} expires={pilot.expires ? formatDay(pilot.expires) : null} />}
 
       <section aria-labelledby="tus-datos" className="space-y-5 border-t border-border pt-6">
         <h2 id="tus-datos" className="text-xl font-semibold">Tus datos y privacidad</h2>

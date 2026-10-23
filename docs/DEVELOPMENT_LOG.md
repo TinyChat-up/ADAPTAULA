@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-23 — Piloto privado de Stripe TEST y Max, destino producción
+
+- Autorización de destino: el fundador decide trabajar en producción; no se interpreta como activar cobros LIVE ni autorizar generación pagada. #66 integrada; base `e016d8b`, rama `codex/stripe-piloto-produccion`.
+- Checkout privado, propietario/miembro único, sesión/origen/rate limit; precio TEST mensual/EUR/IVA incluido validado contra catálogo. Firma cruda y consulta del estado actual; RPC atómica, asociación e idempotencia, sin confiar en el retorno del navegador.
+- Migración 030 nueva: solicitud privada con RLS, vínculo en suscripciones y resolver efectivo con caducidad a siete días, sin Cron ni cambio del catálogo. Cinco imágenes para el único piloto confirmado. No sobrescribe suscripciones previas.
+- UI limitada a cuenta autorizada y desaparece si falta la migración; flags apagados. No cambia CLARO, modelos ni prompts.
+- [Guía de despliegue, inspección y revocación](qa/stripe-piloto-produccion/README.md). No se ha conectado ningún servicio real ni aplicado SQL remoto. Cierre: unidad/BD 1.967 correctas y 13 omitidas; dominio final 38/38; PDF 75/75; E2E completa 134/134 en 18,6 min y UI privada adicional 2/2 (respuesta Stripe simulada); typecheck/build y smoke correctos, lint sin errores y un aviso previo. Pasos de `check` con binarios instalados. Se retiró el directorio generado del servidor auxiliar de captura antes de lint; no se cambiaron reglas para omitir errores de producto. Consulta pública del dominio facilitado bloqueada por túnel 403; no se acredita despliegue. [PR #67](https://github.com/TinyChat-up/ADAPTAULA/pull/67) abierta sin merge.
+
 
 ## 2026-10-23 — Piloto visual Max aislado, sobre #65
 

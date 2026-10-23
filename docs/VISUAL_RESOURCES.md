@@ -1,5 +1,6 @@
 # Recursos visuales (Phase 8.2A)
 
+> **Continuidad del piloto (2026-10-23):** se prepara un modo privado `production-pilot` con Stripe TEST y concesión de siete días (migración 030), por decisión posterior del fundador. No cambia el catálogo público ni activa servicios por sí mismo. [Estado y procedimiento](qa/stripe-piloto-produccion/README.md).
 > **Piloto Max (2026-10-23):** A = representaciones exactas con VisualSpec; B = ilustraciones contextualizadoras; C = ejemplos análogos calculados. Preparado exclusivamente para pruebas aisladas y cerrado por defecto. 026 sigue con cero imágenes y `image_generation=false`. [Auditoría, estado y PDF](qa/max-visuales/README.md), [guía y autorización de ensayo real](qa/max-visuales/PRUEBA_MANUAL.md). Las descripciones de fases anteriores que siguen son antecedentes.
 
 Cómo llega una imagen, un gráfico o un apoyo visual desde el material original, o desde el plan de adaptación, hasta la ficha

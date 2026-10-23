@@ -4,7 +4,7 @@ Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → 
 
 ## Visión general
 
-Un **monolito Next.js** desplegado en Vercel, con Supabase como backend gestionado (Postgres + Auth + Storage). La facturación Stripe está reservada y desactivada; no hay checkout ni webhooks implementados. Sin microservicios, sin Redis, sin colas externas en el MVP.
+Un **monolito Next.js** desplegado en Vercel, con Supabase como backend gestionado (Postgres + Auth + Storage). La facturación pública Stripe permanece desactivada. Hay Checkout/webhook exclusivamente TEST para un piloto privado, cerrado por configuración, backend y workspace; no es una integración LIVE. Sin microservicios, sin Redis, sin colas externas en el MVP.
 
 ```
 Navegador ──► Next.js (Vercel, región fra1)
@@ -523,3 +523,8 @@ Detalle en [BRAND.md](BRAND.md) y [QA](qa/fase-c-marca/README.md). Esta entrega 
 Se conserva `illustrate` y CLARO: no hay un segundo pipeline ni renderer. Las representaciones exactas siguen con VisualSpec; el ejemplo estructurado de fracciones calcula datos distintos y enlaza su figura mediante `example_ref` al `worked_example` existente. `essential` distingue ayudas generadas opcionales en documentos nuevos; los históricos fallan cerrado. La lectura exige aprobación persistida y SHA, además de pertenencia a adaptación y RLS.
 
 La disponibilidad de generación exige la configuración cerrada `AI_IMAGES_PILOT_*`, igualdad de backend y workspace, ausencia de Vercel Production, plan Max efectivo y las puertas existentes. La propuesta de cinco solo vive en fixtures PGlite: no modifica 026 ni condiciones comerciales. [Decisión y límites](qa/max-visuales/README.md). La clasificación y revisión semántica real de imágenes continúan requiriendo evaluación autorizada; el código no acredita que un modelo sea infalible.
+
+
+## Piloto privado de Stripe TEST en producción (2026-10-23)
+
+La decisión del fundador permite `production-pilot` en Vercel Production para un único backend y workspace. Se mantiene la generación de imágenes tras flag independiente. La migración 030 guarda una solicitud privada, asocia el Checkout TEST a una suscripción y caduca el plan efectivo sin Cron; solo modifica condiciones efectivas de esa concesión, no la tabla de planes. Se reutilizan `subscriptions`, cuotas e idempotencia transaccional de `stripe_events`; los eventos se registran con prefijo `pilot-test:`. Las suscripciones anteriores se rechazan para evitar sobrescribir condiciones. Una integración LIVE futura necesitará reconciliar/segregar explícitamente estos registros TEST antes de habilitar cobros. [Procedimiento](qa/stripe-piloto-produccion/README.md).

@@ -19,6 +19,8 @@ export const ServerEnvSchema = z.object({
 
   STRIPE_SECRET_KEY: optional(z.string().min(1)),
   STRIPE_WEBHOOK_SECRET: optional(z.string().min(1)),
+  STRIPE_PILOT_ENABLED: flag(false),
+  STRIPE_PILOT_PRICE_ID: optional(z.string().regex(/^price_[A-Za-z0-9]+$/)),
 
   ANTHROPIC_API_KEY: optional(z.string().min(1)),
   OPENAI_API_KEY: optional(z.string().min(1)),
@@ -48,7 +50,7 @@ export const ServerEnvSchema = z.object({
 
   FLAG_MAX_PLAN_ENABLED: flag(false),
   FLAG_AI_IMAGES_ENABLED: flag(false),
-  AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging"])),
+  AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),
   AI_IMAGES_PILOT_WORKSPACE_ID: optional(z.uuid()),
   AI_IMAGES_PILOT_SUPABASE_URL: optional(z.url()),
   FLAG_MULTI_PROFILE_GENERATION: flag(true),

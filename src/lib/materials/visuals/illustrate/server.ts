@@ -67,7 +67,7 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
   try {
     imageSelection = resolveModel("IMAGE_QUALITY", env);
     textSelection = resolveModel("STANDARD", env);
-    if (textSelection.provider === "mock") return null;
+    if (textSelection.provider === "mock" || imageSelection.provider === "mock") return null;
     imageProvider = imageProviderFor(imageSelection);
   } catch {
     return null;
