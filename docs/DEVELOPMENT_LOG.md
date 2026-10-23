@@ -1,5 +1,15 @@
 # Registro de desarrollo
 
+## 2026-10-23 — Lanzamiento comercial v1: primer preflight de solo lectura
+
+- **Base:** `main` `c45b789`, rama `launch/preflight-v1-20261023`, seguimiento [#61](https://github.com/TinyChat-up/ADAPTAULA/issues/61).
+- **Hallazgo:** `main` sin protección ni workflow GitHub Actions; falta checkout Stripe; páginas legales aún provisionales; ruta de borrado efectivo pendiente. Existen diagnósticos SQL de 025–029, pero faltaba el de 019 («Hacer magia»).
+- **Cambios:** `scripts/staging/inspect-magic-019.sql` (solo metadatos/permisos de migración 019) y `docs/qa/lanzamiento-v1/README.md` (matriz de bloqueo y plan GO/NO-GO con referencia a diagnósticos existentes, sin duplicarlos).
+- **Verificación:** los dos archivos están en la rama, la consulta contiene solo lectura y los procedimientos existentes se han contrastado con su código. **No ejecutados** tests locales, SQL remoto, staging, producción, Stripe ni IA; los resultados de ejecución continúan sin certificar.
+- **Riesgos:** migraciones remotas, políticas RLS, Auth/correo y PDF Vercel sin comprobación en este preflight. Inconsistencia documental de precio Pro: tabla histórica en `docs/BILLING.md` frente a política comercial provisional de 24,90 €.
+- **Decisión:** PR en borrador sin merge ni despliegue. Siguiente acción: confirmar proyecto y autorización de inspección solo lectura, obtener PASS/FAIL de 019/025–029, y desarrollar CI/protección de rama en PR independiente.
+
+
 ## 2026-10-23 — Urgente: la descarga del PDF fallaba desde la Fase C (`useId` en el símbolo)
 
 - **Síntoma:** la E2E completa (al preparar la recuperación de la #12) falló en `claro-quality` y `document-review` al descargar el PDF. El servidor registraba `pdf_export_failed` en la etapa `html`, con «Invalid hook call» y «Cannot read properties of null (reading 'useId')» en `BrandSymbol`.
