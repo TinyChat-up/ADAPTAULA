@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { FunctionalProfileSchema } from "@/lib/schemas/functional-profile";
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import { logger } from "@/lib/logger";
 import { AdaptationError } from "./errors";
 import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning, reopenPlanReview, submitPlanReview, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
@@ -60,7 +61,8 @@ export type ServiceError =
   | "entitlement_unavailable"
   | "entitlement_not_reserved"
   | "generation_limit"
-  | "failure_budget";
+  | "failure_budget"
+  | "unavailable";
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; code: ServiceError; detail?: string[] };
 
 const denied = (actor: Actor): ServiceResult<never> | null => (actor.canWrite ? null : { ok: false, code: "forbidden" });
@@ -147,11 +149,43 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
  * job. Nothing here calls a provider; the screen runs the job right after (`POST /api/adaptations/[id]/run`).
  */
 export async function createAndStartAdaptation(deps: ServiceDeps, actor: Actor, request: CreateAdaptationRequest & { creationMode: CreationMode }): Promise<ServiceResult<{ adaptationId: string }>> {
-  const created = await createAdaptationCommand(deps, actor, request);
+  // An unexpected failure here (a database older than the code, a lost connection) is a refusal the screen can show, not an opaque
+  // HTTP 500. Creation and its reservation are one transaction (`create_adaptation`), so nothing is left behind.
+  const created = await unexpectedAsUnavailable("adaptation_create_failed", { workspaceId: actor.workspaceId, materialId: request.materialId, mode: request.creationMode }, () => createAdaptationCommand(deps, actor, request));
   if (!created.ok) return created;
-  // Created but not started (the failure budget, a lost connection): its page shows that and offers to start it there.
+  // Created but not started (the failure budget, a lost connection): it is kept, and its page offers «Empezar». Retrying the same
+  // click (same request key) or that button reuses this adaptation, its single reservation and its single planning job.
   await startPlanning(deps, actor, created.data.adaptationId);
   return created;
+}
+
+/** Database errors whose cause is a schema older than the code (a migration not applied), named as such in the log. */
+// PostgREST: «Could not find the function … in the schema cache» (PGRST202); Postgres: «function public.x(…) does not exist». The
+// store keeps only the first 160 characters, so a long signature hides «does not exist»: a message that starts by naming a function
+// call with its named arguments (`function public.x(p_a => …`) is that same error.
+const SCHEMA_MISMATCH = /does not exist|could not find the (function|column|table)|schema cache|PGRST20[0-9]|^database: function public\.\w+\(\w+ =>/i;
+
+/**
+ * What the log keeps of an unexpected error: its category and the database's own words with every literal blanked. SQL names stay
+ * (functions, tables, constraints: what an operator needs); a quoted value (an id, a title in an «invalid input» message) does not.
+ */
+export function describeUnexpected(error: unknown): { reason: string; detail: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const detail = message
+    .replace(/'[^']*'/g, "'…'")
+    .replace(/"([^"]*)"/g, (_, inner: string) => (/^[a-z_][a-z0-9_.]*$/i.test(inner) ? `"${inner}"` : '"…"'))
+    .slice(0, 160);
+  return { reason: SCHEMA_MISMATCH.test(message) ? "schema_mismatch" : error instanceof Error ? error.name : "unknown", detail };
+}
+
+async function unexpectedAsUnavailable<T>(event: string, ids: Record<string, string>, work: () => Promise<ServiceResult<T>>): Promise<ServiceResult<T>> {
+  try {
+    return await work();
+  } catch (error) {
+    // Only opaque ids and the sanitised category and words of the error: never material content, a title or a learner.
+    logger.error(event, { ...ids, ...describeUnexpected(error) });
+    return { ok: false, code: "unavailable" };
+  }
 }
 
 /** Maps a stage outcome to the application's vocabulary (no internal message ever crosses this line). */
@@ -184,7 +218,9 @@ export interface EnqueuedDto {
  * teacher's explicit decision, and nothing (not even the recovery cron) starts it for them.
  */
 export async function startPlanning(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<EnqueuedDto>> {
-  return guarded(async () => {
+  // Both entries start here («Hacer magia» right after creating, «Empezar» on the adaptation's page): an unexpected failure keeps the
+  // adaptation as it is and answers «unavailable», so the same button can retry; the planning job is unique per stage.
+  return unexpectedAsUnavailable("adaptation_start_failed", { workspaceId: actor.workspaceId, adaptationId }, () => guarded(async () => {
     const no = denied(actor);
     if (no) return no;
     if (!(await owned(deps, actor, adaptationId))) return notFound;
@@ -192,7 +228,7 @@ export async function startPlanning(deps: ServiceDeps, actor: Actor, adaptationI
     if (outcome.outcome === "enqueued") return { ok: true, data: { status: outcome.status, alreadyQueued: outcome.reusedJob === true } };
     if (outcome.outcome === "reused") return { ok: true, data: { status: outcome.status, alreadyQueued: true } };
     return rejection(outcome);
-  });
+  }));
 }
 
 /** The teacher's review. The reviewer identity and time are set HERE: the client cannot claim to be anyone else. Never generates. */
