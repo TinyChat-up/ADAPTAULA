@@ -1,6 +1,6 @@
 # Maquetación pedagógica · issue #64
 
-23 de octubre de 2026. Base `fb314b2` de `main` (PR #62 integrada). Rama `codex/64-maquetacion-pedagogica`.
+23 de octubre de 2026. Base `fb314b2` de `main` (PR #62 integrada). Rama `codex/64-maquetacion-pedagogica`. [PR #65](https://github.com/TinyChat-up/ADAPTAULA/pull/65) abierta, sin merge.
 
 **Material propio y sintético.** No se dispone del original privado de fracciones descrito en la issue ni de su adaptación de cuatro páginas. Esta comparación reproduce mecanismos del defecto; no demuestra que esa ficha concreta pase ahora de cuatro a dos o tres hojas. No hay IA ni validación docente en esta prueba.
 
