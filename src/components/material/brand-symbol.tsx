@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { BRAND_SYMBOL } from "@/lib/brand/symbol";
 
 const grey = (hex: string) => {
@@ -9,12 +8,13 @@ const grey = (hex: string) => {
 
 /**
  * The official symbol in the sheet header, inline: vector in the preview and in the PDF, with no URL (the print CSP only allows
- * data) and no image to pin. Gradient ids are unique per instance: two sheets on one screen (a hidden tab) never borrow each other's.
+ * data) and no image to pin. No hooks: the PDF prerenders the sheet outside the app's React (a hook there breaks the export), so the
+ * gradient ids come from `idPrefix`, which the sheet derives from what it prints (two different sheets never share them).
  * `greyscale`: the sheet's high-contrast profile prints in one ink; the symbol keeps each gradient's brightness, so its four shapes
  * stay apart (a single flat ink would merge the two leaves on the right into another shape).
  */
-export function BrandSymbol({ greyscale = false }: { greyscale?: boolean }) {
-  const prefix = `ms-brand-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+export function BrandSymbol({ idPrefix, greyscale = false }: { idPrefix: string; greyscale?: boolean }) {
+  const prefix = `ms-brand-${idPrefix.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <svg className="ms-symbol" viewBox={BRAND_SYMBOL.viewBox} role="img" aria-label="Adaptaula" focusable="false">
       <defs>

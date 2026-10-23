@@ -184,3 +184,25 @@ describe("print module boundaries", () => {
     expect(readFileSync(`${dir}/validation.ts`, "utf8")).not.toMatch(/pdfjs|napi-rs/);
   });
 });
+
+describe("the components the PDF prerenders are hook-free", () => {
+  // The PDF prerenders MaterialSheet with react-dom/static outside the app's React: a hook there is an «Invalid hook call» and the
+  // export fails at the HTML stage (it happened with useId in the brand symbol). The tests run on one React and would not see it.
+  it("no server component of the sheet calls a React hook", () => {
+    const dir = "src/components/material";
+    const offenders = readdirSync(dir)
+      .filter((f) => f.endsWith(".tsx"))
+      .map((f) => ({ f, src: readFileSync(path.join(dir, f), "utf8") }))
+      .filter(({ src }) => !/^\s*["']use client["']/.test(src))
+      .filter(({ src }) => /\buse(?:State|Effect|LayoutEffect|InsertionEffect|Id|Memo|Callback|Ref|Context|Reducer|Transition|DeferredValue|SyncExternalStore|ImperativeHandle|Optimistic|ActionState)\s*\(/.test(src))
+      .map(({ f }) => f);
+    expect(offenders).toEqual([]);
+  });
+
+  it("the brand symbol prints in the student PDF, with its gradients referenced in the same document", async () => {
+    const out = await renderPrintHtml(model(geografia()), []);
+    expect(out.html).toMatch(/<svg class="ms-symbol"[^>]*aria-label="Adaptaula"/);
+    expect(out.html).toMatch(/id="ms-brand-student-normal-circle"/);
+    expect(out.html).toContain('fill="url(#ms-brand-student-normal-circle)"');
+  });
+});

@@ -22,7 +22,7 @@ export function MaterialSheet({ model, visiblePage, selection }: { model: Render
                 // sheet be recognised and never takes room from the activities.
                 <div className="ms-masthead">
                   {meta ? <p className="ms-meta">{meta}</p> : <span />}
-                  <BrandSymbol greyscale={model.tokens.contrast === "high"} />
+                  <BrandSymbol idPrefix={`${model.mode}-${model.tokens.contrast}`} greyscale={model.tokens.contrast === "high"} />
                 </div>
               ) : meta ? (
                 <p className="ms-meta">{meta}</p>
