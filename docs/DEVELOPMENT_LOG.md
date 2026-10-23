@@ -1,5 +1,67 @@
 # Registro de desarrollo
 
+## 2026-10-22 — Fase B, cierre de calidad de la PR #56: nunca menos espacio, cuadrículas por demanda y `material_renderer@v6`
+
+- **Base.** La misma rama `claude/fase-b-editorial` y la [PR #56](https://github.com/TinyChat-up/ADAPTAULA/pull/56), sin fusionar. Sin IA de pago, sin tocar Supabase remoto, Stripe ni producción. CLARO sigue siendo el único diseño.
+- **Casos que podían reducir el espacio original:**
+  - cuadrícula heredada sin `rows` → 5 filas (35 mm, frente a los 66 de siempre);
+  - 12 líneas → 8 y 20 de explicación → 12 (topes aplicados al total);
+  - recuadro grande (120 mm) → cuadrícula de 5 filas;
+  - «Operaciones y unidades» impreso → 5 filas.
+- **Arreglo:** `capacityMm` mide la superficie en mm con el renglón y la casilla del perfil, y `atLeastOriginal` añade la diferencia al espacio principal en unidades enteras. Los topes solo limitan lo añadido.
+- **Cuadrículas por demanda:**
+  - sin el máximo de 12 de Primaria (seguridad del contrato en 60 filas; `grid.rows` y `lines` de campo hasta 60);
+  - zonas equilibradas de hasta 12 filas enteras que continúan en otra hoja;
+  - «Dibujo» (≥ 70 mm) y «Explicación» cuando el cálculo los pide; mostrar la división de la figura ya no suma también filas a las operaciones.
+- **Paginación** (encontrado en la revisión real de 03):
+  - una figura que pasa dentro de su actividad se contaba dos veces en la estimación de hoja: la 02 empezaba en la hoja 2 sin la figura A;
+  - un campo de cuadrícula en zonas prohibía el corte entre zonas, y la «Respuesta» se partía de su unidad;
+  - además, la hoja en que empieza una actividad se estima por su inicio que no se corta.
+- **Renderer `material_renderer@v6`.** Cambia el contrato de lo impreso. No es clave de caché ni huella y no se guarda en los documentos: los históricos se leen igual.
+- **Pruebas:**
+  - unidad y BD: 1919 correctas y 13 omitidas (garantía física y cuadrículas por demanda);
+  - PDF: 64/64, con tres casos límite medidos en papel. El de la forma de 03 falla sin el arreglo;
+  - typecheck y lint correctos (un aviso previo ajeno);
+  - E2E completa de escritorio y móvil en entorno limpio (`.next-e2e` y `test-results` borrados; app contra `fake-supabase` con migraciones reales sobre PGlite): 124/124 en 29,6 min, 62 en móvil, incluidos `pdf-preview`, `render`, `sheet-editor` y `visual-locator`.
+- **Revisión real** de 03, 06 y 07 (análisis reales, sin IA): ver [QA](qa/fase-b-editorial/README.md).
+- **Riesgos:** las estimaciones de hoja siguen siendo aproximadas, y 03 pasa a 5 hojas porque hay más espacio.
+- **Siguiente:** revisión y fusión de la #56 por una persona; después, validación docente.
+
+## 2026-10-22 — Fase B: identidad editorial única y espacios de resolución (`answer_space@v1`, ADR-040)
+
+- **Base.** `main` con la #55 integrada (`9af6c6c`); rama `claude/fase-b-editorial`. Sin IA de pago ni migraciones, y sin tocar producción ni Stripe.
+- **Identidad:**
+  - CLARO por defecto en `buildRenderModel` y `standard` solo explícito;
+  - la materia nunca se imprime por su clave;
+  - casilla de cuadrícula como token de la etapa (7, 6 y 5 mm) y `roomy` (+20 %) para la motricidad fina o la letra grande.
+- **Motor `answer_space@v1`** (`src/lib/adaptation/answer-space.ts`):
+  - aplicado en `buildDocument` a las actividades literales y a las adaptadas;
+  - cuadrícula solo para el cálculo escrito, con filas por operaciones;
+  - problemas con datos, operaciones y respuesta (con hueco para la unidad) solo cuando hacen falta;
+  - líneas por resultado pedido, explicación por curso, extensión indicada en las redacciones y recuadro grande para dibujar;
+  - Sujeto/Predicado por oración;
+  - `line` con N líneas da N líneas.
+- **Estructura:**
+  - campos en línea («A:, B:, C:, D:», «Flecha 1, Flecha 2, …») reconocidos y fuera del contexto, sin duplicar;
+  - `marks.ts` reutiliza esa estructura.
+- **Render y paginación:**
+  - cuadrícula en SVG con casillas enteras;
+  - partes del problema unidas;
+  - el ejemplo previo ya no impide mantener junta la actividad;
+  - la regla de tabla posterior solo se aplica cuando la tabla va después;
+  - `heightMm` de los recortes;
+  - repetición de figuras pequeñas o comparadas de una hoja anterior.
+- **Contrato:** ampliado de forma opcional (`grid.rows`, `fields[].space = grid`, `unit`). El borrador de modelo no cambia.
+- **Pruebas:**
+  - unidad y BD: 1910 correctas y 13 omitidas;
+  - PDF: 64/64 (galería de 8 fichas con medidas físicas y grises);
+  - typecheck y lint correctos (un aviso previo ajeno);
+  - antes/después de 03, 06 y 07 reales en local ([QA](qa/fase-b-editorial/README.md)).
+- **Riesgos:**
+  - las estimaciones de hoja física y de filas son aproximadas;
+  - más hojas cuando el perfil limita las tareas por página.
+- **Siguiente:** validación con docentes y una prueba real limitada con generación (autorizada aparte).
+
 ## 2026-10-22 — Validación real de la PR #55: análisis de 03, 06 y 07 (0,0930 USD)
 
 - **Ejecución.**

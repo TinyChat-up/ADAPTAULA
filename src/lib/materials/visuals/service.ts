@@ -362,7 +362,7 @@ export async function resolveVisuals(deps: VisualDeps, input: { materialId: stri
     }
     const ready = (instance: AssetRow): VisualState => {
       const spec = locator.method === "auto" ? verifiedSpec(locator.specs ?? []) : null;
-      return { visualId, status: "ready", provenance, resolution: locator.method === "human" ? "A" : spec ? "C" : "B", ...(spec ? { spec } : {}), widthMm: Math.round(((instance.width * 25.4) / VISUAL_CROP_RECIPE.dpi) * 10) / 10 };
+      return { visualId, status: "ready", provenance, resolution: locator.method === "human" ? "A" : spec ? "C" : "B", ...(spec ? { spec } : {}), widthMm: Math.round(((instance.width * 25.4) / VISUAL_CROP_RECIPE.dpi) * 10) / 10, heightMm: Math.round(((instance.height * 25.4) / VISUAL_CROP_RECIPE.dpi) * 10) / 10 };
     };
     // Lists only (`verify: false`): an instance row counts without reading its object; the sheet and the PDF always verify.
     if (input.verify === false && !input.withBytes) {

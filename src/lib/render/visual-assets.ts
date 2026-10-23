@@ -53,6 +53,8 @@ export interface VisualState {
   spec?: VisualSpec;
   /** Physical width of the crop in the original, in mm (recipe density), for printing it at its own size. */
   widthMm?: number;
+  /** Its physical height, in mm: what it really takes on the page when the sheet is paginated. */
+  heightMm?: number;
 }
 
 export function failureOfState(state: VisualState): VisualAssetFailure | undefined {

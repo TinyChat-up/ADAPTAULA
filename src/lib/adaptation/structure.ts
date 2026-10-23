@@ -77,11 +77,13 @@ function fieldLabels(line: string): string[] | null {
 }
 const isFieldLine = (line: string) => fieldLabels(line) !== null;
 
-export type FieldSpace = "lines" | "box";
+export type FieldSpace = "lines" | "box" | "grid";
 export interface AnswerField {
   label: string;
   space: FieldSpace;
   lines: number;
+  /** An empty slot for the unit next to the answer (answer_space@v1). */
+  unit?: boolean;
 }
 
 /** Where calculations go (a box to work in), where an explanation goes (several lines), and a short answer (one line). */
@@ -130,10 +132,28 @@ export function activityStructure(activity: Pick<AnalysisActivity, "instruction"
 
 function trailingFields(body: readonly string[]): { from: number; fields: string[] } | null {
   let from = body.length;
-  while (from > 0 && isFieldLine(body[from - 1]!)) from -= 1;
+  while (from > 0 && (isFieldLine(body[from - 1]!) || inlineFieldLabels(body[from - 1]!) !== null)) from -= 1;
   if (from === body.length) return null;
-  const fields = body.slice(from).flatMap((l) => fieldLabels(l) ?? []);
+  const fields = body.slice(from).flatMap((l) => fieldLabels(l) ?? inlineFieldLabels(l) ?? []);
   return fields.length > 0 && fields.length <= 12 ? { from, fields } : null;
+}
+
+/** A single label of a figure («A», «D») or a numbered element («Flecha 1», «Paso 3», «Proceso 2»). */
+const MARK_LABEL = /^(?:[A-H]|[\p{L}]{3,12}\s+\d{1,2})$/u;
+
+/**
+ * Fields an analysis writes inline, separated by commas or semicolons, with or without colons: «A:, B:, C:, D:», «Flecha 1, Flecha 2,
+ * Flecha 3, Flecha 4». Only when the WHOLE line is such labels, at least two, and the numbered ones share their word and run from
+ * their first number upwards: a sentence that happens to contain commas is never read as fields.
+ */
+export function inlineFieldLabels(line: string): string[] | null {
+  const parts = line.split(/\s*[,;]\s*/).map((p) => p.replace(/[:_.…\s]+$/u, "").trim()).filter((p) => p.length > 0);
+  if (parts.length < 2 || parts.length > 12 || !parts.every((p) => MARK_LABEL.test(p))) return null;
+  if (parts.every((p) => /^[A-H]$/.test(p))) return new Set(parts).size === parts.length ? parts : null;
+  const words = new Set(parts.map((p) => p.replace(/\s*\d+$/, "").toLowerCase()));
+  const numbers = parts.map((p) => Number(/(\d+)$/.exec(p)?.[1] ?? Number.NaN));
+  if (words.size !== 1 || numbers.some((n, i) => n !== numbers[0]! + i)) return null;
+  return parts;
 }
 
 /** The items to order: one per line, or the « / » separated sentences of a single line. Each item keeps its words. */

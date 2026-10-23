@@ -22,7 +22,7 @@ export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[]; generated: Record<string, { src: string; widthMm: number }> };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number; heightMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[]; generated: Record<string, { src: string; widthMm: number }> };
 
 export interface RenderLoadOptions {
   /**
@@ -162,7 +162,7 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     deferred,
     requiredVisuals: context.success ? context.data.material.required_visuals : [],
     assets: {
-      ...Object.fromEntries(states.filter((s) => s.status === "ready" && !figures[s.visualId] && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId), ...(s.widthMm ? { widthMm: s.widthMm } : {}) }])),
+      ...Object.fromEntries(states.filter((s) => s.status === "ready" && !figures[s.visualId] && (!options.pin || pinned[s.visualId])).map((s) => [s.visualId, { src: sourceOf(s.visualId), ...(s.widthMm ? { widthMm: s.widthMm } : {}), ...(s.heightMm ? { heightMm: s.heightMm } : {}) }])),
       ...Object.fromEntries(teacherImages.map((v) => {
         const state = resolvedResources.states[v] as Extract<ResourceState, { status: "provided" }>;
         return [v, { src: options.pin ? assetRef({ assetId: state.resourceId, sha256: state.sha256 }) : resourceSrc(id, v) }];

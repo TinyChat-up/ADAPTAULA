@@ -1,5 +1,8 @@
 import type { Presentation } from "@/lib/schemas/adaptation-context";
 
+/** Whole squares printed together in one zone of a long grid: a longer grid is split between zones that may continue on the next page. */
+export const GRID_ZONE_ROWS = 12;
+
 /**
  * Design tokens of the printed sheet. They live here, not in `MaterialDocument` (which only carries semantic presentation
  * settings) and not in the app's design system: the sheet is its own surface, neutral and printable. The document says
@@ -16,6 +19,10 @@ export interface RenderTokens {
   answerLineMm: number;
   /** Height of one checkbox / numbering box, in mm. */
   boxMm: number;
+  /** Side of one square of a calculation grid, in mm: one handwritten digit per square (answer_space@v1). */
+  gridCellMm: number;
+  /** Width of the answer column, in mm: the printable width minus CLARO's guide column (or the earlier layer's number). */
+  answerWidthMm: number;
   contrast: Presentation["contrast"];
   decoration: Presentation["decoration"];
   maxTasksPerPage: number | null;
@@ -33,6 +40,18 @@ const STAGE: Record<string, { basePt: number; lineMm: number }> = {
 const DEFAULT_STAGE = { basePt: 11.5, lineMm: 9 };
 
 /**
+ * Squares of a calculation grid by stage: a digit written by a child of Primaria needs about 7 mm; ESO 6 mm; Bachillerato 5 mm
+ * (the usual squared paper). `roomy` (the profile needs more room to write by hand) adds a fifth to lines and squares alike.
+ */
+const GRID_CELL: Record<string, number> = { primaria: 7, eso: 6, bachillerato: 5 };
+const ROOMY = 1.2;
+/** CLARO's guide column by stage (`--claro-gutter` in material.css) and the earlier layer's number column. Keep them in step. */
+const GUTTER_MM: Record<string, number> = { primaria: 13, eso: 11, bachillerato: 10 };
+const STANDARD_NUMBER_MM = 12;
+const half = (scale: number) => 1 + (scale - 1) / 2;
+const toHalfMm = (mm: number) => Math.round(mm * 2) / 2;
+
+/**
  * Sistema CLARO: the editorial scale by stage (Primaria 12.5 pt, ESO 11.75 pt, Bachillerato 11.25 pt), before the profile's
  * `font_scale`. The stage sets the tone; the functional profile still enlarges whatever it needs, at any stage.
  */
@@ -42,16 +61,19 @@ const CLARO_STAGE: Record<string, { basePt: number; lineMm: number }> = {
   bachillerato: { basePt: 11.25, lineMm: 8.5 },
 };
 
-export function renderTokens(presentation: Presentation, stage: string, design: "standard" | "claro" = "standard"): RenderTokens {
+export function renderTokens(presentation: Presentation, stage: string, design: "standard" | "claro" = "claro"): RenderTokens {
   const s = (design === "claro" ? CLARO_STAGE[stage] : STAGE[stage]) ?? DEFAULT_STAGE;
   const scale = presentation.font_scale;
+  const room = presentation.answer_space === "roomy" ? ROOMY : 1;
   return {
     page: { widthMm: 210, heightMm: 297, marginMm: 18 },
     fontPt: Math.round(s.basePt * scale * 10) / 10,
     lineHeight: LINE_HEIGHT[presentation.line_spacing],
     gapEm: GAP[presentation.spacing],
-    answerLineMm: Math.round(s.lineMm * (1 + (scale - 1) / 2) * 10) / 10,
-    boxMm: Math.round(5.5 * (1 + (scale - 1) / 2) * 10) / 10,
+    answerLineMm: Math.round(s.lineMm * half(scale) * room * 10) / 10,
+    boxMm: Math.round(5.5 * half(scale) * 10) / 10,
+    gridCellMm: toHalfMm((GRID_CELL[stage] ?? 6) * half(scale) * room),
+    answerWidthMm: 210 - 2 * 18 - (design === "claro" ? (GUTTER_MM[stage] ?? 11) : STANDARD_NUMBER_MM),
     contrast: presentation.contrast,
     decoration: presentation.decoration,
     maxTasksPerPage: presentation.max_tasks_per_page,
@@ -69,6 +91,7 @@ export function tokenStyle(t: RenderTokens): Record<string, string> {
     "--ms-gap": `${t.gapEm}em`,
     "--ms-line": `${t.answerLineMm}mm`,
     "--ms-box": `${t.boxMm}mm`,
+    "--ms-cell": `${t.gridCellMm}mm`,
     "--ms-ink": t.contrast === "high" ? "#000000" : "#1a1a1a",
     "--ms-rule": t.contrast === "high" ? "#000000" : "#4a4a4a",
     "--ms-soft": t.contrast === "high" ? "#000000" : "#5f6670",

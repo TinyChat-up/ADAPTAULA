@@ -97,7 +97,8 @@ test("visual necesario: no renderizable → localizar en el original → recorte
   // 5 · Student view: renderable, the crop loads from the authorised route, keeps its aspect ratio and fits the sheet.
   await page.goto(`/app/adaptaciones/${id}/vista?modo=alumno`);
   await expect(page.getByText("Esta ficha todavía no se puede mostrar completa.")).toHaveCount(0);
-  const img = page.locator(`.ms-sheet img[src="/api/adaptations/${id}/visuals/vis_2"]`);
+  // The first print of the crop (a later activity that uses it again on another sheet shows the same crop: answer_space@v1).
+  const img = page.locator(`.ms-sheet img[src="/api/adaptations/${id}/visuals/vis_2"]`).first();
   await expect(img).toBeVisible();
   await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
   const geometry = async () =>

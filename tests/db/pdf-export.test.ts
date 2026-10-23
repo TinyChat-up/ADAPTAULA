@@ -63,7 +63,10 @@ describe("GET /api/adaptations/[id]/pdf · what is printed", () => {
     expect(engineCalls).toHaveLength(1);
     const html = engineCalls[0]!;
     const body = html.slice(html.indexOf("<body>"));
-    expect((body.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(2); // vis_1 and vis_2, the crops the teacher located
+    // vis_1 and vis_2, the crops the teacher located, each pinned inline (a figure repeated next to a later activity that uses it is
+    // the same pinned bytes, never a URL).
+    const images = body.match(/src="data:image\/png;base64,[^"]+"/g) ?? [];
+    expect(new Set(images).size).toBe(2);
     expect(body).not.toMatch(/\/api\/|visuals\/vis_|storage|generated-assets|https?:\/\//);
     expect(body).not.toMatch(/ms-teacher|ms-chrome|data-app/);
     expect(html).toContain("Content-Security-Policy");

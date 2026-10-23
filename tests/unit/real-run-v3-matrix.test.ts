@@ -73,12 +73,15 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     expect(diagnoseGeneration({ audit })).toEqual([{ category: "structure_loss", rule: RESPONSE_AREA_CHECK, decisions: [d1], refs: ["act_1"], repair: "deterministic" }]);
   });
 
-  it("02 · «Operaciones y unidades» (caja para calcular) y «Respuesta» se conservan por actividad", () => {
+  it("02 · «Operaciones y unidades» (cuadrícula para calcular, answer_space@v1) y «Respuesta» con hueco para la unidad se conservan por actividad", () => {
     const doc = documentOf(sheet("02-problemas"));
-    for (const a of activities(doc)) expect(a.response).toEqual({ kind: "fields", fields: [{ label: "Operaciones y unidades", space: "box", lines: 5 }, { label: "Respuesta", space: "lines", lines: 2 }] });
+    for (const a of activities(doc)) {
+      expect(a.response).toMatchObject({ kind: "fields", fields: [{ label: "Operaciones y unidades", space: "grid" }, { label: "Respuesta", space: "lines", lines: 2, unit: true }] });
+      if (a.response.kind === "fields") expect(a.response.fields[0]!.lines).toBeGreaterThanOrEqual(5);
+    }
     const out = html(doc);
     expect(out.match(/Operaciones y unidades/g)).toHaveLength(2);
-    expect(out.match(/ms-answer-field-box/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(out.match(/ms-answer-field-grid/g)?.length).toBeGreaterThanOrEqual(2);
     // The sheet header's name/date fields own `.ms-fields` / `.ms-field`: answer fields never reuse (and so never restyle) them.
     // (Reusing them stacked «Nombre» and «Fecha» and pushed a one-sheet PDF onto two: tests/pdf/export.test.ts.)
     expect(out).toContain('<p class="ms-answer-field-label">Operaciones y unidades:</p>');
@@ -130,7 +133,8 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     const s = sheet("05-oraciones");
     const doc = documentOf(s);
     const first = activities(doc)[0]!;
-    expect(first.response).toMatchObject({ kind: "fields", fields: [{ label: "Sujeto" }, { label: "Predicado" }] });
+    // «de cada oración»: one Sujeto/Predicado pair per numbered sentence (answer_space@v1).
+    expect(first.response).toMatchObject({ kind: "fields", fields: [{ label: "1. Sujeto" }, { label: "1. Predicado" }, { label: "2. Sujeto" }, { label: "2. Predicado" }, { label: "3. Sujeto" }, { label: "3. Predicado" }] });
     const out = html(doc);
     expect(out).toMatch(/parque\.<\/span><br\/>/);
     expect(out).toMatch(/sopa\.<\/span><br\/>/);

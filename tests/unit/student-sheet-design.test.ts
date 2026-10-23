@@ -64,8 +64,16 @@ describe("answer spaces", () => {
   it("order: a box big enough for a handwritten number; a squared area ends in whole squares", () => {
     expect(html(build(primaryStructured()).model)).toContain("ms-box ms-box-write");
     const doc = MaterialDocumentSchema.parse({ ...primary(), pages: [{ blocks: [...primary().pages[0]!.blocks, { id: "blk_qagrid1", type: "activity", label: "9", prompt: "Calcula.", response: { kind: "grid" }, trace: { origin: "adapted", source_refs: [], decision_ids: [] } }] }] });
-    const grid = /ms-grid-area" style="height:(\d+)mm"/.exec(html(build(doc).model));
-    expect(Number(grid![1]) % 6).toBe(0);
+    // A grid stored before answer_space@v1 (no rows) keeps its old ~66 mm, in whole squares of the sheet's cell.
+    const out = html(build(doc).model);
+    const tag = /<svg class="ms-grid-area"[^>]*>/.exec(out)?.[0] ?? "";
+    const attr = (name: string) => Number(new RegExp(`${name}="([\\d.]+)`).exec(tag)?.[1]);
+    const [rows, columns, cell] = [attr("data-rows"), attr("data-columns"), attr("data-cell-mm")];
+    const [width, height] = [/width:([\d.]+)mm/.exec(tag)?.[1], /height:([\d.]+)mm/.exec(tag)?.[1]].map(Number);
+    expect(Math.abs(rows * cell - height!)).toBeLessThan(0.01);
+    expect(Math.abs(columns * cell - width!)).toBeLessThan(0.01);
+    expect(rows * cell).toBeLessThanOrEqual(66);
+    expect(rows * cell).toBeGreaterThan(66 - cell);
   });
 
   it("a word bank and sentence starters say what they are", () => {
@@ -103,13 +111,14 @@ describe("student privacy on every QA sheet", () => {
   });
 });
 
-describe("Sistema CLARO (pilot, behind a render option)", () => {
+describe("Sistema CLARO (the product's design, docs/EDITORIAL.md)", () => {
   const claro = (doc: MaterialDocument) => buildRenderModel(doc, { mode: "student", deferred: [], design: "claro" });
 
-  it("is opt-in: by default nothing changes (no attribute, no brand, the same numbers)", () => {
-    const out = html(build(pilotPrimary()).model);
-    expect(build(pilotPrimary()).model.design).toBe("standard");
-    expect(out).not.toMatch(/data-design|ms-brand|ms-cue|>01</);
+  it("is the default; the earlier layer is only printed when it is asked for explicitly", () => {
+    expect(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [] }).model.design).toBe("claro");
+    expect(html(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [] }).model)).toMatch(/data-design="claro"/);
+    const legacy = html(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [], design: "standard" }).model);
+    expect(legacy).not.toMatch(/data-design|ms-brand|ms-cue|>01</);
   });
 
   it("the same blocks through the same renderer: header with a discreet mark, guide numbers 01/02, reading and visual cues", () => {

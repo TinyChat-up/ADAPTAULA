@@ -34,6 +34,9 @@ describe("case B · the cell sheet with its generated illustration, printed", ()
     expect(page).toBeGreaterThanOrEqual(0);
     // The drawing's ink is on that page (the outline and the nucleus of the cell), not on a page of its own.
     expect(printed.pages[page]!.png.byteLength).toBeGreaterThan(10_000);
-    expect(printed.pages).toHaveLength(1);
+    // answer_space@v1 gives the ESO explanation its four lines, so the last activity may open a second sheet: what matters is that
+    // the drawing never takes a sheet of its own and every sheet starts with work to do.
+    expect(printed.pages.length).toBeLessThanOrEqual(2);
+    for (const p of printed.pages) expect(p.text.replace(/\d+ \/ \d+/, "").trim().length).toBeGreaterThan(40);
   });
 });

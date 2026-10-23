@@ -44,10 +44,12 @@ const Choice = z.object({ id: ItemId, text: ShortText });
 export const RESPONSE_KINDS = ["lines", "box", "grid", "table_cells", "choice", "fill_blank", "match", "order", "true_false", "oral_or_alternative", "none", "comparison", "fields", "sequence"] as const;
 export const CLOSED_RESPONSE_KINDS = ["choice", "fill_blank", "match", "order", "true_false"] as const;
 
-const RESPONSE_VARIANTS = [
+// The variants before and after `grid`, which the stored contract widens: split so the published order stays the same.
+const WRITING_VARIANTS = [
   z.object({ kind: z.literal("lines"), lines: z.number().int().min(1).max(40) }),
   z.object({ kind: z.literal("box"), size: z.enum(["small", "medium", "large"]) }),
-  z.object({ kind: z.literal("grid") }),
+] as const;
+const OTHER_VARIANTS = [
   z.object({ kind: z.literal("table_cells") }),
   z.object({ kind: z.literal("choice"), options: z.array(Choice).min(2).max(8), multiple: z.boolean() }),
   // `text` marks blanks as `{{key}}`; the answers live in `answer_key`.
@@ -58,6 +60,7 @@ const RESPONSE_VARIANTS = [
   z.object({ kind: z.literal("oral_or_alternative"), mode: z.enum(["oral", "keyboard", "other"]), lines: z.number().int().min(0).max(40) }),
   z.object({ kind: z.literal("none") }),
 ] as const;
+const RESPONSE_VARIANTS = [...WRITING_VARIANTS, z.object({ kind: z.literal("grid") }), ...OTHER_VARIANTS] as const;
 /** What a model may write (generator, block revision): the published contracts, unchanged. */
 const ResponseSchema = z.discriminatedUnion("kind", RESPONSE_VARIANTS);
 /**
@@ -65,7 +68,14 @@ const ResponseSchema = z.discriminatedUnion("kind", RESPONSE_VARIANTS);
  * one EMPTY box between the two numbers of each item («2/3 ☐ 3/5»), drawn by our own renderer; the sign is never stored.
  */
 const StoredResponseSchema = z.discriminatedUnion("kind", [
-  ...RESPONSE_VARIANTS,
+  ...WRITING_VARIANTS,
+  /**
+   * A squared area to calculate in. `rows`: its height in squares, set by the server's answer-space rules (answer_space@v1) from what
+   * the activity asks for; the square's size is the sheet's (tokens), never stored. Absent (documents before v1, what a model writes):
+   * the renderer's default height.
+   */
+  z.object({ kind: z.literal("grid"), rows: z.number().int().min(3).max(60).optional() }),
+  ...OTHER_VARIANTS,
   z.object({ kind: z.literal("comparison"), spec: ComparisonSpecSchema }),
   /**
    * The labelled answer fields the original prints («Sujeto:» / «Predicado:», «Operaciones y unidades:» / «Respuesta:»): each label
@@ -73,7 +83,9 @@ const StoredResponseSchema = z.discriminatedUnion("kind", [
    */
   z.object({
     kind: z.literal("fields"),
-    fields: z.array(z.object({ label: Text(60), space: z.enum(["lines", "box"]), lines: z.number().int().min(1).max(12) })).min(1).max(12),
+    // `grid` (answer_space@v1): a squared area under the label, `lines` = its rows of squares. `unit`: an empty slot for the unit
+    // next to the answer (never the unit itself: it may be what the activity evaluates).
+    fields: z.array(z.object({ label: Text(60), space: z.enum(["lines", "box", "grid"]), lines: z.number().int().min(1).max(60), unit: z.boolean().optional() })).min(1).max(12),
   }),
   /** The items of an ordering task in their PRINTED order, one empty box each for the number: the order is the student's work. */
   z.object({ kind: z.literal("sequence"), items: z.array(ShortText).min(2).max(12) }),
