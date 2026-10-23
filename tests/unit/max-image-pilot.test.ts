@@ -3,7 +3,7 @@ import { validateBrief, acceptReview } from '@/lib/visuals/illustration';
 import { CELL_BRIEF, CELL_REVIEW_APPROVED } from '../support/cell-case';
 const ctx = { activity: 'Observa la escena.', expectedAnswer: null, signatures: [], lowDetail: false };
 it('no confía a imagen fracciones, operaciones, recuentos ni ejes exactos', () => {
-  for (const composition of ['Una barra con 3/4 sombreados.', 'Escribe 3 + 2 = 5.', 'Dibuja exactamente tres manzanas.', 'Una recta numérica dividida en cuartos.'])
+  for (const composition of ['Una barra con 3/4 sombreados.', 'Escribe 3 + 2 = 5.', 'Resta 3 - 2.', 'Multiplica 3 x 2.', 'Compara 3 ≤ 4.', 'Dibuja exactamente tres manzanas.', 'Una recta numérica dividida en cuartos.'])
     expect(validateBrief({ ...CELL_BRIEF, composition }, ctx), composition).toMatchObject({ ok: false });
 });
 it('una sola evidencia no acredita dos elementos distintos por coincidencia parcial', () => {

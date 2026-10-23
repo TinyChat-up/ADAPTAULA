@@ -45,7 +45,7 @@ const MARKUP = /[<>{}[\]`]/;
 /** A measure, scale or value the picture would have to get exactly right: not for an image model. */
 const EXACT_DATA = /\b\d+(?:[.,]\d+)?\s?(?:mm|cm|dm|m|km|g|kg|mg|l|ml|cl|s|min|h|%|°|º|grados|metros|kilos|litros|euros|€)\b/;
 /** The activity points at numbered parts of the picture («señaladas con los números», «numeradas»). */
-const EXACT_REPRESENTATION = /\b\d+\s*[/⁄]\s*\d+\b|\d\s*[+−×÷=]\s*\d|\b(recta numerica|fracciones? equivalentes?|escala|eje de coordenadas|tabla de valores)\b|\b(exactamente|cantidad de|grupo de)\s+(?:\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/;
+const EXACT_REPRESENTATION = /\b\d+\s*[/⁄]\s*\d+\b|\d\s*[+\-−×x*÷:=≤≥]\s*\d|\b(recta numerica|fracciones? equivalentes?|escala|eje de coordenadas|tabla de valores)\b|\b(exactamente|cantidad de|grupo de)\s+(?:\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/;
 const NUMBERED = /\b(senalad[ao]s? con (?:los )?numeros?|numerad[ao]s|marcad[ao]s? con (?:los )?numeros?|indicad[ao]s? con (?:los )?numeros?|con los numeros)\b/;
 
 /** The numbers an activity says are on the picture, when it says so: those markers must be there, and only those. */
