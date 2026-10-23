@@ -2,7 +2,7 @@
 
 ## Alcance autorizado y estado
 
-El fundador decidió trabajar directamente con producción en esta conversación (2026-10-23). Esta entrega adapta el bloqueo absoluto de #66 a un modo explícito `production-pilot`, limitado al backend y workspace configurados. No habilita contratación pública ni cobros reales. Parte de `main` `e016d8b`, con #66 integrada. Rama `codex/stripe-piloto-produccion`.
+El fundador decidió trabajar directamente con producción en esta conversación (2026-10-23). Esta entrega adapta el bloqueo absoluto de #66 a un modo explícito `production-pilot`, limitado al backend y workspace configurados. No habilita contratación pública ni cobros reales. Parte de `main` `e016d8b`, con #66 integrada. Rama `codex/stripe-piloto-produccion`; [PR #67](https://github.com/TinyChat-up/ADAPTAULA/pull/67) abierta sin merge.
 
 **No se ha accedido a APIs administrativas, migrado ni desplegado ningún servicio real.** El usuario ha identificado el dominio destino: https://adaptaula-nine.vercel.app/. No se ha confirmado mediante Vercel cuál es su proyecto interno. La consulta pública de portada y `/precios` fue bloqueada por el túnel de red del entorno (`CONNECT 403`, HTTP destino `000`); esto no prueba que la aplicación esté caída. El entorno disponible no tiene conectores Vercel/Supabase/Stripe; las pruebas usan el Supabase ficticio local, mocks de transporte y documentos sintéticos. La disponibilidad del modelo y las tarifas actuales siguen pendientes. No se ha gastado en IA.
 
