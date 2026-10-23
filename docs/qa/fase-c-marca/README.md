@@ -98,7 +98,8 @@ Medido y comprobado en el PDF:
   - unidad y BD: 1919 correctas y 13 omitidas;
   - PDF: 64/64;
   - typecheck correcto; lint con el aviso previo ajeno;
-  - E2E completa: ver el registro.
+  - E2E de identidad: 4/4 en escritorio y móvil;
+  - la suite E2E completa no se ha pasado sobre el código final (se interrumpió en la 9 de 128, sin fallos): queda para el cierre antes de fusionar.
 
 ## 5. Revisión crítica de la web
 

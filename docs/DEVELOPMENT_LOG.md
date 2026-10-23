@@ -35,7 +35,7 @@
   - ajustadas con revisión explícita: la galería PDF, el diseño de la ficha y la CSP de impresión, para admitir solo los degradados propios del símbolo;
   - unidad y BD: 1919 correctas y 13 omitidas;
   - PDF: 64/64. Las ocho fichas conservan sus hojas, y la de Matemáticas no tiene ninguna imagen rasterizada;
-  - E2E completa: E2E_RESULT_C.
+  - E2E: la de identidad (4/4, escritorio y móvil), que recorre landing, acceso, bienvenida, escritorio, barra lateral, «Hacer magia» y la ficha. La suite E2E completa no se ha pasado sobre el código final: se interrumpió en la 9 de 128, sin fallos, por decisión del responsable. Queda para el cierre antes de fusionar.
 - **Regresión encontrada y corregida:** el acento sobre su fondo suave daba 4,41:1 en «Próximamente». Pasa a `#0060eb` (4,73:1).
 - **Riesgos:**
   - la dependencia de la #56;
