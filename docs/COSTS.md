@@ -1,5 +1,7 @@
 # Costes y rentabilidad de una adaptación
 
+> **Estado actual (2026-10-23):** las cifras de este análisis son históricas; 026 sustituyó los cupos y precios del catálogo descritos abajo y mantiene las imágenes desactivadas. El piloto propone cinco aprobadas solo en PGlite, con 3 por adaptación y 0,50 USD defensivos, pendientes de aprobación comercial. No se han revalidado tarifas ni disponibilidad remotas. Un presupuesto de admisión no garantiza una factura máxima. [Estimaciones y límites del ensayo](qa/max-visuales/PRUEBA_MANUAL.md#5-coste-estimado-y-significado-de-cinco-imágenes).
+
 Auditoría del coste completo de una adaptación de «Hacer magia», hecha el 13-10-2026 sobre la PR #25. Las cifras están en USD.
 
 **Cada cifra dice de dónde sale:**
@@ -107,7 +109,7 @@ gastan las ilustraciones de **una** adaptación: 0,50 USD por defecto.
 - Se comprueba en el servidor **antes** de cada llamada, con el peor caso de esa llamada.
 - Un aplazamiento por falta de tiempo o por un fallo transitorio puede repetir una ilustración, pero no supera el techo.
 
-**Peor caso garantizado de una adaptación: ≈ 0,30 + 0,50 = 0,80 USD.** La cifra solo crece si el modelo de imagen gasta más tokens
+**Estimación histórica de admisión (no garantizada): ≈ 0,30 + 0,50 = 0,80 USD.** La cifra solo crece si el modelo de imagen gasta más tokens
 de los estimados en una llamada ya empezada.
 
 **Fallos no medidos:** un rechazo de contenido del proveedor de imagen se registra y no se reintenta. Una imagen que no es un PNG

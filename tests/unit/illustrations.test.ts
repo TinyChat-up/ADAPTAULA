@@ -360,3 +360,17 @@ describe("the image transport (OpenAI SDK behind src/lib/ai; a fake client, no n
     expect(estimateImageCostUsd("mock", "x", { textInputTokens: 1, imageInputTokens: 1, outputTokens: 1 })).toBe(0);
   });
 });
+
+it('un coste desconocido de un fallo se carga al peor caso y no permite otro intento fuera de presupuesto', async () => {
+  const s = scriptedDeps({ images: [null], budget: { limitUsd: 0.15, spentUsd: 0 } });
+  const original = s.deps.image;
+  s.deps.image = async input => { const r = await original(input); return { ...r, run: { ...r.run, estimatedCostUsd: null } }; };
+  expect(await illustrate(s.deps, request)).toMatchObject({ ok: false, reason: 'budget_exhausted' });
+  expect(s.calls.filter(c => c === 'image')).toHaveLength(1);
+  expect(s.refunded).toEqual(s.reserved);
+});
+
+it('una imagen sin uso reportado no se presenta como coste cero', () => {
+  expect(estimateImageCostUsd('openai','gpt-image-2.5-sunburst',{textInputTokens:0,imageInputTokens:0,outputTokens:0})).toBeNull();
+  expect(estimateImageCostUsd('mock','x',{textInputTokens:0,imageInputTokens:0,outputTokens:0})).toBe(0);
+});

@@ -228,6 +228,9 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
   const planLimited = new Map<string, "illustration_not_in_plan" | "illustration_quota_exhausted" | "illustration_unavailable">();
   /** One illustration for a need: within the adaptation's limit, with the activities' own words and answers. */
   const illustrate = async (needKey: string, activities: readonly AnalysisActivity[], missing: string | null, purpose: string): Promise<IllustrationOutcome | null> => {
+    const need = needs.find(n => n.key === needKey);
+    // A missing picture carrying evaluated quantities must be exact. A contextual picture is allowed only as an optional help.
+    if (need?.essential && activities.some(a => a.type === "calculation" || a.type === "problem_solving" || a.response_format === "calculate" || a.response_format === "write_number" || /\b(fraccion|fracciones|recta numerica|escala|coordenadas)\b/.test(normalizeText(a.instruction)))) return null;
     const withheld = deps.illustrationsWithheld;
     if (!deps.illustrate && activities.length > 0 && withheld && withheld !== "service") planLimited.set(needKey, withheld === "plan" ? "illustration_not_in_plan" : withheld === "quota" ? "illustration_quota_exhausted" : "illustration_unavailable");
     const limit = Math.min(ILLUSTRATION_LIMITS.perAdaptation, deps.maxIllustrations ?? ILLUSTRATION_LIMITS.perAdaptation);

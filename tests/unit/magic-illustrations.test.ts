@@ -229,3 +229,14 @@ describe("«Observa el esquema» with no scheme on the sheet", () => {
     expect(plan.needs.find((n) => n.key === "act_1")).toMatchObject({ category: "unresolved_visual", resolution: { reason: "referenced_picture_unavailable" } });
   });
 });
+
+it('una figura imprescindible para un cálculo no se sustituye por una ilustración aunque el proveedor la apruebe', async () => {
+  const c=cell(true);
+  const a=c.s.analysis.activities[0]!;
+  a.type='calculation';a.response_format='calculate';a.instruction='Observa la figura y calcula su área.';a.context=null;
+  const v=c.s.analysis.visuals[0]!;
+  v.kind='other';v.description='Figura coloreada necesaria para calcular un área.';v.title=null;v.text=null;
+  const plan=await c.resolve();
+  expect(c.requests).toHaveLength(0);
+  expect(outcome(plan,'vis_1').resolution.action).not.toBe('illustration');
+});

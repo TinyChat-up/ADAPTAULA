@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Piloto visual Max (2026-10-23):** #65 confirmada integrada en `56c899f`. [PR #66](https://github.com/TinyChat-up/ADAPTAULA/pull/66) abierta sin merge, rama `codex/max-visuales-piloto`: clasificación A/B/C, aislamiento por backend/workspace, revisión persistida, controles de respuestas/coste desconocido, finalidad en panel existente y ejemplos calculados acotados. Solo fixtures de cinco en PGlite; 024/026, precios y producción intactos. [Estado, evaluaciones y PDF](qa/max-visuales/README.md). Disponibilidad real del modelo y ensayo pagado pendientes; no se han ejecutado servicios remotos.
+
 > **Maquetación pedagógica #64 (2026-10-23):** trabajo desde `main` `fb314b2` (#62 integrada), rama `codex/64-maquetacion-pedagogica`. Corrección de conteo de fracciones, campos etiquetados con contexto, reparto compartido de actividades y unidad de paginación con ejemplo/comprobación; sin segundo renderer. [PDF antes/después, pruebas y límites](qa/maquetacion-pedagogica-64/README.md). Las menciones a PR abiertas en los antecedentes siguientes son históricas: #52–#62 ya están integradas. [PR #65](https://github.com/TinyChat-up/ADAPTAULA/pull/65) abierta. Sin merge, despliegue ni migraciones remotas.
 
 > **E2E y regresión de la PR #53 (2026-10-22):** la PR #53 está integrada. En `claude/hacer-magia-2`, sin PR nueva todavía:

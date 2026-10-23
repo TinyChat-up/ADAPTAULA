@@ -152,8 +152,8 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
   let spent = 0;
   const worstOf = (run: AIRunRecord) => (run.purpose === "image" ? ILLUSTRATION_BUDGET.imageUsd : ILLUSTRATION_BUDGET.textUsd);
   const record = (run: AIRunRecord) => {
-    spent += run.estimatedCostUsd ?? (run.status === "success" ? worstOf(run) : 0);
-    return deps.recordAiRun(run).catch(() => undefined);
+    spent += run.estimatedCostUsd ?? worstOf(run);
+    return deps.recordAiRun(run);
   };
   const fits = (usd: number) => !deps.budget || spent + usd <= deps.budget.limitUsd + 1e-9;
   const left = () => (request.deadline ?? Number.POSITIVE_INFINITY) - (deps.now ? deps.now() : Date.now());

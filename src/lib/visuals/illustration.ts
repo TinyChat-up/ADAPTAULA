@@ -45,6 +45,7 @@ const MARKUP = /[<>{}[\]`]/;
 /** A measure, scale or value the picture would have to get exactly right: not for an image model. */
 const EXACT_DATA = /\b\d+(?:[.,]\d+)?\s?(?:mm|cm|dm|m|km|g|kg|mg|l|ml|cl|s|min|h|%|°|º|grados|metros|kilos|litros|euros|€)\b/;
 /** The activity points at numbered parts of the picture («señaladas con los números», «numeradas»). */
+const EXACT_REPRESENTATION = /\b\d+\s*[/⁄]\s*\d+\b|\d\s*[+\-−×x*÷:=≤≥]\s*\d|\b(recta numerica|fracciones? equivalentes?|escala|eje de coordenadas|tabla de valores)\b|\b(exactamente|cantidad de|grupo de)\s+(?:\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b/;
 const NUMBERED = /\b(senalad[ao]s? con (?:los )?numeros?|numerad[ao]s|marcad[ao]s? con (?:los )?numeros?|indicad[ao]s? con (?:los )?numeros?|con los numeros)\b/;
 
 /** The numbers an activity says are on the picture, when it says so: those markers must be there, and only those. */
@@ -54,6 +55,8 @@ export function markerNumbersIn(activity: string): number[] {
   return [...new Set([...norm.matchAll(/(?<![\d/])\b([1-9])\b(?![\d/])/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
 }
 
+const labelsForCheck = (elements: IllustrationElement[]) => elements.flatMap(e => e.label ? [e.label] : []);
+
 const words = (s: string) => normalizeText(s).split(/[^a-z0-9ñ]+/).filter((w) => w.length > 2);
 
 export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok: true; brief: IllustrationBrief } | { ok: false; violations: string[] } {
@@ -62,12 +65,13 @@ export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok
   if (!kind || !concept?.trim() || !pedagogical_purpose?.trim() || !composition?.trim() || !detail_level || !alt_text?.trim()) return { ok: false, violations: ["incomplete"] };
   const elements = (draft.required_elements ?? []).map((e) => ({ name: e.name.trim(), marker: e.marker, label: e.label?.trim() || null }));
   const violations: string[] = [];
+  if (elements.some(e => e.marker === null && /\b(?:[2-9]|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+\p{L}+/u.test(normalizeText(e.name)))) violations.push("exact_data");
   if (elements.length === 0 || elements.some((e) => !e.name)) violations.push("no_required_elements");
   const names = elements.map((e) => normalizeText(e.name));
   if (new Set(names).size !== names.length) violations.push("duplicate_elements");
   const texts = [concept, pedagogical_purpose, composition, alt_text, ...elements.flatMap((e) => [e.name, e.label ?? ""]), ...(draft.prohibited_elements ?? []), ...(draft.conceptual_constraints ?? [])];
   if (texts.some((t) => MARKUP.test(t))) violations.push("markup");
-  if ([concept, composition, ...(draft.conceptual_constraints ?? []), ...elements.map((e) => e.name)].some((t) => EXACT_DATA.test(normalizeText(t)))) violations.push("exact_data");
+  if ([concept, composition, alt_text, ...labelsForCheck(elements), ...(draft.conceptual_constraints ?? []), ...elements.map((e) => e.name)].some((t) => EXACT_DATA.test(normalizeText(t)) || EXACT_REPRESENTATION.test(normalizeText(t)))) violations.push("exact_data");
 
   // Numbered parts: exactly the numbers the activity names, consecutive, each on one element, never with its name written.
   const markers = elements.filter((e) => e.marker !== null).map((e) => e.marker!);
@@ -80,6 +84,8 @@ export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok
 
   // Labels: few, short, and never what the student has to find.
   const labels = elements.filter((e) => e.label).map((e) => e.label!);
+  if (labels.some(l => /[0-9]/.test(l))) violations.push("exact_data");
+  if (ctx.expectedAnswer && labels.some(l => normalizeText(l) === normalizeText(ctx.expectedAnswer!))) violations.push("label_gives_answer");
   if (labels.length > 8) violations.push("too_many_labels");
   const answerWords = new Set(ctx.expectedAnswer ? words(ctx.expectedAnswer) : []);
   if (labels.some((l) => words(l).length > 0 && words(l).every((w) => answerWords.has(w)))) violations.push("label_gives_answer");
@@ -103,18 +109,15 @@ export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok
   };
 }
 
-const sameName = (a: string, b: string) => {
-  const x = normalizeText(a);
-  const y = normalizeText(b);
-  return x === y || x.includes(y) || y.includes(x);
-};
-
-/** The review is evidence, not a vote: every required element, marker and label confirmed, and nothing else wrong. */
+/** The review is a model claim to check, not a guarantee of semantic correctness: every required element, marker and label confirmed, and nothing else wrong. */
 export function acceptReview(review: ReviewDraft | null, brief: IllustrationBrief): { ok: true } | { ok: false; issues: string[] } {
   if (!review) return { ok: false, issues: ["no_review"] };
   const issues: string[] = [];
+  const used = new Set<number>();
   for (const e of brief.required_elements) {
-    const seen = review.elements.find((r) => sameName(r.name, e.name));
+    const at = review.elements.findIndex((r, i) => !used.has(i) && normalizeText(r.name) === normalizeText(e.name));
+    if (at >= 0) used.add(at);
+    const seen = at >= 0 ? review.elements[at] : undefined;
     if (!seen || !seen.present) issues.push(`missing:${e.name}`);
     else {
       if (e.marker !== null && seen.marker_ok !== true) issues.push(`marker:${e.marker}:${e.name}`);

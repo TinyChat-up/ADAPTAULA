@@ -117,6 +117,7 @@ const StoredImageSourceSchema = z.discriminatedUnion("kind", [
   ...IMAGE_SOURCE_VARIANTS,
   z.object({
     kind: z.literal("figure"),
+    example_ref: z.string().regex(/^blk_[A-Za-z0-9_-]+$/).optional(),
     spec: VisualSpecSchema,
     provenance: z.enum(["reconstruction", "generated"]),
     visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/).optional(),
@@ -131,6 +132,7 @@ const StoredImageSourceSchema = z.discriminatedUnion("kind", [
    */
   z.object({
     kind: z.literal("generated"),
+    essential: z.boolean().optional(),
     asset_id: z.string().uuid(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     visual_ref: z.string().regex(/^vis_[0-9]{1,4}$/).optional(),

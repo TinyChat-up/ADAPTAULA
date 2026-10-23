@@ -48,6 +48,9 @@ export const ServerEnvSchema = z.object({
 
   FLAG_MAX_PLAN_ENABLED: flag(false),
   FLAG_AI_IMAGES_ENABLED: flag(false),
+  AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging"])),
+  AI_IMAGES_PILOT_WORKSPACE_ID: optional(z.uuid()),
+  AI_IMAGES_PILOT_SUPABASE_URL: optional(z.url()),
   FLAG_MULTI_PROFILE_GENERATION: flag(true),
   FLAG_SCHOOL_WORKSPACES: flag(false),
   FLAG_GOOGLE_AUTH: flag(false),

@@ -1,6 +1,17 @@
 # Registro de desarrollo
 
 
+## 2026-10-23 — Piloto visual Max aislado, sobre #65
+
+- Base `56c899f`, rama `codex/max-visuales-piloto`; #65 integrada, sin PR abiertas al iniciar.
+- Auditoría acotada de 024/026, costes, política de Hacer magia, brief/revisión, almacenamiento y lectura. Cero imágenes y generación apagada en catálogo actual. SDK admite los modelos históricos; disponibilidad/documentación remota no verificada (red 403).
+- Defectos reproducidos: figura matemática imprescindible derivada a ilustración contextual, uso OpenAI ausente contabilizado como cero, briefs con matemáticas/recuentos exactos y respuesta numérica aceptados; una comprobación parcial acreditaba dos elementos; SHA sin aprobación permitía leer una ilustración. Corregidos con pruebas que fallaban antes.
+- Implementación: aislamiento de backend y workspace, exclusión de Vercel Production, cómputo defensivo de costes desconocidos también en fallos, consulta de aprobadas antes de reservar, exigencia de revisión persistida y distinción opcional/imprescindible. Panel existente con finalidad y revisión docente explícita. No hay migraciones, precios ni Stripe.
+- Ejemplos: helper acotado de fracciones calculado con aritmética determinista; figura ligada a su ejemplo en CLARO. Se corrigió la confusión observada en el PDF donde esa barra aparecía bajo el ejercicio. No se activa selección automática de ejemplos ni se cambia el currículo.
+- Seis parejas de PDF sintéticos, monocromo, dibujos manuales y mocks; ensayo real preparado con un marcador exclusivo previo al gasto, un máximo de dos intentos de imagen y presupuesto hasta 0,50 USD. No ejecutado; requiere autorización.
+- [QA, evaluación, capturas y guía](qa/max-visuales/README.md). Cierre: unidad/BD 1.948 correctas y 13 omitidas; dominio 90/90; PDF 75/75 con regresión #65 y fases B/C; E2E completa 130/130 escritorio/móvil en 17,3 min; typecheck/build y smoke correctos; lint sin errores y un aviso previo. Pasos de `check` ejecutados con binarios instalados por el intento de reinstalación del lanzador pnpm. Sin servicios remotos ni IA pagada. [PR #66](https://github.com/TinyChat-up/ADAPTAULA/pull/66) abierta; no merge.
+
+
 ## 2026-10-23 — #64: maquetación pedagógica comprobada con PDF
 
 - Base `fb314b2`, rama `codex/64-maquetacion-pedagogica`. Sin PR abiertas al comenzar; sin cambios en producción desplegada.

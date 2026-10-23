@@ -1,5 +1,7 @@
 # Facturación, planes y cuotas
 
+> **Imágenes Max, piloto (2026-10-23):** el catálogo vigente de 026 conserva `monthly_images=0` e `image_generation=false`; Max no es contratable. Cinco imágenes aprobadas mensuales es una propuesta exclusiva del fixture local, pendiente de aprobación comercial. No se modifican precios, condiciones, migraciones previas ni Stripe. [Estado y pruebas](qa/max-visuales/README.md).
+
 > **Estado 4A:** política efectiva nueva en migración 026: Free 1/2, Pro 15/30 y Max 30/50 (adaptaciones/análisis). Pro 24,90 €/mes y Max 49,90 €/mes con IVA, provisionales. Sin contratación ni precios anuales anunciados. Las suscripciones antiguas conservan sus condiciones. [Procedimiento y límites](qa/adaptaula-2-etapa-4a/README.md). Los flujos Stripe descritos debajo son diseño futuro, no endpoints operativos.
 
 ## Productos Stripe

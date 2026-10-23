@@ -22,6 +22,7 @@ function NeedRow({ need, adaptationId, canWrite, locateHref }: { need: VisualNee
         {need.origin === "original" ? need.label : `Recurso: ${need.label}`}
         {need.essential && !done ? " · imprescindible para imprimir la ficha" : ""}
       </p>
+      {need.generated ? <p className="text-sm text-muted-foreground">{need.purpose ? `Finalidad: ${need.purpose} ` : ""}Ilustración generada con IA. La revisión automática puede equivocarse: comprueba su contenido y la vista previa del PDF antes de utilizarla.</p> : null}
       {canWrite && need.origin === "original" && !need.generated ? (
         <div className="flex flex-wrap items-start gap-2">
           <LinkButton size="sm" variant={need.status === "ready" ? "secondary" : "primary"} href={locateHref(need.key)}>
@@ -50,7 +51,11 @@ export function VisualNeedsPanel({ needs, adaptationId, canWrite, locateHref, ma
   if (needs.length === 0) return null;
   const blocking = blockingNeeds(needs);
   if (!manual) {
-    if (blocking.length === 0) return null;
+    if (blocking.length === 0) {
+      const generated = needs.filter(n => n.generated);
+      if (generated.length === 0) return null;
+      return <section className="ms-chrome space-y-3" aria-labelledby="recursos-generados"><h2 id="recursos-generados" className="text-lg font-semibold">Ilustraciones generadas · revisión docente</h2><ul className="space-y-3">{generated.map(need => <NeedRow key={need.key} need={need} adaptationId={adaptationId} canWrite={false} locateHref={locateHref} />)}</ul></section>;
+    }
     return (
       <section className="ms-chrome space-y-3" aria-labelledby="recursos-visuales">
         <Alert tone="warning" title="No hemos podido completar automáticamente esta ficha porque necesita un recurso visual">

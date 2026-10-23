@@ -19,6 +19,7 @@ import type { GeneratedDeps } from "@/lib/render/generated";
 import { loadRenderInputWith } from "@/lib/render/load";
 import { readinessOf } from "@/lib/render/readiness";
 import { CELL_BRIEF, CELL_REVIEW_APPROVED, cellCaseAnalysis, cellPdf } from "../support/cell-case";
+import { enableLocalMaxImageProposal } from "../support/max-pilot-plan";
 import { as, createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions, type User } from "./orchestration-harness";
 import { resourceHarness } from "./resource-harness";
@@ -39,7 +40,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'");
   // Policy 026 keeps images disabled in every real plan. Enable the dormant path only in this local fixture.
-  await db.query("update public.plans set monthly_images = 50, features = features || '{\"image_generation\":true}'::jsonb where slug = 'max'");
+  await enableLocalMaxImageProposal(db);
 });
 const q = <T>(sql: string, params: unknown[] = []) => db.query<T>(sql, params).then((r) => r.rows);
 const asService = <T>(fn: () => Promise<T>) => as(db, "service_role", null, fn);
@@ -98,7 +99,7 @@ function pgIllustrationDeps(user: User, objects: Map<string, Uint8Array>, ids: {
 function userGeneratedDeps(user: User, objects: Map<string, Uint8Array>): GeneratedDeps {
   const asUser = <T>(fn: () => Promise<T>) => as(db, "authenticated", user.id, fn);
   return {
-    row: async (assetId) => (await asUser(() => q<{ id: string; adaptation_id: string; storage_path: string; sha256: string; width: number; height: number }>("select id, adaptation_id, storage_path, sha256, width, height from public.generated_assets where id = $1 and sha256 is not null", [assetId])))[0] ?? null,
+    row: async (assetId) => (await asUser(() => q<{ id: string; adaptation_id: string; storage_path: string; sha256: string; width: number; height: number; review: { approved: boolean } }>("select id, adaptation_id, storage_path, sha256, width, height, review from public.generated_assets where id = $1 and sha256 is not null", [assetId])))[0] ?? null,
     readObject: async (path) => ((await asUser(() => q("select 1 from storage.objects where bucket_id = $1 and name = $2", [BUCKET, path]))).length > 0 ? (objects.get(path) ?? null) : null),
   };
 }
@@ -259,13 +260,23 @@ describe("migration 024: the illustration row, its isolation and its accounting"
     await expect(as(db, "authenticated", t.user.id, () => q("update public.generated_assets set alt_text = 'x' where id = $1", [row.id]))).rejects.toThrow(/permission denied/i);
   });
 
+  it("propuesta local: cinco aprobadas, sexta bloqueada y otro workspace sin derecho", async () => {
+    const max = await createUser(db, `pilot-five-${++n}@example.com`);
+    await subscribe(max.workspaceId, "max");
+    const take = (ws: string, key: string) => asService(() => q<{ r: { allowed: boolean; limit: number } }>("select public.consume_quota($1, 'image', 1, null, null, $2) as r", [ws, key])).then(r => r[0]!.r);
+    for (let i=0;i<5;i++) expect(await take(max.workspaceId, `pilot-${n}-${i}`)).toMatchObject({allowed:true,limit:5});
+    expect(await take(max.workspaceId, `pilot-${n}-six`)).toMatchObject({allowed:false,limit:5});
+    const other=await createUser(db, `pilot-other-${++n}@example.com`);
+    expect(await take(other.workspaceId, `pilot-${n}-other`)).toMatchObject({allowed:false,limit:0});
+  });
+
   it("the `image` quota: Free has none, fixture Max has units; a repeated key never charges twice; a refund gives it back", async () => {
     const free = await createUser(db, `illustrations-free-${++n}@example.com`);
     const consume = (ws: string, key: string) => asService(() => q<{ r: { allowed: boolean; duplicate?: boolean; limit: number } }>("select public.consume_quota($1, 'image', 1, null, null, $2) as r", [ws, key])).then((r) => r[0]!.r);
     expect(await consume(free.workspaceId, `k-${n}-a`)).toMatchObject({ allowed: false, limit: 0 });
     const max = await createUser(db, `illustrations-max-${++n}@example.com`);
     await subscribe(max.workspaceId, "max");
-    expect(await consume(max.workspaceId, `k-${n}-b`)).toMatchObject({ allowed: true, limit: 50 });
+    expect(await consume(max.workspaceId, `k-${n}-b`)).toMatchObject({ allowed: true, limit: 5 });
     expect(await consume(max.workspaceId, `k-${n}-b`)).toMatchObject({ allowed: true, duplicate: true });
     await asService(() => q("select public.refund_quota($1)", [`k-${n}-b`]));
     expect(Number((await q<{ s: string }>("select sum(units)::text s from public.usage_events where workspace_id = $1 and kind = 'image'", [max.workspaceId]))[0]!.s)).toBe(0);

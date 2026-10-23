@@ -1,5 +1,7 @@
 # Recursos visuales (Phase 8.2A)
 
+> **Piloto Max (2026-10-23):** A = representaciones exactas con VisualSpec; B = ilustraciones contextualizadoras; C = ejemplos análogos calculados. Preparado exclusivamente para pruebas aisladas y cerrado por defecto. 026 sigue con cero imágenes y `image_generation=false`. [Auditoría, estado y PDF](qa/max-visuales/README.md), [guía y autorización de ensayo real](qa/max-visuales/PRUEBA_MANUAL.md). Las descripciones de fases anteriores que siguen son antecedentes.
+
 Cómo llega una imagen, un gráfico o un apoyo visual desde el material original, o desde el plan de adaptación, hasta la ficha
 impresa. También qué hace el docente cuando falta algo. Ningún modelo dibuja ni inventa imágenes; en esta fase no hay generación
 de imágenes por IA.

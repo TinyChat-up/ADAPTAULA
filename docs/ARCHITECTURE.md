@@ -516,3 +516,10 @@ Detalle en [EDITORIAL.md](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md).
 - Si aparecen los originales vectoriales del diseñador, sustituyen a estos SVG con los mismos nombres.
 
 Detalle en [BRAND.md](BRAND.md) y [QA](qa/fase-c-marca/README.md). Esta entrega depende de la #56 (Fase B), sobre la que se construye.
+
+
+## Piloto aislado de imágenes Max (2026-10-23)
+
+Se conserva `illustrate` y CLARO: no hay un segundo pipeline ni renderer. Las representaciones exactas siguen con VisualSpec; el ejemplo estructurado de fracciones calcula datos distintos y enlaza su figura mediante `example_ref` al `worked_example` existente. `essential` distingue ayudas generadas opcionales en documentos nuevos; los históricos fallan cerrado. La lectura exige aprobación persistida y SHA, además de pertenencia a adaptación y RLS.
+
+La disponibilidad de generación exige la configuración cerrada `AI_IMAGES_PILOT_*`, igualdad de backend y workspace, ausencia de Vercel Production, plan Max efectivo y las puertas existentes. La propuesta de cinco solo vive en fixtures PGlite: no modifica 026 ni condiciones comerciales. [Decisión y límites](qa/max-visuales/README.md). La clasificación y revisión semántica real de imágenes continúan requiriendo evaluación autorizada; el código no acredita que un modelo sea infalible.

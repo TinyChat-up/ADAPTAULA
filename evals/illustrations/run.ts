@@ -16,6 +16,7 @@
  * synthetic (no learner, no private material); storage and quota live in memory (no database is touched).
  * Needs ANTHROPIC_API_KEY and OPENAI_API_KEY in the environment (.env.local); their values are never printed.
  */
+import OpenAI from "openai";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -48,13 +49,15 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--mock") args.mock = true;
     else if (a === "--budget") args.budgetUsd = Number(argv[++i]);
   }
-  if (!Number.isFinite(args.budgetUsd) || args.budgetUsd <= 0) throw new Error("--budget debe ser un número positivo (USD).");
+  if (!Number.isFinite(args.budgetUsd) || args.budgetUsd <= 0 || args.budgetUsd > ILLUSTRATION_BUDGET.perAdaptationUsd) throw new Error("--budget debe ser positivo y no superar 0,50 USD en este ensayo.");
   return args;
 }
 
 /** Worst case before anything is spent: one brief, two images at medium quality, two reviews (the production ceilings). */
 const WORST_CASE_USD = 3 * ILLUSTRATION_BUDGET.textUsd + 2 * ILLUSTRATION_BUDGET.imageUsd;
 const MARKER = path.join(process.cwd(), "evals", "results", "illustrations", "REAL_RUN_DONE.json");
+
+const STARTED_MARKER = path.join(process.cwd(), "evals", "results", "illustrations", "REAL_RUN_STARTED.json");
 
 const usd = (n: number) => `${n.toFixed(4)} USD`;
 
@@ -86,8 +89,8 @@ async function main() {
       process.exitCode = 2;
       return;
     }
-    if (existsSync(MARKER) && !args.again) {
-      console.error(`Ya se hizo la ejecución real autorizada (${readFileSync(MARKER, "utf8").trim()}). Para otra, repite con --again.`);
+    if ((existsSync(MARKER) || existsSync(STARTED_MARKER)) && !args.again) {
+      console.error(`Ya se hizo la ejecución real autorizada (${existsSync(MARKER) ? "terminada" : "iniciada o interrumpida"}). Para otra, repite con --again.`);
       process.exitCode = 2;
       return;
     }
@@ -105,6 +108,25 @@ async function main() {
   const env = process.env as ModelEnv;
   const textSelection: ModelSelection = args.mock ? resolveModel("STANDARD", { AI_MODEL_STANDARD: "mock:default" }) : resolveModel("STANDARD", env);
   const imageSelection: ModelSelection = args.mock ? resolveModel("IMAGE_QUALITY", { AI_MODEL_IMAGE_QUALITY: "mock:dibujo" }) : resolveModel("IMAGE_QUALITY", env);
+  if (!args.mock) {
+    // Metadata availability is separate from SDK compatibility. This happens only under the existing explicit --yes gate.
+    try {
+      const metadata = await new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0 }).models.retrieve(imageSelection.model);
+      if (metadata.id !== imageSelection.model) throw new Error("model_mismatch");
+    } catch {
+      console.error("No se pudo confirmar la disponibilidad del modelo de imagen. No se ha generado ninguna imagen.");
+      process.exitCode = 2;
+      return;
+    }
+    mkdirSync(path.dirname(STARTED_MARKER), { recursive: true });
+    // Exclusive creation closes concurrent launches. An interrupted paid run needs a deliberate, newly authorised retry.
+    if (args.again && existsSync(STARTED_MARKER)) {
+      console.error("Ya existe un inicio de ensayo. Revisa los costes y archiva el marcador manualmente antes de otro ensayo autorizado.");
+      process.exitCode = 2;
+      return;
+    }
+    writeFileSync(STARTED_MARKER, JSON.stringify({ startedAt: new Date().toISOString(), model: imageSelection.model }), { flag: "wx" });
+  }
   const textProvider = args.mock ? null : createProvider(textSelection, { anthropicApiKey: process.env.ANTHROPIC_API_KEY });
   const imageProvider: ImageProvider = args.mock ? new MockImageProvider() : createImageProvider(imageSelection, { openaiApiKey: process.env.OPENAI_API_KEY });
 
@@ -200,4 +222,4 @@ ${imgs || "<p>No se generó ninguna imagen.</p>"}
 </html>`;
 }
 
-void main();
+void main().catch(() => { console.error("Ensayo detenido por un fallo técnico. No se reintenta automáticamente; revisa el marcador y los resultados locales."); process.exitCode = 1; });
