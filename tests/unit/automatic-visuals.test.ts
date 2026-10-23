@@ -255,7 +255,7 @@ describe("each figure with its activity, and the pages it takes", () => {
     const { model: m } = model({ vis_1: barSpec, vis_2: lineSpec });
     expect(document.presentation.max_tasks_per_page).toBe(3);
     expect(m.pages).toHaveLength(2);
-    expect(m.pages.map((p) => p.nodes.filter((n) => n.kind === "activity").length)).toEqual([3, 2]);
+    expect(m.pages.map((p) => p.nodes.filter((n) => n.kind === "activity").length)).toEqual([2, 3]);
     for (const p of m.pages) expect(p.nodes.some((n) => n.kind === "activity")).toBe(true);
     const imagesOutside = m.pages.flatMap((p) => p.nodes).filter((n) => n.kind === "image");
     expect(imagesOutside).toEqual([]);

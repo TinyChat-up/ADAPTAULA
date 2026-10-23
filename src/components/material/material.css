@@ -62,6 +62,13 @@ ul.ms-list { list-style: disc; }
 
 /* Actividad: número (dónde empieza una tarea) + enunciado; la zona de respuesta va alineada con el enunciado.
    Las actividades se separan por espacio, no por rayas: una raya junto a líneas de escritura parece otra línea más. */
+/* Let the browser measure the complete teaching unit, including its example and final check. If it exceeds an A4,
+   break-inside: avoid yields to the existing field/line/grid-zone breakpoints; no content or writing space is removed. */
+.ms-activity-unit[data-keep], .ms-closing-pair { break-inside: avoid; }
+.ms-closing-pair > * + * { margin-top: var(--ms-gap); }
+.ms-activity-unit > .ms-activity-leads { margin-bottom: var(--ms-gap); }
+.ms-activity-checks { margin-top: .6em; }
+.ms-activity-checks > * + * { margin-top: .5em; }
 .ms-activity { --ms-num-w: 1.75em; --ms-num-gap: .7em; padding-top: .35em; }
 .ms-activity[data-keep] { break-inside: avoid; }
 .ms-activity[data-isolate] { break-inside: avoid; padding-top: .9em; margin-top: .6em; }

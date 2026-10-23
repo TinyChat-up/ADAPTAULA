@@ -6,5 +6,6 @@
  * read and printed as before (the version is not stored in them, nor used as a cache key: it names what the renderer prints).
  * v7 (Fase C, ADR-041): the CLARO header prints the official Adaptaula symbol (inline vector) instead of the word, and the accent is
  * the brand navy. Content, answer spaces and pagination are those of v6; stored documents read and print as before.
+ * v8 (#64): complete teaching units, balanced task groups and short closing pairs. Original content and answer capacity are preserved.
  */
-export const MATERIAL_RENDERER_VERSION = "material_renderer@v7";
+export const MATERIAL_RENDERER_VERSION = "material_renderer@v8";

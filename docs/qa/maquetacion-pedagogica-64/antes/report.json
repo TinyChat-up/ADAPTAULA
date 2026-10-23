@@ -1,0 +1,36 @@
+{
+  "pages": 3,
+  "texts": [
+    "MATEMÁTICAS·4.ºPRIMARIANombre:Fecha:Fracciones·prácticasintéticaEJEMPLODISTINTODecincopartesigualesquedancuatroyseusauna.1.Manténeltamañodelaspartes.2.Restalaspartesutilizadas.Quedantresdelascincopartes.Escribelafracciónquerepresentatresdeochopartes.Fracción:____Todaslaspartestienenelmismotamaño.Escribe>,<o=encadahueco.14342616Quedan3/4deunacinta.Seusa1/4delacinta.¿Quéfracciónqueda?RECUERDACompruebaquelaspartestienenelmismotamaño.Datosyrazonamiento:Operaciones:",
+    "COMPRUEBAELPROBLEMAHeconservadoeltamañodelaspartes.Respuesta:Enlarecta,marcalaposiciónde1/2.01412341",
+    "Explicaporquédosfraccionespuedenrepresentarlamismacantidad."
+  ],
+  "layout": {
+    "grids": [
+      {
+        "rows": 8,
+        "heightMm": 56,
+        "cellMm": 7
+      },
+      {
+        "rows": 7,
+        "heightMm": 49,
+        "cellMm": 7
+      }
+    ],
+    "fields": [
+      "Datos y razonamiento:",
+      "Operaciones:",
+      "Respuesta:"
+    ],
+    "writingLinesMm": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ]
+  }
+}

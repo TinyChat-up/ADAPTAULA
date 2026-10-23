@@ -445,6 +445,8 @@ Rectas, barras y figuras sin marcas nombradas se comportan exactamente igual que
 
 ## ADR-040 — Identidad editorial única y espacios de resolución deterministas (`answer_space@v1`, 2026-10-22)
 
+**Ajuste #64 (2026-10-23):** `answer_space@v2` corrige el conteo de fracciones sin alterar la capacidad original. `material_renderer@v8` agrupa unidades pedagógicas completas y comparte el reparto de tareas con el ensamblador. No añade contratos ni otro renderer. [Reglas y límites](EDITORIAL.md#10-ajuste-de-maquetación-64-2026-10-23), [evidencia PDF](qa/maquetacion-pedagogica-64/README.md).
+
 **Decisión.**
 - **Diseño.** Sistema CLARO es el diseño por defecto y el único del producto. `standard` se conserva solo para renders históricos y comparaciones explícitas.
 - **Espacio de respuesta.** Lo decide el servidor al ensamblar el documento (`src/lib/adaptation/answer-space.ts`) con reglas deterministas y versionadas, a partir de:

@@ -5,6 +5,8 @@ import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferr
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
 import { composeMath, type MathPart } from "./math";
 import { GRID_ZONE_ROWS, renderTokens, type RenderTokens } from "./tokens";
+import { taskGroups } from "./task-groups";
+export { taskGroups } from "./task-groups";
 import { withAdjacentFigures } from "./figure-order";
 import { MATERIAL_RENDERER_VERSION } from "./version";
 
@@ -55,7 +57,7 @@ export type RenderNode = { key: string } & (
    * original figures it asks about, right after its prompt. Both are resolved from the document's references, so a figure can never
    * be printed away from its instruction: enunciado → figura → apoyos → espacio de respuesta.
    */
-  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[]; leads: RenderNode[]; figures: RenderNode[] }
+  | { kind: "activity"; label?: string; prompt: Run[][]; steps: string[]; requirements: string[]; response: RenderResponse; keepTogether: boolean; isolate: boolean; supports: RenderNode[]; leads: RenderNode[]; figures: RenderNode[]; checks?: RenderNode[]; keepUnitTogether?: boolean }
   | { kind: "list"; ordered: boolean; items: Run[][] }
   | { kind: "table"; caption?: string; unit?: string; headers: string[]; rows: string[][] }
   | { kind: "chart"; title?: string; chartType: "bar" | "line" | "pie" | "other"; categories: string[]; series: Array<{ label: string | null; values: number[] }>; unit?: string; xLabel?: string; yLabel?: string }
@@ -79,6 +81,8 @@ export type RenderNode = { key: string } & (
 export interface RenderPage {
   number: number;
   nodes: RenderNode[];
+  /** Two short closing activities may travel together, avoiding a lone short task on the last sheet. */
+  keepLastPair?: boolean;
 }
 
 export interface RenderHeader {
@@ -235,7 +239,7 @@ const REPEAT_MAX_MM = PAGE_MM / 3;
 /** A rough, deterministic height of a node in mm, only to tell on which sheet of paper it will land (never to lay it out). */
 function estimatedMm(n: RenderNode): number {
   if (n.kind === "activity") {
-    const rows = activityRows(n.prompt, n.steps, n.requirements, n.response) + n.leads.reduce((r, l) => r + leadRows(l), 0) + n.supports.reduce((r, x) => r + leadRows(x), 0);
+    const rows = activityRows(n.prompt, n.steps, n.requirements, n.response) + n.leads.reduce((r, l) => r + leadRows(l), 0) + n.supports.reduce((r, x) => r + leadRows(x), 0) + (n.checks ?? []).reduce((r, x) => r + leadRows(x), 0);
     return rows * MM_PER_ROW + n.figures.reduce((mm, f) => mm + (f.kind === "image" && f.heightMm ? Math.min(f.heightMm, MAX_FIGURE_MM) + 8 : figureRows(f) * MM_PER_ROW), 0) + 6;
   }
   if (FIGURE_KINDS.has(n.kind)) return n.kind === "image" && n.heightMm ? Math.min(n.heightMm, MAX_FIGURE_MM) + 8 : figureRows(n) * MM_PER_ROW;
@@ -264,32 +268,19 @@ function leadMm(n: RenderNode): number {
 
 /** Every node of a sheet, including those inside an activity (its leads, figures and supports), in reading order. */
 export function flatNodes(nodes: readonly RenderNode[]): RenderNode[] {
-  return nodes.flatMap((n) => (n.kind === "activity" ? [...flatNodes(n.leads), n, ...flatNodes(n.figures), ...flatNodes(n.supports)] : [n]));
+  return nodes.flatMap((n) => (n.kind === "activity" ? [...flatNodes(n.leads), n, ...flatNodes(n.figures), ...flatNodes(n.supports), ...flatNodes(n.checks ?? [])] : [n]));
 }
 
 /** The same tree with `f` applied to every node, nested ones included (a print transform, never a content change). */
 export function mapNodes(nodes: readonly RenderNode[], f: (n: RenderNode) => RenderNode): RenderNode[] {
   return nodes.map((n) => {
     const mapped = f(n);
-    return mapped.kind === "activity" ? { ...mapped, leads: mapNodes(mapped.leads, f), figures: mapNodes(mapped.figures, f), supports: mapNodes(mapped.supports, f) } : mapped;
+    return mapped.kind === "activity" ? { ...mapped, leads: mapNodes(mapped.leads, f), figures: mapNodes(mapped.figures, f), supports: mapNodes(mapped.supports, f), ...(mapped.checks ? { checks: mapNodes(mapped.checks, f) } : {}) } : mapped;
   });
 }
 
 /** Responses that are written (where an organiser or sentence starters help). */
 const WRITING = new Set<RenderResponse["kind"]>(["lines", "box", "oral"]);
-
-/**
- * How many activities each page holds under `max_tasks_per_page`: the fewest pages the limit allows, filled as evenly as possible
- * (7 tasks, max 3 → 2 · 3 · 2, never 3 · 3 · 1). The first page takes the smaller share: it also carries the header, the title
- * and the orientation. Counts, not heights: the browser still paginates whatever a group does not fit.
- */
-export function taskGroups(tasks: number, max: number): number[] {
-  if (tasks <= max) return [tasks];
-  const groups = Math.ceil(tasks / max);
-  const base = Math.floor(tasks / groups);
-  const extra = tasks - base * groups;
-  return Array.from({ length: groups }, (_, i) => base + (i >= 1 && i <= extra ? 1 : 0));
-}
 
 const wordsRange = /(\d{2,4})\s*(?:[-–]|y|a)\s*(\d{2,4})\s*palabras/i;
 /** Lines needed for the longest expected answer stated in the requirements ("150-180 palabras"), conservative and bounded. */
@@ -486,7 +477,7 @@ const textsOf = (n: RenderNode): string[] => {
     case "paragraph": return runs(n.paragraphs);
     case "reading_text": return n.paragraphs.map((p) => p.runs.map((r) => r.text).join(""));
     case "instruction": return [...runs(n.paragraphs), ...n.steps];
-    case "activity": return [...n.leads.flatMap(textsOf), ...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf)];
+    case "activity": return [...n.leads.flatMap(textsOf), ...runs(n.prompt), ...n.steps, ...n.requirements, ...n.supports.flatMap(textsOf), ...(n.checks ?? []).flatMap(textsOf)];
     case "list": return runs(n.items);
     case "table": return [...n.headers, ...n.rows.flat()];
     case "help_box": return runs(n.paragraphs);
@@ -657,6 +648,10 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
       // before where to answer (after the answer lines it is read too late). A checklist stays after (it is for checking the work);
       // a support of another activity or of the whole sheet stays where it is.
       const own = (previous?.kind === "activity" && block.trace.origin !== "original" && block.trace.source_refs.length > 0 && block.trace.source_refs.every((r) => (sources.at(-1) ?? []).includes(r))) || false;
+      if (node.kind === "checklist" && previous?.kind === "activity" && own) {
+        (previous.checks ??= []).push(node);
+        continue;
+      }
       if ((node.kind === "help_box" || node.kind === "vocabulary") && previous?.kind === "activity" && own) {
         previous.supports.push(node);
         if (previous.keepTogether && activityRows(previous.prompt, previous.steps, previous.requirements, previous.response) + previous.figures.reduce((n, f) => n + figureRows(f), 0) + previous.supports.reduce((n, x) => n + leadRows(x), 0) > COMPACT_ROWS + FIGURE_ALLOWANCE) previous.keepTogether = false;
@@ -710,7 +705,16 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     design,
     header: { subject: options.subjectLabel ?? subjectName(doc.meta.subject), grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
-    pages,
+    pages: pages.map((page) => {
+      const nodes = mapNodes(page.nodes, n => n.kind === "activity" ? {
+        ...n,
+        // Oversized units must flow immediately, not be pushed onto a blank page by Chromium before it abandons avoidance.
+        keepUnitTogether: estimatedMm(n) * Math.max(tokens.answerLineMm / MM_PER_ROW, tokens.fontPt / 12.5) <= PAGE_MM,
+      } : n);
+      const pair = nodes.slice(-2);
+      const keepLastPair = pair.length === 2 && pair.every(n => n.kind === "activity") && pair.reduce((mm, n) => mm + estimatedMm(n), 0) <= PAGE_MM / 2;
+      return keepLastPair ? { ...page, nodes, keepLastPair: true } : { ...page, nodes };
+    }),
   };
   return { model, validation };
 }

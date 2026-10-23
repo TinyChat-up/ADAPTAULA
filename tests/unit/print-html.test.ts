@@ -28,10 +28,10 @@ const model = (doc: MaterialDocument, pins: Record<string, PinnedAsset> = {}, mo
 const bodyOf = (html: string) => html.slice(html.indexOf("<body>"));
 
 describe("renderPrintHtml · self-contained document", () => {
-  it("uses material_renderer@v7 and the app's own sheet markup, whole", async () => {
-    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v7");
+  it("uses material_renderer@v8 and the app's own sheet markup, whole", async () => {
+    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v8");
     const out = await renderPrintHtml(model(geografia()), []);
-    expect(out.rendererVersion).toBe("material_renderer@v7");
+    expect(out.rendererVersion).toBe("material_renderer@v8");
     expect(out.html.startsWith('<!doctype html><html lang="es">')).toBe(true);
     expect(bodyOf(out.html)).toMatch(/^<body><div class="ms-root"/);
     expect(out.html).toContain('class="ms-sheet"');

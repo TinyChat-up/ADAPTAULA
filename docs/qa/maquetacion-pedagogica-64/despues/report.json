@@ -1,0 +1,54 @@
+{
+  "pages": 3,
+  "texts": [
+    "MATEMÁTICAS·4.ºPRIMARIANombre:Fecha:Fracciones·prácticasintéticaEscribelafracciónquerepresentatresdeochopartes.Todaslaspartestienenelmismotamaño.Fracción:Escribe>,<o=encadahueco.14342616",
+    "EJEMPLODISTINTODecincopartesigualesquedancuatroyseusauna.1.Manténeltamañodelaspartes.2.Restalaspartesutilizadas.Quedantresdelascincopartes.COMPRUEBAELPROBLEMAHeconservadoeltamañodelaspartes.Quedan3/4deunacinta.Seusa1/4delacinta.¿Quéfracciónqueda?RECUERDACompruebaquelaspartestienenelmismotamaño.Datosyrazonamiento:Operaciones:Respuesta:",
+    "Enlarecta,marcalaposiciónde1/2.01412341Explicaporquédosfraccionespuedenrepresentarlamismacantidad."
+  ],
+  "layout": {
+    "grids": [
+      {
+        "heightMm": 49,
+        "widthMm": 161,
+        "rows": 7,
+        "cellMm": 7
+      }
+    ],
+    "fields": [
+      {
+        "label": "Fracción:",
+        "lines": 1,
+        "heightMm": 10
+      },
+      {
+        "label": "Datos y razonamiento:",
+        "lines": 2,
+        "heightMm": 27.93
+      },
+      {
+        "label": "Operaciones:",
+        "lines": 0,
+        "heightMm": 56.94
+      },
+      {
+        "label": "Respuesta:",
+        "lines": 1,
+        "heightMm": 10
+      }
+    ],
+    "writingLinesMm": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "bodyFontPt": 12.500024999999999,
+    "figures": [
+      "<svg class=\"ms-spec\" data-spec=\"number_line\" role=\"img\" aria-label=\"Recta numérica de 0 a 1 dividida en 4 partes iguales; marcas rotuladas: 0, 1/4, 1/2, 3/4, 1.\" width=\"152mm\" height=\"20.4mm\" viewBox=\"-1 -1 152 20.4\"><line x1=\"8\" x2=\"142\" y1=\"4.2\" y2=\"4.2\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><g data-tick=\"0\"><line x1=\"8\" x2=\"8\" y1=\"1\" y2=\"7.4\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><text x=\"8\" y=\"14.47\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">0</text></g><g data-tick=\"1\"><line x1=\"41.5\" x2=\"41.5\" y1=\"1\" y2=\"7.4\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><g><text x=\"41.5\" y=\"12.1\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">1</text><line x1=\"39.556\" x2=\"43.444\" y1=\"13\" y2=\"13\" stroke=\"currentColor\" stroke-width=\"0.3\"></line><text x=\"41.5\" y=\"16.99\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g></g><g data-tick=\"2\"><line x1=\"75\" x2=\"75\" y1=\"1\" y2=\"7.4\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><g><text x=\"75\" y=\"12.1\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">1</text><line x1=\"73.056\" x2=\"76.944\" y1=\"13\" y2=\"13\" stroke=\"currentColor\" stroke-width=\"0.3\"></line><text x=\"75\" y=\"16.99\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">2</text></g></g><g data-tick=\"3\"><line x1=\"108.5\" x2=\"108.5\" y1=\"1\" y2=\"7.4\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><g><text x=\"108.5\" y=\"12.1\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">3</text><line x1=\"106.556\" x2=\"110.444\" y1=\"13\" y2=\"13\" stroke=\"currentColor\" stroke-width=\"0.3\"></line><text x=\"108.5\" y=\"16.99\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g></g><g data-tick=\"4\"><line x1=\"142\" x2=\"142\" y1=\"1\" y2=\"7.4\" stroke=\"currentColor\" stroke-width=\"0.4\"></line><text x=\"142\" y=\"14.47\" font-size=\"4.2\" text-anchor=\"middle\" fill=\"currentColor\">1</text></g></svg>"
+    ],
+    "activities": 5
+  }
+}

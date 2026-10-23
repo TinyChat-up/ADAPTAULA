@@ -1,5 +1,16 @@
 # Registro de desarrollo
 
+
+## 2026-10-23 — #64: maquetación pedagógica comprobada con PDF
+
+- Base `fb314b2`, rama `codex/64-maquetacion-pedagogica`. Sin PR abiertas al comenzar; sin cambios en producción desplegada.
+- Reproducción: tres pruebas unitarias fallan (campo Fracción con contexto, 15 filas por una resta de fracciones, reparto 4 + 1) y una prueba de PDF muestra la respuesta en otra hoja.
+- Correcciones: `structure.ts`, `answer-space.ts` v2; reparto común `task-groups.ts` y `document.ts`; `model.ts`, `nodes.tsx`, `sheet.tsx` y CSS de CLARO agrupan unidades y cierre de tareas cortas (`material_renderer@v8`). Sin cambiar contenido matemático, tokens, modelos, prompts ni esquema persistido.
+- Regresión detectada y resuelta durante el desarrollo: agrupar incondicionalmente unidades largas añadía una hoja en redacciones de 40 líneas. La estimación permite que continúen con las reglas previas; no se han regenerado líneas base para esconder el fallo.
+- Nuevos fixtures propios, medidas en mm, PDF y PNG antes/después, variante motriz y grises. [QA y límites](qa/maquetacion-pedagogica-64/README.md). No se dispone del PDF privado de la issue; no se presenta como reproducido literalmente ni como validación pedagógica del generador.
+- Verificaciones: unidad/BD 1.933 correctas y 13 omitidas; regresión final 7/7; PDF 66/66 (B y C incluidas); E2E completa 128/128 en 16,7 min, escritorio/móvil. Typecheck y build correctos; lint sin errores y un aviso previo ajeno. Sin regenerar líneas base PDF. `check:secrets` correcto sin valores secretos reales cargados. Código `bea206c`; [PR #65](https://github.com/TinyChat-up/ADAPTAULA/pull/65) abierta, sin merge.
+- Siguiente: revisión docente del PDF y del caso autorizado concreto. #63 (contenido de representaciones) permanece separada; lanzamiento y staging no se declaran validados.
+
 ## 2026-10-23 — Lanzamiento comercial v1: primer preflight de solo lectura
 
 - **Base:** `main` `c45b789`, rama `launch/preflight-v1-20261023`, seguimiento [#61](https://github.com/TinyChat-up/ADAPTAULA/issues/61).

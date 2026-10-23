@@ -721,6 +721,8 @@ regla conoce una ficha concreta). Mismo renderer para pantalla y PDF (HTML/CSS �
 
 ## Sistema CLARO — identidad editorial (Phase 8, aprobada; activa desde 8.2A.1)
 
+**Estado de maquetación (2026-10-23, #64):** versión `material_renderer@v8`, sobre la identidad de B y C. Agrupación de actividad, ejemplo y comprobación; reparto común de tareas; espacios de fracciones corregidos (`answer_space@v2`). Se mantienen fuentes, figuras, contratos y exportador. [Estándar vigente](EDITORIAL.md) y [PDF comparados](qa/maquetacion-pedagogica-64/README.md). Las descripciones de versiones anteriores que siguen son antecedentes.
+
 Variante del mismo renderer (`buildRenderModel(doc, { design: "claro" })` → `data-design="claro"` → capa CSS acotada en
 `material.css`). Desde 8.2A.1 es el diseño del producto: `PRODUCT_DESIGN` en `src/lib/render/load.ts` (`sheetModel`) la aplica a la
 vista y al PDF. Es `material_renderer@v4`. Paleta azul Adaptaula `#23426B`, verde petróleo

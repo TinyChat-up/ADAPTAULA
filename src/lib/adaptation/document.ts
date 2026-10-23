@@ -6,6 +6,7 @@ import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis }
 import { statedAnswer } from "@/lib/analysis/answers";
 import { comparisonFromText } from "@/lib/visuals/comparison";
 import { pruneRedundantSupports } from "./support-policy";
+import { taskGroups } from "@/lib/render/task-groups";
 import { answerSpace, spaceContextOf } from "./answer-space";
 import { activityStructure, readingParagraphs } from "./structure";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
@@ -356,13 +357,20 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   const pages: Array<{ blocks: Block[] }> = [{ blocks: [title, ...head] }];
   let currentPage = ordered[0]?.page ?? 1;
   let tasks = 0;
+  let group = 0;
+  const tasksByPage = new Map<number, number>();
+  for (const { page, block } of ordered) if (block.type === "activity") tasksByPage.set(page, (tasksByPage.get(page) ?? 0) + 1);
+  const groupsFor = (page: number) => maxTasks === null ? [] : taskGroups(tasksByPage.get(page) ?? 0, maxTasks);
+  let quotas = groupsFor(currentPage);
   for (const { page, block } of ordered) {
     const isTask = block.type === "activity";
-    const overflow = isTask && maxTasks !== null && tasks >= maxTasks;
+    if (page !== currentPage) { group = 0; quotas = groupsFor(page); }
+    const overflow = page === currentPage && isTask && maxTasks !== null && tasks >= (quotas[group] ?? maxTasks);
     if ((page !== currentPage || overflow) && pages[pages.length - 1]!.blocks.length > 0) {
       // What leads into the activity that opens the new page (its figure, its example) goes with it: never a lonely figure.
       pages.push({ blocks: page === currentPage ? takeLeads(pages[pages.length - 1]!.blocks, block, analysis) : [] });
       tasks = 0;
+      if (overflow) group += 1;
     }
     currentPage = page;
     pages[pages.length - 1]!.blocks.push(block);

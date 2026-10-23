@@ -113,21 +113,22 @@ export interface ActivityStructure {
  */
 export function activityStructure(activity: Pick<AnalysisActivity, "instruction" | "context" | "type" | "answer_area">): ActivityStructure {
   const none: ActivityStructure = { instruction: activity.instruction, context: activity.context, fields: null, sequence: null };
-  if (!activity.context) {
-    const tail = lines(activity.instruction);
-    // «Escribe qué parte indica cada letra.\nA:\nB:» — the fields printed right after the instruction (never the whole instruction).
-    const fields = trailingFields(tail);
-    if (!fields || fields.from === 0) return none;
-    return { instruction: tail.slice(0, fields.from).join("\n"), context: null, fields: fields.fields.map((l) => fieldOf(l, activity.answer_area.lines)), sequence: null };
-  }
-  const body = lines(activity.context);
+  const instructionLines = lines(activity.instruction);
+  const instructionFields = trailingFields(instructionLines);
+  // A standalone instruction must remain: a label-only instruction is not safely separable.
+  const fromInstruction = instructionFields && instructionFields.from > 0 ? instructionFields : null;
+  const instruction = fromInstruction ? instructionLines.slice(0, fromInstruction.from).join("\n") : activity.instruction;
+  const body = lines(activity.context ?? "");
   const trailing = trailingFields(body);
   const rest = trailing ? body.slice(0, trailing.from) : body;
-  const fields = trailing ? trailing.fields.map((l) => fieldOf(l, activity.answer_area.lines)) : null;
-  const sequence = activity.type === "sequencing" || SEQUENCING.test(activity.instruction) ? sequenceItems(rest) : null;
+  const labels = [...(fromInstruction?.fields ?? []), ...(trailing?.fields ?? [])];
+  // Both locations may contain distinct fields; preserve their order, never deduplicate answers.
+  if (labels.length > 12) return none;
+  const fields = labels.length ? labels.map((l) => fieldOf(l, activity.answer_area.lines)) : null;
+  const sequence = activity.type === "sequencing" || SEQUENCING.test(instruction) ? sequenceItems(rest) : null;
   if (!fields && !sequence) return none;
   const kept = sequence ? [] : rest;
-  return { instruction: activity.instruction, context: kept.length > 0 ? kept.join("\n") : null, fields, sequence };
+  return { instruction, context: kept.length > 0 ? kept.join("\n") : null, fields, sequence };
 }
 
 function trailingFields(body: readonly string[]): { from: number; fields: string[] } | null {
