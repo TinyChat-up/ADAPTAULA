@@ -1,0 +1,122 @@
+[
+  {
+    "id": "fracciones-equivalencia",
+    "category": "A",
+    "purpose": "Representar los datos con SVG verificable.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "fracciones-equivalencia",
+    "category": "A",
+    "purpose": "Representar los datos con SVG verificable.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "recta",
+    "category": "A",
+    "purpose": "Representar los datos con SVG verificable.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "recta",
+    "category": "A",
+    "purpose": "Representar los datos con SVG verificable.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "procesos",
+    "category": "A",
+    "purpose": "Organizar estados ya dados en la consigna.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "procesos",
+    "category": "A",
+    "purpose": "Organizar estados ya dados en la consigna.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "problema-ejemplo",
+    "category": "C",
+    "purpose": "Mostrar una resta análoga con otros datos y resultado distinto.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "problema-ejemplo",
+    "category": "C",
+    "purpose": "Mostrar una resta análoga con otros datos y resultado distinto.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "vocabulario",
+    "category": "B",
+    "purpose": "Situar el vocabulario en un entorno cotidiano.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "vocabulario",
+    "category": "B",
+    "purpose": "Situar el vocabulario en un entorno cotidiano.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "ciencias",
+    "category": "B",
+    "purpose": "Contextualizar la relación entre una planta y su entorno luminoso.",
+    "supported": false,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  },
+  {
+    "id": "ciencias",
+    "category": "B",
+    "purpose": "Contextualizar la relación entre una planta y su entorno luminoso.",
+    "supported": true,
+    "pages": 1,
+    "aiCalls": 0,
+    "estimatedApiCostUsd": 0,
+    "semanticReview": "manual fixture; not teacher validated"
+  }
+]
