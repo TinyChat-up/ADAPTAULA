@@ -369,3 +369,8 @@ it('un coste desconocido de un fallo se carga al peor caso y no permite otro int
   expect(s.calls.filter(c => c === 'image')).toHaveLength(1);
   expect(s.refunded).toEqual(s.reserved);
 });
+
+it('una imagen sin uso reportado no se presenta como coste cero', () => {
+  expect(estimateImageCostUsd('openai','gpt-image-2.5-sunburst',{textInputTokens:0,imageInputTokens:0,outputTokens:0})).toBeNull();
+  expect(estimateImageCostUsd('mock','x',{textInputTokens:0,imageInputTokens:0,outputTokens:0})).toBe(0);
+});

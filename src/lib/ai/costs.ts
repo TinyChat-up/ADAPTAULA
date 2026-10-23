@@ -74,6 +74,8 @@ export const IMAGE_MODEL_PRICES: readonly ImagePrice[] = [
 export function estimateImageCostUsd(provider: ProviderName, model: string, usage: ImageUsage): number | null {
   if (provider === "mock") return 0;
   if (provider !== "openai") return null;
+  // Missing provider usage is mapped to zero by transport; a generated image is not evidence of a free call.
+  if (usage.textInputTokens + usage.imageInputTokens + usage.outputTokens === 0) return null;
   const price = IMAGE_MODEL_PRICES.find((p) => p.match.test(model));
   if (!price) return null;
   const cost = (usage.textInputTokens * price.textInput + usage.imageInputTokens * price.imageInput + usage.outputTokens * price.imageOutput) / 1_000_000;
