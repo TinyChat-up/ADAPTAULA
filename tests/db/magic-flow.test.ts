@@ -1,8 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
 import { continueAutomatically, runPlanningStage } from "@/lib/adaptation/orchestration/orchestrator";
-import { createAndStartAdaptation, getAdaptationPlan, getAdaptationStatus, reopenReview, startGeneration, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
+import { createAndStartAdaptation, describeUnexpected, getAdaptationPlan, getAdaptationStatus, reopenReview, startGeneration, startPlanning, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
+import { PUBLIC_SERVICE_ERRORS, toPublic } from "@/lib/adaptation/orchestration/public";
 import { MAX_GENERATION_CYCLES } from "@/lib/adaptation/orchestration/status";
 import { processAdaptationStage, runAdaptationWorkerCycle } from "@/lib/adaptation/orchestration/worker";
 import type { AiReviewDraft } from "@/lib/schemas/pedagogical-review";
@@ -278,5 +279,152 @@ describe("permissions, persistence and telemetry", () => {
     expect(Object.keys(summary.cost_by_creation_mode).sort()).toEqual(["automatic", "review"]);
     expect(summary.cost_by_creation_mode.automatic!.adaptations).toBe(1);
     expect(JSON.stringify(summary)).not.toMatch(/Marta|fracci|display_name|prompt/i);
+  });
+});
+
+/** The structured lines the logger wrote to console.error while `work` ran (the console itself stays quiet). */
+async function errorLog<T>(work: () => Promise<T>): Promise<{ result: T; lines: Array<Record<string, string>> }> {
+  const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const result = await work();
+    return { result, lines: spy.mock.calls.map((c) => JSON.parse(String(c[0])) as Record<string, string>) };
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+describe("«Hacer magia» when the database fails: a clear refusal, never an opaque HTTP 500, nothing left half done", () => {
+  it("a database without migration 019: «unavailable» in plain words, logged as a schema mismatch; nothing created or reserved", async () => {
+    const old = await createTestDb({ through: "20261001001800" });
+    await old.query("update public.plans set monthly_adaptations = 100, features = features - 'unlimited_adaptations' where slug = 'free'");
+    const u = await createUser(old, "magic-old@example.com");
+    const material = await seedMaterial(old, u, fractionsAnalysis());
+    const learner = await seedLearner(old, u);
+    const orchestrator = makeDeps(old, scriptedServices(newSpy(), {}));
+    orchestrator.entitlements = dbEntitlements(orchestrator.store);
+    const deps: ServiceDeps = { orchestrator, reader: readerFor(old, u), resolveVersions: versions };
+    const { result, lines } = await errorLog(() => createAndStartAdaptation(deps, { userId: u.id, workspaceId: u.workspaceId, canWrite: true }, { materialId: material, learnerProfileId: learner, adaptationType: "accessibility", requestKey: "old-schema-key", creationMode: "automatic" }));
+    expect(result).toEqual({ ok: false, code: "unavailable" });
+    // What the screen shows: the public copy, a 503, no SQL.
+    const shown = toPublic(result);
+    expect(shown.ok ? "" : shown.message).toBe(PUBLIC_SERVICE_ERRORS.unavailable.message);
+    expect(PUBLIC_SERVICE_ERRORS.unavailable.status).toBe(503);
+    expect(PUBLIC_SERVICE_ERRORS.unavailable.message).not.toMatch(/sql|database|function|error|50\d/i);
+    expect(lines.at(-1)).toMatchObject({ level: "error", event: "adaptation_create_failed", reason: "schema_mismatch", mode: "automatic", materialId: material, workspaceId: u.workspaceId });
+    expect(lines.at(-1)!.detail).toMatch(/create_adaptation/);
+    expect(Number((await old.query<{ c: string }>("select count(*)::text c from public.adaptations")).rows[0]!.c)).toBe(0);
+    expect(Number((await old.query<{ c: string }>("select count(*)::text c from public.adaptation_entitlements")).rows[0]!.c)).toBe(0);
+    await old.close();
+  }, 120_000);
+
+  it("the connection drops while creating: «unavailable», and no adaptation, reservation or job exists", async () => {
+    const t = await teacher();
+    t.orchestrator.store.createAdaptation = async () => {
+      throw new Error("database: connection reset by peer");
+    };
+    const { result, lines } = await errorLog(() => t.start("automatic"));
+    expect(result).toEqual({ ok: false, code: "unavailable" });
+    expect(lines.at(-1)).toMatchObject({ event: "adaptation_create_failed", reason: "Error", workspaceId: t.user.workspaceId });
+    expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(0);
+    expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(0);
+    expect(await count("public.adaptation_jobs j join public.adaptations a on a.id = j.adaptation_id where a.workspace_id = $1", [t.user.workspaceId])).toBe(0);
+  });
+
+  it("the database created it but the answer was lost: the teacher sees «unavailable»; the same click again finds it, one reservation, one job", async () => {
+    const t = await teacher();
+    const create = t.orchestrator.store.createAdaptation.bind(t.orchestrator.store);
+    let lose = true;
+    t.orchestrator.store.createAdaptation = async (a) => {
+      const id = await create(a);
+      if (lose) {
+        lose = false;
+        throw new Error("database: fetch failed");
+      }
+      return id;
+    };
+    const key = `lost-answer-${n}`;
+    const { result: first } = await errorLog(() => t.start("automatic", key));
+    expect(first).toEqual({ ok: false, code: "unavailable" });
+    // Committed, with its single reservation and no job yet (the start never ran).
+    expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    const second = await t.start("automatic", key);
+    expect(second.ok).toBe(true);
+    const id = second.ok ? second.data.adaptationId : "";
+    expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(1);
+  });
+
+  it("created but the start fails: the adaptation is kept and returned (its page offers «Empezar»); retrying never duplicates work or quota", async () => {
+    const t = await teacher();
+    const getAdaptation = t.deps.reader.getAdaptation.bind(t.deps.reader);
+    let fail = true;
+    t.deps.reader.getAdaptation = async (id) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return getAdaptation(id);
+    };
+    const key = `magic-retry-${n}`;
+    const { result: first, lines } = await errorLog(() => t.start("automatic", key));
+    expect(first.ok).toBe(true);
+    const id = first.ok ? first.data.adaptationId : "";
+    expect(lines.at(-1)).toMatchObject({ event: "adaptation_start_failed", adaptationId: id, reason: "Error", detail: "connection reset" });
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(0);
+    // Its page: nothing is running, so it offers to start it.
+    expect((await t.status(id)).nextAction).toBe("start_planning");
+    // The same click again (same request key) and then «Empezar» on the page, twice: the same adaptation, one reservation, one job.
+    const again = await t.start("automatic", key);
+    expect(again.ok && again.data.adaptationId === id).toBe(true);
+    const button = await startPlanning(t.deps, t.actor, id);
+    const twice = await startPlanning(t.deps, t.actor, id);
+    expect(button.ok && twice.ok && twice.data.alreadyQueued).toBe(true);
+    expect(await count("public.adaptations where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(1);
+    // And it still completes as «Hacer magia» does: delivered, the quota consumed once.
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
+    expect(await entitlement(id)).toBe("consumed");
+    expect(await count("public.adaptation_entitlements where workspace_id = $1", [t.user.workspaceId])).toBe(1);
+  });
+
+  it("«Empezar» on the page while the database fails: «unavailable» (never a throw), the adaptation untouched, and it can be pressed again", async () => {
+    const t = await teacher();
+    const getAdaptation = t.deps.reader.getAdaptation.bind(t.deps.reader);
+    // The adaptation exists without its job (the start of «Hacer magia» failed earlier).
+    let down = true;
+    t.deps.reader.getAdaptation = async (id) => {
+      if (down) throw new Error("database: canceling statement due to statement timeout");
+      return getAdaptation(id);
+    };
+    const { result: created } = await errorLog(() => t.start("automatic"));
+    const id = created.ok ? created.data.adaptationId : "";
+    const { result, lines } = await errorLog(() => startPlanning(t.deps, t.actor, id));
+    expect(result).toEqual({ ok: false, code: "unavailable" });
+    expect(lines.at(-1)).toMatchObject({ event: "adaptation_start_failed", adaptationId: id, workspaceId: t.user.workspaceId });
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(0);
+    down = false;
+    const retried = await startPlanning(t.deps, t.actor, id);
+    expect(retried.ok).toBe(true);
+    expect(await count("public.adaptation_jobs where adaptation_id = $1", [id])).toBe(1);
+  });
+});
+
+describe("what the log keeps of an unexpected error", () => {
+  it("SQL names stay, values never: quoted literals are blanked, schema drift is named, length is bounded", () => {
+    expect(describeUnexpected(new Error("database: function public.create_adaptation(uuid, text) does not exist"))).toEqual({ reason: "schema_mismatch", detail: "database: function public.create_adaptation(uuid, text) does not exist" });
+    expect(describeUnexpected(new Error('database: Could not find the function public.create_adaptation(p_creation_mode) in the schema cache')).reason).toBe("schema_mismatch");
+    // Truncated at 160 characters by the store: the call with named arguments is still recognised; a mere mention is not.
+    expect(describeUnexpected(new Error("database: function public.create_adaptation(p_workspace => unknown, p_material => unknown, p_user => unknown, p_learner => unknown, p_type =")).reason).toBe("schema_mismatch");
+    expect(describeUnexpected(new Error("database: permission denied for function create_adaptation")).reason).toBe("Error");
+    const value = describeUnexpected(new Error('database: invalid input syntax for type uuid: "Ficha de Marta 3ºB"'));
+    expect(value.detail).toBe('database: invalid input syntax for type uuid: "…"');
+    expect(describeUnexpected(new Error("database: value 'Marta García' is not allowed")).detail).not.toContain("Marta");
+    expect(describeUnexpected(new Error('database: duplicate key value violates unique constraint "adaptations_request_key_key"')).detail).toContain('"adaptations_request_key_key"');
+    expect(describeUnexpected(new Error("x".repeat(400))).detail).toHaveLength(160);
+    expect(describeUnexpected("plain string")).toEqual({ reason: "unknown", detail: "plain string" });
   });
 });

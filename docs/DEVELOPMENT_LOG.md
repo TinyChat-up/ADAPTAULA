@@ -1,5 +1,33 @@
 # Registro de desarrollo
 
+## 2026-10-23 — «Hacer magia» ante fallos de base de datos: rechazo claro, sin nada a medias (recupera la #12)
+
+- **Base:** `main` (`2bb6309`), rama `claude/hacer-magia-fallos`.
+- **Revisión de la #12** (`b84d17e`, cerrada sin fusionar el 9 de octubre):
+  - su diseño sigue siendo válido;
+  - se reescribe sobre el código actual, sin *cherry-pick*.
+- **Cambios respecto a la #12:**
+  - la protección del arranque pasa a `startPlanning`, así que cubre también «Empezar» en la página, no solo el arranque justo tras crear;
+  - el registro borra los literales del mensaje de la base de datos (antes lo guardaba tal cual);
+  - se mantiene la detección de la firma truncada a 160 caracteres.
+- **Garantías comprobadas contra el código actual:**
+  - la reserva va dentro de `create_adaptation` (`atomicWithCreation`): un fallo no deja ni adaptación ni reserva;
+  - la `request key` es estable por pantalla;
+  - el job de planificación es único por etapa;
+  - una adaptación sin job llega a su página con `start_planning`, y la página ofrece «Empezar».
+- **Pruebas** (BD real en PGlite con las migraciones):
+  - base de datos sin la 019;
+  - conexión caída al crear;
+  - respuesta perdida después de crear;
+  - arranque fallido con reintento por el mismo clic y por «Empezar» dos veces;
+  - «Empezar» con la base de datos caída;
+  - limpieza del registro;
+  - resultado: unidad y BD, 1925 correctas y 13 omitidas.
+- **Migración 019 en producción:** no verificada desde esta sesión, porque no hay credenciales de Supabase ni acceso al equipo de Vercel. La comprobación de solo lectura está en la PR.
+- **Riesgos:**
+  - `createAdaptationAction`, que ninguna pantalla usa, sigue sin esta protección;
+  - un fallo en la consulta de estado de la página no forma parte de este cambio.
+
 ## 2026-10-23 — Fase C: identidad visual corporativa (ADR-041, `material_renderer@v7`)
 
 - **Base:**
