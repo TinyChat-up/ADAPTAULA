@@ -1,5 +1,7 @@
 # Piloto aislado de recursos visuales Max
 
+> Continuidad: #66 ya está integrada. Posteriormente el fundador autorizó preparar el destino producción mediante un piloto privado. [Stripe TEST, modo explícito y caducidad 030](../stripe-piloto-produccion/README.md). Este documento conserva los resultados y el alcance de #66; no implica que se haya activado producción.
+
 Base `56c899f` de main, con #65 integrada. Rama `codex/max-visuales-piloto`; [PR #66](https://github.com/TinyChat-up/ADAPTAULA/pull/66) abierta sin merge. Sin modificaciones de 024, 026, seed, precios, Stripe o servicios remotos. No se ha generado ninguna imagen con un proveedor real.
 
 ## Estado comprobado
