@@ -81,3 +81,17 @@ it('la figura del ejemplo viaja dentro de él y una referencia a otro ejemplo bl
   image.source.example_ref='blk_other';
   expect(buildRenderModel(malformed,{mode:'student',deferred:[]}).validation.status).toBe('not_renderable');
 });
+
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { VisualNeedsPanel } from '@/components/material/visual-needs-panel';
+import { visualNeedsOf } from '@/lib/adaptation/presentation/visual-needs';
+it('Hacer magia también identifica la ilustración lista y su finalidad sin una segunda aprobación', () => {
+  const c=maxVisualCorpus().find(c=>c.id==='vocabulario')!;
+  const needs=visualNeedsOf({document:c.withSupport,visuals:[],requiredVisuals:[],requested:[],generated:c.generated});
+  const html=renderToStaticMarkup(createElement(VisualNeedsPanel,{needs,adaptationId:'test',canWrite:true,locateHref:()=>'/no-usado',manual:false}));
+  expect(html).toContain('Ilustraciones generadas · revisión docente');
+  expect(html).toContain(c.purpose);
+  expect(html).toContain('puede equivocarse');
+  expect(html).not.toContain('Localizar en el original');
+});
