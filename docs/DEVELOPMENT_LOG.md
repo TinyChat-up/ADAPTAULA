@@ -1,5 +1,23 @@
 # Registro de desarrollo
 
+## 2026-10-23 — Urgente: la descarga del PDF fallaba desde la Fase C (`useId` en el símbolo)
+
+- **Síntoma:** la E2E completa (al preparar la recuperación de la #12) falló en `claro-quality` y `document-review` al descargar el PDF. El servidor registraba `pdf_export_failed` en la etapa `html`, con «Invalid hook call» y «Cannot read properties of null (reading 'useId')» en `BrandSymbol`.
+- **Causa:**
+  - el PDF prerenderiza `MaterialSheet` con `react-dom/static`, fuera del React de la app, y allí un *hook* no funciona;
+  - la Fase C (#58, ya en `main` y en producción) añadió `useId` al símbolo de la ficha;
+  - las pruebas de unidad y PDF usan un solo React y no lo vieron;
+  - la E2E completa de la Fase C no se pasó antes de fusionar.
+- **Arreglo:**
+  - `BrandSymbol` deja de tener *hooks*: los ids de los degradados vienen de un prefijo determinista (`idPrefix`, derivado del modo y del contraste de la ficha);
+  - nueva prueba de unidad que falla si un componente de servidor de la ficha llama a cualquier *hook* de React;
+  - otra que comprueba que el símbolo y sus degradados salen en el HTML del PDF.
+- **Pruebas:**
+  - E2E de `claro-quality`, `document-review` y `pdf-preview` en escritorio: 7/7, sin errores de exportación;
+  - unidad de la ficha y del HTML de impresión: 60/60;
+  - PDF: 64/64;
+  - typecheck, lint y build correctos.
+- **Lección:** la regla de `AGENTS.md` (E2E completa antes de fusionar) existía por esto. Saltársela en la #58 llevó el fallo a producción.
 ## 2026-10-23 — «Hacer magia» ante fallos de base de datos: rechazo claro, sin nada a medias (recupera la #12)
 
 - **Base:** `main` (`2bb6309`), rama `claude/hacer-magia-fallos`.
