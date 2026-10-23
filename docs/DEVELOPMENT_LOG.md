@@ -45,6 +45,7 @@
   - «Empezar» con la base de datos caída;
   - limpieza del registro;
   - resultado: unidad y BD, 1925 correctas y 13 omitidas.
+- **E2E completa** (entorno limpio, escritorio y móvil, con el arreglo de la #59 incluido): **128/128** en 33 min, sin ningún `pdf_export_failed`. La primera ejecución de esta rama, antes de ese arreglo, encontró las dos regresiones de la Fase C que corrige la #59.
 - **Migración 019 en producción:** no verificada desde esta sesión, porque no hay credenciales de Supabase ni acceso al equipo de Vercel. La comprobación de solo lectura está en la PR.
 - **Riesgos:**
   - `createAdaptationAction`, que ninguna pantalla usa, sigue sin esta protección;
