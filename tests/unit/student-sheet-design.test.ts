@@ -118,13 +118,17 @@ describe("Sistema CLARO (the product's design, docs/EDITORIAL.md)", () => {
     expect(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [] }).model.design).toBe("claro");
     expect(html(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [] }).model)).toMatch(/data-design="claro"/);
     const legacy = html(buildRenderModel(pilotPrimary(), { mode: "student", deferred: [], design: "standard" }).model);
-    expect(legacy).not.toMatch(/data-design|ms-brand|ms-cue|>01</);
+    expect(legacy).not.toMatch(/data-design|ms-symbol|ms-cue|>01</);
   });
 
   it("the same blocks through the same renderer: header with a discreet mark, guide numbers 01/02, reading and visual cues", () => {
     const out = html(claro(pilotPrimary()).model);
     expect(out).toContain('data-design="claro"');
-    expect(visible(out)).toMatch(/Ciencias de la Naturaleza · 4\.º Primaria Adaptaula/);
+    expect(visible(out)).toMatch(/Ciencias de la Naturaleza · 4\.º Primaria/);
+    // The mark is the official symbol, inline and named (a reader and a PDF text layer say «Adaptaula»), once, in the header.
+    expect(out).toMatch(/<div class="ms-masthead"><p class="ms-meta">[^<]+<\/p><svg class="ms-symbol"[^>]*role="img"[^>]*aria-label="Adaptaula"/);
+    expect(out.match(/class="ms-symbol"/g)).toHaveLength(1);
+    expect(out).not.toMatch(/<img[^>]+adaptaula/i);
     expect(out).toMatch(/class="ms-num"[^>]*>01<\/span>[\s\S]*class="ms-num"[^>]*>02<\/span>/);
     expect(visible(out)).toContain("Lee");
   });
@@ -148,7 +152,7 @@ describe("Sistema CLARO (the product's design, docs/EDITORIAL.md)", () => {
 
   it("palette: petroleum and fog only as CLARO tokens; high contrast is black and white", () => {
     const normal = tokenStyle(renderTokens(pilotPrimary().presentation, "primaria", "claro"));
-    expect([normal["--ms-accent"], normal["--ms-petrol"], normal["--ms-fog"]]).toEqual(["#23426b", "#227e81", "#eff3f7"]);
+    expect([normal["--ms-accent"], normal["--ms-petrol"], normal["--ms-fog"]]).toEqual(["#05234b", "#227e81", "#eff3f7"]);
     const high = tokenStyle(renderTokens({ ...pilotPrimary().presentation, contrast: "high" }, "primaria", "claro"));
     expect([high["--ms-petrol"], high["--ms-fog"]]).toEqual(["#000000", "#ffffff"]);
   });

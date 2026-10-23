@@ -69,7 +69,7 @@ export function PrivacySection() {
   return (
     <Section id="privacidad" eyebrow="Confianza" title="El cuidado también está en los datos." intro="Recogemos lo mínimo para preparar los materiales.">
       <div className="grid gap-10 lg:grid-cols-[1fr_2fr]">
-        <div><p className="font-editorial text-2xl leading-relaxed">Detrás de cada ficha hay una persona. Su información merece cuidado.</p><LinkButton href="/privacidad" variant="secondary" className="mt-6">Más sobre privacidad</LinkButton></div>
+        <div><p className="font-display text-2xl leading-relaxed">Detrás de cada ficha hay una persona. Su información merece cuidado.</p><LinkButton href="/privacidad" variant="secondary" className="mt-6">Más sobre privacidad</LinkButton></div>
         <dl className="editorial-list">{PRIVACY.map(([term, detail]) => <div key={term} className="grid gap-2 py-5 sm:grid-cols-[10rem_1fr]"><dt className="font-semibold">{term}</dt><dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd></div>)}</dl>
       </div>
     </Section>

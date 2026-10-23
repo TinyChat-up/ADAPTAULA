@@ -14,9 +14,10 @@ export default async function WelcomePage() {
   const usage = await getWorkspaceUsage(ctx.workspace.id);
   return (
     <div className="bg-background flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
-      <Logo href="/app" />
+      <Logo href="/app" size="lg" />
       <main id="contenido" className="mt-8 w-full max-w-2xl">
-        <div className="border-t-2 border-foreground bg-surface p-6 sm:p-8">
+        <div aria-hidden className="brand-rule" />
+        <div className="bg-surface p-6 sm:p-8">
           <OnboardingWizard action={completeOnboarding} plan={{ name: usage.plan.name, adaptations: usage.adaptations.limit, analyses: usage.analyses.limit, profiles: usage.max_profiles }} />
         </div>
       </main>

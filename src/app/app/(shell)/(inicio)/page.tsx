@@ -6,6 +6,8 @@ import { requireWorkspace } from "@/lib/auth/workspace";
 import { formatDay, greetingFor } from "@/lib/format/date";
 import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { listMaterials } from "@/lib/materials/repository";
+import { stepTone } from "@/lib/brand/tones";
+import { cn } from "@/lib/utils/cn";
 import { StatusBadge } from "@/components/materials/status-badge";
 import type { MaterialStatus } from "@/lib/materials/types";
 import { countActiveProfiles } from "@/lib/profiles/repository";
@@ -101,12 +103,12 @@ export default async function DashboardPage() {
 
       {materials.length === 0 ? (
         <section aria-labelledby="empieza" className="py-2">
-          <h2 id="empieza" className="font-editorial text-2xl sm:text-3xl">Empieza subiendo una ficha que ya utilizas.</h2>
+          <h2 id="empieza" className="font-display text-2xl sm:text-3xl">Empieza subiendo una ficha que ya utilizas.</h2>
           <p className="mt-3 max-w-xl text-muted-foreground">Cuando subas tu primer material, aparecerá aquí para que puedas retomarlo.</p>
           <ol className="mt-8 grid gap-6 sm:grid-cols-3">
             {FIRST_STEPS.map((step, i) => (
-              <li key={step.title} className="border-t border-border pt-4">
-                <span aria-hidden className="text-xs text-primary">0{i + 1}</span>
+              <li key={step.title} className={cn("border-t-2 pt-4", stepTone(i).rule)}>
+                <span aria-hidden className={cn("font-display text-sm font-semibold", stepTone(i).text)}>0{i + 1}</span>
                 <h3 className="mb-2 mt-3 font-semibold"><span className="sr-only">Paso {i + 1}: </span>{step.title}</h3>
                 <p className="text-sm text-muted-foreground">{step.text}</p>
               </li>

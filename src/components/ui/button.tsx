@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "magic";
 type Size = "md" | "sm" | "lg";
 
 const variants: Record<Variant, string> = {
@@ -10,6 +10,9 @@ const variants: Record<Variant, string> = {
   secondary: "border border-control-border bg-surface text-foreground hover:border-primary hover:bg-primary-soft",
   ghost: "text-foreground hover:bg-foreground/5",
   danger: "bg-danger text-white hover:bg-danger/90",
+  // The action the AI carries out by itself («Hacer magia»): the brand blue, as a gradient in the symbol's manner. What the teacher
+  // decides stays navy (primary), so the two read differently. White text keeps ≥ 5.4:1 across the gradient (brand.css).
+  magic: "btn-magic border border-transparent text-white shadow-sm",
 };
 
 const sizes: Record<Size, string> = {

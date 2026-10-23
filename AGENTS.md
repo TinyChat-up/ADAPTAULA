@@ -14,4 +14,6 @@ Al iniciar: leer [estado](docs/PROJECT_STATUS.md), [roadmap y aceptación](docs/
 
 Seguir las convenciones de [CLAUDE.md](CLAUDE.md) y las decisiones de [ARCHITECTURE.md](docs/ARCHITECTURE.md). Estos documentos son comunes a Codex y Claude Code; no duplicar su contenido.
 
+Pruebas por cambio: las focalizadas del área tocada (unidad, PDF y la E2E de esa pantalla), más typecheck y lint. La suite E2E completa (unos 30 min) se pasa una sola vez, al cerrar una fase o antes de fusionar, no en cada iteración.
+
 Al terminar: actualizar los Markdown afectados y registrar cambios, archivos, pruebas, riesgos, decisión, PR (o bloqueo verificable) y siguiente acción precisa. Distinguir implementado, simulado, probado y pendiente de validar en producción. Nunca guardar claves, tokens o datos de alumnos. Respetar el alcance de pruebas y servicios externos autorizado para la sesión.

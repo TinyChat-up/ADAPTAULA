@@ -28,10 +28,10 @@ const model = (doc: MaterialDocument, pins: Record<string, PinnedAsset> = {}, mo
 const bodyOf = (html: string) => html.slice(html.indexOf("<body>"));
 
 describe("renderPrintHtml · self-contained document", () => {
-  it("uses material_renderer@v6 and the app's own sheet markup, whole", async () => {
-    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v6");
+  it("uses material_renderer@v7 and the app's own sheet markup, whole", async () => {
+    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v7");
     const out = await renderPrintHtml(model(geografia()), []);
-    expect(out.rendererVersion).toBe("material_renderer@v6");
+    expect(out.rendererVersion).toBe("material_renderer@v7");
     expect(out.html.startsWith('<!doctype html><html lang="es">')).toBe(true);
     expect(bodyOf(out.html)).toMatch(/^<body><div class="ms-root"/);
     expect(out.html).toContain('class="ms-sheet"');
@@ -44,7 +44,9 @@ describe("renderPrintHtml · self-contained document", () => {
     expect(PRINT_CSP).toMatch(/script-src 'none'/);
     expect(out.html).not.toMatch(/<script|<link|<iframe|<object|<embed|<base|\bon[a-z]+=/i);
     expect(out.html).not.toMatch(/https?:|\/\/[a-z0-9.-]+\.[a-z]{2,}\//i);
-    for (const m of out.html.matchAll(/url\(\s*["']?([^"')]*)/g)) expect(m[1]!.startsWith("data:font/woff2;base64,")).toBe(true);
+    // Fonts are embedded; the only other url() are the symbol's own gradients, by fragment in the same document (no request).
+    for (const m of out.html.matchAll(/url\(\s*["']?([^"')]*)/g)) expect(m[1]!.startsWith("data:font/woff2;base64,") || /^#ms-brand-[A-Za-z0-9_-]+-(circle|orange|green|blue)$/.test(m[1]!)).toBe(true);
+    expect(out.html).toMatch(/<svg class="ms-symbol"[^>]*role="img"[^>]*aria-label="Adaptaula"/);
     for (const m of out.html.matchAll(/\bsrc="([^"]*)"/g)) expect(m[1]!.startsWith("data:image/png;base64,")).toBe(true);
     expect(out.html).not.toMatch(/supabase|signed|token=|cookie|\/api\//i);
   });

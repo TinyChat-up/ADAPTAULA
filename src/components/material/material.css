@@ -254,9 +254,10 @@ ul.ms-list { list-style: disc; }
 
 /* A · Cabecera editorial: materia y curso, la marca muy discreta, y los campos a mano. Sin banner. */
 [data-design="claro"] .ms-header { border-bottom: 0; padding-bottom: 0; margin-bottom: 1.1em; font-size: .9em; }
-[data-design="claro"] .ms-masthead { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding-bottom: .4em; margin-bottom: .75em; border-bottom: 1.5px solid var(--ms-accent); }
+[data-design="claro"] .ms-masthead { display: flex; justify-content: space-between; align-items: center; gap: 1em; padding-bottom: .4em; margin-bottom: .75em; border-bottom: 1.5px solid var(--ms-accent); }
+/* El símbolo oficial, a tamaño físico fijo: se reconoce sin competir con el contenido ni con la materia y el curso. */
+[data-design="claro"] .ms-symbol { display: block; flex: none; height: 6mm; width: auto; aspect-ratio: 829.7 / 713; }
 [data-design="claro"] .ms-meta { margin: 0; font-size: .82em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ms-accent); }
-[data-design="claro"] .ms-brand { margin: 0; font-size: .74em; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--ms-soft); }
 [data-design="claro"] .ms-field-line { border-bottom-color: var(--ms-rule-soft); }
 
 /* Columna guía: todo el contenido comparte una columna; la de la izquierda solo lleva el número de cada actividad.

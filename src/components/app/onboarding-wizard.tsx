@@ -36,7 +36,7 @@ export function OnboardingWizard({ action, plan }: { action: (input: unknown) =>
 
   return (
     <div className="space-y-7">
-      <div className="space-y-2"><p className="eyebrow text-primary">Primeros pasos</p><h1 className="font-editorial text-3xl tracking-tight sm:text-4xl">Tu primera ficha empieza aquí.</h1><p className="text-muted-foreground">Elige la etapa en la que trabajas. Podrás cambiarla después.</p></div>
+      <div className="space-y-2"><p className="eyebrow text-primary">Primeros pasos</p><h1 className="font-display text-3xl tracking-tight sm:text-4xl">Tu primera ficha empieza aquí.</h1><p className="text-muted-foreground">Elige la etapa en la que trabajas. Podrás cambiarla después.</p></div>
       {error ? <Alert tone="danger">{error}</Alert> : null}
       <ChoiceCards name="stage" legend="¿Qué enseñas?" options={STAGES} value={stage} onChange={setStage} columns={2} />
       <div className="border-y border-border py-5 text-sm"><p className="font-medium">Un perfil funcional describe apoyos, no diagnósticos.</p><p className="mt-1 text-muted-foreground">Después de subir la ficha, podrás elegir apoyos de lectura, lenguaje, organización o matemáticas. Identifica al alumnado mediante un alias o iniciales.</p></div>
