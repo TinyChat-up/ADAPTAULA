@@ -7,6 +7,10 @@ import { TABLE_CHOICE_DRAFT, tableChoiceCase } from "../support/table-choice-cas
 async function accessible(page: Page) {
   await expect(page.locator("h1").first()).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
+  // Contrast must be checked after finite colour transitions, not halfway between the active and inactive filter colours.
+  await page.locator("main").evaluate(async root => {
+    await Promise.all(root.getAnimations({ subtree: true }).filter(a => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined)));
+  });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
 }

@@ -1,0 +1,54 @@
+import { readFileSync } from 'node:fs';
+import { test, expect } from '@playwright/test';
+import { maxVisualCorpus } from '../../evals/max-visuals/corpus';
+import { signUpAndOnboard, uniqueEmail, uploadAndOpen, makePdf, waitForAnalysis, createReviewedAdaptation, workspaceOf } from './helpers';
+import { seedReadyDocument, requireVisuals } from './adaptation-seed';
+
+test('ilustración sintética: procedencia, finalidad, revisión docente, acceso privado y PDF existente', async ({page}, info) => {
+  test.setTimeout(180000);
+  const email=uniqueEmail(); await signUpAndOnboard(page,email);
+  await page.getByLabel('Alias o iniciales').fill('Perfil de ensayo');
+  await page.getByLabel('Etapa').selectOption({label:'Educación Primaria'});
+  await page.getByLabel('Curso').selectOption({label:'4.º de Primaria'});
+  await page.getByRole('button',{name:'Crear perfil',exact:true}).click();
+  const material=await uploadAndOpen(page,{name:'Original sintético.pdf',mimeType:'application/pdf',buffer:await makePdf({marker:email})});
+  await waitForAnalysis(page);
+  const id=await createReviewedAdaptation(page,`/app/materiales/${material}`,'Perfil de ensayo');
+  const ws=await workspaceOf(page,email);
+  const c=maxVisualCorpus().find(c=>c.id==='vocabulario')!, pin=c.pins[0]!;
+  const base='http://127.0.0.1:54399';
+  const headers={apikey:'sb_secret_fakefakefakefakefake',authorization:'Bearer sb_secret_fakefakefakefakefake'};
+  const plansResponse=await page.request.get(`${base}/rest/v1/plans?slug=eq.max&select=id,features,monthly_images`,{headers});
+  const [maxPlan]=await plansResponse.json();
+  const activate=await page.request.patch(`${base}/rest/v1/plans?slug=eq.max`,{headers,data:{monthly_images:5,features:{...maxPlan.features,image_generation:true,illustrations_per_adaptation:3,illustration_budget_usd:0.5}}});
+  expect(activate.ok()).toBe(true);
+  try {
+  const subscription=await page.request.post(`${base}/rest/v1/subscriptions`,{headers,data:{workspace_id:ws,plan_id:maxPlan.id,stripe_subscription_id:`pilot-local-${id}`,stripe_price_id:'pilot-local-not-stripe',billing_interval:'month',status:'active',period_start:new Date(Date.now()-86400000).toISOString(),period_end:new Date(Date.now()+29*86400000).toISOString()}});
+  expect(subscription.ok(),await subscription.text()).toBe(true);
+  const storagePath=`${ws}/${id}/illustrations/${pin.sha256}.png`;
+  const signed=await page.request.post(`${base}/storage/v1/object/upload/sign/generated-assets/${storagePath}`,{headers});
+  expect(signed.ok()).toBe(true);
+  const signedData=await signed.json();
+  const upload=await page.request.put(`${base}/storage/v1${signedData.url}`,{headers:{...headers,'content-type':'image/png'},data:Buffer.from(pin.bytes)});
+  expect(upload.ok(),await upload.text()).toBe(true);
+  const row=await page.request.post(`${base}/rest/v1/generated_assets`,{headers:{...headers,'content-type':'application/json'},data:{id:pin.assetId,workspace_id:ws,adaptation_id:id,type:'illustration',storage_path:storagePath,sha256:pin.sha256,mime:'image/png',width:768,height:512,bytes:pin.bytes.length,need_key:'dec_1',brief_fingerprint:'a'.repeat(64),model_alias:'IMAGE_QUALITY',attempts:1,review:{approved:true},image_brief:{pedagogical_purpose:c.purpose},alt_text:'Estantería y libro abierto.'}});
+  expect(row.ok(),await row.text()).toBe(true);
+  await seedReadyDocument(page,ws,id,c.withSupport); await requireVisuals(page,id,[]);
+  await page.goto(`/app/adaptaciones/${id}/vista`);
+  await expect(page.getByRole('link',{name:/^Plan Max/}).first()).toBeVisible();
+  await expect(page.getByText('Ilustración generada con IA.',{exact:false})).toBeVisible();
+  await expect(page.getByText(`Finalidad: ${c.purpose}`,{exact:false})).toBeVisible();
+  await expect(page.locator('.ms-sheet img')).toHaveCount(1);
+  await page.screenshot({path:info.outputPath('ilustracion-docente.png'),fullPage:true,style:'nextjs-portal{display:none}'});
+  const download=page.waitForEvent('download'); await page.getByRole('button',{name:'Descargar PDF',exact:true}).click();
+  expect(readFileSync((await (await download).path())!).subarray(0,5).toString()).toBe('%PDF-');
+  const assetUrl=`/api/adaptations/${id}/generated/${pin.assetId}`;
+  const other=await page.context().browser()!.newContext(), p=await other.newPage();
+  await signUpAndOnboard(p,uniqueEmail());
+  expect((await p.request.get(new URL(assetUrl,page.url()).href)).ok()).toBe(false);
+  await other.close();
+  } finally {
+    const restored=await page.request.patch(`${base}/rest/v1/plans?slug=eq.max`,{headers,data:{monthly_images:maxPlan.monthly_images,features:maxPlan.features}});
+    expect(restored.ok()).toBe(true);
+  }
+});

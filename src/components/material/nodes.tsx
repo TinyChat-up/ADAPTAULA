@@ -209,7 +209,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
       </dl>
     </section>
   ),
-  worked_example: ({ node }) => (
+  worked_example: ({ node, mode, design }) => (
     <section className="ms-example" data-keep>
       <p className="ms-help-title">{node.title ?? "Ejemplo"}</p>
       <Paragraphs paragraphs={node.problem} />
@@ -221,6 +221,7 @@ export const NODE_RENDERERS: { [K in RenderNode["kind"]]: (props: Props<K>) => R
       <p>
         <strong>{node.result}</strong>
       </p>
+      {node.figures?.map(figure => <NodeView key={figure.key} node={figure} mode={mode} {...(design ? { design } : {})} />)}
     </section>
   ),
   sentence_starters: ({ node }) => (

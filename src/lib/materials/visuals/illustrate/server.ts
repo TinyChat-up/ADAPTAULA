@@ -9,13 +9,15 @@ import { resolveModel, type ModelEnv } from "@/lib/ai/registry";
 import { toAiRunRow } from "@/lib/ai/run-record";
 import { imageProviderFor, providerFor } from "@/lib/ai/runtime";
 import type { AIRunRecord, ImageProvider, ModelSelection } from "@/lib/ai/types";
+import { publicEnv } from "@/lib/config/env.public";
+import { imagePilotAllows } from "./pilot";
 import { serverEnv } from "@/lib/config/env.server";
 import { getFlags } from "@/lib/config/flags";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callStructured } from "../auto/assistants";
 import type { IllustrationWithheld } from "../auto/policy";
-import { ILLUSTRATION_BUDGET, type IllustrationDeps, type StoredIllustration } from "./service";
+import { ILLUSTRATION_BUDGET, ILLUSTRATION_LIMITS, type IllustrationDeps, type StoredIllustration } from "./service";
 
 /**
  * Production `IllustrationDeps` for one adaptation, or null when illustrations are not available to it. Available only when ALL
@@ -39,10 +41,11 @@ const ILLUSTRATION_PURPOSES = ["image_brief", "image", "image_review"] as const;
 export async function illustrationAvailability(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
   // Switched off in Adaptaula: true for every plan, so the stop must not suggest changing plans (fichas 06/07 of the real run).
   if (!getFlags().aiImagesEnabled) return { available: false, reason: "disabled" };
+  if (!imagePilotAllows(serverEnv(), ids.workspaceId, publicEnv().NEXT_PUBLIC_SUPABASE_URL, process.env.VERCEL_ENV)) return { available: false, reason: "disabled" };
   const admin = createAdminClient();
   const { data: plan } = await admin.rpc("workspace_plan", { ws: ids.workspaceId });
-  const effective = (plan as { features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
-  if (effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: (await anyPlanOffersIllustrations(admin)) ? "plan" : "not_offered" };
+  const effective = (plan as { slug?: string; features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
+  if (effective?.slug !== "max" || effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: (await anyPlanOffersIllustrations(admin)) ? "plan" : "not_offered" };
   const planBudget = Number(effective.features?.illustration_budget_usd);
   const deps = await illustrationDeps(ids, Number.isFinite(planBudget) && planBudget > 0 ? planBudget : ILLUSTRATION_BUDGET.perAdaptationUsd);
   const perAdaptation = Number(effective.features?.illustrations_per_adaptation);
@@ -90,7 +93,7 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
     store: {
       async find(adaptationId, needKey) {
         // The illustration already approved for this need (a resumed job, a correction cycle): reused, never paid twice.
-        const { data } = await admin.from("generated_assets").select(COLUMNS).eq("adaptation_id", adaptationId).eq("need_key", needKey).not("sha256", "is", null).order("created_at", { ascending: false }).limit(1);
+        const { data } = await admin.from("generated_assets").select(COLUMNS).eq("adaptation_id", adaptationId).eq("need_key", needKey).not("sha256", "is", null).eq("review->>approved", "true").order("created_at", { ascending: false }).limit(1);
         const row = data?.[0] as { id: string; sha256: string; width: number; height: number; alt_text: string | null } | undefined;
         return row ? toStored(row) : null;
       },
@@ -102,13 +105,15 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
         const { data, error } = await admin.from("generated_assets").insert(row).select(COLUMNS).single();
         if (!error && data) return toStored(data as { id: string; sha256: string; width: number; height: number; alt_text: string | null });
         // A concurrent producer stored the same illustration (same adaptation, need and brief): that row is the one.
-        const { data: existing } = await admin.from("generated_assets").select(COLUMNS).eq("adaptation_id", request.adaptationId).eq("need_key", request.needKey).eq("brief_fingerprint", briefFingerprint).maybeSingle();
+        const { data: existing } = await admin.from("generated_assets").select(COLUMNS).eq("adaptation_id", request.adaptationId).eq("need_key", request.needKey).eq("brief_fingerprint", briefFingerprint).eq("review->>approved", "true").maybeSingle();
         if (existing) return toStored(existing as { id: string; sha256: string; width: number; height: number; alt_text: string | null });
         throw new Error("illustration_insert_failed");
       },
     },
     quota: {
       async reserve(key) {
+        const { data: approved, error: countError } = await admin.from("generated_assets").select("id").eq("adaptation_id", ids.adaptationId).not("sha256", "is", null).eq("review->>approved", "true").limit(ILLUSTRATION_LIMITS.perAdaptation);
+        if (countError || !approved || approved.length >= ILLUSTRATION_LIMITS.perAdaptation) return false;
         const { data, error } = await admin.rpc("consume_quota", { p_workspace: ids.workspaceId, p_kind: "image", p_units: 1, p_user: null, p_job: null, p_key: key });
         return !error && (data as { allowed?: boolean } | null)?.allowed === true;
       },
@@ -124,10 +129,11 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
     budget: {
       limitUsd: budgetUsd,
       // Everything this adaptation's illustrations have cost so far (resumed jobs and correction cycles included); a run with no
-      // price counts at its worst case, a failed call without usage at nothing.
+      // price, including a failed call without usage, counts at its defensive estimate.
       async spentUsd() {
-        const { data } = await admin.from("ai_runs").select("purpose, status, estimated_cost_usd").eq("adaptation_id", ids.adaptationId).in("purpose", [...ILLUSTRATION_PURPOSES]);
-        return ((data ?? []) as Array<{ purpose: string; status: string; estimated_cost_usd: number | string | null }>).reduce((sum, r) => sum + (r.estimated_cost_usd !== null ? Number(r.estimated_cost_usd) : r.status === "success" ? (r.purpose === "image" ? ILLUSTRATION_BUDGET.imageUsd : ILLUSTRATION_BUDGET.textUsd) : 0), 0);
+        const { data, error } = await admin.from("ai_runs").select("purpose, status, estimated_cost_usd").eq("adaptation_id", ids.adaptationId).in("purpose", [...ILLUSTRATION_PURPOSES]);
+        if (error) throw new Error("illustration_spend_unavailable");
+        return ((data ?? []) as Array<{ purpose: string; status: string; estimated_cost_usd: number | string | null }>).reduce((sum, r) => sum + (r.estimated_cost_usd !== null ? Number(r.estimated_cost_usd) : (r.purpose === "image" ? ILLUSTRATION_BUDGET.imageUsd : ILLUSTRATION_BUDGET.textUsd)), 0);
       },
     },
   };

@@ -70,7 +70,7 @@ export type RenderNode = { key: string } & (
   | { kind: "help_box"; variant: "key_idea" | "reminder" | "tip" | "strategy"; title?: string; paragraphs: Run[][] }
   | { kind: "checklist"; title?: string; items: string[]; keepTogether: boolean }
   | { kind: "vocabulary"; title?: string; items: Array<{ term: string; definition: string }> }
-  | { kind: "worked_example"; title?: string; problem: Run[][]; steps: string[]; result: string }
+  | { kind: "worked_example"; title?: string; problem: Run[][]; steps: string[]; result: string; figures?: RenderNode[] }
   | { kind: "sentence_starters"; items: string[] }
   | { kind: "planner"; title?: string; slots: Array<{ label: string; lines: number }> }
   /** `parts`: the formula composed (stacked fractions…) when it is within what the sheet can typeset; otherwise its source is shown. */
@@ -226,7 +226,7 @@ function figureRows(n: RenderNode): number {
   return n.widthMm ? Math.ceil(n.widthMm / 3 / MM_PER_ROW) + 1 : 8;
 }
 function leadRows(n: RenderNode): number {
-  if (n.kind === "worked_example") return 2 + n.problem.length + n.steps.length;
+  if (n.kind === "worked_example") return 2 + n.problem.length + n.steps.length + (n.figures ?? []).reduce((rows, f) => rows + figureRows(f), 0);
   if (n.kind === "paragraph") return n.paragraphs.reduce((r, p) => r + Math.max(1, Math.ceil(p.reduce((c, x) => c + x.text.length, 0) / 90)), 0);
   return 2;
 }
@@ -238,6 +238,7 @@ const HEADER_MM = 40;
 const REPEAT_MAX_MM = PAGE_MM / 3;
 /** A rough, deterministic height of a node in mm, only to tell on which sheet of paper it will land (never to lay it out). */
 function estimatedMm(n: RenderNode): number {
+  if (n.kind === "worked_example") return leadRows(n) * MM_PER_ROW;
   if (n.kind === "activity") {
     const rows = activityRows(n.prompt, n.steps, n.requirements, n.response) + n.leads.reduce((r, l) => r + leadRows(l), 0) + n.supports.reduce((r, x) => r + leadRows(x), 0) + (n.checks ?? []).reduce((r, x) => r + leadRows(x), 0);
     return rows * MM_PER_ROW + n.figures.reduce((mm, f) => mm + (f.kind === "image" && f.heightMm ? Math.min(f.heightMm, MAX_FIGURE_MM) + 8 : figureRows(f) * MM_PER_ROW), 0) + 6;
@@ -268,14 +269,14 @@ function leadMm(n: RenderNode): number {
 
 /** Every node of a sheet, including those inside an activity (its leads, figures and supports), in reading order. */
 export function flatNodes(nodes: readonly RenderNode[]): RenderNode[] {
-  return nodes.flatMap((n) => (n.kind === "activity" ? [...flatNodes(n.leads), n, ...flatNodes(n.figures), ...flatNodes(n.supports), ...flatNodes(n.checks ?? [])] : [n]));
+  return nodes.flatMap((n) => (n.kind === "activity" ? [...flatNodes(n.leads), n, ...flatNodes(n.figures), ...flatNodes(n.supports), ...flatNodes(n.checks ?? [])] : n.kind === "worked_example" ? [n, ...flatNodes(n.figures ?? [])] : [n]));
 }
 
 /** The same tree with `f` applied to every node, nested ones included (a print transform, never a content change). */
 export function mapNodes(nodes: readonly RenderNode[], f: (n: RenderNode) => RenderNode): RenderNode[] {
   return nodes.map((n) => {
     const mapped = f(n);
-    return mapped.kind === "activity" ? { ...mapped, leads: mapNodes(mapped.leads, f), figures: mapNodes(mapped.figures, f), supports: mapNodes(mapped.supports, f), ...(mapped.checks ? { checks: mapNodes(mapped.checks, f) } : {}) } : mapped;
+    return mapped.kind === "activity" ? { ...mapped, leads: mapNodes(mapped.leads, f), figures: mapNodes(mapped.figures, f), supports: mapNodes(mapped.supports, f), ...(mapped.checks ? { checks: mapNodes(mapped.checks, f) } : {}) } : mapped.kind === "worked_example" && mapped.figures ? { ...mapped, figures: mapNodes(mapped.figures, f) } : mapped;
   });
 }
 
@@ -430,7 +431,7 @@ function nodeOf(block: Block, ctx: Ctx): RenderNode {
       if (block.source.kind === "generated") {
         const asset = ctx.options.generated?.[block.source.asset_id];
         // It stands for something the sheet needs: a required original, or the picture an activity refers to; a support counts too.
-        const essential = block.source.visual_ref ? (ctx.options.requiredVisuals?.includes(block.source.visual_ref) ?? true) : true;
+        const essential = block.source.visual_ref ? (ctx.options.requiredVisuals?.includes(block.source.visual_ref) ?? true) : (block.source.activity_ref ? true : block.source.essential ?? true);
         const origin = block.source.decision_id ? ("requested" as const) : ("original" as const);
         // Its text alternative is the illustration's own description, written and reviewed with it (never the answer).
         return { key, kind: "image", state: asset ? "available" : "missing", ...(asset ? { src: asset.src, ...(asset.widthMm ? { widthMm: asset.widthMm } : {}), ...(asset.heightMm ? { heightMm: asset.heightMm } : {}) } : {}), alt: block.caption ?? block.alt_text, ...(block.caption ? { caption: block.caption } : {}), essential, origin };
@@ -591,6 +592,17 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     const blockIds: string[] = [];
     for (const block of withAdjacentFigures(logical.blocks, uses)) {
       const node = nodeOf(block, ctx);
+      if (block.type === "image" && block.source.kind === "figure" && block.source.example_ref) {
+        const example = current.at(-1);
+        if (example?.kind !== "worked_example" || blockIds.at(-1) !== block.source.example_ref) {
+          ctx.issues.push({ code: "structure_inconsistent", severity: "error", message: "La figura del ejemplo no tiene un ejemplo anterior verificado en esta página." });
+        } else {
+          (example.figures ??= []).push(node);
+          used += estimatedMm(node);
+          continue;
+        }
+      }
+
       // The figures and the example an activity uses travel INSIDE it (see `leads` / `figures`): the document places them right
       // before the activity, and their link is the activity's own references, never their position on the page.
       const moved: string[] = [];

@@ -22,7 +22,7 @@ export type RenderLoad =
   | { kind: "not_found" }
   | { kind: "not_ready"; status: AdaptationStatusDto }
   | { kind: "invalid_document"; status: AdaptationStatusDto }
-  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number; heightMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[]; generated: Record<string, { src: string; widthMm: number }> };
+  | { kind: "ok"; status: AdaptationStatusDto; version: Pick<AdaptationVersionDto, "version" | "createdAt">; document: MaterialDocument; deferred: DeferredInput[] | null; requiredVisuals: string[]; assets: Record<string, { src: string; widthMm?: number; heightMm?: number }>; figures: Record<string, VisualSpec>; assetFailures: Record<string, VisualAssetFailure>; materialId: string; visuals: VisualState[]; pinned: PinnedAsset[]; subjectName: string | null; resources: Record<string, { src: string } | { omitted: true }>; requested: Array<RequestedVisual & { state: ResourceState }>; teacherImages: string[]; generated: Record<string, { src: string; widthMm: number; purpose?: string }> };
 
 export interface RenderLoadOptions {
   /**
@@ -137,8 +137,8 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
   }
   // Approved illustrations: the row of THIS adaptation and the exact bytes the document pins, or the image stays missing.
   const generatedSources = generatedSourcesOf(parsed.data);
-  const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Map<string, { width: number; height: number }>(), bytes: {} as Record<string, Uint8Array> };
-  const generated: Record<string, { src: string; widthMm: number }> = {};
+  const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Map<string, { width: number; height: number; purpose?: string }>(), bytes: {} as Record<string, Uint8Array> };
+  const generated: Record<string, { src: string; widthMm: number; purpose?: string }> = {};
   for (const g of generatedSources) {
     const size = resolvedGenerated.ready.get(g.assetId);
     if (!size) continue;
@@ -147,7 +147,7 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
       if (!bytes) continue;
       pinned[`gen:${g.assetId}`] = { assetId: g.assetId, sha256: g.sha256, mime: "image/png", bytes };
     }
-    generated[g.assetId] = { src: options.pin ? assetRef({ assetId: g.assetId, sha256: g.sha256 }) : generatedSrc(id, g.assetId), widthMm: generatedWidthMm(size.width, size.height) };
+    generated[g.assetId] = { src: options.pin ? assetRef({ assetId: g.assetId, sha256: g.sha256 }) : generatedSrc(id, g.assetId), widthMm: generatedWidthMm(size.width, size.height), ...(size.purpose ? { purpose: size.purpose } : {}) };
   }
   const subjectSlug = parsed.data.meta.subject;
   const subjectName = subjectSlug && deps.reader.getSubjectName ? await deps.reader.getSubjectName(subjectSlug) : null;

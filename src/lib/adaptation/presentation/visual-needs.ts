@@ -25,6 +25,7 @@ export interface VisualNeed {
   locatedBy?: "teacher" | "automatic";
   /** A new illustration «Hacer magia» created and had reviewed: informative only (it is changed by editing the sheet). */
   generated?: true;
+  purpose?: string;
 }
 
 const activityOf = (document: MaterialDocument, blockId: string | undefined) => {
@@ -71,11 +72,14 @@ export function visualNeedsOf(input: { document: MaterialDocument; visuals: Visu
   const generated: VisualNeed[] = blocks.flatMap((b) => {
     if (b.type !== "image" || b.source.kind !== "generated") return [];
     // Ready when its verified bytes were found (the loader's `generated`); without that information, the document's word stands.
-    const ready = !input.generated || b.source.asset_id in input.generated;
+    const ready = Boolean(input.generated && b.source.asset_id in input.generated);
+    const metadata = input.generated?.[b.source.asset_id];
+    const purpose = metadata && typeof metadata === "object" && "purpose" in metadata && typeof metadata.purpose === "string" ? metadata.purpose : null;
     const key = b.source.visual_ref ?? b.source.decision_id ?? b.source.activity_ref ?? b.id;
     const origin = b.source.decision_id ? ("requested" as const) : ("original" as const);
-    const message = b.source.visual_ref ? GENERATED_COPY.original : b.source.decision_id ? GENERATED_COPY.support : GENERATED_COPY.referenced;
-    return [{ key, origin, essential: true, status: ready ? ("ready" as const) : ("to_select" as const), label: b.caption ?? "Ilustración de la actividad", activity: activityOf(input.document, b.id), message, omittable: false, locatedBy: "automatic" as const, generated: true as const }];
+    const message = !ready ? "El recurso generado no está disponible o no supera las comprobaciones. No se incluye en la ficha." : b.source.visual_ref ? GENERATED_COPY.original : b.source.decision_id ? GENERATED_COPY.support : GENERATED_COPY.referenced;
+    const essential = b.source.visual_ref ? input.requiredVisuals.includes(b.source.visual_ref) : (b.source.activity_ref ? true : b.source.essential ?? true);
+    return [{ key, origin, essential, status: ready ? ("ready" as const) : ("to_select" as const), label: b.caption ?? "Ilustración de la actividad", activity: activityOf(input.document, b.id), message, omittable: false, locatedBy: "automatic" as const, generated: true as const, ...(purpose ? { purpose } : {}) }];
   });
   return [...original, ...requested, ...generated];
 }
