@@ -35,8 +35,21 @@
   .brand-lockup--symbol { padding-top: 0; }
   .brand-lockup--symbol .brand-wordmark { display: none; }
   .brand-lockup--symbol .brand-symbol { height: 2rem; margin-top: 0; }
+  /* Titulares (Outfit): seminegrita por defecto, como el logotipo; un peso explícito en el marcado manda. */
+  .font-display { font-weight: 600; letter-spacing: -0.02em; }
+  /* «Hacer magia»: la acción que hace la IA, en el azul de la marca (del círculo al azul intenso). Blanco ≥ 5,4:1 en todo el
+     degradado; el hover lo oscurece. Sin degradado en alto contraste o colores forzados. */
+  .btn-magic { background: linear-gradient(100deg, var(--color-primary) 0%, var(--color-brand-blue-ink) 100%); }
+  .btn-magic:hover:not(:disabled) { background: linear-gradient(100deg, var(--color-primary-strong) 0%, var(--color-primary) 100%); }
+  /* Firma de marca: los cuatro colores de «aula» en su orden. Decorativa (aria-hidden); nunca transmite información. */
+  .brand-rule { height: 3px; border: 0; background: linear-gradient(90deg, var(--color-brand-orange) 0 25%, var(--color-brand-green) 25% 50%, var(--color-brand-blue) 50% 75%, var(--color-brand-cyan) 75% 100%); }
+}
+@media (prefers-contrast: more) {
+  .btn-magic, .btn-magic:hover:not(:disabled) { background: var(--color-primary-strong); }
 }
 @media (forced-colors: active) {
   /* Los recursos oficiales se ven tal cual; el enlace sigue mostrando su foco del sistema. */
   .brand-lockup img { forced-color-adjust: none; }
+  .btn-magic { background: ButtonFace; color: ButtonText; border-color: ButtonText; }
+  .brand-rule { display: none; }
 }

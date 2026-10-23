@@ -28,7 +28,8 @@ const COLUMNS = [
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-border bg-surface">
+    <footer className="bg-surface">
+      <div aria-hidden className="brand-rule" />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[2fr_1fr_1fr_1fr]">
         <div className="space-y-3">
           <Logo />

@@ -22,7 +22,7 @@ export function Section({
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="mb-10 max-w-2xl space-y-4">
           {eyebrow ? <p className="eyebrow text-primary">{eyebrow}</p> : null}
-          <h2 id={id ? `${id}-titulo` : undefined} className="font-editorial text-3xl leading-tight tracking-tight sm:text-5xl">
+          <h2 id={id ? `${id}-titulo` : undefined} className="font-display text-3xl leading-tight tracking-tight sm:text-5xl">
             {title}
           </h2>
           {intro ? <p className="text-lg text-muted-foreground">{intro}</p> : null}

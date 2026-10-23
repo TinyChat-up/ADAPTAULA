@@ -17,7 +17,12 @@
   - `<Logo>` con las piezas oficiales en la landing, el pie, el acceso, la bienvenida, la barra lateral (solo el símbolo si está plegada) y la cabecera móvil;
   - tokens: el azul marino de la marca como texto y primario fuerte, `#063f79` como primario, el azul de marca como acento y foco, y los colores de marca con variantes accesibles medidas;
   - «CLARO» desaparece de los textos para el docente;
-  - la muestra de la landing lleva el símbolo, como la ficha real.
+  - la muestra de la landing lleva el símbolo, como la ficha real;
+  - tras la revisión del responsable, la forma:
+    - titulares en Outfit (IoU de 0,61 contra el logotipo, la primera de 14 tipografías);
+    - pasos en los colores de «aula»;
+    - «Hacer magia» en el azul de marca, distinto de las decisiones del docente;
+    - franja de marca en la bienvenida y el pie.
 - **Ficha:**
   - `BrandSymbol`, en línea y vectorial en el PDF, sin URL y dentro de la CSP, a 6 mm en la cabecera CLARO;
   - el acento CLARO pasa a ser el azul marino de la marca;
@@ -38,8 +43,7 @@
   - pantallas poco frecuentes que no se han revisado a mano con los colores nuevos.
 - **Siguiente:**
   - fusionar la #56 y después esta PR;
-  - la barra de la vista previa, con la descarga como acción principal;
-  - la tipografía de los titulares, con quien lleva la marca.
+  - la barra de la vista previa, con la descarga como acción principal.
 
 ## 2026-10-22 — Fase B, cierre de calidad de la PR #56: nunca menos espacio, cuadrículas por demanda y `material_renderer@v6`
 

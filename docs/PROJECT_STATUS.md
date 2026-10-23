@@ -73,7 +73,7 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 - **Colores:** el azul marino como color de interfaz, con acento y foco en el azul de marca.
 - **Ficha:** el símbolo vectorial en la cabecera CLARO, también en el PDF (`material_renderer@v7`).
 
-Detalle en [BRAND](BRAND.md) y [QA](qa/fase-c-marca/README.md). PR independiente que **depende de la #56**. Pendiente: la barra de la vista previa (descarga como acción principal) y la tipografía de los titulares, con quien lleva la marca.
+Detalle en [BRAND](BRAND.md) y [QA](qa/fase-c-marca/README.md). PR independiente que **depende de la #56**. Forma: los titulares en Outfit, los pasos en los colores de «aula» y «Hacer magia» en el azul de marca. Pendiente: la barra de la vista previa, con la descarga como acción principal.
 
 **Figuras originales (2026-10-22).** Las figuras con letras, flechas numeradas o medidas se recuperan del original sin redibujarlas (`auto_visuals@v6`, ADR-039). Detalle en [QA](qa/figuras-originales/README.md). Validado con el análisis real de 03, 06 y 07 (0,0930 USD; [validación](qa/figuras-originales/VALIDACION-REAL.md)): las cuatro figuras se recuperan tras ampliar el parser de marcas.
 

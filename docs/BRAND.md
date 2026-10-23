@@ -75,7 +75,25 @@ Sobre los fondos suaves de primario y acento, el texto naranja, verde o cian no 
 - **La marca no es un estado.** Éxito (`#24623e`), aviso (`#925015`) y error (`#b12828`) conservan sus colores y su significado. El verde de marca nunca significa «correcto» ni el naranja «aviso».
 - El color nunca es la única señal (WCAG 1.4.1).
 
-## 4. Dónde va la marca
+## 4. La forma de la interfaz habla la marca
+
+La marca no es solo el logotipo. La interfaz toma su geometría y sus colores, con un significado fijo:
+
+| Elemento | Decisión | Por qué |
+|---|---|---|
+| Titulares y títulos de página (`font-display`) | **Outfit**, seminegrita, por `next/font` (se sirve desde la app y no se pide nada a Google al usarla) | Es la tipografía de Google más parecida al logotipo: «a» de un piso, «o d p» redondas y geométricas. Medida contra la silueta del logotipo: IoU de 0,61, la primera de 14 candidatas (Nunito 0,58, Figtree 0,57, Urbanist 0,55, Fredoka 0,54…). Sustituye a Georgia, que no tenía relación con la marca. |
+| Texto, controles y ficha | Inter (la ficha, su Inter incrustada) | Legibilidad de interfaz y paginación pedagógica estable. La ficha no cambia de tipografía. |
+| Secuencias numeradas (los pasos de la landing, del escritorio y del acceso) | Los colores de **«aula»** en su orden: naranja, verde, azul y cian, en sus variantes accesibles (`src/lib/brand/tones.ts`) | El proceso del producto se cuenta con los colores de la marca. El número nunca es la única señal: el título y el orden lo dicen también. |
+| «Hacer magia» (`variant="magic"`) | Degradado del azul marino claro al azul de marca; texto blanco ≥ 5,4:1 | Lo que hace la IA por sí sola se distingue de lo que decide el docente, que va en azul marino. Azul = tecnología, según la paleta. En alto contraste o con colores forzados es un botón sólido. |
+| Franja de marca (`.brand-rule`) | 3 px con los cuatro colores de «aula» | La firma de la marca, decorativa (`aria-hidden`). Solo en dos sitios: la tarjeta de bienvenida y el pie. |
+| Foco | Azul de marca `#0067fd` | Se distingue del azul marino de los botones. |
+
+Lo que **no** se hace:
+- repartir los colores en fondos o tarjetas;
+- usar el verde o el naranja como estados;
+- cambiar la tipografía de la ficha.
+
+## 5. Dónde va la marca
 
 | Lugar | Pieza | Tamaño |
 |---|---|---|
@@ -91,7 +109,7 @@ Sobre los fondos suaves de primario y acento, el texto naranja, verde o cian no 
 
 Las piezas son decorativas (`alt=""`) dentro de un enlace con nombre («Adaptaula, inicio»). Nunca se duplican en una misma cabecera. Nunca se ponen donde quiten espacio funcional.
 
-## 5. La marca en la ficha (CLARO, `material_renderer@v7`)
+## 6. La marca en la ficha (CLARO, `material_renderer@v7`)
 
 - Cabecera de la primera página: materia y curso a la izquierda y el símbolo a la derecha, sobre la línea de acento azul marino. Debajo, Nombre y Fecha, título, actividades y el número de página en el pie.
 - **Símbolo y no logotipo horizontal:**
@@ -106,7 +124,7 @@ Las piezas son decorativas (`alt=""`) dentro de un enlace con nombre («Adaptaul
 - **Blanco y negro:** el símbolo se reconoce en grises. Con el perfil de alto contraste se dibuja en grises de su luminancia, porque una sola tinta plana fundiría las dos hojas de la derecha.
 - La versión `standard` (histórica) no cambia.
 
-## 6. Pendiente
+## 7. Pendiente
 
 - Fondo oscuro: la plataforma solo tiene tema claro. Cuando exista uno oscuro hará falta una variante del logotipo con «Adapt» en blanco, que tiene que aprobar la persona responsable de la marca.
 - El símbolo en el pie de todas las páginas de una ficha suelta (hoy solo va en la cabecera de la primera): se valorará con docentes.

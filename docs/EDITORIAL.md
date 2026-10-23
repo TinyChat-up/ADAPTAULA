@@ -21,7 +21,7 @@ Estado: **implementado** (`answer_space@v1`, ADR-040). Sin llamadas de IA: todo 
 | Componente | Regla | Dónde |
 |---|---|---|
 | Diseño | CLARO es el **valor por defecto** de `buildRenderModel` y el único que usa el producto (`PRODUCT_DESIGN`). `standard` queda como capa histórica y solo se imprime si se pide explícitamente (pruebas y comparación). | `src/lib/render/model.ts`, `sheet-model.ts` |
-| Cabecera | Una sola línea con la materia por su **nombre legible** y el curso («4.º Primaria»), el **símbolo oficial** de Adaptaula a la derecha (6 mm, vectorial, [BRAND.md §5](BRAND.md)) y Nombre y Fecha a mano. Una clave de catálogo (`conocimiento-medio`) no se imprime nunca. | `sheet.tsx`, `brand-symbol.tsx`, `subjectName()` |
+| Cabecera | Una sola línea con la materia por su **nombre legible** y el curso («4.º Primaria»), el **símbolo oficial** de Adaptaula a la derecha (6 mm, vectorial, [BRAND.md §6](BRAND.md)) y Nombre y Fecha a mano. Una clave de catálogo (`conocimiento-medio`) no se imprime nunca. | `sheet.tsx`, `brand-symbol.tsx`, `subjectName()` |
 | Título, orientación y actividad | Mismo orden siempre: número «01» en la columna guía, consigna, figura o recurso, apoyos y zona de respuesta. | `nodes.tsx`, `material.css` (CLARO) |
 | Tokens | Tamaño por etapa (Primaria 12,5 pt), renglón (10 mm en Primaria), **casilla de cuadrícula** (7 mm en Primaria, 6 en ESO, 5 en Bachillerato), márgenes de 18 mm, un acento que se imprime como negro y grises que se ven en escala de grises. | `src/lib/render/tokens.ts` |
 | Numeración de páginas | «N / M» física, en el margen inferior. | `material.css` (`@page`) |

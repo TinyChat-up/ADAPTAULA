@@ -490,6 +490,11 @@ Detalle en [EDITORIAL.md](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md).
   - naranja, verde y cian, solo como acento puntual, con variantes accesibles medidas.
 
   Los estados conservan sus propios colores.
+- **Forma.**
+  - Los titulares pasan a Outfit, la tipografía más cercana al logotipo (medida contra él), en lugar de Georgia;
+  - los pasos numerados llevan los colores de «aula» en su orden;
+  - «Hacer magia», la acción de la IA, va en un degradado del azul de marca, para distinguirla de las decisiones del docente (azul marino);
+  - la franja de marca aparece en dos sitios.
 - **Ficha.**
   - En la cabecera CLARO, el símbolo sustituye a la palabra, a 6 mm. Es SVG en línea (`BrandSymbol`, datos en `src/lib/brand/symbol.ts`): vectorial en el PDF, sin URL y dentro de la CSP de impresión, sin pasar por los recursos fijados del docente;
   - el acento de la ficha pasa a ser el azul marino de la marca;

@@ -72,6 +72,10 @@ test("landing, cabecera, footer y acceso: logotipo oficial, favicon y sin desbor
     const manifest = (await (await request.get(icons.find((i) => i.rel === "manifest")!.href)).json()) as { icons: Array<{ src: string; sizes: string }> };
     for (const icon of manifest.icons) expect((await request.get(icon.src)).status(), icon.src).toBe(200);
     expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
+    // The form speaks the brand: titles in the display face closest to the wordmark, the steps in the colours of «aula» in order.
+    expect(await page.getByRole("heading", { level: 1 }).first().evaluate((h) => getComputedStyle(h).fontFamily)).toMatch(/Outfit/i);
+    const stepRules = await page.locator("#como-funciona ol > li").evaluateAll((items) => items.map((li) => getComputedStyle(li).borderTopColor));
+    expect(stepRules.slice(0, 4)).toEqual(["rgb(219, 110, 1)", "rgb(28, 161, 69)", "rgb(0, 103, 253)", "rgb(1, 153, 186)"]);
     // Exactly one horizontal logo per header: never duplicated.
     await expect(page.getByRole("banner").locator(`img[src="${WORDMARK}"]:visible`)).toHaveCount(1);
   }
@@ -141,6 +145,13 @@ test("espacio docente: bienvenida, escritorio, barra lateral expandida y plegada
   await expect(page.getByRole("heading", { name: "¿Cómo quieres preparar esta ficha?" })).toBeVisible();
   await snap(page, info, "06-hacer-magia");
   if (!BEFORE) {
+    // What the AI does by itself is told apart from what the teacher decides: «Hacer magia» in the brand blue, «Revisar antes de
+    // crear» a neutral control. Its white label keeps ≥ 4.5:1 on both ends of the gradient (measured in brand.css).
+    const magic = page.getByRole("button", { name: "Hacer magia" });
+    await expect(magic).toHaveClass(/btn-magic/);
+    expect(await magic.evaluate((b) => getComputedStyle(b).backgroundImage)).toMatch(/linear-gradient/);
+    expect(await magic.evaluate((b) => getComputedStyle(b).color)).toBe("rgb(255, 255, 255)");
+    await expect(page.getByRole("button", { name: "Revisar antes de crear" })).not.toHaveClass(/btn-magic/);
     expect(await noOverflow(page)).toBe(true);
     expect(await serious(page)).toEqual([]);
   }

@@ -21,7 +21,7 @@ export function PageHeader({
     <div className="flex flex-col gap-5 pb-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <div className="space-y-3">
-          <h1 className="break-words text-page font-semibold">{title}</h1>
+          <h1 className="break-words font-display text-page font-semibold">{title}</h1>
           {description ? <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{description}</p> : null}
         </div>
       </div>

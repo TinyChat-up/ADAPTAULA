@@ -19,7 +19,7 @@ export default function HowItWorksPage() {
       </div>
       <StepsList />
       <section aria-labelledby="vista-ejemplo" className="space-y-5 border-t border-border pt-10">
-        <div className="max-w-2xl"><h2 id="vista-ejemplo" className="font-editorial text-3xl">Conoce el documento antes de empezar</h2><p className="mt-2 text-muted-foreground">Explora una ficha sintética. Puedes alternar original, propuesta, comparación y aspecto de revisión.</p></div>
+        <div className="max-w-2xl"><h2 id="vista-ejemplo" className="font-display text-3xl">Conoce el documento antes de empezar</h2><p className="mt-2 text-muted-foreground">Explora una ficha sintética. Puedes alternar original, propuesta, comparación y aspecto de revisión.</p></div>
         <Demo />
       </section>
       <div className="max-w-2xl space-y-4 border-t border-border pt-10">

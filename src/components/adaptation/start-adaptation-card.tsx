@@ -113,7 +113,7 @@ export function StartAdaptationCard({
             </h3>
             <div className="grid gap-3">
               <div className="flex flex-col gap-3 border-t border-primary py-4">
-                <Button size="lg" onClick={() => void start("automatic")} disabled={pending !== null} aria-describedby={`${uid}-magic`}>
+                <Button size="lg" variant="magic" onClick={() => void start("automatic")} disabled={pending !== null} aria-describedby={`${uid}-magic`}>
                   {pending === "automatic" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
                   {CREATION_COPY.automatic.label}
                 </Button>

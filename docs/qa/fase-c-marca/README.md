@@ -39,6 +39,7 @@ Capturas reales de la app (`tests/e2e/brand-identity.spec.ts` con `BRAND_GALLERY
 | Escritorio, móvil | [panel-movil.png](web/panel-movil.png) |
 | «Hacer magia» | [hacer-magia.png](web/hacer-magia.png) |
 | Vista previa de la ficha | [vista-previa-ficha.png](web/vista-previa-ficha.png) |
+| Landing completa (titulares en Outfit, pasos en los colores de «aula» y franja en el pie) | [landing-completa.png](web/landing-completa.png) |
 
 El círculo negro con una «N», abajo a la izquierda, es el indicador de desarrollo de Next: no existe en producción.
 
@@ -78,6 +79,8 @@ Medido y comprobado en el PDF:
   - está dentro de la pantalla y en su proporción (±3 %);
   - aparece una sola vez por cabecera.
 
+  Comprueba también la forma: los titulares en Outfit, los cuatro primeros pasos con los colores de «aula» en su orden, y «Hacer magia» en degradado con texto blanco, distinto de «Revisar antes de crear».
+
   Cubre la landing, el pie, el acceso, la bienvenida, el escritorio, la barra expandida y la plegada (solo el símbolo), la cabecera móvil, «Hacer magia» y la ficha (símbolo con nombre «Adaptaula», de 12 a 40 px, sin el logotipo horizontal).
 
   También comprueba:
@@ -88,7 +91,8 @@ Medido y comprobado en el PDF:
   - galería PDF: la cabecera ya no tiene la palabra, sino el símbolo con nombre, de 6 mm, en su proporción y una vez por ficha;
   - diseño de la ficha: el símbolo en la cabecera, una vez y sin `<img>`; el acento CLARO pasa a ser el azul marino de la marca;
   - HTML de impresión: solo se admiten las referencias del símbolo a sus degradados, además de las fuentes;
-  - versión del renderer: v7 en unidad, BD y E2E.
+  - versión del renderer: v7 en unidad, BD y E2E;
+  - flujo de «Hacer magia»: sigue siendo la acción principal y recomendada, ahora con su estilo propio (`btn-magic`), y «Revisar antes de crear» sigue siendo neutra.
 - **Regresión encontrada y corregida:** el acento de marca (`#0064f6`) sobre su fondo suave daba 4,41:1 en la etiqueta «Próximamente» de precios. Pasa a `#0060eb` (4,73:1).
 - **Resultados:**
   - unidad y BD: 1919 correctas y 13 omitidas;
@@ -129,10 +133,16 @@ Desde un docente que llega por primera vez. Se separan los **defectos observable
   - el acento de CLARO (`#23426b`) tampoco salía de la marca.
 
   Ahora los dos usan el azul marino, y la muestra lleva el símbolo como la ficha real.
-- **Pendiente** (preferencia, no defecto): los titulares de la landing y del estado vacío usan Georgia, en serif, y el resto de la interfaz Inter. Es una decisión editorial anterior (ADR-024). Con el logotipo, de geometría redondeada, convendría revisarla con quien lleva la marca, sin cambiarla por iniciativa propia.
+- **Corregida, tras la revisión del responsable:** la forma de la interfaz no tenía relación con la marca. Los titulares iban en Georgia, en serif, junto a un logotipo geométrico redondeado, y los colores de marca solo aparecían en el logo. Ahora:
+  - los titulares van en Outfit, medida como la tipografía más cercana al logotipo;
+  - los pasos llevan los colores de «aula»;
+  - «Hacer magia» tiene su propio azul de marca.
+
+  Detalle en [BRAND.md §4](../../BRAND.md).
 
 **6. ¿Se distingue lo que hace la IA de lo que decide el docente?**
-- Sí:
+- Sí, y ahora también se ve:
+  - «Hacer magia», lo que hace la IA, va en el azul de marca, y lo que decide el docente, en azul marino;
   - «Hacer magia» y «Revisar antes de crear» se explican junto a cada botón;
   - la landing repite «El docente conserva la decisión final»;
   - la ficha final se puede editar.
@@ -161,6 +171,7 @@ Desde un docente que llega por primera vez. Se separan los **defectos observable
 4. El símbolo en la ficha CLARO, vectorial en el PDF, y el acento de la ficha en el azul marino de la marca.
 5. Sin jerga interna («CLARO») en los textos del docente.
 6. La muestra de la landing coherente con la ficha real.
+7. La forma: los titulares en Outfit, los pasos en los colores de «aula», «Hacer magia» en el azul de marca y la franja de marca en la bienvenida y el pie.
 
 ### Pendiente para una fase posterior
 
@@ -168,10 +179,9 @@ Desde un docente que llega por primera vez. Se separan los **defectos observable
    - modos de vista como selector segmentado;
    - «Descargar PDF» como acción principal;
    - todo en una fila en escritorio.
-2. **La tipografía de los titulares** (Georgia frente al logotipo redondeado), con quien lleva la marca.
-3. **Una variante del logotipo para fondo oscuro**, cuando exista un tema oscuro.
-4. **El símbolo en el pie de cada página** de una ficha, para hojas sueltas, a validar con docentes.
-5. **Acentos de marca puntuales**, por ejemplo los pasos numerados de la landing en los colores del símbolo, con criterio y sin convertirlos en señales de estado.
+2. **Una variante del logotipo para fondo oscuro**, cuando exista un tema oscuro.
+3. **El símbolo en el pie de cada página** de una ficha, para hojas sueltas, a validar con docentes.
+4. **Más acentos de marca puntuales** (iconos de sección, estados vacíos), con el mismo criterio y sin convertirlos en señales de estado.
 
 ## 6. Riesgos
 
