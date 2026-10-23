@@ -17,6 +17,10 @@
   - unidad de la ficha y del HTML de impresión: 60/60;
   - PDF: 64/64;
   - typecheck, lint y build correctos.
+- **Segunda regresión de la Fase C, encontrada en la misma E2E:** con el texto al 200 % en una pantalla de 320 px, la página se desbordaba en horizontal (WCAG 1.4.10).
+  - El logotipo, medido en `rem`, llegaba a unos 295 px. Ahora se encoge en su proporción al espacio que deja la cabecera.
+  - Una palabra del titular en Outfit («documento») no cabía en su columna. Ahora parte la palabra, con guion donde el navegador puede.
+  - Pasan `public-stage4b`, `pricing-stage4` y `brand-identity` en escritorio y móvil: 12/12.
 - **Lección:** la regla de `AGENTS.md` (E2E completa antes de fusionar) existía por esto. Saltársela en la #58 llevó el fallo a producción.
 ## 2026-10-23 — «Hacer magia» ante fallos de base de datos: rechazo claro, sin nada a medias (recupera la #12)
 

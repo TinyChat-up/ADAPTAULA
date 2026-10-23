@@ -25,9 +25,11 @@
 /* Logotipo horizontal: símbolo y logotipo oficiales en las proporciones de public/brand/adaptaula-logo-horizontal.svg.
    El logotipo mide 1em de alto; el símbolo, 1,018em, centrado sobre la altura de ascendente a línea base. */
 @layer components {
-  .brand-lockup { display: inline-flex; flex: none; align-items: flex-start; gap: 0.296em; padding-top: 0.1175em; border-radius: var(--radius-control); font-size: 1.5rem; line-height: 0; }
-  .brand-lockup--sm { font-size: 1.25rem; }
-  .brand-lockup--lg { font-size: 1.875rem; }
+  /* The lockup is 6.14em wide. With text zoomed to 200 % on a 320 px screen it must still fit beside the header's margins and menu
+     button (about 6rem in all), so it never grows past the space left: it shrinks in its own proportions (WCAG 1.4.10, reflow). */
+  .brand-lockup { display: inline-flex; flex: none; align-items: flex-start; gap: 0.296em; padding-top: 0.1175em; border-radius: var(--radius-control); font-size: min(1.5rem, calc((100vw - 6rem) / 6.2)); line-height: 0; }
+  .brand-lockup--sm { font-size: min(1.25rem, calc((100vw - 6rem) / 6.2)); }
+  .brand-lockup--lg { font-size: min(1.875rem, calc((100vw - 6rem) / 6.2)); }
   .brand-lockup img { display: block; width: auto; max-width: none; }
   .brand-symbol { height: 1.0183em; margin-top: -0.1175em; }
   .brand-wordmark { height: 1em; }
@@ -36,7 +38,9 @@
   .brand-lockup--symbol .brand-wordmark { display: none; }
   .brand-lockup--symbol .brand-symbol { height: 2rem; margin-top: 0; }
   /* Titulares (Outfit): seminegrita por defecto, como el logotipo; un peso explícito en el marcado manda. */
-  .font-display { font-weight: 600; letter-spacing: -0.02em; }
+  /* A word that does not fit its column (text zoomed to 200 % on a narrow screen) breaks, hyphenated where the browser can, instead of
+     pushing the page sideways (WCAG 1.4.10). At normal sizes nothing changes. */
+  .font-display { font-weight: 600; letter-spacing: -0.02em; overflow-wrap: break-word; hyphens: auto; }
   /* «Hacer magia»: la acción que hace la IA, en el azul de la marca (del círculo al azul intenso). Blanco ≥ 5,4:1 en todo el
      degradado; el hover lo oscurece. Sin degradado en alto contraste o colores forzados. */
   .btn-magic { background: linear-gradient(100deg, var(--color-primary) 0%, var(--color-brand-blue-ink) 100%); }
