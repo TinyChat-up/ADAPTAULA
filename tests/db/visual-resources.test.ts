@@ -469,6 +469,6 @@ describe("8.2A.1 · Sistema CLARO is the product design, on screen and in the PD
     const out = await renderPrintHtml(print.model, print.loaded.pinned);
     expect(out.html).toContain('data-design="claro"');
     expect(print.model.rendererVersion).toBe(MATERIAL_RENDERER_VERSION);
-    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v7");
+    expect(MATERIAL_RENDERER_VERSION).toBe("material_renderer@v8");
   });
 });

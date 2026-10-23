@@ -34,7 +34,7 @@ function Activity({ node, mode, design, selection }: Props<"activity">) {
   const target = selection?.targets[node.key];
   const select = () => { if (target) selection?.onSelect(target.id); };
   return (
-    <>
+    <div className="ms-activity-unit" data-keep={node.keepUnitTogether || undefined}>
       {node.leads.length > 0 ? (
         // What the student needs before the task (its example): kept with the task by CSS, outside its numbered column.
         <div className="ms-activity-leads">
@@ -90,7 +90,8 @@ function Activity({ node, mode, design, selection }: Props<"activity">) {
           <Response response={node.response} />
         </div>
       </section>
-    </>
+      {node.checks?.length ? <div className="ms-activity-checks">{node.checks.map((check) => <NodeView key={check.key} node={check} mode={mode} {...(design ? { design } : {})} />)}</div> : null}
+    </div>
   );
 }
 

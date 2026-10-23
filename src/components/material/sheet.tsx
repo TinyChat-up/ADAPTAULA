@@ -39,9 +39,10 @@ export function MaterialSheet({ model, visiblePage, selection }: { model: Render
             </header>
           ) : null}
           <div className="ms-flow">
-            {page.nodes.map((node) => (
+            {(page.keepLastPair ? page.nodes.slice(0, -2) : page.nodes).map((node) => (
               <NodeView key={node.key} node={node} mode={model.mode} design={model.design} selection={selection} />
             ))}
+            {page.keepLastPair ? <div className="ms-closing-pair">{page.nodes.slice(-2).map(node => <NodeView key={node.key} node={node} mode={model.mode} design={model.design} selection={selection} />)}</div> : null}
           </div>
           <footer className="ms-footer">
             {page.number} / {model.pages.length}

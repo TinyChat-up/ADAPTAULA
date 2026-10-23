@@ -23,7 +23,7 @@ import { renderTokens } from "@/lib/render/tokens";
  * something else. Bounds only limit what it ADDS; a long area is split by the renderer across pages, never cut.
  */
 
-export const ANSWER_SPACE_VERSION = "answer_space@v1";
+export const ANSWER_SPACE_VERSION = "answer_space@v2";
 
 export type SpaceNeed = "calculation" | "explanation" | "short" | "composition" | "drawing" | "keep";
 
@@ -102,7 +102,7 @@ const EXPLAIN = /\b(explica|justifica|razona)\b|¿\s*por qu[eé]/i;
 /** «8 cm», «750 ml», «12 €», «3 kg», «2 h»: quantities the answer is expressed in. */
 const UNIT = /\b\d+(?:[.,]\d+)?\s?(?:mm|cm|dm|m|km|cm²|m²|ml|cl|dl|l|g|kg|mg|h|min|s|€|euros?|grados|°)(?![\p{L}])/iu;
 /** A datum of the statement: «750», «2,35», «3/4» (a fraction is one datum, not two). */
-const NUMBER = /\b\d+(?:[.,]\d+)?(?:\/\d+)?\b/g;
+const NUMBER = /\b\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?\b/g;
 
 /** Squares per written operation: two operands, the line and the result, with room for the carries. */
 const ROWS_PER_OPERATION = 4;
@@ -237,7 +237,9 @@ function proposeSpace(activity: AnalysisActivity, current: ResponseSpec, ctx: Sp
  */
 export function operationsOf(activity: AnalysisActivity): number {
   const text = `${activity.instruction} ${activity.context ?? ""}`;
-  const expressions = (text.match(/\d+(?:[.,]\d+)?(?:\s*[+\-−×x·*:÷/]\s*\d+(?:[.,]\d+)?)+/g) ?? []).length;
+  // A slash inside a fraction is not a separate written operation. Whitespace from PDF extraction is immaterial.
+  const operand = String.raw`\d+(?:[.,]\d+)?(?:\s*/\s*\d+)?`;
+  const expressions = (text.match(new RegExp(`${operand}(?:\\s*[+\\-−×x·*:÷]\\s*${operand})+`, "g")) ?? []).length;
   const data = activity.type === "problem_solving" ? Math.min(4, (text.match(NUMBER) ?? []).length - 1) : 0;
   return Math.max(requestedResults(activity), expressions, data) + (activity.difficulty === "high" ? 1 : 0);
 }
