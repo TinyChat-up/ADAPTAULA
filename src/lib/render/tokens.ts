@@ -95,8 +95,9 @@ export function tokenStyle(t: RenderTokens): Record<string, string> {
     "--ms-ink": t.contrast === "high" ? "#000000" : "#1a1a1a",
     "--ms-rule": t.contrast === "high" ? "#000000" : "#4a4a4a",
     "--ms-soft": t.contrast === "high" ? "#000000" : "#5f6670",
-    // One accent, dark enough to read as black when printed in greyscale: it helps find things, it never carries meaning alone.
-    "--ms-accent": t.contrast === "high" ? "#000000" : "#23426b",
+    // One accent, the brand navy (docs/BRAND.md): it reads as black when printed in greyscale, helps find things and never carries
+    // meaning alone.
+    "--ms-accent": t.contrast === "high" ? "#000000" : "#05234b",
     // Surfaces of helps and instructions: a tint that photocopies as a very light grey (never needed to understand anything).
     "--ms-tint": t.contrast === "high" ? "#ffffff" : "#eef1f5",
     "--ms-rule-soft": t.contrast === "high" ? "#000000" : "#c3c8d0",

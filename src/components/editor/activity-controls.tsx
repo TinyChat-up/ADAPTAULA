@@ -20,7 +20,7 @@ export function ActivityControls({ activities, selected, onSelect, changes, onCh
         hint="Conserva los datos y lo que debe resolver el alumnado. No añadas respuestas."
         onChange={(e) => onChange(editActivity(changes, selected, { prompt: e.target.value }))} />
       {activity.response.kind === "lines" ? <SelectField label="Líneas para responder" value={edit?.lines ?? activity.response.lines}
-        hint="Si la actividad exige una extensión mínima, CLARO conservará ese espacio."
+        hint="Si la actividad exige una extensión mínima, la ficha conservará ese espacio."
         onChange={(e) => onChange(editActivity(changes, selected, { lines: Number(e.target.value) }))}>
         {Array.from({ length: 40 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
       </SelectField> : activity.response.kind === "box" ? <SelectField label="Espacio para responder" value={edit?.box ?? activity.response.size}

@@ -89,13 +89,14 @@ Fuente: `src/styles/tokens.css`, importada por `globals.css`; composición de la
 | background | #F7F8FA | espacio de trabajo |
 | surface | #FFFFFF | documentos, campos y paneles |
 | surface-muted / surface-inset | #F0F3F6 / #E8EDF2 | navegación, capas secundarias |
-| foreground / muted-foreground | #1E2E43 / #536379 | texto y metadatos |
-| primary / primary-strong | #285782 / #1E4164 | foco, enlaces, acción principal |
-| primary-soft | #E6EEF6 | selección |
+| foreground / muted-foreground | #05234B (azul marino de marca) / #536379 | texto y metadatos |
+| primary / primary-strong | #063F79 / #05234B | enlaces, bordes, acción principal (azul marino de marca, Fase C) |
+| accent / focus | #0060EB / #0067FD | acento e información / anillo de foco (azul de marca) |
+| primary-soft | #E7EDF5 | selección |
 | border / control-border | #DCE2E8 / #7D8B9C | separadores / controles identificables |
 | success / warning / danger | #24623E / #925015 / #B12828 | estados acompañados de texto |
 
-Inter existente: texto 16 px, metadatos 12–14, secciones 18, títulos fluidos 26–32; Georgia del sistema permanece en titulares públicos hasta su entrega específica. Sin nuevas fuentes ni dependencias. Base de espaciado Tailwind de 4 px; control 12, panel 24, sección 32. Radios control 12, tarjeta 20, panel 24. Sombras neutras leves para paneles, mayores solo en controles flotantes y diálogos. Capas explícitas para navegación, overlays y salto al contenido.
+Inter existente: texto 16 px, metadatos 12–14, secciones 18, títulos fluidos 26–32; los titulares usan Outfit (Fase C, [BRAND.md §4](BRAND.md)), la tipografía más cercana al logotipo. Sin nuevas fuentes ni dependencias. Base de espaciado Tailwind de 4 px; control 12, panel 24, sección 32. Radios control 12, tarjeta 20, panel 24. Sombras neutras leves para paneles, mayores solo en controles flotantes y diálogos. Capas explícitas para navegación, overlays y salto al contenido.
 
 **Materiales de interfaz:** `surface-glass` nace sólido; solo con soporte aplica fondo 90 % opaco y blur de 12 px en cabeceras, barra móvil y `ActionBar` del editor existente. No hay cristales en filas, fichas, PDF ni tarjetas ordinarias. `ActionBar` usa un grupo etiquetado con Tab nativo, no un role toolbar sin su comportamiento de flechas.
 
@@ -151,7 +152,7 @@ loading (skeletons con la forma real) · empty (explica y ofrece la siguiente ac
 
 ## Accesibilidad de la aplicación (WCAG 2.2 AA)
 
-Navegación completa por teclado y orden lógico · foco visible (anillo de 2 px `primary` + offset) · enlace "Saltar al contenido" · labels en todos los controles · errores con `aria-describedby` + `aria-invalid` y un resumen al enviar · diálogos con foco atrapado y Escape · objetivos táctiles ≥ 24×24 px (44 px en móvil) · `prefers-reduced-motion` · responsive y zoom al 200 % sin scroll horizontal · `lang="es"` · tests automáticos con axe en E2E.
+Navegación completa por teclado y orden lógico · foco visible (anillo de 2 px `focus`, azul de marca, + offset) · enlace "Saltar al contenido" · labels en todos los controles · errores con `aria-describedby` + `aria-invalid` y un resumen al enviar · diálogos con foco atrapado y Escape · objetivos táctiles ≥ 24×24 px (44 px en móvil) · `prefers-reduced-motion` · responsive y zoom al 200 % sin scroll horizontal · `lang="es"` · tests automáticos con axe en E2E.
 
 El material generado también es accesible: encabezados semánticos, orden de lectura correcto, texto alternativo, nada solo por color y tablas con cabeceras.
 

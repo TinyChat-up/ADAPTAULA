@@ -20,7 +20,7 @@ const PX_PER_MM = 96 / 25.4;
 
 interface Layout {
   pageWidthMm: number;
-  masthead: { brand: string; meta: string } | null;
+  masthead: { brand: string; meta: string; symbolMm: { height: number; width: number }; symbols: number } | null;
   font: string;
   /** Every zone of squares (`continued`: it carries on the area above it, so one area may be several zones). */
   grids: Array<{ widthMm: number; heightMm: number; cellMm: number; columns: number; rows: number; whole: boolean; continued: boolean }>;
@@ -70,11 +70,14 @@ async function layoutOf(model: RenderModel, pins: PinnedAsset[]): Promise<Layout
         const activities = s.querySelectorAll(".ms-activity").length;
         return { fillMm: mm(last - top), activities, onlyHeader: activities === 0 };
       });
-      const brand = document.querySelector(".ms-brand")?.textContent ?? null;
+      // The brand is the official symbol (inline SVG, named), never a word: its name and its physical size on the page.
+      const symbol = document.querySelector(".ms-masthead svg.ms-symbol");
+      const brand = symbol?.getAttribute("aria-label") ?? null;
+      const symbolBox = symbol?.getBoundingClientRect();
       const meta = document.querySelector(".ms-meta")?.textContent ?? "";
       return {
         pageWidthMm: mm(rootBox.width),
-        masthead: brand ? { brand, meta } : null,
+        masthead: brand && symbolBox ? { brand, meta, symbolMm: { height: mm(symbolBox.height), width: mm(symbolBox.width) }, symbols: document.querySelectorAll("svg.ms-symbol").length } : null,
         font: getComputedStyle(root).fontFamily,
         grids,
         lines,
@@ -187,6 +190,10 @@ describe("galería editorial: ocho fichas, una identidad, espacios para resolver
       // One identity: the same masthead, family and accent on every sheet.
       expect(layout.masthead?.brand).toBe("Adaptaula");
       expect(layout.masthead?.meta).toContain(sheet.input.subjectName);
+      // The symbol is small and stable: 6 mm high in its own proportions, once per sheet (the header), never the horizontal logo.
+      expect(layout.masthead!.symbolMm.height).toBeCloseTo(6, 0);
+      expect(layout.masthead!.symbolMm.width / layout.masthead!.symbolMm.height).toBeCloseTo(829.7 / 713, 1);
+      expect(layout.masthead!.symbols).toBe(1);
       expect(layout.font).toContain("Adaptaula Inter");
       // Usable answer spaces: whole squares of a handwriting size, lines a hand can write on.
       for (const g of layout.grids) {

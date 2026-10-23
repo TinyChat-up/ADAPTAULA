@@ -320,6 +320,20 @@ Une las piezas existentes en un solo camino, sin pipeline, renderer, motor PDF n
   - tablas de clasificación que el original no imprime;
   - alternativa oral por perfil.
 
+
+## Identidad visual corporativa (Fase C, 2026-10-23, ADR-041)
+- **Hecho (probado localmente, sin IA):**
+  - piezas oficiales en SVG y PNG, fieles a los originales y medidas;
+  - variantes en grises y en una tinta, favicon, icono de Apple y manifiesto;
+  - tokens corporativos y variantes accesibles;
+  - el logotipo en todos los puntos de identidad;
+  - el símbolo en la ficha y en el PDF (`material_renderer@v7`);
+  - la forma: los titulares en Outfit, los pasos en los colores de «aula» y «Hacer magia» en el azul de marca.
+- **Pruebas:** E2E de identidad, galería antes/después y fichas en vista previa, PDF y grises ([QA](qa/fase-c-marca/README.md)).
+- **Siguiente:**
+  - la barra de la vista previa, con la descarga como acción principal;
+  - una variante para fondo oscuro;
+  - el símbolo en el pie de cada página.
 ## Fase 6 — Stripe, planes y cuotas
 - Checkout, Portal y webhook idempotente; `subscriptions`, `billing_customers`, `stripe_events`.
 - Plan efectivo, entitlements en todas las acciones, `/app/uso` («Plan y cuenta», con la facturación del Customer Portal) y `/precios` conectada.

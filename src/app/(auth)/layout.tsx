@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Logo } from "@/components/ui/logo";
+import { stepTone } from "@/lib/brand/tones";
+import { cn } from "@/lib/utils/cn";
 
 const STEPS = ["Sube un PDF o una imagen", "Elige apoyos funcionales", "Revisa la ficha y descarga el PDF"] as const;
 
@@ -7,12 +9,12 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <aside className="hidden border-r border-border bg-surface-muted px-10 py-12 text-foreground lg:flex lg:flex-col lg:justify-between xl:px-16">
-        <Logo />
+        <Logo size="lg" />
         <div className="max-w-lg space-y-8">
           <p className="eyebrow text-primary">Del documento al aula</p>
-          <p className="font-editorial text-5xl leading-[1.12] tracking-tight">Tus materiales de siempre. Más formas de aprender.</p>
+          <p className="font-display text-5xl leading-[1.12] tracking-tight">Tus materiales de siempre. Más formas de aprender.</p>
           <ol className="divide-y divide-border border-y border-border text-sm">
-            {STEPS.map((step, i) => <li key={step} className="flex gap-5 py-4"><span aria-hidden className="font-medium tabular-nums text-primary">0{i + 1}</span>{step}</li>)}
+            {STEPS.map((step, i) => <li key={step} className="flex gap-5 py-4"><span aria-hidden className={cn("font-display font-semibold tabular-nums", stepTone(i).text)}>0{i + 1}</span>{step}</li>)}
           </ol>
         </div>
         <p className="max-w-md text-sm text-muted-foreground">Adaptaula prepara propuestas. Tú decides qué usar y conservas el documento original.</p>
