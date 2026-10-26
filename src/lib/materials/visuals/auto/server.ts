@@ -36,6 +36,10 @@ export function autoRunDeps(): AutoRunDeps {
       async complete(id, status, result, visionCalls) {
         await admin.from("material_visual_autolocations").update({ status, result, vision_calls: visionCalls, completed_at: new Date().toISOString() }).eq("id", id).eq("status", "running");
       },
+      async retry(id) {
+        const { data, error } = await admin.from("material_visual_autolocations").update({ status: "running", started_at: new Date().toISOString(), completed_at: null }).eq("id", id).eq("status", "completed").select("id");
+        return !error && (data?.length ?? 0) > 0;
+      },
     },
     specs: {
       async exists(locatorId, extractor) {

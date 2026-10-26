@@ -130,6 +130,7 @@ export function autoHarness(db: PGlite, visuals: VisualHarness, vision?: VisionL
       complete: async (id, status, result, visionCalls) => {
         await asService(() => db.query("update public.material_visual_autolocations set status = $2, result = $3, vision_calls = $4, completed_at = now() where id = $1 and status = 'running'", [id, status, JSON.stringify(result), visionCalls]));
       },
+      retry: async (id) => (await asService(() => db.query("update public.material_visual_autolocations set status = 'running', started_at = now(), completed_at = null where id = $1 and status = 'completed' returning id", [id]))).rows.length > 0,
     },
     specs: {
       exists: async (locatorId, extractor) => (await asService(() => db.query("select 1 from public.material_visual_specs where locator_id = $1 and extractor_version = $2", [locatorId, extractor]))).rows.length > 0,

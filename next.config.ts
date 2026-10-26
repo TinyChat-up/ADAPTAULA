@@ -35,7 +35,12 @@ const nextConfig: NextConfig = {
     // `scripts/smoke-raster.mjs` checks after every build that both traces really contain these files.
     "/api/materials/*/pages/*": RASTER_FILES,
     "/api/materials/*/visuals/*": RASTER_FILES,
-    "/api/adaptations/*/pdf": PDF_FILES,
+    // Generating a sheet locates and crops the original's figures in the same request (and in the cron recovery): without these
+    // files every page read failed there with `extraction_failed`.
+    "/api/adaptations/*/run": RASTER_FILES,
+    "/api/adaptations/*/visuals/*": RASTER_FILES,
+    "/api/cron/adaptations": RASTER_FILES,
+    "/api/adaptations/*/pdf": [...PDF_FILES, ...RASTER_FILES],
   },
 };
 

@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Las figuras del original no se leían al generar la ficha en producción
+
+- Síntoma: «Hacer magia» paraba con «Una actividad depende de una imagen del material original» (ficha de la célula, esquema A–D). `material_visual_autolocations` guardaba `extraction_failed` en cada intento, con cero llamadas de visión.
+- Causa: el lector de PDF (pdf.js + @napi-rs/canvas) necesita en ejecución su worker, `standard_fonts/` y su `package.json`. `next.config.ts` solo los incluía en las rutas de materiales, no en `api/adaptations/[id]/run`, `visuals/auto`, `cron/adaptations` ni `pdf`. Reproducido: `smoke-raster` con las rutas nuevas falla en la build anterior y pasa con el arreglo.
+- Arreglo: trazas añadidas a esas rutas y `smoke-raster` las comprueba. Una ejecución con una página ilegible se guarda como `failed`, y un resultado `completed` con `extraction_failed` (lo que quedó guardado en producción) se vuelve a leer una vez (`runs.retry`) en lugar de reutilizarse.
+- Pruebas: BD de visuales automáticos y escaneos 23/23 (con un caso nuevo); unidad y BD 1.974 correctas y 13 omitidas; build, `smoke-raster` y `smoke-pdf` correctos; typecheck; lint sin errores (un aviso previo). Pendiente: comprobarlo en producción con la ficha real. Sin migraciones.
+
 ## 2026-10-26 — Max se contrata desde su tarjeta (Stripe en modo prueba)
 
 - Base `57695f1`, rama `claude/variables-expuestas-repo-f2o2et`. Decisión del fundador: quitar la prueba privada, contratar Max desde el plan, para cualquier docente (aún no hay usuarios externos), con Stripe en modo prueba e imágenes como en el piloto.
