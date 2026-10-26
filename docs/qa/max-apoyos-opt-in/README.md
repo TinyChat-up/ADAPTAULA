@@ -44,7 +44,7 @@ Los PDFs de esta entrega se generan desde el código nuevo; las escenas de las r
 | Typecheck / lint / build | Correctos; lint con un aviso previo `_id` sin usar en `analysis-run-auth.test.ts` |
 | Raster / descarga de PDF desde traza aislada | Correctos localmente; Vercel pendiente |
 | Secretos | Sin coincidencias en los artefactos inspeccionados; solo valores ficticios locales cargados |
-| E2E completa | En curso; registrar resultado antes del cierre |
+| E2E completa | 134 correctas, 2 omitidas (Checkout Max requiere configuración específica), escritorio/móvil, 20,3 min; sin reintentos |
 | IA generativa pagada / producción | NO EJECUTADO |
 
 Se ejecutan los binarios instalados (`node node_modules/vitest/vitest.mjs run`, `node node_modules/next/dist/bin/next build`, `node node_modules/eslint/bin/eslint.js`, `node node_modules/typescript/bin/tsc --noEmit`) por el fallo del lanzador pnpm del entorno. Para E2E se arrancan manualmente `tests/e2e/fake-supabase.mjs` y `next dev` con `.next-e2e`, proveedores mock y las credenciales públicas ficticias de `playwright.config.ts`; se ejecuta Playwright con `E2E_BASE_URL=http://localhost:3100 E2E_CHROMIUM_PATH=/usr/bin/chromium`. No se debilitan reglas para superar las verificaciones.
