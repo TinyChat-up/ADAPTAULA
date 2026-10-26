@@ -53,7 +53,9 @@ export class StripeTest {
   async checkPrice(id: string, amount: number) {
     const parsed = z.object({ id: StripeId('price'), livemode: z.literal(false), active: z.literal(true),
       type: z.literal('recurring'), currency: z.literal('eur'), unit_amount: z.number().int(),
-      tax_behavior: z.literal('inclusive'), recurring: z.object({ interval: z.literal('month'), interval_count: z.literal(1) }),
+      // Without automatic tax (never enabled here) an unspecified price charges exactly its amount, as «IVA incluido» promises;
+      // only an exclusive price, which would add tax on top, is refused.
+      tax_behavior: z.enum(['inclusive', 'unspecified']), recurring: z.object({ interval: z.literal('month'), interval_count: z.literal(1) }),
     }).safeParse(await this.request(`/prices/${id}`));
     // Names the price fields that do not match (never their values), so the person who set up Stripe knows what to fix.
     if (!parsed.success) throw new Error(`stripe_price_invalid:${[...new Set(parsed.error.issues.map((i) => i.path.join('.')))].join(',')}`);
