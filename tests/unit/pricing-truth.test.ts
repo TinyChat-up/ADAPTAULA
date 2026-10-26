@@ -58,14 +58,18 @@ describe("/precios tells the truth", () => {
     expect(html).not.toMatch(/50 recursos visuales|Hasta 30 clases|Hasta 10 clases|Varios perfiles a la vez|Historial completo|Historial de 30 días/);
   });
 
-  it("only the private pilot account sees a link to its test checkout on Max; Pro stays unavailable and nothing else is sold", () => {
-    const html = renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans(), pilotMax: true }));
-    expect(html.match(/href="\/app\/uso#piloto-privado"/g)).toHaveLength(1);
-    expect(html).toContain("Probar Max");
-    expect(html).toContain("Stripe en modo prueba");
-    expect(html).not.toContain("En preparación");
-    expect(html).toContain("Contratación no disponible");
-    expect(renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans() }))).not.toContain("piloto-privado");
+  it("Max offers its Stripe test checkout when the server allows it; Pro stays unavailable and the note says nothing is charged", () => {
+    const render = (maxOffer: "unavailable" | "sign_in" | "buy" | "current" | "not_allowed") =>
+      renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans(), maxOffer }));
+    const buy = render("buy");
+    expect(buy).toContain("Contratar Max");
+    expect(buy).toContain("modo prueba: no se cobra nada");
+    expect(buy).not.toContain("En preparación");
+    expect(buy).toContain("Contratación no disponible");
+    expect(render("sign_in")).toContain('href="/login?next=/precios"');
+    expect(render("current")).toContain("Tu plan actual");
+    expect(render("not_allowed")).not.toContain("Contratar Max");
+    expect(render("unavailable")).not.toMatch(/Contratar Max|modo prueba/);
   });
 
   it("'Cómo funciona' does not promise a quick adaptation without a profile nor a free-text request", () => {

@@ -46,9 +46,9 @@ it('el registro nombra qué falla del precio o de Stripe, nunca sus valores',asy
 });
 it('Checkout fija metadata, precio e idempotencia; no acepta return URL del navegador',async()=>{
   const send=vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({id:'cs_test_One',livemode:false,mode:'subscription',subscription:null,status:'open',url:'https://checkout.stripe.com/c/pay/test',metadata:{}})));
-  await new StripeTest('sk_test_fixture',send).checkout({requestId:'request',workspaceId:'workspace',priceId:'price_Test',site:'https://adaptaula.example',expires:1700003600});
-  const call=send.mock.calls[0]![1]!;expect(call.headers).toMatchObject({'Idempotency-Key':'max-pilot:request'});
-  const fields=new URLSearchParams(String(call.body));expect(fields.get('success_url')).toBe('https://adaptaula.example/app/uso?piloto=pendiente');
+  await new StripeTest('sk_test_fixture',send).checkout({workspaceId:'workspace',userId:'user',priceId:'price_Test',site:'https://adaptaula.example',expires:1700003600,key:'max-checkout:workspace:1700000000'});
+  const call=send.mock.calls[0]![1]!;expect(call.headers).toMatchObject({'Idempotency-Key':'max-checkout:workspace:1700000000'});
+  const fields=new URLSearchParams(String(call.body));expect(fields.get('success_url')).toBe('https://adaptaula.example/app/uso?max=pendiente');expect(fields.get('client_reference_id')).toBe('workspace');
   expect(fields.get('subscription_data[metadata][workspace_id]')).toBe('workspace');
 });
 it('cuerpo del webhook acotado antes de analizar JSON',async()=>{

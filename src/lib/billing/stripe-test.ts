@@ -13,6 +13,7 @@ export const SubscriptionSchema = z.object({
   id: StripeId('sub'), livemode: z.literal(false),
   status: z.enum(['active','trialing','past_due','canceled','unpaid','paused','incomplete','incomplete_expired']),
   current_period_start: z.number().int().positive(), current_period_end: z.number().int().positive(),
+  cancel_at_period_end: z.boolean().default(false),
   metadata: z.record(z.string(), z.string()),
   items: z.object({ data: z.array(z.object({ price: z.object({ id: StripeId('price') }) })).length(1) }),
 });
@@ -59,17 +60,16 @@ export class StripeTest {
     const price = parsed.data;
     if (price.id !== id || price.unit_amount !== amount) throw new Error('stripe_price_mismatch');
   }
-  async checkout(input: { requestId: string; workspaceId: string; priceId: string; site: string; expires: number }) {
+  async checkout(input: { workspaceId: string; userId: string; priceId: string; site: string; expires: number; key: string }) {
     const site = new URL(input.site);
     if ((site.protocol !== 'https:' && site.hostname !== 'localhost' && site.hostname !== '127.0.0.1') || site.username || site.password) throw new Error('stripe_return_url_invalid');
     const fields = new URLSearchParams({ mode: 'subscription', 'line_items[0][price]': input.priceId,
-      'line_items[0][quantity]': '1', success_url: `${site.origin}/app/uso?piloto=pendiente`,
-      cancel_url: `${site.origin}/app/uso?piloto=cancelado`, expires_at: String(input.expires),
-      'metadata[pilot_request]': input.requestId, 'metadata[workspace_id]': input.workspaceId,
-      'subscription_data[metadata][pilot_request]': input.requestId,
+      'line_items[0][quantity]': '1', success_url: `${site.origin}/app/uso?max=pendiente`,
+      cancel_url: `${site.origin}/precios`, expires_at: String(input.expires), client_reference_id: input.workspaceId,
+      'metadata[workspace_id]': input.workspaceId, 'metadata[user_id]': input.userId,
       'subscription_data[metadata][workspace_id]': input.workspaceId,
     });
-    return CheckoutSchema.parse(await this.request('/checkout/sessions', fields, `max-pilot:${input.requestId}`));
+    return CheckoutSchema.parse(await this.request('/checkout/sessions', fields, input.key));
   }
   async session(id: string) { return CheckoutSchema.parse(await this.request(`/checkout/sessions/${id}`)); }
   async subscription(id: string) { return SubscriptionSchema.parse(await this.request(`/subscriptions/${id}`)); }

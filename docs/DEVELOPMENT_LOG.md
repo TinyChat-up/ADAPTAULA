@@ -1,5 +1,14 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Max se contrata desde su tarjeta (Stripe en modo prueba)
+
+- Base `57695f1`, rama `claude/variables-expuestas-repo-f2o2et`. Decisión del fundador: quitar la prueba privada, contratar Max desde el plan, para cualquier docente (aún no hay usuarios externos), con Stripe en modo prueba e imágenes como en el piloto.
+- Migración 031 nueva: `sync_max_subscription` (solo `service_role`, idempotente por evento, no sustituye otra suscripción vigente) y `workspace_plan` concede cinco imágenes a cualquier Max vigente. 030 se conserva; el catálogo no cambia.
+- Checkout/webhook generales (`src/lib/billing/max.ts`, rutas `api/stripe/*`): `FLAG_MAX_PLAN_ENABLED` enciende la venta; solo claves de prueba; precio validado contra Max; el registro guarda el motivo de cada fallo con códigos propios. Eliminados `billing/pilot.ts`, el bloque «Prueba privada de Max» y sus pruebas; `STRIPE_PILOT_ENABLED` deja de usarse.
+- UI: «Contratar Max» en la tarjeta de `/precios` y la landing (o «Entrar para contratar Max», «Tu plan actual»), y en «Plan y cuenta» con aviso de confirmación al volver de Stripe.
+- Pruebas: BD `max-checkout` 3/3 y `billing-pilot` 6/6; unidad y BD 1.973 correctas y 13 omitidas; rutas Stripe simuladas 7/7; E2E focalizadas 10/10 y `max-checkout` 2/2 con servidor local con la venta encendida (Stripe simulado). Typecheck y build correctos, lint sin errores (un aviso previo). Suite E2E completa no ejecutada. Sin Stripe real, IA ni SQL remoto.
+- Pendiente en producción: aplicar 031, `FLAG_MAX_PLAN_ENABLED=true`, revisar el precio de Stripe (el 503 del piloto apunta a él) y redeploy.
+
 ## 2026-10-26 — Cabecera pública con sesión y acceso al piloto Max desde Precios
 
 - Base `b6b612b` (#67 integrada), rama `claude/variables-expuestas-repo-f2o2et`. Motivo: con sesión iniciada, «Ver planes» llevaba a `/precios`, cuya cabecera mostraba siempre «Entrar»; la docente creía haber perdido la sesión y no encontraba el piloto (solo estaba en `/app/uso`).

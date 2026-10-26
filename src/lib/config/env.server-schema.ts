@@ -19,7 +19,6 @@ export const ServerEnvSchema = z.object({
 
   STRIPE_SECRET_KEY: optional(z.string().min(1)),
   STRIPE_WEBHOOK_SECRET: optional(z.string().min(1)),
-  STRIPE_PILOT_ENABLED: flag(false),
   STRIPE_PILOT_PRICE_ID: optional(z.string().regex(/^price_[A-Za-z0-9]+$/)),
 
   ANTHROPIC_API_KEY: optional(z.string().min(1)),

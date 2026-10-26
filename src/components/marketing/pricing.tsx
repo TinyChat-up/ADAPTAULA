@@ -1,4 +1,6 @@
 import { Check } from "lucide-react";
+import { MaxCheckoutButton } from "@/components/account/max-checkout-button";
+import type { MaxOffer } from "@/lib/billing/max";
 import { LinkButton } from "@/components/ui/button";
 import { Alert, Badge } from "@/components/ui/feedback";
 import { formatEuros } from "@/lib/format/date";
@@ -21,7 +23,7 @@ export function planBullets(plan: PublicPlan): string[] {
   return out;
 }
 
-function PlanCard({ plan, highlighted, pilot }: { plan: PublicPlan; highlighted: boolean; pilot: boolean }) {
+function PlanCard({ plan, highlighted, offer }: { plan: PublicPlan; highlighted: boolean; offer: MaxOffer }) {
   const free = plan.monthly_price_cents === 0;
   return (
     <div className={cn("flex min-w-0 flex-col rounded-card border bg-surface p-5 [overflow-wrap:anywhere] sm:p-7", highlighted ? "border-primary/40" : "border-border")}>
@@ -45,25 +47,37 @@ function PlanCard({ plan, highlighted, pilot }: { plan: PublicPlan; highlighted:
         ))}
       </ul>
       <div className="mt-6 space-y-2">
-        {free ? <LinkButton href="/registro" variant="primary" className="w-full">Empezar gratis</LinkButton> : pilot ? (
-          <LinkButton href="/app/uso#piloto-privado" variant="primary" className="w-full">Probar Max</LinkButton>
-        ) : (
-          <div className="rounded-control border border-border bg-muted px-4 py-3 text-center text-sm font-medium">
-            {plan.slug === "max" ? "En preparación" : "Contratación no disponible"}
-          </div>
-        )}
-        {!free && (
-          <p className="text-center text-xs text-muted-foreground">
-            {pilot ? "Prueba privada de tu cuenta, con Stripe en modo prueba." : "Todavía no se puede contratar este plan."}
-          </p>
-        )}
+        {free ? <LinkButton href="/registro" variant="primary" className="w-full">Empezar gratis</LinkButton> : <PaidAction offer={offer} max={plan.slug === "max"} />}
       </div>
     </div>
   );
 }
 
-/** `pilotMax` is resolved on the server (pilotOfferAvailable); it only links to the private checkout, never sells Max publicly. */
-export function PricingGrid({ plans, pilotMax = false }: { plans: PublicPlan[]; pilotMax?: boolean }) {
+const NOTE: Record<MaxOffer, string> = {
+  unavailable: "Todavía no se puede contratar este plan.",
+  sign_in: "Pago con Stripe en modo prueba: no se cobra nada.",
+  buy: "Pago con Stripe en modo prueba: no se cobra nada.",
+  current: "Es el plan de tu espacio.",
+  not_allowed: "Lo contrata quien administra tu espacio de trabajo.",
+};
+
+/** Pro is not sold yet; Max is when `offer` (resolved on the server by maxOffer) allows it. */
+function PaidAction({ offer, max }: { offer: MaxOffer; max: boolean }) {
+  return (
+    <>
+      {offer === "buy" ? <MaxCheckoutButton className="w-full" /> : offer === "sign_in" ? (
+        <LinkButton href="/login?next=/precios" variant="primary" className="w-full">Entrar para contratar Max</LinkButton>
+      ) : (
+        <div className="rounded-control border border-border bg-muted px-4 py-3 text-center text-sm font-medium">
+          {offer === "current" ? "Tu plan actual" : offer === "unavailable" ? (max ? "En preparación" : "Contratación no disponible") : "Plan Max"}
+        </div>
+      )}
+      <p className="text-center text-xs text-muted-foreground">{NOTE[offer]}</p>
+    </>
+  );
+}
+
+export function PricingGrid({ plans, maxOffer = "unavailable" }: { plans: PublicPlan[]; maxOffer?: MaxOffer }) {
   if (plans.length === 0) {
     return <Alert tone="warning" title="No hemos podido cargar los planes">Vuelve a intentarlo en unos minutos.</Alert>;
   }
@@ -71,7 +85,7 @@ export function PricingGrid({ plans, pilotMax = false }: { plans: PublicPlan[]; 
     <div className="space-y-4">
       <div className={cn("grid gap-6", plans.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2")}>
         {plans.map((p) => (
-          <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} pilot={pilotMax && p.slug === "max"} />
+          <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} offer={p.slug === "max" ? maxOffer : "unavailable"} />
         ))}
       </div>
       {/* The numbers are read from the plans table; they are launch values, not a final commercial commitment (docs/PRODUCT.md). */}
@@ -81,10 +95,10 @@ export function PricingGrid({ plans, pilotMax = false }: { plans: PublicPlan[]; 
   );
 }
 
-export function PricingSection({ plans, pilotMax = false }: { plans: PublicPlan[]; pilotMax?: boolean }) {
+export function PricingSection({ plans, maxOffer }: { plans: PublicPlan[]; maxOffer?: MaxOffer }) {
   return (
     <Section id="precios" title="Precios" intro="Empieza con Free. Consulta la capacidad prevista de los próximos planes." tone="surface">
-      <PricingGrid plans={plans} pilotMax={pilotMax} />
+      <PricingGrid plans={plans} maxOffer={maxOffer} />
     </Section>
   );
 }
