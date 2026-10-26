@@ -46,14 +46,17 @@ export class StripeTest {
         ...(fields ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
         ...(key ? { 'Idempotency-Key': key } : {}) }, body: fields?.toString(),
     });
-    if (!response.ok) throw new Error('stripe_unavailable');
+    if (!response.ok) throw new Error(`stripe_unavailable:${response.status}`);
     return response.json();
   }
   async checkPrice(id: string, amount: number) {
-    const price = z.object({ id: StripeId('price'), livemode: z.literal(false), active: z.literal(true),
+    const parsed = z.object({ id: StripeId('price'), livemode: z.literal(false), active: z.literal(true),
       type: z.literal('recurring'), currency: z.literal('eur'), unit_amount: z.number().int(),
       tax_behavior: z.literal('inclusive'), recurring: z.object({ interval: z.literal('month'), interval_count: z.literal(1) }),
-    }).parse(await this.request(`/prices/${id}`));
+    }).safeParse(await this.request(`/prices/${id}`));
+    // Names the price fields that do not match (never their values), so the person who set up Stripe knows what to fix.
+    if (!parsed.success) throw new Error(`stripe_price_invalid:${[...new Set(parsed.error.issues.map((i) => i.path.join('.')))].join(',')}`);
+    const price = parsed.data;
     if (price.id !== id || price.unit_amount !== amount) throw new Error('stripe_price_mismatch');
   }
   async checkout(input: { requestId: string; workspaceId: string; priceId: string; site: string; expires: number }) {
@@ -90,4 +93,10 @@ export async function boundedWebhookBody(request: Request): Promise<string> {
     }
   } finally { reader.releaseLock(); }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+/** Only our own fixed codes reach the log: never a Stripe message, an id, a URL or a secret. */
+export function checkoutFailureReason(error: unknown): string {
+  if (error instanceof z.ZodError) return `stripe_response_invalid:${[...new Set(error.issues.map((i) => i.path.join('.')))].join(',')}`;
+  return error instanceof Error && /^[a-z_]+(:[a-z0-9_.,]+)?$/.test(error.message) ? error.message : 'unknown';
 }

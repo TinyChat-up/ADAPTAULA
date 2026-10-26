@@ -1,6 +1,6 @@
 import { expect,it,vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { StripeTest,validStripeSignature,checkoutUrl,EventSchema,SubscriptionSchema,boundedWebhookBody } from '@/lib/billing/stripe-test';
+import { StripeTest,checkoutFailureReason,validStripeSignature,checkoutUrl,EventSchema,SubscriptionSchema,boundedWebhookBody } from '@/lib/billing/stripe-test';
 import { imagePilotAllows } from '@/lib/materials/visuals/illustrate/pilot';
 const secret='whsec_fixture';
 it('solo permite producción con modo explícito, backend y workspace exactos',()=>{
@@ -34,6 +34,15 @@ it('contrato de precio: mensual, EUR, IVA incluido y precio del catálogo',async
   expect(send.mock.calls[0]?.[1]?.headers).toMatchObject({'Stripe-Version':'2025-02-24.acacia'});
   await expect(stripe.checkPrice('price_Test',2490)).rejects.toThrow('stripe_price_mismatch');
   await expect(stripe.request('/customers/anything')).rejects.toThrow('stripe_path_invalid');
+});
+it('el registro nombra qué falla del precio o de Stripe, nunca sus valores',async()=>{
+  const price={id:'price_Test',livemode:false,active:true,type:'recurring',currency:'eur',unit_amount:4990,tax_behavior:'unspecified',recurring:{interval:'year',interval_count:1}};
+  const stripe=new StripeTest('sk_test_fixture',vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify(price))));
+  const failure=await stripe.checkPrice('price_Test',4990).catch((e:unknown)=>e);
+  expect(checkoutFailureReason(failure)).toBe('stripe_price_invalid:tax_behavior,recurring.interval');
+  const down=await new StripeTest('sk_test_fixture',vi.fn<typeof fetch>().mockResolvedValue(new Response('{}',{status:404}))).checkPrice('price_Test',4990).catch((e:unknown)=>e);
+  expect(checkoutFailureReason(down)).toBe('stripe_unavailable:404');
+  expect(checkoutFailureReason(new Error('Invalid API Key provided: sk_test_123'))).toBe('unknown');
 });
 it('Checkout fija metadata, precio e idempotencia; no acepta return URL del navegador',async()=>{
   const send=vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({id:'cs_test_One',livemode:false,mode:'subscription',subscription:null,status:'open',url:'https://checkout.stripe.com/c/pay/test',metadata:{}})));

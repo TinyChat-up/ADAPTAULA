@@ -1,7 +1,7 @@
 import 'server-only';
 import { getApiContext, apiError } from '@/lib/api/context';
 import { billingPilotConfig } from '@/lib/billing/pilot';
-import { StripeTest, checkoutUrl } from '@/lib/billing/stripe-test';
+import { StripeTest, checkoutFailureReason, checkoutUrl } from '@/lib/billing/stripe-test';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logger } from '@/lib/logger';
 
@@ -41,8 +41,8 @@ export async function POST(request: Request) {
     }
     if (session.status !== 'open' || session.metadata.pilot_request !== start.data || session.metadata.workspace_id !== ctx.workspace.id) throw new Error('pilot_session_invalid');
     return Response.json({ url: checkoutUrl(session.url) }, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch {
-    logger.warn('stripe_pilot_checkout_failed', { workspaceId: ctx.workspace.id });
+  } catch (error) {
+    logger.warn('stripe_pilot_checkout_failed', { workspaceId: ctx.workspace.id, reason: checkoutFailureReason(error) });
     return apiError(503, 'checkout_failed', 'No se ha podido preparar Stripe de prueba. No se ha confirmado ningún cambio de plan.');
   }
 }
