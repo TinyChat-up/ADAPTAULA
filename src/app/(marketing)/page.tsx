@@ -3,19 +3,19 @@ import { FinalCta } from "@/components/marketing/final-cta";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorks, PrivacySection } from "@/components/marketing/info-sections";
 import { PricingSection } from "@/components/marketing/pricing";
-import { pilotOfferAvailable } from "@/lib/billing/pilot";
+import { maxOffer } from "@/lib/billing/max";
 import { getPublicPlans } from "@/lib/plans/public-plans";
 
 export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
-  const [plans, pilotMax] = await Promise.all([getPublicPlans(), pilotOfferAvailable()]);
+  const [plans, offer] = await Promise.all([getPublicPlans(), maxOffer()]);
   return (
     <>
       <Hero />
       <HowItWorks />
       <PrivacySection />
-      <PricingSection plans={plans} pilotMax={pilotMax} />
+      <PricingSection plans={plans} maxOffer={offer} />
       <Faq />
       <FinalCta />
     </>

@@ -13,19 +13,19 @@ import { formatDay } from "@/lib/format/date";
 import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { countActiveProfiles } from "@/lib/profiles/repository";
 import { updateAccountName } from "./actions";
-import { StripePilot } from "@/components/account/stripe-pilot";
-import { loadBillingPilot, pilotConfigFor } from "@/lib/billing/pilot";
+import { MaxCheckoutButton } from "@/components/account/max-checkout-button";
+import { canBuyPlan, maxCheckoutConfig } from "@/lib/billing/max";
 
 export const metadata: Metadata = { title: "Plan y cuenta" };
 
-export default async function UsagePage() {
+export default async function UsagePage({ searchParams }: { searchParams: Promise<{ max?: string }> }) {
   const ctx = await requireWorkspace();
-  const pilotConfig = pilotConfigFor(ctx);
-  const pilot = pilotConfig ? await loadBillingPilot(ctx.workspace.id) : null;
+  const { max } = await searchParams;
   const [usage, profiles, request] = await Promise.all([
     getWorkspaceUsage(ctx.workspace.id), countActiveProfiles(ctx.workspace.id),
     (await getSupabase()).from("account_deletion_requests").select("status").eq("user_id", ctx.user.id).maybeSingle(),
   ]);
+  const canBuyMax = usage.plan.slug !== "max" && canBuyPlan(ctx) && maxCheckoutConfig() !== null;
   return (
     <div className="space-y-10">
       <PageHeader title="Plan y cuenta" description="Tu capacidad de trabajo y los datos de tu cuenta, en un mismo lugar." />
@@ -36,11 +36,19 @@ export default async function UsagePage() {
             <p className="text-sm text-muted-foreground">Periodo: {formatDay(usage.period_start)} – {formatDay(usage.period_end)}.</p>
             <p className="text-sm text-muted-foreground">Las cuotas se renuevan el {formatDay(usage.period_end)}.</p>
           </div>
-          <LinkButton href="/precios" variant="secondary">Ver planes</LinkButton>
+          <div className="flex flex-wrap items-start gap-3">
+            {canBuyMax ? <MaxCheckoutButton /> : null}
+            <LinkButton href="/precios" variant="secondary">Ver planes</LinkButton>
+          </div>
         </div>
+        {max === "pendiente" && usage.plan.slug !== "max" ? (
+          <Alert tone="info" title="Estamos confirmando tu pago">
+            Stripe nos avisará en unos segundos. Recarga esta página para ver tu plan Max; no hace falta volver a pagar.
+          </Alert>
+        ) : null}
         {usage.adaptations.limit - usage.adaptations.used <= 1 && (
           <Alert tone="warning" title={usage.adaptations.used >= usage.adaptations.limit ? "Has agotado las adaptaciones del periodo" : "Te queda una adaptación este periodo"}>
-            Podrás continuar con una nueva cuota el {formatDay(usage.period_end)}. La contratación de otros planes todavía no está disponible.
+            Podrás continuar con una nueva cuota el {formatDay(usage.period_end)}.{canBuyMax ? " También puedes pasar a Max." : ""}
           </Alert>
         )}
         <div className="grid gap-x-10 md:grid-cols-2">
@@ -77,7 +85,6 @@ export default async function UsagePage() {
         </div>
       </section>
 
-      {pilot && <StripePilot state={pilot.state} expires={pilot.expires ? formatDay(pilot.expires) : null} />}
 
       <section aria-labelledby="tus-datos" className="space-y-5 border-t border-border pt-6">
         <h2 id="tus-datos" className="text-xl font-semibold">Tus datos y privacidad</h2>

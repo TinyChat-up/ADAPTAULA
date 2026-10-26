@@ -26,10 +26,10 @@ test("precios reales, planes sin compra y cuota coherente con cuenta", async ({ 
   await page.screenshot({ path: info.outputPath("cuenta.png"), fullPage: true, caret: "initial", style: "nextjs-portal { display: none; }" });
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze()).violations).toEqual([]);
   await page.goto("/precios");
-  // Signed in, the public header leads back to the app instead of looking signed out; a non-pilot account still cannot buy.
+  // Signed in, the public header leads back to the app instead of looking signed out; with Max sales off, nothing can be bought.
   await expect(page.getByRole("banner").getByRole("link", { name: "Entrar", exact: true })).toHaveCount(0);
   await expect(page.getByText("En preparación", { exact: true })).toBeVisible();
-  await expect(page.locator('main a[href*="piloto-privado"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Contratar Max" })).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
   await page.setViewportSize({ width: 320, height: 900 });
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
