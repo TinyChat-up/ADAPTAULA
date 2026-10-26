@@ -2,7 +2,8 @@ import 'server-only';
 import { publicEnv } from '@/lib/config/env.public';
 import { serverEnv } from '@/lib/config/env.server';
 import { imagePilotAllows } from '@/lib/materials/visuals/illustrate/pilot';
-import { getSupabase } from '@/lib/auth/session';
+import { getSupabase, getUser } from '@/lib/auth/session';
+import { getWorkspaceContext, type WorkspaceContext } from '@/lib/auth/workspace';
 
 /** This is a private TEST checkout, independent of public plan availability. */
 export function billingPilotConfig(workspaceId?: string) {
@@ -21,4 +22,18 @@ export async function loadBillingPilot(workspaceId: string) {
   if (result.error) return null; // An unapplied migration must not publish an operational button.
   return { state: result.data && Date.parse(result.data.expires_at) <= Date.now() ? 'canceled' : result.data?.state ?? null,
     expires: result.data?.expires_at ?? null };
+}
+
+/** Only the owner of the single personal pilot workspace ever sees the private checkout. */
+export function pilotConfigFor(ctx: WorkspaceContext) {
+  return ctx.role === 'owner' && ctx.workspace.type === 'personal' ? billingPilotConfig(ctx.workspace.id) : null;
+}
+
+/** For public pages: never redirects nor throws; anyone else (or a missing migration) sees the public offer unchanged. */
+export async function pilotOfferAvailable(): Promise<boolean> {
+  try {
+    if (!(await getUser())) return false;
+    const ctx = await getWorkspaceContext();
+    return pilotConfigFor(ctx) !== null && (await loadBillingPilot(ctx.workspace.id)) !== null;
+  } catch { return false; }
 }

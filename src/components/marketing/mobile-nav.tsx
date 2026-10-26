@@ -10,7 +10,7 @@ export interface NavItem {
   label: string;
 }
 
-export function MobileNav({ items }: { items: NavItem[] }) {
+export function MobileNav({ items, signedIn = false }: { items: NavItem[]; signedIn?: boolean }) {
   const pathname = usePathname();
   // Open state is tied to the path it was opened on, so navigating closes it without an effect.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -42,19 +42,29 @@ export function MobileNav({ items }: { items: NavItem[] }) {
                 </Link>
               </li>
             ))}
-            <li>
-              <Link href="/login" className="block rounded-control px-3 py-3 font-medium hover:bg-foreground/5">
-                Entrar
-              </Link>
-            </li>
-            <li className="pt-2">
-              <Link
-                href="/registro"
-                className="flex min-h-11 items-center justify-center rounded-control bg-primary px-4 font-medium text-primary-foreground"
-              >
-                Empezar gratis
-              </Link>
-            </li>
+            {signedIn ? (
+              <li className="pt-2">
+                <Link href="/app" className="flex min-h-11 items-center justify-center rounded-control bg-primary px-4 font-medium text-primary-foreground">
+                  Ir a la app
+                </Link>
+              </li>
+            ) : (
+              <>
+                <li>
+                  <Link href="/login" className="block rounded-control px-3 py-3 font-medium hover:bg-foreground/5">
+                    Entrar
+                  </Link>
+                </li>
+                <li className="pt-2">
+                  <Link
+                    href="/registro"
+                    className="flex min-h-11 items-center justify-center rounded-control bg-primary px-4 font-medium text-primary-foreground"
+                  >
+                    Empezar gratis
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </nav>
       ) : null}
