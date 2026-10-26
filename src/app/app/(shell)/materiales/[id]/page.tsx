@@ -31,6 +31,7 @@ import { AdaptationList } from "@/components/adaptation/adaptation-list";
 import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { createAdaptationFromMaterialAction } from "../../adaptaciones/actions";
+import { visualSupportOffer } from "@/lib/materials/visuals/illustrate/server";
 import { deleteMaterialAction, retryAnalysisAction, updateContextAction } from "../actions";
 
 export const metadata: Metadata = { title: "Material" };
@@ -51,6 +52,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
   // `?perfil=` comes from "Adaptar un material" on a profile or right after creating one: only preselects, never trusted.
   const preselected = typeof query.perfil === "string" && profileOptions.some((p) => p.id === query.perfil) ? query.perfil : undefined;
   const canWrite = hasRole(ctx.role, WRITE_ROLES);
+  const visualOffer = canWrite && detail.material.status === "analyzed" ? await visualSupportOffer(ctx.workspace.id) : null;
 
   const { material, file, analysis, meta, analysisOutdated } = detail;
   const status = material.status as MaterialStatus;
@@ -123,6 +125,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
                   profiles={profileOptions}
                   initialProfileId={preselected}
                   canWrite={canWrite}
+                  visualSupportOffer={visualOffer}
                   newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
                   create={createAdaptationFromMaterialAction.bind(null, material.id)}
                 />

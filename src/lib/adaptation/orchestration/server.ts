@@ -10,6 +10,7 @@ import { createModelPlanner } from "../planner";
 import { createModelReviewer } from "../reviewer";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
+import { visualSupportOffer } from "@/lib/materials/visuals/illustrate/server";
 import { dbEntitlements } from "./entitlements-db";
 import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
@@ -85,5 +86,5 @@ export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
 }
 
 export function serviceDeps(supabase: SupabaseClient): ServiceDeps {
-  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv };
+  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv, visualSupportOffer };
 }

@@ -10,6 +10,7 @@ import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-documen
 import { resolveAutomatically } from "../automatic-resolution";
 import { VISUAL_STOP_CODES, applyVisualResolution, unresolvedEssential, visualStopCode, type VisualResolutionPlan, type VisualStopCode } from "../visual-policy";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
+import { addVisualSupports } from "../visual-supports";
 import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
 import { fingerprint } from "../fingerprint";
@@ -83,7 +84,7 @@ export interface OrchestratorDeps {
    * resolved by the server (located, rebuilt, generated, rewritten around or left out when optional) before it is reviewed; what
    * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
-  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; deadline?: number | null }): Promise<VisualResolutionPlan> };
+  visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 
 const DEFAULTS = { leaseSeconds: 300, retryBackoffSeconds: 30, maxAttempts: 3 } as const;
@@ -201,6 +202,7 @@ export interface CreateAdaptationInput {
   education: { stage: string | null; grade: string | null; subject: string | null };
   adaptationType: AdaptationContext["adaptation_type"];
   teacherRequest?: string | null;
+  visualSupports?: boolean;
   title: string;
   /** Same key, same adaptation: a double submit never creates two. */
   requestKey: string;
@@ -218,6 +220,7 @@ export async function createAdaptation(deps: OrchestratorDeps, input: CreateAdap
     analysis: parsed.analysis,
     adaptationType: input.adaptationType,
     ...(input.teacherRequest !== undefined ? { teacherRequest: input.teacherRequest } : {}),
+    visualSupports: input.visualSupports === true,
     policy: input.versions.context_policy,
   });
   const contextFingerprint = fingerprint(context);
@@ -926,7 +929,8 @@ function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, rawGeneration:
   const generation = screenGeneration(rawGeneration);
   const check = (g: NormalizedGeneration) => {
     const assembled = buildDocument({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, generated: g.segments, newBlockId: sequentialIds() });
-    const document = visualPlan && visualPlan.needs.length > 0 ? applyVisualResolution(assembled, visualPlan) : assembled;
+    const resolved = visualPlan && visualPlan.needs.length > 0 ? applyVisualResolution(assembled, visualPlan) : assembled;
+    const document = addVisualSupports(resolved, loaded.analysis, loaded.context);
     const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
     const deterministic = assembleReview(input, deterministicChecks(input));
     const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document: assembled, review: visualPlan ? assembleReview({ ...input, document: assembled }, deterministicChecks({ ...input, document: assembled })) : deterministic });
@@ -1175,7 +1179,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const cached = await store.findArtifact(adaptationId, "visual_resolution", { inputFingerprint: inputFp });
       if (cached) visualPlan = (cached.payload as { plan: VisualResolutionPlan }).plan;
       else {
-        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, grade: loaded.context.education.grade, subject: loaded.context.education.subject, functionalNeeds: loaded.context.needs.map((n) => n.dimension), deadline: visualsDeadline });
+        visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, grade: loaded.context.education.grade, subject: loaded.context.education.subject, functionalNeeds: loaded.context.needs.map((n) => n.dimension), visualSupports: loaded.context.visual_supports?.requested === true, deadline: visualsDeadline });
         await store.putArtifact(adaptationId, run.lease, "visual_resolution", inputFp, fingerprint({ input: inputFp, plan: visualPlan }), { plan: visualPlan });
       }
       if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan);

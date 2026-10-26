@@ -78,7 +78,7 @@ export async function prepareAdaptationVisuals(input: { workspaceId: string; mat
  * The visual policy of «Hacer magia» for one assembled sheet: the automatic locator first (cached per material version), then the
  * rungs of `policy.ts`. Server job only (service role), after the adaptation authorised its material.
  */
-export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; deadline?: number | null }): Promise<VisualResolutionPlan> {
+export async function resolveAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> {
   const summary = await prepareAdaptationVisuals(input);
   const admin = createAdminClient();
   const { data: material } = await admin.from("materials").select("workspace_id, content_hash").eq("id", input.materialId).maybeSingle();
@@ -103,7 +103,7 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
         if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
       },
     },
-    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, grade: input.grade, subject: input.subject, functionalNeeds: input.functionalNeeds },
+    { analysis: input.analysis, document: input.document, requiredVisuals: input.requiredVisuals, stage: input.stage, grade: input.grade, subject: input.subject, functionalNeeds: input.functionalNeeds, visualSupports: input.visualSupports === true },
   );
   const count = (category: string) => plan.needs.filter((n) => n.category === category).length;
   logger.info("magic_visual_policy", { adaptationId: input.adaptationId, needs: plan.needs.length, located: count("exact_original_visual"), reconstructed: count("reconstructable_structured_visual"), generated: count("generatable_support_visual"), illustrated: count("generated_illustration"), rewritten: count("rewritable_without_visual"), substituted: count("substituted_activity"), unresolved: count("unresolved_visual") });

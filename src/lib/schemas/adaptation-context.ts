@@ -118,5 +118,7 @@ export const AdaptationContextSchema = z.object({
   }),
   conflicts: z.array(ConflictResolutionSchema).max(20),
   teacher_request: z.string().max(500).nullable(),
+  /** Absent on historical adaptations: never authorises premium image generation. */
+  visual_supports: z.object({ requested: z.literal(true) }).optional(),
 });
 export type AdaptationContext = z.infer<typeof AdaptationContextSchema>;

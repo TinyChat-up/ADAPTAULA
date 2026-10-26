@@ -1,0 +1,26 @@
+import { beforeAll, expect, it } from 'vitest';
+import type { PGlite } from '@electric-sql/pglite';
+import { createTestDb, createUser } from './harness';
+import { deps as makeDeps, readerFor, seedMaterial, seedLearner, scriptedServices, newSpy, versions } from './orchestration-harness';
+import { fractionsAnalysis } from '../../evals/adaptation/fixtures';
+import { createAdaptationCommand, type ServiceDeps } from '@/lib/adaptation/orchestration/service';
+
+let db:PGlite;beforeAll(async()=>{db=await createTestDb();},60000);
+it('autoriza en servidor, persiste consentimiento y conserva idempotencia; deniega cupo agotado y otro workspace',async()=>{
+  const u=await createUser(db,'consent@example.com'), b=await createUser(db,'other-consent@example.com');
+  const materialId=await seedMaterial(db,u,fractionsAnalysis()), learnerProfileId=await seedLearner(db,u);
+  const deps:ServiceDeps={orchestrator:makeDeps(db,scriptedServices(newSpy())),reader:readerFor(db,u),resolveVersions:versions};
+  const actor={userId:u.id,workspaceId:u.workspaceId,canWrite:true};
+  const request={materialId,learnerProfileId,adaptationType:'accessibility' as const,creationMode:'automatic' as const,visualSupports:true,requestKey:'consent-request'};
+  expect(await createAdaptationCommand(deps,actor,request)).toMatchObject({ok:false,code:'visual_supports_unavailable'});
+  deps.visualSupportOffer=async()=>({remaining:0,maxPerAdaptation:3});
+  expect(await createAdaptationCommand(deps,actor,request)).toMatchObject({ok:false,code:'visual_supports_exhausted'});
+  deps.visualSupportOffer=async()=>({remaining:5,maxPerAdaptation:3});
+  expect(await createAdaptationCommand(deps,{...actor,workspaceId:b.workspaceId},request)).toMatchObject({ok:false,code:'not_found'});
+  const created=await createAdaptationCommand(deps,actor,request);expect(created.ok).toBe(true);if(!created.ok)throw new Error('fixture');
+  expect(await createAdaptationCommand(deps,actor,request)).toEqual(created);
+  const row=await db.query<{context_snapshot:{visual_supports:{requested:boolean}}}>('select context_snapshot from public.adaptations where id=$1',[created.data.adaptationId]);
+  expect(row.rows[0]!.context_snapshot.visual_supports).toEqual({requested:true});
+  expect(await createAdaptationCommand(deps,{...actor,canWrite:false},request)).toMatchObject({ok:false,code:'forbidden'});
+  expect(await createAdaptationCommand(deps,actor,{...request,creationMode:'review'})).toMatchObject({ok:false,code:'invalid'});
+});

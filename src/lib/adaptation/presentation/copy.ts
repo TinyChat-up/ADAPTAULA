@@ -209,7 +209,7 @@ export const AUTOMATIC_STOP_COPY = {
   },
   /** New illustrations are switched off in Adaptaula (for every plan): never an upgrade that would not help. */
   visual_unavailable: {
-    body: "Una actividad necesita una imagen que no hemos podido recuperar del material original, y Adaptaula todavía no crea ilustraciones nuevas. No entregamos una ficha a la que le falte una imagen imprescindible.",
+    body: "Una actividad necesita una imagen que no hemos podido recuperar del material original y no está habilitada la creación de ilustraciones para esta adaptación. No entregamos una ficha a la que le falte una imagen imprescindible.",
     hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Puedes revisar y editar la adaptación para añadir tú la imagen.",
   },
   edit: "Revisar y editar",

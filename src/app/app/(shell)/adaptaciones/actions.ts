@@ -70,6 +70,7 @@ const StartInput = z.object({
   learnerProfileId: Id,
   requestKey: z.string().min(8).max(120),
   mode: z.enum(CREATION_MODES),
+  visualSupports: z.boolean().optional(),
 });
 
 /**
@@ -87,6 +88,7 @@ export async function createAdaptationFromMaterialAction(materialId: string, inp
       adaptationType: "accessibility",
       requestKey: parsed.data.requestKey,
       creationMode: parsed.data.mode,
+      visualSupports: parsed.data.visualSupports === true,
     }),
   );
 }

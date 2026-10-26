@@ -7,7 +7,7 @@ vi.mock('@/lib/config/env.server',()=>({serverEnv:()=>({
   AI_IMAGES_PILOT_MODE:'local',AI_IMAGES_PILOT_WORKSPACE_ID:'one',AI_IMAGES_PILOT_SUPABASE_URL:'http://127.0.0.1:54399',
   AI_MODEL_STANDARD:'anthropic:claude-sonnet-5-5',AI_MODEL_IMAGE_QUALITY:'mock:dibujo',
 })}));
-vi.mock('@/lib/supabase/admin',()=>({createAdminClient:()=>({rpc:async()=>({data:{slug:'max',monthly_images:5,features:{image_generation:true}}})})}));
+vi.mock('@/lib/supabase/admin',()=>({createAdminClient:()=>({from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{workspace_id:'one',context_snapshot:{visual_supports:{requested:true}}}})})})}),rpc:async()=>({data:{slug:'max',monthly_images:5,features:{image_generation:true}}})})}));
 const {illustrationAvailability}=await import('@/lib/materials/visuals/illustrate/server');
 it('el servidor no entrega dibujos mock como imágenes generadas aunque el plan y flag permitan ilustrar',async()=>{
   const result=await illustrationAvailability({workspaceId:'one',adaptationId:'test',materialId:'test'});

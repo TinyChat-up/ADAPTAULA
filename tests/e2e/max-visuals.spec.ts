@@ -13,6 +13,7 @@ test('ilustración sintética: procedencia, finalidad, revisión docente, acceso
   await page.getByRole('button',{name:'Crear perfil',exact:true}).click();
   const material=await uploadAndOpen(page,{name:'Original sintético.pdf',mimeType:'application/pdf',buffer:await makePdf({marker:email})});
   await waitForAnalysis(page);
+  await expect(page.getByRole('checkbox',{name:'Crear con apoyos visuales'})).toHaveCount(0);
   const id=await createReviewedAdaptation(page,`/app/materiales/${material}`,'Perfil de ensayo');
   const ws=await workspaceOf(page,email);
   const c=maxVisualCorpus().find(c=>c.id==='vocabulario')!, pin=c.pins[0]!;
