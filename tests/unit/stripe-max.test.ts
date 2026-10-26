@@ -33,10 +33,12 @@ it('contrato de precio: mensual, EUR, IVA incluido y precio del catálogo',async
   await stripe.checkPrice('price_Test',4990);
   expect(send.mock.calls[0]?.[1]?.headers).toMatchObject({'Stripe-Version':'2025-02-24.acacia'});
   await expect(stripe.checkPrice('price_Test',2490)).rejects.toThrow('stripe_price_mismatch');
+  const unspecified=new StripeTest('sk_test_fixture',vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({...price,tax_behavior:'unspecified'}))));
+  await unspecified.checkPrice('price_Test',4990);
   await expect(stripe.request('/customers/anything')).rejects.toThrow('stripe_path_invalid');
 });
 it('el registro nombra qué falla del precio o de Stripe, nunca sus valores',async()=>{
-  const price={id:'price_Test',livemode:false,active:true,type:'recurring',currency:'eur',unit_amount:4990,tax_behavior:'unspecified',recurring:{interval:'year',interval_count:1}};
+  const price={id:'price_Test',livemode:false,active:true,type:'recurring',currency:'eur',unit_amount:4990,tax_behavior:'exclusive',recurring:{interval:'year',interval_count:1}};
   const stripe=new StripeTest('sk_test_fixture',vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify(price))));
   const failure=await stripe.checkPrice('price_Test',4990).catch((e:unknown)=>e);
   expect(checkoutFailureReason(failure)).toBe('stripe_price_invalid:tax_behavior,recurring.interval');
