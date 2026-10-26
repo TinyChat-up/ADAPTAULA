@@ -99,6 +99,18 @@ describe("idempotency, concurrency and cost", () => {
     expect(await count("material_visual_autolocations", w.materialId)).toBe(1);
   });
 
+  it("a page that could not be read (the rasteriser failed where it ran) is not a final answer: the next run reads it again", async () => {
+    const w = await world();
+    const claim = await w.auto.deps.runs.claim({ ...w.input, sourceSha256: w.input.sourceSha256!, engine: AUTO_ENGINE_VERSION });
+    const broken = { engine: AUTO_ENGINE_VERSION, vision_pages: 0, visuals: { vis_1: { choice: "D", reason: "extraction_failed", confidence: null, method: null, spec: null } } };
+    // What production stored while the generation route lacked the rasteriser's files: a "completed" run that read nothing.
+    await w.auto.deps.runs.complete(claim.id, "completed", broken as never, 0);
+    const again = await prepareVisuals(w.auto.deps, w.input);
+    expect(again.status).toBe("completed");
+    expect(JSON.stringify(again)).not.toContain("extraction_failed");
+    expect(await q<{ status: string }>("select status from public.material_visual_autolocations where material_id = $1", [w.materialId])).toEqual([{ status: "completed" }]);
+  });
+
   it("two simultaneous runs: one works, the other stands aside; one locator per visual", async () => {
     const w = await world();
     const results = await Promise.all([prepareVisuals(w.auto.deps, w.input), prepareVisuals(w.auto.deps, w.input)]);

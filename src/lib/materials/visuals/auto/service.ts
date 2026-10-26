@@ -80,6 +80,8 @@ export interface AutoRunDeps {
   runs: {
     claim(key: { workspaceId: string; materialId: string; analysisFingerprint: string; sourceSha256: string; engine: string }): Promise<{ id: string; claimed: boolean; status: "running" | "completed" | "failed"; result: unknown }>;
     complete(id: string, status: "completed" | "failed", result: AutoRunResult, visionCalls: number): Promise<void>;
+    /** Takes a completed run back to running (true if this caller got it): a page that could not be read is not a final answer. */
+    retry(id: string): Promise<boolean>;
   };
   specs: {
     exists(locatorId: string, extractor: string): Promise<boolean>;
@@ -128,13 +130,19 @@ export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { 
     });
 }
 
+/** A run where some page could not be rendered: an environment failure, never an answer about the figure. */
+const unreadable = (result: unknown) =>
+  Object.values((result as Partial<AutoRunResult> | null)?.visuals ?? {}).some((v) => v.reason === "extraction_failed");
+
 const signalsOf = (e: Evidence): Omit<Evidence, "reason"> => ({ shape: e.shape, signature: e.signature, placement: e.placement, unique: e.unique, clean: e.clean, anchor: e.anchor, vision: e.vision, ...(e.marks ? { marks: e.marks } : {}) });
 
 export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Promise<AutoRunSummary> {
   const targets = autoTargets(input.analysis);
   if (targets.length === 0 || !input.sourceSha256) return { status: "nothing_to_locate" };
   const claim = await deps.runs.claim({ workspaceId: input.workspaceId, materialId: input.materialId, analysisFingerprint: input.analysisFingerprint, sourceSha256: input.sourceSha256, engine: AUTO_ENGINE_VERSION });
-  if (!claim.claimed) return { status: claim.status === "running" ? "busy" : "cached", result: (claim.result as AutoRunResult | null) ?? null };
+  if (!claim.claimed && !(claim.status === "completed" && unreadable(claim.result) && (await deps.runs.retry(claim.id)))) {
+    return { status: claim.status === "running" ? "busy" : "cached", result: (claim.result as AutoRunResult | null) ?? null };
+  }
 
   let visionCalls = 0;
   const result: AutoRunResult = { engine: AUTO_ENGINE_VERSION, visuals: {}, vision_pages: 0 };
@@ -237,7 +245,8 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
       }
     }
     result.vision_pages = visionCalls;
-    await deps.runs.complete(claim.id, "completed", result, visionCalls);
+    // An unreadable page (the rasteriser failed where it runs) is stored as failed, so a later run reads it again.
+    await deps.runs.complete(claim.id, unreadable(result) ? "failed" : "completed", result, visionCalls);
     return { status: "completed", result };
   } catch (error) {
     const reason = error instanceof RasterError ? error.code : error instanceof Error ? error.name : "unknown";

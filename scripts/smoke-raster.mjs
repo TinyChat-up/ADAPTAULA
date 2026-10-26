@@ -16,7 +16,15 @@ import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 const dist = process.env.NEXT_DIST_DIR || ".next";
-const ROUTES = ["server/app/api/materials/[id]/pages/[page]/route.js.nft.json", "server/app/api/materials/[id]/visuals/[visualId]/route.js.nft.json"];
+const ROUTES = [
+  "server/app/api/materials/[id]/pages/[page]/route.js.nft.json",
+  "server/app/api/materials/[id]/visuals/[visualId]/route.js.nft.json",
+  // Generating a sheet reads the original's pages too (locator and crops), in the request and in the cron recovery.
+  "server/app/api/adaptations/[id]/run/route.js.nft.json",
+  "server/app/api/adaptations/[id]/visuals/auto/route.js.nft.json",
+  "server/app/api/cron/adaptations/route.js.nft.json",
+  "server/app/api/adaptations/[id]/pdf/route.js.nft.json",
+];
 const fail = (message) => {
   console.error(`smoke:raster · FALLO · ${message}`);
   process.exit(1);
