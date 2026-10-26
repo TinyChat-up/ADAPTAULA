@@ -41,7 +41,7 @@ Se usan los binarios instalados de Vitest/Next/TypeScript/ESLint por el fallo de
 
 ## Aplicación y límites
 
-PR independiente, sin merge ni despliegue de producción. No se ha aplicado SQL remoto ni modificado la adaptación fallida. La consulta realizada por el fundador fue solo lectura.
+[PR #73](https://github.com/TinyChat-up/ADAPTAULA/pull/73) en borrador, sin merge ni despliegue de producción. No se ha aplicado SQL remoto ni modificado la adaptación fallida. La consulta realizada por el fundador fue solo lectura.
 
 La adaptación anterior conserva su estado fallido: publicar este cambio no la regenera ni reescribe sus artefactos. No usar `jobs:recover --apply` a ciegas; la herramienta existente no garantiza que esta generación almacenada pueda recuperarse ni que continuar sea gratuito. Una entrega posterior aún puede requerir la revisión de IA y una figura imprescindible puede bloquear por otro motivo. No afirmar que se han probado imágenes reales por corregir el glosario.
 

@@ -4,7 +4,7 @@
 
 - Base `1a72c1c`, rama `codex/reparacion-glosario-presupuesto`, #72 integrada. El fundador aporta `generator_validation`, dos generaciones, y el glosario de 32 palabras frente a 24+6. Contador correcto: no era un fallo de Stripe/PDF.
 - Regresión primero: prueba PGlite falla porque la segunda generación no recibe el apoyo anterior. La reparación ahora recibe solo el fragmento afectado como material no confiable, recuento y restricción vigente. Verificación determinista de términos preservados, diagnóstico `glossary_terms_preserved` y contabilidad de llamadas conservada.
-- [Evidencias y límites](qa/glosario-presupuesto/README.md). Éxito local con respuesta manual programada de 22 palabras; no se acredita eficacia del modelo real ni se recupera automáticamente la adaptación de producción. Sin cambios de límites, prompts publicados, modelos, CLARO, migraciones ni servicios remotos. Resultados finales y PR pendientes de cierre.
+- [Evidencias y límites](qa/glosario-presupuesto/README.md). Unidad/BD 1.999 correctas y 13 omitidas; regresiones 70/70 y control final de glosarios normalizados 17/17; PDF focalizadas 12/12 más 1 caso color/grises; E2E Hacer magia 6/6, typecheck/build/secretos correctos y lint sin errores (aviso previo `_id`). [PR #73](https://github.com/TinyChat-up/ADAPTAULA/pull/73) en borrador: E2E completa pendiente antes de integrar. Éxito local con respuesta manual programada de 22 palabras; no se acredita eficacia del modelo real ni se recupera automáticamente la adaptación de producción. Sin cambios de límites, prompts publicados, modelos, CLARO, migraciones ni servicios remotos.
 
 ## 2026-10-26 — Apoyos visuales Max con consentimiento por adaptación
 
