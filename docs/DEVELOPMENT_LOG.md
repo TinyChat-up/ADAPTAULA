@@ -2,6 +2,8 @@
 
 ## 2026-10-26 — Imágenes: recuperar las marcas del original antes de pedir una ilustración
 
+[PR #75](https://github.com/TinyChat-up/ADAPTAULA/pull/75), abierta sin merge.
+
 - Base `268b4bf`, #74 integrada y sin PR abiertas al iniciar; rama `codex/imagenes-recuperacion-original`. El fundador aporta tres necesidades imprescindibles sin resolver, dos con `brief_rejected`. Se revisa el recorrido visual en código; no se consulta Supabase/Vercel ni se obtiene el análisis real de esa adaptación.
 - Regresiones fallando antes del arreglo: números explícitos no reconocidos, número junto a una línea indicadora fuera del alcance de 4 mm, número duplicado oculto por la caja, elección ambigua entre gemelos mediante visión, figura truncada en el borde, brief A–D sin sus letras y ejes externos de una cuadrícula. Reparación conservadora de recuperación/validación, no cambios del currículo ni generación pagada.
 - Motor v7 y rechazo de recortes antiguos parecidos que no contienen la caja completa; selección humana intacta. Parser literal compartido de letras, vértices/columnas y números de la descripción, líneas indicadoras y retículas verificadas desde píxeles. Códigos fijos de rechazo del brief guardados en el plan visual sin texto libre del proveedor.

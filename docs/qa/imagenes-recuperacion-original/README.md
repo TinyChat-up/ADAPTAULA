@@ -1,6 +1,6 @@
 # Imágenes: recuperación de originales y validación de ilustraciones
 
-2026-10-26 · base `268b4bf` (#74 integrada) · rama `codex/imagenes-recuperacion-original`.
+2026-10-26 · base `268b4bf` (#74 integrada) · rama `codex/imagenes-recuperacion-original` · [PR #75](https://github.com/TinyChat-up/ADAPTAULA/pull/75), abierta sin merge.
 
 ## Alcance y diagnóstico
 

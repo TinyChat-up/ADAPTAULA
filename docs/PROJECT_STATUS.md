@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+Entrega visual actual: [PR #75](https://github.com/TinyChat-up/ADAPTAULA/pull/75), abierta sin merge.
+
 > **Recuperación de imágenes y validación de marcas (2026-10-26):** base `268b4bf`, #74 integrada. Rama `codex/imagenes-recuperacion-original`: auditoría del recorrido visual y regresiones de números explícitos, líneas indicadoras separadas, coordenadas externas de cuadrícula, figuras ambiguas/cortadas y briefs sin letras exigidas. Motor v7, reutilización completa de recortes y códigos de rechazo del brief sin texto libre. [QA, PDF sintéticos y límites](qa/imagenes-recuperacion-original/README.md). No se ha leído el análisis de producción ni regenerado la adaptación bloqueada. Sin APIs pagadas, servicios remotos, migración ni despliegue; E2E de ordenador/móvil excluidas por petición expresa.
 
 > **Ciencias y resultado visual explícito (2026-10-26):** #73 integrada, base `32c6ff2`, [PR #74](https://github.com/TinyChat-up/ADAPTAULA/pull/74), rama `codex/apoyos-visuales-ciencias`. El PDF recibido tiene una sola imagen distinta repetida; no acredita apoyo IA adicional. Se reproduce una exclusión de preguntas abiertas de ciencias/vocabulario y se amplía su selección conservadora; resultado real de recursos en la versión guardada, incluido cero. [Pruebas y límites](qa/ciencias-apoyos-visuales/README.md). Sin generación pagada ni modificación del PDF recibido; no se redibuja el esquema evaluado A–D. Usar el dominio estable: los deployments GitHub identifican la URL de las capturas como #72, no #73.
