@@ -2,6 +2,8 @@
 
 2026-10-26 · base `7d3dc15` (#75 integrada) · rama `codex/perfiles-fortalezas-barreras`.
 
+[PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), abierta sin merge.
+
 ## Auditoría inicial y decisiones
 
 Se inspeccionaron formulario, selector, controles, resumen, directorio, catálogo de áreas, textos, presets, borrador, schemas, repositorio, acciones y consumidores del contexto. Se leyó la issue #63 y se capturó el formulario original en esta sesión con identidad ficticia. No se auditaron ni alteraron otros subsistemas.

@@ -2,6 +2,8 @@
 
 ## 2026-10-26 — Perfiles: fortalezas declaradas, barreras contextuales y apoyos combinables
 
+[PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), abierta sin merge.
+
 - Base `7d3dc15`, #75 confirmada integrada y ninguna PR abierta al iniciar; rama `codex/perfiles-fortalezas-barreras`. Auditoría focalizada del formulario, catálogo, presets, persistencia y consumidores; issue #63 leída. [Decisiones, antes/después, perfil sintético y despliegue](qa/perfiles-dua/README.md).
 - Once tarjetas y flujo progresivo sin pasos obligatorios adicionales. Se distinguen imágenes para comprender, accesibilidad visual y carga visual. Fortalezas/barreras opcionales de catálogo, sugerencias elegidas por el docente y resumen en tres bloques. Frecuencia de apoyo sin inferir capacidad ni reducir currículo. Presets históricos conservados, suma sin borrar, sustitución confirmada, veinte estados para deshacer; cerrar un área ya no borra dimensiones.
 - JSONB V1/V2 compatible, `none` explícito distinto de no indicado, guardado/duplicación completos y contexto opcional de IDs sin alias ni texto libre. Revisión `updated_at` y escritura condicionada evitan sobrescrituras entre pestañas. Migración 032 impide degradación V2→V1 incluso desde clientes antiguos; aplicada dos veces solo en PGlite. Requiere autorización y aplicación antes del despliegue compartido. Sin conversión masiva y sin reversión destructiva a V1.

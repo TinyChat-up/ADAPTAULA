@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-Entrega actual: perfiles docentes con fortalezas, barreras y apoyos combinables; [alcance, capturas y pruebas](qa/perfiles-dua/README.md). #75 confirmada integrada en `7d3dc15` al iniciar. Rama `codex/perfiles-fortalezas-barreras`, sin merge.
+Entrega actual: [PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), perfiles docentes con fortalezas, barreras y apoyos combinables; [alcance, capturas y pruebas](qa/perfiles-dua/README.md). #75 confirmada integrada en `7d3dc15` al iniciar. Rama `codex/perfiles-fortalezas-barreras`, sin merge.
 
 > **Perfiles comprensibles y compatibles (2026-10-26):** once tarjetas combinables, observaciones declaradas de catálogo y resumen en tres bloques. Suma conservadora, sustitución confirmada, deshacer y conservación al cerrar áreas. Lectura V1/V2, guardado/duplicación, contexto sin alias y protección de conflictos. Migración **032 solo local**: impide que un cliente antiguo degrade V2 y borre sus observaciones; requiere autorización y aplicación antes de permitir escrituras V2 en un entorno compartido. Unidad/BD 2.049 correctas/13 omitidas, PDF 80/80, E2E completa 142 correctas/4 omitidas más 10/10 focalizadas con 032 cargada desde el arranque. Typecheck, lint sin errores (aviso previo), build, smoke raster/PDF y secretos correctos. Imágenes y motor curricular #63 no ampliados; calidad del modelo real y revisión con docentes/tecnologías de apoyo pendientes. Sin IA pagada ni servicios remotos.
 
