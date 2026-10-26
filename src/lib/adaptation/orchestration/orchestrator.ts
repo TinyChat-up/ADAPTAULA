@@ -17,7 +17,7 @@ import { fingerprint } from "../fingerprint";
 import { auditGeneration } from "../generation-checks";
 import { decisionSupportBudget, designatedRewriter } from "../generated-v2";
 import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK } from "../generation-checks";
-import { diagnoseGeneration, diagnoseReview, failureSignature, repairLocally, screenGeneration, type GenerationFailure } from "../generation-recovery";
+import { diagnoseGeneration, diagnoseReview, failureSignature, missingRepairedGlossaries, repairLocally, screenGeneration, type GenerationFailure } from "../generation-recovery";
 import { buildGeneratorInputV2, normalizeGeneration } from "../generator";
 import { classifyPlan } from "../invariants";
 import { modelFacingAnalysis } from "../model-input";
@@ -1009,7 +1009,7 @@ function isolateUnbuildable<T>(generation: NormalizedGeneration, check: (g: Norm
  * keep everything else). Only for a review the server made as a repair or correction of an earlier generation of the same plan,
  * and only when that generation is still stored. Null otherwise (a full generation, as before).
  */
-async function localizedRepair(store: AdaptationStore, adaptationId: string, reviewFp: string, planFp: string, loaded: Loaded, ai: readonly string[]): Promise<{ only: Set<string>; previous: DraftGeneratedSegmentsV2; previousInputFp: string } | null> {
+async function localizedRepair(store: AdaptationStore, adaptationId: string, reviewFp: string, planFp: string, loaded: Loaded, ai: readonly string[]): Promise<{ only: Set<string>; previous: DraftGeneratedSegmentsV2; previousInputFp: string; budgetDecisions: Set<string> } | null> {
   const report = (await store.listArtifacts(adaptationId, "execution_report"))
     .map((a) => a.payload as { review_fingerprint?: string; automatic?: { repair_of?: string; correction_of?: string; restricted?: string[] } })
     .find((r) => r.review_fingerprint === reviewFp && (r.automatic?.repair_of || r.automatic?.correction_of));
@@ -1019,7 +1019,9 @@ async function localizedRepair(store: AdaptationStore, adaptationId: string, rev
   const previous = await store.findArtifact(adaptationId, "generation", { inputFingerprint: previousInputFp });
   const parsed = previous ? DraftGeneratedSegmentsV2Schema.safeParse((previous.payload as { draft?: unknown }).draft) : null;
   if (!parsed?.success) return null;
-  return { only: new Set((report.automatic?.restricted ?? []).filter((id) => ai.includes(id))), previous: parsed.data, previousInputFp };
+  const generation = previous?.payload.generation as Partial<NormalizedGeneration> | undefined;
+  const budgetDecisions = new Set((Array.isArray(generation?.issues) ? generation.issues : []).filter((i) => i.code === "support_out_of_budget" && typeof i.decision_id === "string").map((i) => i.decision_id!));
+  return { only: new Set((report.automatic?.restricted ?? []).filter((id) => ai.includes(id))), previous: parsed.data, previousInputFp, budgetDecisions };
 }
 
 /** The previous draft for the decisions not regenerated, the fresh one for those regenerated; decisions no longer applied vanish. */
@@ -1141,8 +1143,9 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
         if (JSON.stringify([...sent].sort()) !== JSON.stringify([...asked].sort())) throw new AdaptationError("internal", "La petición no contiene exactamente las decisiones ai_generation");
         if (!(await store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
         let answered;
+        const repairFrom = localized?.previous.segments.filter((s) => asked.includes(s.decision_id) && localized.budgetDecisions.has(s.decision_id)).map(({ decision_id, target, supports }) => ({ decision_id, target, supports }));
         try {
-          answered = await services.generator.generate({ context: loaded.context, analysis: loaded.analysis, reviewed, ...(localized ? { only: asked } : {}) });
+          answered = await services.generator.generate({ context: loaded.context, analysis: loaded.analysis, reviewed, ...(localized ? { only: asked, ...(repairFrom?.length ? { repairFrom } : {}) } : {}) });
         } catch (error) {
           const { code } = classifyAIFailure(error, "generation");
           await store.recordAiRun(failedRow(error, loaded.versions.generator, "generate", "material_generator", code, run.ids, inputFp, localized ? "repair" : "initial"));
@@ -1158,6 +1161,13 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
           for (const r of answered.runs) await store.recordAiRun(runRow(r, run.ids, inputFp, outputFp));
           await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
           throw new AdaptationError("generator_validation", `generator draft rejected: ${error instanceof Error ? error.name : "unknown"}`, { cause: error });
+        }
+        const missingGlossaries = repairFrom ? missingRepairedGlossaries(repairFrom, generation.segments) : [];
+        if (missingGlossaries.length) {
+          for (const r of answered.runs) await store.recordAiRun(runRow(r, run.ids, inputFp, outputFp));
+          await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
+          await recordDiagnosis(store, adaptationId, reviewFp, "generation", missingGlossaries.map((id) => ({ category: "data_loss", rule: "glossary_terms_preserved", decisions: [id], refs: [], repair: "none" })));
+          throw new AdaptationError("generator_validation", "glossary_terms_lost");
         }
         for (const r of answered.runs) await store.recordAiRun(runRow(r, run.ids, inputFp, outputFp));
         await store.putArtifact(adaptationId, run.lease, "generation", inputFp, fingerprint({ input: inputFp, draft, generation }), { draft, generation, ...(localized ? { reused_from: localized.previousInputFp, regenerated: asked } : {}) });

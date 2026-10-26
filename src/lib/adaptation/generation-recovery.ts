@@ -3,6 +3,8 @@ import { DraftBlockSchema, blockConsistencyIssues, type DraftBlock } from "@/lib
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { responseFor } from "./document";
 import type { NormalizedGeneration } from "./generated";
+import type { DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
+import { normalizeText } from "./text";
 import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, NON_EFFECTIVE_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK, type AuditCheck, type GenerationAudit } from "./generation-checks";
 
 /**
@@ -20,6 +22,16 @@ export const FAILURE_CATEGORIES = [
   "format_incompatible", "visual_unresolved", "pedagogical_review", "cost_or_limit", "not_executed", "traceability",
 ] as const;
 export type FailureCategory = (typeof FAILURE_CATEGORIES)[number];
+
+/** Shortening a failed glossary must not silently remove its terms. Definitions still need the complete pedagogical review. */
+export function missingRepairedGlossaries(previous: readonly Pick<DraftGeneratedSegmentsV2["segments"][number], "decision_id" | "target" | "supports">[], fresh: NormalizedGeneration["segments"]): string[] {
+  return previous.flatMap((old) => {
+    const wanted = old.supports.flatMap((s) => s.kind === "glossary" ? s.items.map((i) => normalizeText(i.term)) : []);
+    if (!wanted.length) return [];
+    const actual = new Set(fresh.segments.filter((s) => s.decision_ids.includes(old.decision_id) && s.target === old.target).flatMap((s) => s.blocks.flatMap((b) => b.type === "vocabulary" && b.trace.decision_ids.includes(old.decision_id) ? b.items.map((i) => normalizeText(i.term)) : [])));
+    return wanted.some((term) => !actual.has(term)) ? [old.decision_id] : [];
+  });
+}
 
 export interface GenerationFailure {
   category: FailureCategory;
