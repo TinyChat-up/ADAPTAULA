@@ -22,6 +22,7 @@ export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | 
 export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | VisualStopCode;
 
 export interface StatusArtifacts {
+  visualSupportResult?: { generated: number; original: number; structured: number } | null;
   planValidation?: { counts: { valid: number; review: number; blocked: number } } | null;
   execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] } | null;
   review?: Pick<PedagogicalReview, "verdict" | "checks"> | null;
@@ -38,6 +39,7 @@ export interface StatusArtifacts {
 }
 
 export interface AdaptationStatusDto {
+  visualSupportResult?: { generated: number; original: number; structured: number };
   id: string;
   status: AdaptationStatus;
   /** How the teacher chose to create it: `automatic` («Hacer magia») or `review` («Revisar antes de crear»). */
@@ -263,5 +265,6 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
     generationsUsed: cycles,
     regenerationAvailable: cycles < MAX_GENERATION_CYCLES,
     automaticStop,
+    ...(delivered && artifacts.visualSupportResult ? { visualSupportResult: artifacts.visualSupportResult } : {}),
   };
 }

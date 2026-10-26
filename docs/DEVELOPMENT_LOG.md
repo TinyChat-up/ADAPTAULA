@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Ciencias: evaluación de apoyo contextual y transparencia del resultado
+
+- Base `32c6ff2`, rama `codex/apoyos-visuales-ciencias`, #73 integrada y sin PR abiertas. Inspección local del PDF adjunto: tres páginas, una imagen de 577×341 repetida en 1 y 3. No se publica el archivo del usuario ni se atribuye su procedencia solo por el aspecto. El fundador indica consumo OpenAI cero; no se han inspeccionado servicios remotos.
+- Regresión primero: pregunta abierta de ciencias con vocabulario explicado no intenta ilustrar. Se admiten candidatos abiertos/contextuales y apoyos de vocabulario/comprensión reales, sin sustituir figuras evaluadas, duplicar imágenes o forzar un dibujo decorativo. No se intenta el añadido si ya falta un visual imprescindible.
+- Resumen privado por versión entregada: cuenta recursos distintos del documento actual, no solicitudes ni llamadas. La UI indica explícitamente cero ilustraciones IA cuando corresponde, sin inferir consumo cero. Mantiene consentimiento, plan, flags, cuota y revisión.
+- [QA y límites](qa/ciencias-apoyos-visuales/README.md). Proveedores programados y dibujos sintéticos, sin IA pagada. Unidad/BD 2.005 correctas y 13 omitidas; PDF focalizadas 11+1; E2E focalizadas 8/8; E2E completa pendiente de cierre. Sin modelos/prompts nuevos, migraciones, cambios comerciales ni servicios remotos.
+
 ## 2026-10-26 — Reparación localizada con el apoyo que excedió su presupuesto
 
 - Base `1a72c1c`, rama `codex/reparacion-glosario-presupuesto`, #72 integrada. El fundador aporta `generator_validation`, dos generaciones, y el glosario de 32 palabras frente a 24+6. Contador correcto: no era un fallo de Stripe/PDF.

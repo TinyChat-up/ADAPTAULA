@@ -30,6 +30,12 @@ const card = (props: Partial<Parameters<typeof StartAdaptationCard>[0]> = {}) =>
 /** Words that belong to the machinery, never to the teacher's screen («Planificador» is a kind of help, so it is allowed). */
 const INTERNAL = /planner|generator|reviewer|revisor|\bjob\b|\bcola\b|queue|schema|pipeline|\bmodelo\b|token|\d+ ?%/i;
 
+it('una ficha con opt-in y cero imágenes generadas lo indica sin fingir consumo ni mejora de la figura original',()=>{
+  const out=visible(view({...ready({creationMode:'automatic'}),visualSupportResult:{generated:0,original:1,structured:0}}));
+  expect(out).toContain('Esta ficha no incorpora ninguna ilustración generada con IA.');
+  expect(out).toContain('Figuras del original: 1');
+});
+
 describe("A · creation screen: «¿Cómo quieres preparar esta ficha?»", () => {
   it("offers «Hacer magia» as the primary, recommended action and «Revisar antes de crear» as the secondary one, with the exact copy", () => {
     const out = card({ initialProfileId: "p2" });

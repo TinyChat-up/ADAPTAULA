@@ -35,6 +35,13 @@ test('ilustración sintética: procedencia, finalidad, revisión docente, acceso
   const row=await page.request.post(`${base}/rest/v1/generated_assets`,{headers:{...headers,'content-type':'application/json'},data:{id:pin.assetId,workspace_id:ws,adaptation_id:id,type:'illustration',storage_path:storagePath,sha256:pin.sha256,mime:'image/png',width:768,height:512,bytes:pin.bytes.length,need_key:'dec_1',brief_fingerprint:'a'.repeat(64),model_alias:'IMAGE_QUALITY',attempts:1,review:{approved:true},image_brief:{pedagogical_purpose:c.purpose},alt_text:'Estantería y libro abierto.'}});
   expect(row.ok(),await row.text()).toBe(true);
   await seedReadyDocument(page,ws,id,c.withSupport); await requireVisuals(page,id,[]);
+  const stored=await page.request.get(`${base}/rest/v1/adaptations?id=eq.${id}&select=context_snapshot`,{headers});
+  const snapshot=(await stored.json())[0].context_snapshot;
+  const consent=await page.request.patch(`${base}/rest/v1/adaptations?id=eq.${id}`,{headers,data:{context_snapshot:{...snapshot,visual_supports:{requested:true}}}});
+  expect(consent.ok()).toBe(true);
+  await page.goto(`/app/adaptaciones/${id}`);
+  await expect(page.getByText('Ilustraciones generadas con IA incorporadas: 1.')).toBeVisible();
+  await page.screenshot({path:info.outputPath('resultado-apoyos.png'),fullPage:true,style:'nextjs-portal{display:none}'});
   await page.goto(`/app/adaptaciones/${id}/vista`);
   await expect(page.getByRole('link',{name:/^Plan Max/}).first()).toBeVisible();
   await expect(page.getByText('Ilustración generada con IA.',{exact:false})).toBeVisible();
@@ -48,6 +55,13 @@ test('ilustración sintética: procedencia, finalidad, revisión docente, acceso
   await signUpAndOnboard(p,uniqueEmail());
   expect((await p.request.get(new URL(assetUrl,page.url()).href)).ok()).toBe(false);
   await other.close();
+  const version=await page.request.post(`${base}/rest/v1/adaptation_versions`,{headers,data:{adaptation_id:id,workspace_id:ws,version:2,document:c.without,review:{},source:'ai_generated'}});
+  expect(version.ok()).toBe(true);
+  const current=await page.request.patch(`${base}/rest/v1/adaptations?id=eq.${id}`,{headers,data:{current_version:2}});
+  expect(current.ok()).toBe(true);
+  await page.goto(`/app/adaptaciones/${id}`);
+  await expect(page.getByText('Esta ficha no incorpora ninguna ilustración generada con IA.')).toBeVisible();
+  await page.screenshot({path:info.outputPath('sin-ilustraciones.png'),fullPage:true,style:'nextjs-portal{display:none}'});
   } finally {
     const restored=await page.request.patch(`${base}/rest/v1/plans?slug=eq.max`,{headers,data:{monthly_images:maxPlan.monthly_images,features:maxPlan.features}});
     expect(restored.ok()).toBe(true);

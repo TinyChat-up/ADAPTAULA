@@ -3,7 +3,8 @@ import type { PGlite } from '@electric-sql/pglite';
 import { createTestDb, createUser } from './harness';
 import { deps as makeDeps, readerFor, seedMaterial, seedLearner, scriptedServices, newSpy, versions } from './orchestration-harness';
 import { fractionsAnalysis } from '../../evals/adaptation/fixtures';
-import { createAdaptationCommand, type ServiceDeps } from '@/lib/adaptation/orchestration/service';
+import { createAdaptationCommand, getAdaptationStatus, type ServiceDeps } from '@/lib/adaptation/orchestration/service';
+import { maxVisualCorpus } from '../../evals/max-visuals/corpus';
 
 let db:PGlite;beforeAll(async()=>{db=await createTestDb();},60000);
 it('autoriza en servidor, persiste consentimiento y conserva idempotencia; deniega cupo agotado y otro workspace',async()=>{
@@ -23,4 +24,10 @@ it('autoriza en servidor, persiste consentimiento y conserva idempotencia; denie
   expect(row.rows[0]!.context_snapshot.visual_supports).toEqual({requested:true});
   expect(await createAdaptationCommand(deps,{...actor,canWrite:false},request)).toMatchObject({ok:false,code:'forbidden'});
   expect(await createAdaptationCommand(deps,actor,{...request,creationMode:'review'})).toMatchObject({ok:false,code:'invalid'});
+  const before=await getAdaptationStatus(deps,actor,created.data.adaptationId);
+  expect(before.ok && before.data.visualSupportResult).toBeUndefined();
+  const document=maxVisualCorpus()[0]!.without;
+  await db.query("insert into public.adaptation_versions(adaptation_id,workspace_id,version,document,review,source) values($1,$2,1,$3::jsonb,'{}'::jsonb,'ai_generated')",[created.data.adaptationId,u.workspaceId,JSON.stringify(document)]);
+  await db.query("update public.adaptations set status='ready',current_version=1,delivered_at=now() where id=$1",[created.data.adaptationId]);
+  expect(await getAdaptationStatus(deps,actor,created.data.adaptationId)).toMatchObject({ok:true,data:{visualSupportResult:{generated:0,original:0,structured:0}}});
 });
