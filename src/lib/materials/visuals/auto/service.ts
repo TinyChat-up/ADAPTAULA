@@ -36,8 +36,9 @@ import type { VisionLocator } from "./vision";
  * v5: require an activity anchor, including on text pages; invalidate previous acceptance decisions.
  * v6: a generic figure is located by the marks its analysis names (letters, arrow numbers, measures), all printed on it, legibly;
  *     column-aware zones and a lead zone for such figures; the text inside its own boxes belongs to it.
+ * v7: explicit numbered parts and detached marks with a visible leader; revalidate the complete crop before reusing an old one.
  */
-export const AUTO_ENGINE_VERSION = "auto_visuals@v6";
+export const AUTO_ENGINE_VERSION = "auto_visuals@v7";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -234,7 +235,12 @@ export async function prepareVisuals(deps: AutoRunDeps, input: AutoRunInput): Pr
         }
         const earlier = earlierAuto.get(l.visualId);
         if (earlier) {
-          const same = iou(boundsRect(earlier), boundsRect(l.bounds)) >= 0.8;
+          // A similar box can still cut off a mark the new engine recovered. Reuse only if it also CONTAINS the new crop
+          // (one raster pixel allows coordinate rounding), on the same page. Never silently replace a persisted selection.
+          const old = boundsRect(earlier), next = boundsRect(l.bounds);
+          const same = earlier.page === page && iou(old, next) >= 0.8
+            && old.x0 <= next.x0 + 1 / read.model.width && old.y0 <= next.y0 + 1 / read.model.height
+            && old.x1 >= next.x1 - 1 / read.model.width && old.y1 >= next.y1 - 1 / read.model.height;
           result.visuals[l.visualId] = same ? await finish(earlier) : { choice: "D", reason: "auto_not_revalidated", confidence: l.confidence, method: null, spec: null, signals: signalsOf(l.evidence) };
           continue;
         }

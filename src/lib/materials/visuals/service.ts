@@ -144,7 +144,7 @@ const PageBoxSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pdf"), width_pt: z.number().positive(), height_pt: z.number().positive(), rotation: z.number().finite(), view: z.tuple([z.number(), z.number(), z.number(), z.number()]) }),
 ]);
 const AutoEvidenceSchema = z.object({
-  engine: z.enum(["auto_visuals@v1", "auto_visuals@v2", "auto_visuals@v3", "auto_visuals@v4", "auto_visuals@v5", "auto_visuals@v6"]),
+  engine: z.enum(["auto_visuals@v1", "auto_visuals@v2", "auto_visuals@v3", "auto_visuals@v4", "auto_visuals@v5", "auto_visuals@v6", "auto_visuals@v7"]),
   shape: z.enum(["bar", "number_line", "figure"]), signature: z.boolean(), unique: z.boolean(),
   placement: z.literal(true), clean: z.literal(true), anchor: z.string().regex(/^act_[0-9]{1,4}$/),
   vision: z.object({ used: z.boolean(), agrees: z.boolean(), confidence: z.number().min(0).max(1).nullable(), iou: z.number().min(0).max(1).nullable() }),

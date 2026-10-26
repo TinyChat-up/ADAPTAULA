@@ -1,6 +1,8 @@
 import { MIN_SIDE, type NormalizedBounds } from "../geometry";
 import { area, components, gap, inkFraction, intersection, iou, isLabel, isLabelLine, px, textLines, textMask, textSegments, union, type Component, type PageModel, type Rect, type TextLine } from "./page-model";
 import { isMark, isMarkLine, isMeasure, type ExpectedMarks } from "./marks";
+import { hasLeader } from "./leader";
+import { withGridMarks } from "./grid-marks";
 import { barShape, numberLineShape } from "./shapes";
 
 /**
@@ -179,7 +181,7 @@ export function candidates(model: PageModel, mask = textMask(model)): Candidate[
       const key = `${c.x0}:${c.y0}:${c.x1}:${c.y1}`;
       return !seen.has(key) && seen.add(key) !== undefined;
     })
-    .map((c) => ({ ...c, crop: withLabels(model, c), markCrop: withMarks(model, c) }));
+    .map((c) => ({ ...c, crop: withLabels(model, c), markCrop: withMarks(model, mask, c) }));
 }
 
 /** An empty box (a frame to write in, a sign box): ink on its border only. */
@@ -209,9 +211,10 @@ function withLabels(model: PageModel, r: Rect): Rect {
  * The marks printed within reach of a figure belong to its crop: labels and «?» within 4 mm, a measure within 6 mm (it is written
  * beside the side it measures), and the marks touching those. Running text never does.
  */
-function withMarks(model: PageModel, r: Rect): Rect {
-  let crop = r;
+function withMarks(model: PageModel, mask: Uint8Array, r: Rect): Rect {
+  let crop = withGridMarks(model, mask, r);
   const marks = model.texts.filter((t) => isMark(t.text));
+  for (const mark of marks) if (hasLeader(model, mask, r, mark)) crop = union(crop, mark);
   for (let pass = 0; pass < 3; pass++) {
     const grown = marks.reduce((c, t) => (gap(c, t) <= px(model, pass === 0 ? (isMeasure(t.text) ? 6 : 4) : 1) ? union(c, t) : c), crop);
     if (area(grown) === area(crop)) break;
@@ -280,6 +283,8 @@ const EDGE = 238;
  * line of an activity's instruction (its anchor or a continuation) and any printed solution make it unclean.
  */
 function isCleanFigure(model: PageModel, mask: Uint8Array, lines: readonly TextLine[], instruction: (l: TextLine) => boolean, crop: Rect): boolean {
+  // Ink reaching the page boundary may be a truncated figure: its marks alone cannot prove completeness.
+  if (crop.x0 <= 0 || crop.y0 <= 0 || crop.x1 >= model.width || crop.y1 >= model.height) return false;
   if (area(crop) > 0.5 * model.width * model.height) return false;
   if (inkFraction(model, crop) < 0.004) return false;
   return !lines.some((l) => {
@@ -391,7 +396,8 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
     const signed = rows.filter((r) => r.evidence.signature && r.evidence.clean && (byMarks ? r.evidence.placement : zone === null || r.evidence.placement));
     const rivals = (byMarks ? signed.filter((r) => !signed.some((o) => o !== r && contains(r.candidate.crop, o.candidate.crop))) : signed).sort((a, b) => b.score - a.score);
     for (const r of rows) {
-      const ahead = rivals[0] === r && (rivals.length === 1 || r.score - rivals[1]!.score >= 0.15);
+      // Repeated marks on two separate figures are ambiguous. A model's preference is not independent identity evidence.
+      const ahead = rivals[0] === r && (rivals.length === 1 || !byMarks && r.score - rivals[1]!.score >= 0.15);
       if (ahead) {
         r.evidence.unique = true;
         r.score += W.unique;
@@ -405,6 +411,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
   const taken: Rect[] = [];
   for (const s of [...scored].sort((a, b) => b.score - a.score)) {
     if (out.has(s.target.id)) continue;
+    if (s.target.shape === "figure" && s.target.marks && (!s.evidence.signature || !s.evidence.unique)) continue;
     if (!s.evidence.clean || !s.evidence.placement || !s.evidence.anchor || s.score < ACCEPT) continue;
     if (taken.some((t) => iou(t, s.candidate.crop) > 0.2)) continue;
     taken.push(s.candidate.crop);

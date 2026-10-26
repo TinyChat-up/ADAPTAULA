@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { resolveMagicVisuals } from "@/lib/materials/visuals/auto/policy";
 import { AUTO_ENGINE_VERSION, prepareVisuals, type AutoRunInput } from "@/lib/materials/visuals/auto/service";
+import { locateVisuals } from "@/lib/materials/visuals/auto/locate";
+import { readPage } from "@/lib/materials/visuals/auto/read";
 import { resolveVisuals } from "@/lib/materials/visuals/service";
 import { normalizeAnalysis } from "@/lib/analysis/normalize";
 import { MaterialAnalysisDraftSchema, type MaterialAnalysis } from "@/lib/schemas/material-analysis";
@@ -10,7 +12,7 @@ import { buildDocument, sequentialIds } from "@/lib/adaptation/document";
 import { normalizePlan } from "@/lib/adaptation/plan";
 import { buildAdaptationContext } from "@/lib/adaptation/context";
 import { EXECUTIVE_EXPERIMENT_PROFILE } from "../../evals/adaptation/planner-lib";
-import { ARROWS_INSTRUCTION, LETTERS_INSTRUCTION, POLYGON_INSTRUCTION, SECOND_INSTRUCTION, VISUALS, arrowsSheet, lettersSheet, polygonSheet } from "../support/marked-figures";
+import { ARROWS_INSTRUCTION, GRID_INSTRUCTION, LETTERS_INSTRUCTION, NUMBERED_INSTRUCTION, POLYGON_INSTRUCTION, SECOND_INSTRUCTION, VISUALS, arrowsSheet, coordinateGridSheet, lettersSheet, numberedLeadersSheet, polygonSheet } from "../support/marked-figures";
 import { as, createTestDb, createUser } from "./harness";
 import { seedMaterial, type User } from "./orchestration-harness";
 import { attachSource, autoHarness, visualHarness } from "./visual-harness";
@@ -26,8 +28,10 @@ beforeAll(async () => {
   db = await createTestDb();
 }, 120_000);
 
-type Kind = "polygon" | "letters" | "arrows";
+type Kind = "polygon" | "letters" | "arrows" | "numbered" | "grid";
 const SHEETS: Record<Kind, { pdf: () => Promise<Uint8Array>; instruction: string; context?: string }> = {
+  grid: { pdf: () => coordinateGridSheet(), instruction: GRID_INSTRUCTION },
+  numbered: { pdf: () => numberedLeadersSheet(), instruction: NUMBERED_INSTRUCTION },
   polygon: { pdf: () => polygonSheet(), instruction: POLYGON_INSTRUCTION },
   letters: { pdf: () => lettersSheet(), instruction: LETTERS_INSTRUCTION, context: "A:\nB:\nC:\nD:" },
   arrows: { pdf: () => arrowsSheet(), instruction: ARROWS_INSTRUCTION, context: "Flecha 1: ______ Flecha 2: ______\nFlecha 3: ______ Flecha 4: ______" },
@@ -67,13 +71,13 @@ async function world(kind: Kind, bytes?: Uint8Array) {
 const q = <T>(sql: string, params: unknown[] = []) => db.query<T>(sql, params).then((r) => r.rows);
 
 describe("las tres figuras se recuperan del original, sin dibujarlas", () => {
-  for (const kind of ["polygon", "letters", "arrows"] as const) {
+  for (const kind of ["polygon", "letters", "arrows", "numbered", "grid"] as const) {
     it(`${kind}: localizador «auto» v6 con sus marcas, recorte con la receta de una persona, identidad y fidelidad verificadas, pedagogía NO`, async () => {
       const w = await world(kind);
       const summary = await prepareVisuals(w.auto.deps, w.input);
       expect(summary).toMatchObject({ status: "completed", result: { engine: AUTO_ENGINE_VERSION, vision_pages: 0, visuals: { vis_1: { choice: "B", method: "auto", verification: { identity: "verified", fidelity: "verified", pedagogy: "unverified" } } } } });
       const [locator] = await q<{ method: string; confidence: number; evidence: Record<string, unknown> }>("select method, confidence, evidence from public.material_visual_locators where material_id = $1", [w.materialId]);
-      expect(locator).toMatchObject({ method: "auto", evidence: { engine: "auto_visuals@v6", signature: true, placement: true, clean: true, marks: { legible: true } } });
+      expect(locator).toMatchObject({ method: "auto", evidence: { engine: AUTO_ENGINE_VERSION, signature: true, placement: true, clean: true, marks: { legible: true } } });
       expect(locator!.confidence).toBeGreaterThanOrEqual(0.75);
       // Signals, marks and coordinates only: no sentence of the material.
       expect(JSON.stringify(locator!.evidence)).not.toMatch(/Escribe|Deduce|planta|Vapor|Nubes/);
@@ -89,6 +93,23 @@ describe("las tres figuras se recuperan del original, sin dibujarlas", () => {
 });
 
 describe("identidad del original a lo largo del tiempo", () => {
+  it("no reutiliza una caja antigua parecida que deja fuera una marca recién recuperada", async () => {
+    const bytes = await numberedLeadersSheet();
+    const w = await world("numbered", bytes);
+    const read = await readPage(bytes, "application/pdf", 1, 100);
+    const [located] = locateVisuals(read.model, [{ id: "vis_1", shape: "figure", activityIds: ["act_1"], marks: { letters: [], numbers: ["1", "2", "3", "4"], measures: false } }], [{ id: "act_1", label: "1", instruction: NUMBERED_INSTRUCTION }, { id: "act_2", label: "2", instruction: SECOND_INSTRUCTION }]);
+    expect(located!.accepted).toBe(true);
+    const bounds = located!.bounds!;
+    await w.visuals.deps.admin.createLocator({
+      workspaceId: w.user.workspaceId, materialId: w.materialId, analysisFingerprint: w.input.analysisFingerprint,
+      visualId: "vis_1", sourceSha256: w.input.sourceSha256!, page: 1, pageBox: read.box, userId: null,
+      method: "auto", confidence: 0.9, evidence: { ...located!.evidence, engine: "auto_visuals@v6" },
+      bounds: { ...bounds, x: bounds.x + 0.025, w: bounds.w - 0.025 },
+    });
+    const summary = await prepareVisuals(w.auto.deps, w.input);
+    expect(summary).toMatchObject({ result: { engine: AUTO_ENGINE_VERSION, visuals: { vis_1: { choice: "D", reason: "auto_not_revalidated" } } } });
+    expect(await q("select id from public.material_visual_assets where material_id = $1", [w.materialId])).toHaveLength(0);
+  });
   it("original modificado después de guardar el localizador: el recurso de la versión anterior no se usa", async () => {
     const w = await world("letters");
     await prepareVisuals(w.auto.deps, w.input);

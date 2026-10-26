@@ -13,7 +13,7 @@ import { VISUAL_CROP_RECIPE } from "@/lib/materials/visuals/recipe";
 import { buildRenderModel } from "@/lib/render/model";
 import { assetRef, type PinnedAsset } from "@/lib/render/print/pinned-assets";
 import { MaterialDocumentSchema, type Block } from "@/lib/schemas/material-document";
-import { ARROWS_INSTRUCTION, LETTERS_INSTRUCTION, POLYGON_INSTRUCTION, USERS, VISUALS, activities, arrowsSheet, lettersSheet, polygonSheet } from "../support/marked-figures";
+import { ARROWS_INSTRUCTION, GRID_INSTRUCTION, LETTERS_INSTRUCTION, NUMBERED_INSTRUCTION, POLYGON_INSTRUCTION, USERS, VISUALS, activities, arrowsSheet, coordinateGridSheet, lettersSheet, numberedLeadersSheet, polygonSheet } from "../support/marked-figures";
 import { OUT_DIR, printPdf } from "./harness";
 
 /**
@@ -24,8 +24,10 @@ import { OUT_DIR, printPdf } from "./harness";
  */
 
 const PDF = "application/pdf";
-type Kind = "polygon" | "letters" | "arrows";
+type Kind = "polygon" | "letters" | "arrows" | "numbered" | "grid";
 const CASES: Record<Kind, { pdf: () => Promise<Uint8Array>; instruction: string }> = {
+  grid: { pdf: () => coordinateGridSheet(), instruction: GRID_INSTRUCTION },
+  numbered: { pdf: () => numberedLeadersSheet(), instruction: NUMBERED_INSTRUCTION },
   polygon: { pdf: () => polygonSheet(), instruction: POLYGON_INSTRUCTION },
   letters: { pdf: () => lettersSheet(), instruction: LETTERS_INSTRUCTION },
   arrows: { pdf: () => arrowsSheet(), instruction: ARROWS_INSTRUCTION },
