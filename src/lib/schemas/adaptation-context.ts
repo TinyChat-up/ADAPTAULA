@@ -2,6 +2,7 @@ import { z } from "zod";
 import { StrategyKeySchema, IntensitySchema } from "./adaptation-plan";
 import { AdaptationTypeSchema } from "./adaptation-type";
 import { DimensionKeySchema } from "./functional-profile";
+import { LearningObservationsSchema } from "./learning-observations";
 
 /**
  * AdaptationContext v1: the compact, deterministic input of the planner, derived in TypeScript from the functional
@@ -120,5 +121,7 @@ export const AdaptationContextSchema = z.object({
   teacher_request: z.string().max(500).nullable(),
   /** Absent on historical adaptations: never authorises premium image generation. */
   visual_supports: z.object({ requested: z.literal(true) }).optional(),
+  /** Declared observations only; supports remain authoritative and no competence or diagnosis is inferred. */
+  learning_observations: LearningObservationsSchema.optional(),
 });
 export type AdaptationContext = z.infer<typeof AdaptationContextSchema>;

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAndOnboard, uniqueEmail, waitForAnalysis, workspaceOf, uploadAndOpen } from "./helpers";
+import { applyProfilePreset, signUpAndOnboard, uniqueEmail, waitForAnalysis, workspaceOf, uploadAndOpen } from "./helpers";
 import { workspacePdf } from "../support/workspace-pdf";
 
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -63,8 +63,7 @@ test("workspace: arrastre, análisis simulado, páginas, apoyos, panel y estados
   await page.getByLabel("Alias o iniciales").fill("Perfil de prueba");
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
-  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Atención, planificación y organización" });
-  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+  await applyProfilePreset(page, "Atención, planificación y organización");
   await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}\\?perfil=`));
   const selected = await page.getByLabel("Perfil", { exact: true }).inputValue();

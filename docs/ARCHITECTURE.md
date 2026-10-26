@@ -2,6 +2,12 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-043 — Observaciones declaradas y apoyos explícitos en perfiles (2026-10-26)
+
+El lector acepta `FunctionalProfile` V1 y V2 en el JSONB existente. V2 conserva fortalezas y barreras por IDs de un catálogo cerrado, y distingue ausencia de valoración de un `none` explícito. `supports`, límites y permisos siguen decidiendo la adaptación: ni una fortaleza ni una barrera activan dimensiones por sí solas. Tarjetas, presets y sugerencias actualizan ese mismo estado tras una acción docente. La observación se incorpora opcionalmente al contexto y al planificador, sin alias ni texto personal; un contexto sin observaciones conserva su fingerprint histórico. No cambia el currículo ni autoriza imágenes.
+
+Sin conversión masiva de filas. Edición y duplicación conservan el contrato leído; las nuevas observaciones/selecciones escriben V2. El servidor impide degradar V2 desde un cliente V1 y compara la revisión temporal del formulario en las ediciones nuevas. La escritura usa además un filtro atómico por `updated_at`, workspace e ID. La migración 032 añade una protección de versión en BD, necesaria antes de escribir V2 en entornos compartidos: también protege frente a despliegues antiguos que no ejecutan la API nueva. No transforma datos ni cambia RLS. Un rollback a un lector exclusivamente V1 deja de ser seguro en cuanto existan filas V2: mantener un lector compatible y conservar las observaciones. [Despliegue, reversibilidad y límites](qa/perfiles-dua/README.md).
+
 ## ADR-042 — Consentimiento de apoyos visuales por adaptación (2026-10-26)
 
 La disponibilidad comercial no autoriza por sí sola a consumir imágenes. La acción «Hacer magia» acepta una elección explícita, validada en servidor y persistida como `visual_supports.requested=true` en el contexto y su fingerprint. La ausencia histórica significa sin consentimiento; no se migran ni reescriben documentos entregados. La fábrica de ilustraciones comprueba el contexto persistido y el workspace, además del plan, flag, presupuesto y cuota existentes. La oferta de interfaz consulta `workspace_usage` con identidad de miembro, no con la identidad vacía del rol de servicio.

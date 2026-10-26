@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAndOnboard, uniqueEmail as unique } from "./helpers";
+import { applyProfilePreset, signUpAndOnboard, uniqueEmail as unique } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -10,8 +10,7 @@ async function createProfile(page: Page, alias: string, preset?: string) {
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
   if (preset) {
-    await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: preset });
-    await page.getByRole("button", { name: "Aplicar" }).click();
+    await applyProfilePreset(page, preset);
   }
   await page.getByRole("button", { name: "Crear perfil" }).click();
 }
@@ -36,18 +35,17 @@ test("registro → onboarding → crear perfil desde un punto de partida → edi
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
 
   await expect(page.getByText("Todavía no has indicado ningún apoyo")).toBeVisible();
-  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Atención, planificación y organización" });
-  await page.getByRole("button", { name: "Aplicar" }).click();
+  await applyProfilePreset(page, "Atención, planificación y organización");
 
-  await expect(page.getByText("instrucciones breves y divididas en pasos (mucho)")).toBeVisible();
+  await expect(page.getByText("instrucciones breves y divididas en pasos (habitual o imprescindible)")).toBeVisible();
   await expect(page.getByText("como máximo 3 tareas visibles a la vez")).toBeVisible();
   await page.getByText("Ajustar atención y organización", { exact: true }).click();
   await expect(
-    page.getByRole("radiogroup", { name: "Dividir instrucciones largas en pasos" }).getByRole("radio", { name: "Mucho" }),
+    page.getByRole("radiogroup", { name: "Dividir instrucciones largas en pasos" }).getByRole("radio", { name: "Es un apoyo habitual o imprescindible" }),
   ).toBeChecked();
 
   // Todo sigue siendo editable tras aplicar la configuración.
-  await page.getByRole("radiogroup", { name: "Dividir instrucciones largas en pasos" }).getByText("Sin adaptación").click();
+  await page.getByRole("radiogroup", { name: "Dividir instrucciones largas en pasos" }).getByText("No necesita este apoyo").click();
   await expect(page.getByText("instrucciones breves y divididas en pasos")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Crear perfil" }).click();
@@ -125,6 +123,7 @@ test("accesibilidad (axe) en las pantallas principales de la app", async ({ page
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso", "/app/adaptar"]) {
     await page.goto(path);
     if (path === "/app/alumnos/nuevo") {
+      await page.getByText("Personalizar más", { exact: true }).click();
       await page.getByText("Elegir otras áreas de apoyo", { exact: true }).click();
       await page.getByRole("button", { name: /^Lectura/ }).click();
     }

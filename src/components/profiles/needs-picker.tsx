@@ -44,7 +44,7 @@ export function PresetPicker({
       {preset ? (
         <p className="text-sm">
           {preset.description}
-          {hasConfiguration ? <span className="text-muted-foreground"> Al aplicarlo se sustituye la configuración actual.</span> : null}
+          {hasConfiguration ? <span className="text-muted-foreground"> Al aplicarlo se añaden apoyos, sin borrar los anteriores.</span> : null}
         </p>
       ) : null}
     </Card>
@@ -89,7 +89,7 @@ export function AreaPicker({
           );
         })}
       </ul>
-      <p className="mt-3 text-sm text-muted-foreground">Al quitar un área se restablecen sus ajustes.</p>
+      <p className="mt-3 text-sm text-muted-foreground">Abrir o cerrar un área solo cambia los controles visibles. Conserva todos sus apoyos.</p>
     </div>
   );
 }

@@ -4,6 +4,8 @@
 
 ## Propuesta de valor
 
+**Perfiles declarados, 2026-10-26:** fortalezas observadas, barreras situadas en la tarea y apoyos explícitos se guardan por separado. Once tarjetas permiten combinar propuestas sin diagnósticos. La frecuencia expresa cuánto ayuda un ajuste; no mide capacidad ni competencia curricular. Las sugerencias requieren elección docente y no garantizan generación de imágenes. Los perfiles V1 permanecen legibles; no se implementa aquí el motor de competencia por contenido de la issue #63. [Alcance y pruebas](qa/perfiles-dua/README.md).
+
 > Sube el material que ya utilizas y conviértelo en una versión adaptada para cada alumno en minutos.
 
 El docente sube una ficha (PDF o imagen), indica contexto (etapa, curso, asignatura), elige uno o varios perfiles de alumnado o una adaptación rápida, y recibe una ficha adaptada, maquetada, editable, comparable con el original y exportable a PDF. Cada resultado explica **qué se ha adaptado y por qué**.

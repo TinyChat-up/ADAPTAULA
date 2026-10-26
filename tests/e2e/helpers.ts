@@ -5,6 +5,15 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 export const password = "contraseña-segura-123";
 export const uniqueEmail = () => `docente-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
+export async function applyProfilePreset(page: Page, label: string) {
+  const advanced = page.locator("details[data-profile-advanced]");
+  if (!await advanced.getAttribute("open").then((value) => value !== null)) await advanced.locator("summary").first().click();
+  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label });
+  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+  const more = page.getByRole("complementary", { name: "Resumen del perfil" }).locator("details");
+  if (await more.count() && await more.getAttribute("open") === null) await more.locator("summary").click();
+}
+
 export async function signUpAndOnboard(page: Page, email: string, start: RegExp = /Crear un perfil/) {
   await page.goto("/registro");
   await page.getByLabel("Nombre").fill("Ana Pérez");

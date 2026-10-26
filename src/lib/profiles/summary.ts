@@ -1,16 +1,20 @@
 import { DIMENSIONS, activeSupports, type DimensionKey, type FunctionalProfile } from "@/lib/schemas/functional-profile";
 import { DIMENSION_COPY, LEVEL_WORD } from "./copy";
+import { BARRIERS, STRENGTHS } from "./learning-catalog";
 
 export interface SummaryLine {
   text: string;
   /** Intensity word shown next to the line, when it comes from a support level. */
-  level?: "algo" | "bastante" | "mucho";
+  level?: string;
 }
 
 export interface ProfileSummary {
   isEmpty: boolean;
   intro: string;
   lines: SummaryLine[];
+  strengths: string[];
+  barriers: string[];
+  notNeeded: string[];
 }
 
 const LEVEL_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -33,6 +37,11 @@ function bilingualLine(code: string): string {
  */
 export function summarizeProfile(profile: FunctionalProfile): ProfileSummary {
   const lines: SummaryLine[] = [];
+  const observations = {
+    strengths: (profile.observations?.strengths ?? []).map((id) => STRENGTHS[id]),
+    barriers: (profile.observations?.barriers ?? []).map((id) => BARRIERS[id].label),
+    notNeeded: (Object.entries(profile.supports) as [DimensionKey, string][]).filter(([, level]) => level === "none").map(([key]) => DIMENSION_COPY[key].control),
+  };
 
   const supports = activeSupports(profile)
     .map(([key, level]) => ({ key, level }))
@@ -57,11 +66,12 @@ export function summarizeProfile(profile: FunctionalProfile): ProfileSummary {
   if (lines.length === 0) {
     return {
       isEmpty: true,
-      intro: "Todavía no has indicado ningún apoyo. Las adaptaciones solo cambiarán lo que pidas en cada material.",
+      intro: observations.notNeeded.length ? "No hay apoyos activos. Has marcado algunos como no necesarios; lo demás sigue sin indicar." : "Todavía no has indicado ningún apoyo. Las adaptaciones solo cambiarán lo que pidas en cada material.",
       lines,
+      ...observations,
     };
   }
-  return { isEmpty: false, intro: "Adaptaula tendrá en cuenta que este perfil se beneficia de:", lines };
+  return { isEmpty: false, intro: "Apoyos seleccionados por ti; su aplicación depende del material y de los objetivos.", lines, ...observations };
 }
 
 /** Short teaser for list rows: the first lines plus how many more there are. */

@@ -70,7 +70,7 @@ export const DIMENSION_COPY: Record<DimensionKey, DimensionCopy> = {
   screen_reader_compatibility: { control: "Compatible con lector de pantalla", summary: "documento compatible con lector de pantalla" },
   // Audición
   written_instructions: { control: "Dar las instrucciones por escrito", summary: "instrucciones por escrito" },
-  visual_support: { control: "Añadir apoyos visuales", summary: "apoyos visuales" },
+  visual_support: { control: "Usar apoyos visuales para comprender", summary: "apoyos visuales para comprender", hint: "No equivale a necesitar letra ampliada o contraste. Puede combinarse con pocas imágenes relevantes." },
   transcript_support: { control: "Incluir transcripciones", summary: "transcripciones del material audiovisual" },
   audio_dependency_reduction: { control: "No depender del audio", summary: "tareas que no dependen del audio" },
   // Motricidad
@@ -94,10 +94,11 @@ export const DIMENSION_COPY: Record<DimensionKey, DimensionCopy> = {
 };
 
 export const LEVEL_OPTIONS = [
-  { value: "none", label: "Sin adaptación" },
-  { value: "low", label: "Algo" },
-  { value: "medium", label: "Bastante" },
-  { value: "high", label: "Mucho" },
+  { value: "unknown", label: "No indicado" },
+  { value: "none", label: "No necesita este apoyo" },
+  { value: "low", label: "A veces le ayuda" },
+  { value: "medium", label: "Lo necesita con frecuencia" },
+  { value: "high", label: "Es un apoyo habitual o imprescindible" },
 ] as const;
 
-export const LEVEL_WORD = { low: "algo", medium: "bastante", high: "mucho" } as const;
+export const LEVEL_WORD = { low: "a veces", medium: "con frecuencia", high: "habitual o imprescindible" } as const;

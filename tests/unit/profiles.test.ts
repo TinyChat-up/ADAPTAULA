@@ -65,7 +65,7 @@ describe("presets", () => {
   it("stay editable: any dimension can be changed or cleared afterwards", () => {
     let profile = applyPreset(findPreset("dislexia")!);
     profile = setSupport(profile, "decoding_support", "none");
-    expect(profile.supports.decoding_support).toBeUndefined();
+    expect(profile.supports.decoding_support).toBe("none");
     profile = clearArea(profile, "reading");
     expect(areasInUse(profile)).not.toContain("reading");
   });
@@ -75,6 +75,7 @@ describe("draft helpers", () => {
   it("compactProfile drops `none` and empty values", () => {
     const compact = compactProfile({
       ...emptyFunctionalProfile(),
+      schema_version: 1,
       supports: { font_size: "none", choice: "low" },
       limits: { max_visible_tasks: undefined },
       allowances: { calculator: false, keyboard: true },
@@ -113,7 +114,7 @@ describe("summarizeProfile (deterministic, no AI)", () => {
       "como máximo 3 tareas visibles a la vez",
       "se permite el uso de calculadora",
     ]);
-    expect(s.lines[0]?.level).toBe("mucho");
+    expect(s.lines[0]?.level).toBe("habitual o imprescindible");
   });
 
   it("is a pure function of the profile", () => {

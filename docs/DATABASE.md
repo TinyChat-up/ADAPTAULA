@@ -109,6 +109,8 @@ Free no tiene fila: **sin suscripción vigente = plan `free`**.
 ## Alumnado y clases
 
 **learner_profiles** (UI: "Perfiles de alumnado"; nunca "students")
+
+El JSONB `functional_profile` admite lectura V1/V2 en la aplicación desde la entrega de perfiles DUA (2026-10-26). V2 añade observaciones declaradas por IDs de catálogo y conserva `none` explícito; no se convierte ni reescribe ninguna fila histórica. La migración 032 impide degradar un perfil V2 a V1, también desde un despliegue antiguo. Debe aplicarse con autorización antes de habilitar escrituras V2 en entornos compartidos. Los permisos, límites y RLS existentes se mantienen. [Compatibilidad y reversibilidad](qa/perfiles-dua/README.md).
 | id | uuid PK | |
 |---|---|---|
 | workspace_id | uuid | |
