@@ -21,6 +21,8 @@ export const PUBLIC_SERVICE_ERRORS: Readonly<Record<ServiceError, { status: numb
   generation_limit: { status: 409, message: "Ya se han preparado tres versiones de esta ficha. La última se conserva; para intentarlo de nuevo, crea una adaptación nueva desde el material." },
   failure_budget: { status: 429, message: "Ha habido demasiados intentos fallidos en poco tiempo. Vuelve a intentarlo dentro de unas horas." },
   unavailable: { status: 503, message: "No hemos podido preparar la adaptación en este momento. Inténtalo de nuevo en unos minutos." },
+  visual_supports_unavailable: { status: 409, message: "Los apoyos visuales premium no están disponibles ahora. Puedes desmarcar la opción y continuar con la adaptación habitual." },
+  visual_supports_exhausted: { status: 402, message: "Has agotado el cupo de imágenes de este periodo. Desmarca los apoyos visuales premium para continuar sin consumir imágenes." },
 };
 
 export type PublicResult<T> = { ok: true; data: T } | { ok: false; code: ServiceError; message: string };

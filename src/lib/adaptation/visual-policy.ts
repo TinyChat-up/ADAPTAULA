@@ -255,6 +255,8 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
   const removed = new Set<string>();
   const rewrites = new Map(plan.needs.flatMap((n) => (n.resolution.action === "rewrite" || n.resolution.action === "substitute" ? n.resolution.activities.map((a) => [a.activityId, a] as const) : [])));
   const rewritten = new Set<string>();
+  const existingIds = new Set(allBlocks(document).map((b) => b.id));
+  const insertedPictures = new Set<string>();
   const pages = document.pages.map((page) => ({
     blocks: page.blocks.flatMap((b): Block[] => {
       const key = keyOf(b);
@@ -281,8 +283,11 @@ export function applyVisualResolution(document: MaterialDocument, plan: VisualRe
       const picture = referenced && referenced.origin === "referenced" ? sourceFor(referenced) : null;
       if (picture && actRef) {
         const id = pictureBlockId(actRef);
-        out.push({ id, type: "image", source: picture.source, alt_text: picture.alt, trace: { origin: "adapted", source_refs: [actRef], decision_ids: [] } });
-        activity = { ...activity, resource_block_ids: [...new Set([...(activity.resource_block_ids ?? []), id])] };
+        if (!existingIds.has(id) && !insertedPictures.has(id)) {
+          out.push({ id, type: "image", source: picture.source, alt_text: picture.alt, trace: { origin: "adapted", source_refs: [actRef], decision_ids: [] } });
+          insertedPictures.add(id);
+        }
+        if (insertedPictures.has(id)) activity = { ...activity, resource_block_ids: [...new Set([...(activity.resource_block_ids ?? []), id])] };
       }
       const act = b.trace.source_refs.find((r) => rewrites.has(r));
       if (act && !rewritten.has(act)) {

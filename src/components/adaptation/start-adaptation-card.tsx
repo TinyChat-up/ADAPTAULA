@@ -32,12 +32,14 @@ export function StartAdaptationCard({
   canWrite,
   newProfileHref,
   create,
+  visualSupportOffer,
 }: {
   profiles: ProfileOption[];
   initialProfileId?: string | undefined;
   canWrite: boolean;
   newProfileHref: string;
-  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice }) => Promise<PublicResult<{ adaptationId: string }>>;
+  visualSupportOffer?: { remaining: number; maxPerAdaptation: number } | null;
+  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; visualSupports?: boolean }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
   const uid = useId();
@@ -46,6 +48,7 @@ export function StartAdaptationCard({
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [pending, setPending] = useState<CreationModeChoice | null>(null);
   const lock = useRef(false);
+  const [visualSupports, setVisualSupports] = useState(false);
   const [requestKey] = useState(() => crypto.randomUUID());
 
   async function start(mode: CreationModeChoice) {
@@ -60,7 +63,7 @@ export function StartAdaptationCard({
     setError(null);
     setFieldError(undefined);
     try {
-      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}`, mode });
+      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}`, mode, visualSupports: mode === "automatic" && visualSupports });
       if (result.ok) {
         router.push(`/app/adaptaciones/${result.data.adaptationId}`);
         return;
@@ -113,6 +116,15 @@ export function StartAdaptationCard({
             </h3>
             <div className="grid gap-3">
               <div className="flex flex-col gap-3 border-t border-primary py-4">
+                {visualSupportOffer ? <div className="space-y-2 text-sm">
+                  <label className="flex min-h-11 items-center gap-3 font-medium">
+                    <input type="checkbox" className="size-5 accent-primary" checked={visualSupports} onChange={(e) => setVisualSupports(e.target.checked)} disabled={pending !== null || visualSupportOffer.remaining <= 0} aria-describedby={`${uid}-visuals`} />
+                    Crear con apoyos visuales
+                  </label>
+                  <p id={`${uid}-visuals`} className="text-muted-foreground">{visualSupportOffer.remaining <= 0 ? "Has agotado el cupo de imágenes de este periodo. Puedes continuar sin imágenes premium." : `Quedan ${visualSupportOffer.remaining} imágenes. Puede consumir hasta ${Math.min(visualSupportOffer.remaining, visualSupportOffer.maxPerAdaptation)} en esta adaptación, solo si ayudan a comprender. Las representaciones exactas no consumen imágenes.`}</p>
+                  <p className="text-muted-foreground">Se priorizan ejemplos con otros datos y apoyos junto al ejercicio. No se garantiza una ilustración: puedes revisar el resultado antes de imprimir.</p>
+                  <p className="text-muted-foreground">Esta opción se aplica al pulsar Hacer magia.</p>
+                </div> : null}
                 <Button size="lg" variant="magic" onClick={() => void start("automatic")} disabled={pending !== null} aria-describedby={`${uid}-magic`}>
                   {pending === "automatic" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
                   {CREATION_COPY.automatic.label}

@@ -2,6 +2,12 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-042 — Consentimiento de apoyos visuales por adaptación (2026-10-26)
+
+La disponibilidad comercial no autoriza por sí sola a consumir imágenes. La acción «Hacer magia» acepta una elección explícita, validada en servidor y persistida como `visual_supports.requested=true` en el contexto y su fingerprint. La ausencia histórica significa sin consentimiento; no se migran ni reescriben documentos entregados. La fábrica de ilustraciones comprueba el contexto persistido y el workspace, además del plan, flag, presupuesto y cuota existentes. La oferta de interfaz consulta `workspace_usage` con identidad de miembro, no con la identidad vacía del rol de servicio.
+
+Se reutiliza la política visual y CLARO: un ejemplo exacto acotado se calcula sin API de imagen; una escena adicional opcional solo se intenta para un problema verbal con barrera pertinente. La elección nunca garantiza una imagen ni una equivalencia pedagógica automática. Los ejemplos añadidos entran en la revisión de la ficha. [Alcance, evidencias y límites](qa/max-apoyos-opt-in/README.md).
+
 ## Visión general
 
 Un **monolito Next.js** desplegado en Vercel, con Supabase como backend gestionado (Postgres + Auth + Storage). La facturación pública Stripe permanece desactivada. Hay Checkout/webhook exclusivamente TEST para un piloto privado, cerrado por configuración, backend y workspace; no es una integración LIVE. Sin microservicios, sin Redis, sin colas externas en el MVP.

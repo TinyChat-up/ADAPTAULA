@@ -15,6 +15,7 @@ import { serverEnv } from "@/lib/config/env.server";
 import { getFlags } from "@/lib/config/flags";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { callStructured } from "../auto/assistants";
 import type { IllustrationWithheld } from "../auto/policy";
 import { ILLUSTRATION_BUDGET, ILLUSTRATION_LIMITS, type IllustrationDeps, type StoredIllustration } from "./service";
@@ -39,6 +40,27 @@ export type IllustrationAvailability = { available: true; deps: IllustrationDeps
 const ILLUSTRATION_PURPOSES = ["image_brief", "image", "image_review"] as const;
 
 export async function illustrationAvailability(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
+  const { data, error } = await createAdminClient().from("adaptations").select("workspace_id, context_snapshot").eq("id", ids.adaptationId).maybeSingle();
+  const context = data?.context_snapshot as { visual_supports?: { requested?: boolean } } | null;
+  if (error || data?.workspace_id !== ids.workspaceId || context?.visual_supports?.requested !== true) return { available: false, reason: "disabled" };
+  return availableForWorkspace(ids);
+}
+
+/** No provider call or reservation: a server offer, rechecked when the adaptation is created. */
+export async function visualSupportOffer(workspaceId: string): Promise<{ remaining: number; maxPerAdaptation: number } | null> {
+  try {
+    if (!getFlags().aiImagesEnabled || !imagePilotAllows(serverEnv(), workspaceId, publicEnv().NEXT_PUBLIC_SUPABASE_URL, process.env.VERCEL_ENV)) return null;
+    // workspace_usage requires the member's identity even when invoked by a service role: use the existing RLS session loader.
+    const usage = await getWorkspaceUsage(workspaceId);
+    if (usage.plan.slug !== "max" || usage.features.image_generation !== true || usage.images.limit <= 0) return null;
+    if (!await illustrationDeps({ workspaceId, adaptationId: "", materialId: "" }, ILLUSTRATION_BUDGET.perAdaptationUsd)) return null;
+    const configured = Number(usage.features.illustrations_per_adaptation);
+    const maxPerAdaptation = Math.min(ILLUSTRATION_LIMITS.perAdaptation, Number.isInteger(configured) && configured >= 0 ? configured : ILLUSTRATION_LIMITS.perAdaptation);
+    return maxPerAdaptation > 0 ? { remaining: Math.max(0, usage.images.limit - usage.images.used), maxPerAdaptation } : null;
+  } catch { return null; }
+}
+
+async function availableForWorkspace(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
   // Switched off in Adaptaula: true for every plan, so the stop must not suggest changing plans (fichas 06/07 of the real run).
   if (!getFlags().aiImagesEnabled) return { available: false, reason: "disabled" };
   if (!imagePilotAllows(serverEnv(), ids.workspaceId, publicEnv().NEXT_PUBLIC_SUPABASE_URL, process.env.VERCEL_ENV)) return { available: false, reason: "disabled" };

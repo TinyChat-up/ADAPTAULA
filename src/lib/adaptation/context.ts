@@ -30,6 +30,7 @@ export interface ContextInput {
   analysis: MaterialAnalysis;
   adaptationType: AdaptationType;
   teacherRequest?: string | null;
+  visualSupports?: boolean;
   /** Builder policy. Defaults to the historical one (1) so a context is reproducible; opt in to a later one explicitly. */
   policy?: ContextPolicy;
 }
@@ -199,6 +200,7 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
     },
     conflicts: detectConflicts(new Set(needs.map((n) => n.dimension)), analysis, { literalTexts, writingActivities }),
     teacher_request: sanitizeRequest(input.teacherRequest),
+    ...(input.visualSupports === true ? { visual_supports: { requested: true as const } } : {}),
   };
   return { context: AdaptationContextSchema.parse(context), omitted };
 }

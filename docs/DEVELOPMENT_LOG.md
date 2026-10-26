@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Apoyos visuales Max con consentimiento por adaptación
+
+- Base `33be83c`, rama `codex/max-apoyos-opt-in`. #67–#71 integradas y ninguna PR abierta al iniciar.
+- Control explícito junto a «Hacer magia», cupo efectivo y máximo potencial. Contexto/fingerprint con elección, aviso persistente y rechazo de imágenes sin consentimiento incluso por vías alternativas. Free/Pro, agotamiento y disponibilidad se comprueban en servidor.
+- Apoyo visible acotado: ejemplo de fracciones calculado y barra del ejemplo con datos/resultados distintos; escena de problema verbal solo ante barrera pertinente y sin cantidades exactas. Recursos opcionales rechazados se omiten; los imprescindibles mantienen el bloqueo.
+- Corrección de integración local: la oferta consulta `workspace_usage` con la sesión del miembro, porque esa RPC exige identidad incluso al rol de servicio. Inserción de imágenes por actividad idempotente y sin IDs duplicados al compartir actividad.
+- [QA, evidencia, comandos y límites](qa/max-apoyos-opt-in/README.md). Unidad/BD: 1.991 correctas y 13 omitidas; PDF: 76/76; E2E completa: 134 correctas y 2 omitidas en 20,3 min; control Max configurado adicional: 2/2. Typecheck, build, smoke raster/PDF y secretos correctos; lint sin errores, aviso previo `_id`. Los pasos de `check` usan binarios instalados por el fallo del lanzador pnpm. [PR #72](https://github.com/TinyChat-up/ADAPTAULA/pull/72), sin merge. Sin cambios de modelos/prompts, precios, migraciones, CLARO ni servicios remotos. No se ha generado ninguna ilustración mediante API de pago.
+
 ## 2026-10-26 — Las figuras del original no se leían al generar la ficha en producción
 
 - Síntoma: «Hacer magia» paraba con «Una actividad depende de una imagen del material original» (ficha de la célula, esquema A–D). `material_visual_autolocations` guardaba `extraction_failed` en cada intento, con cero llamadas de visión.

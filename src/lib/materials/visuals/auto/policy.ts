@@ -56,6 +56,7 @@ export interface MagicVisualInput {
   subject?: string | null;
   /** The functional dimensions the sheet attends (no student data): they decide how many steps a rewrite may add. */
   functionalNeeds?: readonly string[];
+  visualSupports?: boolean;
 }
 
 /** Kinds of original picture an image model may stand in for: never data, measures, scales or real places. */
@@ -395,6 +396,17 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       continue;
     }
     done("unresolved_visual", { action: "unresolved", reason: "support_unavailable" });
+  }
+  // Only one additional context scene, and only for an actual language/visual barrier in a verbal problem.
+  // It is optional: quantities and the evaluated operation stay in the task, never in a generated drawing.
+  if (input.visualSupports === true && functionalNeeds.some((d) => ["visual_math_support", "number_sense_support", "visual_support", "literal_language", "background_knowledge_support"].includes(d))) {
+    const activity = input.analysis.activities.find((a) => a.type === "problem_solving" && !outcomes.some((n) => n.activityIds.includes(a.id)) && !allBlocks(input.document).some((b) => b.type === "image" && b.trace.source_refs.includes(a.id)));
+    if (activity) {
+      const purpose = "Comprender la situación del problema sin mostrar cantidades, operaciones ni resultados. Escena contextual sencilla, sin decoración.";
+      const outcome = await illustrate(activity.id, [activity], null, purpose);
+      const need: VisualNeedOutcome = { key: activity.id, origin: "referenced", essential: false, activityIds: [activity.id], category: outcome?.ok ? "generated_illustration" : "rewritable_without_visual", resolution: outcome?.ok ? { action: "illustration", asset: outcome.asset, alt: outcome.asset.alt } : { action: "omit", reason: outcome && !outcome.ok ? outcome.reason : "optional_support_unavailable" }, attempts: [outcome ? "illustrate" : "omit"] };
+      outcomes.push({ ...need, contract: { ...contractOf(need, null), reason: "teacher_requested_context_support" } });
+    }
   }
   return { policy_version: VISUAL_POLICY_VERSION, needs: outcomes };
 }
