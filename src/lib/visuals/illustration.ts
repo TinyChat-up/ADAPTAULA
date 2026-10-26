@@ -2,6 +2,7 @@ import type { IMAGE_BRIEF_V1 } from "@prompts/image-brief/v1";
 import type { IMAGE_REVIEW_V1 } from "@prompts/image-review/v1";
 import type { z } from "zod";
 import { leakedSignature, normalizeText } from "@/lib/adaptation/text";
+import { letterMarkersIn } from "./marks";
 
 /**
  * New educational illustrations (docs/VISUAL_RESOURCES.md § Ilustraciones generadas): the deterministic gates around the two
@@ -40,6 +41,13 @@ export interface BriefContext {
   /** The sheet attends the reduction of visual distractions or density: never more than «simple» detail. */
   lowDetail: boolean;
 }
+
+/** Fixed validation codes only: never persist a provider's explanation or the contents of a rejected illustration. */
+export const BRIEF_REJECTION_CODES: ReadonlySet<string> = new Set([
+  "not_feasible", "incomplete", "exact_data", "no_required_elements", "duplicate_elements", "markup",
+  "duplicate_markers", "markers_not_consecutive", "markers_do_not_match_activity", "marker_with_name",
+  "label_gives_answer", "too_many_labels", "answer_leaked", "letter_markers_do_not_match_activity",
+]);
 
 const MARKUP = /[<>{}[\]`]/;
 /** A measure, scale or value the picture would have to get exactly right: not for an image model. */
@@ -84,6 +92,8 @@ export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok
 
   // Labels: few, short, and never what the student has to find.
   const labels = elements.filter((e) => e.label).map((e) => e.label!);
+  const letters = letterMarkersIn(ctx.activity);
+  if (letters.length > 0 && (letters.some((l) => labels.filter((label) => label === l).length !== 1) || labels.some((l) => /^[A-H]$/.test(l) && !letters.includes(l)))) violations.push("letter_markers_do_not_match_activity");
   if (labels.some(l => /[0-9]/.test(l))) violations.push("exact_data");
   if (ctx.expectedAnswer && labels.some(l => normalizeText(l) === normalizeText(ctx.expectedAnswer!))) violations.push("label_gives_answer");
   if (labels.length > 8) violations.push("too_many_labels");

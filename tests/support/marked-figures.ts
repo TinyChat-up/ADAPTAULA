@@ -81,6 +81,47 @@ export const POLYGON_INSTRUCTION = "Deduce la longitud de los lados con ? de la 
 export const LETTERS_INSTRUCTION = "Escribe que parte indica cada letra.";
 export const ARROWS_INSTRUCTION = "Escribe el nombre de cada proceso de las flechas.";
 export const SECOND_INSTRUCTION = "Explica tu respuesta con una frase completa.";
+export const NUMBERED_INSTRUCTION = "Nombra las partes señaladas con los números 1, 2, 3 y 4.";
+export const GRID_INSTRUCTION = "Mira el plano. Escribe la casilla donde se encuentra el circulo.";
+
+/** The axis labels are outside the lattice; its internal symbols must survive as original pixels, never be reconstructed. */
+export const coordinateGridSheet = (variant?: "missing" | "misaligned" | "irregular") => sheet((p) => {
+  header(p);
+  text(p, `1. ${GRID_INSTRUCTION}`, 50, 130);
+  for (let i = 0; i <= 4; i++) {
+    line(p, 180 + 50 * i, 200, 180 + 50 * i, 400);
+    const y = 200 + 50 * i + (variant === "irregular" && i === 2 ? 12 : 0);
+    line(p, 180, y, 380, y);
+  }
+  for (let i = 0; i < 4; i++) {
+    text(p, "ABCD"[i]!, 201 + 50 * i, 190, 12, true);
+    if (!(variant === "missing" && i === 2)) text(p, String(i + 1), 149, 229 + 50 * i + (variant === "misaligned" && i === 2 ? 18 : 0), 12, true);
+  }
+  circle(p, 305, 325, 12);
+  text(p, `2. ${SECOND_INSTRUCTION}`, 50, 520);
+});
+
+/** A synthetic diagram with a detached number beside a visible leader, rather than inside a circle. */
+export const numberedLeadersSheet = (variant?: "no_leader" | "too_far" | "other_activity" | "duplicate" | "instruction_inside" | "clipped") => sheet((p) => {
+  header(p);
+  text(p, `1. ${NUMBERED_INSTRUCTION}`, 50, 130);
+  circle(p, 300, 220, 35);
+  line(p, 300, 255, 300, 480, 3);
+  line(p, 300, 300, 250, 280, 2);
+  line(p, 300, 400, 350, 380, 2);
+  line(p, 300, 480, 260, 520, 2);
+  line(p, 300, 480, 340, 520, 2);
+  for (const [n, y] of [["1", 220], ["2", 380], ["4", 500]] as const) {
+    line(p, 305, y, 390, y);
+    text(p, n, 396, y + 4, 12, true);
+  }
+  if (variant !== "no_leader") line(p, 206, 340, 300, 340);
+  text(p, "3", variant === "too_far" ? 120 : 183, 344, 12, true);
+  if (variant === "duplicate") text(p, "3", 325, 340, 12, true);
+  if (variant === "instruction_inside") text(p, "Responde aqui con una frase completa.", 220, 360, 10);
+  if (variant === "clipped") line(p, 300, 460, -20, 460, 2);
+  text(p, `2. ${SECOND_INSTRUCTION}`, 50, variant === "other_activity" ? 300 : 620);
+});
 
 /** 03-like: the outline LEADS its activity (above the first instruction), as the real sheet prints it. */
 export const polygonSheet = (scale = 1) => sheet((p) => { header(p); lShape(p, 120, 150, scale); text(p, `1. ${POLYGON_INSTRUCTION}`, 50, 420); text(p, `2. ${SECOND_INSTRUCTION}`, 50, 600); });
@@ -115,12 +156,16 @@ export const tinySheet = () => sheet((p) => { header(p); text(p, `1. ${LETTERS_I
 
 /** The analysis each sheet would get (only the fields the locator reads), in the words a careful analyzer writes. */
 export const VISUALS = {
+  grid: { title: "Plano", description: "Cuadrícula con columnas señaladas con las letras A, B, C y D y filas numeradas del 1 al 4.", text: null },
+  numbered: { title: "Partes de una planta", description: "Dibujo con partes señaladas.", text: null },
   polygon: { title: "Figura A", description: "Contorno en L con las medidas de sus lados en centímetros y dos lados desconocidos marcados con ?.", text: null },
   letters: { title: "Esquema", description: "Dibujo de una planta con cuatro partes señaladas con las letras A, B, C y D.", text: null },
   arrows: { title: null, description: "Esquema del ciclo del agua con cuatro flechas numeradas del 1 al 4 entre cajas.", text: null },
 } as const;
 const shortAnswer = (instruction: string, context: string | null = null) => ({ instruction, context, type: "short_answer" as const, answer_area: { type: "lines" as const, lines: null } });
 export const USERS = {
+  grid: [shortAnswer(GRID_INSTRUCTION)],
+  numbered: [shortAnswer(NUMBERED_INSTRUCTION)],
   polygon: [shortAnswer(POLYGON_INSTRUCTION)],
   letters: [shortAnswer(LETTERS_INSTRUCTION, "A:\nB:\nC:\nD:")],
   arrows: [shortAnswer(ARROWS_INSTRUCTION, "Flecha 1: ______ Flecha 2: ______\nFlecha 3: ______ Flecha 4: ______")],

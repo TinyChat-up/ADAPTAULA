@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Imágenes: recuperar las marcas del original antes de pedir una ilustración
+
+- Base `268b4bf`, #74 integrada y sin PR abiertas al iniciar; rama `codex/imagenes-recuperacion-original`. El fundador aporta tres necesidades imprescindibles sin resolver, dos con `brief_rejected`. Se revisa el recorrido visual en código; no se consulta Supabase/Vercel ni se obtiene el análisis real de esa adaptación.
+- Regresiones fallando antes del arreglo: números explícitos no reconocidos, número junto a una línea indicadora fuera del alcance de 4 mm, número duplicado oculto por la caja, elección ambigua entre gemelos mediante visión, figura truncada en el borde, brief A–D sin sus letras y ejes externos de una cuadrícula. Reparación conservadora de recuperación/validación, no cambios del currículo ni generación pagada.
+- Motor v7 y rechazo de recortes antiguos parecidos que no contienen la caja completa; selección humana intacta. Parser literal compartido de letras, vértices/columnas y números de la descripción, líneas indicadoras y retículas verificadas desde píxeles. Códigos fijos de rechazo del brief guardados en el plan visual sin texto libre del proveedor.
+- [Auditoría, límites y PDF sintéticos](qa/imagenes-recuperacion-original/README.md). 410 pruebas focalizadas de unidad/BD/boundaries (28 archivos) y 18 PDF (6 archivos) correctas; typecheck, build y comprobación de secretos correctos. Lint sin errores, con el aviso previo `_id`. Por instrucción expresa del fundador no se ejecutan E2E de ordenador/móvil ni capturas de interfaz. No se repite la suite general. Se inspeccionan los dos PDF reales de Chromium publicados como evidencia técnica sintética.
+- No se publica el corpus previo ni se cambia un documento del usuario. Sin prompts/modelos, segundo renderer, cuotas/precios, migraciones, datos remotos, llamadas de pago, merge ni despliegue. No se acredita éxito de la adaptación remota ni calidad pedagógica del modelo real. Siguiente: revisar/integrar la PR y después un ensayo manual expresamente autorizado por el fundador; las adaptaciones bloqueadas no se reabren solas.
+
 ## 2026-10-26 — Ciencias: evaluación de apoyo contextual y transparencia del resultado
 
 - Base `32c6ff2`, rama `codex/apoyos-visuales-ciencias`, #73 integrada y sin PR abiertas. Inspección local del PDF adjunto: tres páginas, una imagen de 577×341 repetida en 1 y 3. No se publica el archivo del usuario ni se atribuye su procedencia solo por el aspecto. El fundador indica consumo OpenAI cero; no se han inspeccionado servicios remotos.

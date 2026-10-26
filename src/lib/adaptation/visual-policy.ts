@@ -91,6 +91,8 @@ export interface VisualNeedOutcome {
   resolution: VisualAction;
   /** Rungs tried, in order (audit). */
   attempts: string[];
+  /** Fixed brief-validation codes for diagnosis; never raw provider text or review descriptions. */
+  illustrationRejection?: { reason: string; codes: string[] };
   /** Absent only in plans stored before the contract existed (policy v1). */
   contract?: VisualContract;
 }

@@ -27,6 +27,15 @@ const ctx = { activity: CELL_ACTIVITY_1, expectedAnswer: ANSWER, signatures: [] 
 const brief = (over: Partial<BriefDraft> = {}): BriefDraft => ({ ...structuredClone(CELL_BRIEF), ...over });
 
 describe("the brief: what the illustration must show, validated before any image is paid for", () => {
+  it("no acepta una ilustración sin las letras A–D que exige la consigna", () => {
+    const activity = "Observa el esquema. Nombra las partes señaladas con las letras A, B, C y D.";
+    const elements = ["membrana", "citoplasma", "nucleo", "mitocondria"].map((name, i) => ({ name, marker: null, label: "ABCD"[i]! }));
+    const labelled = brief({ required_elements: elements });
+    const context = { ...ctx, activity, expectedAnswer: null };
+    expect(validateBrief(labelled, context)).toMatchObject({ ok: true });
+    expect(validateBrief(brief({ required_elements: elements.map((e) => ({ ...e, label: null })) }), context)).toMatchObject({ ok: false, violations: expect.arrayContaining(["letter_markers_do_not_match_activity"]) });
+    expect(validateBrief(brief({ required_elements: elements.map((e) => ({ ...e, label: e.label === "D" ? "C" : e.label })) }), context)).toMatchObject({ ok: false, violations: expect.arrayContaining(["letter_markers_do_not_match_activity"]) });
+  });
   it("accepts the cell with the three numbered parts the activity names, and no names written", () => {
     expect(markerNumbersIn(CELL_ACTIVITY_1)).toEqual([1, 2, 3]);
     expect(validateBrief(brief(), ctx)).toMatchObject({ ok: true, brief: { kind: "scientific_diagram", required_elements: [{ marker: 1 }, { marker: 2 }, { marker: 3 }] } });

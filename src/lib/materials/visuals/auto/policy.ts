@@ -15,6 +15,7 @@ import { drawableFamily, generateEquivalentFigure } from "@/lib/visuals/from-tas
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, specIssues, type VisualSpec } from "@/lib/visuals/spec";
 import type { RewriteDraft, SubstituteDraft, SupportDraft, VisualAssistants } from "./assistants";
 import { ILLUSTRATION_LIMITS, type IllustrationOutcome, type IllustrationRequest } from "../illustrate/service";
+import { BRIEF_REJECTION_CODES } from "@/lib/visuals/illustration";
 
 /**
  * The visual policy of «Hacer magia», decided for one assembled sheet (rungs and categories: `src/lib/adaptation/visual-policy.ts`).
@@ -244,11 +245,12 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
 
   for (const need of needs) {
     const attempts: string[] = [];
+    let illustrationRejection: VisualNeedOutcome["illustrationRejection"];
     const visual = need.origin === "original" ? input.analysis.visuals.find((v) => v.id === need.key) : undefined;
     const done = (category: VisualNeedCategory, given: VisualAction) => {
       const limited = planLimited.get(need.key);
       const resolution: VisualAction = given.action === "unresolved" && limited ? { action: "unresolved", reason: limited } : given;
-      const outcome = { ...need, category, resolution, attempts };
+      const outcome = { ...need, category, resolution, attempts, ...(illustrationRejection ? { illustrationRejection } : {}) };
       outcomes.push({ ...outcome, contract: contractOf(outcome, visual?.kind ?? null) });
     };
     const signatures = signaturesFor(input.analysis, need.activityIds);
@@ -258,6 +260,7 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       if (!outcome) return false;
       if (!outcome.ok) {
         attempts.push(`illustrate:${outcome.reason}`);
+        illustrationRejection = { reason: outcome.reason, codes: outcome.reason === "brief_rejected" ? [...new Set(outcome.detail.filter((c) => BRIEF_REJECTION_CODES.has(c)))] : [] };
         if (outcome.reason === "quota_exhausted") planLimited.set(need.key, "illustration_quota_exhausted");
         return false;
       }

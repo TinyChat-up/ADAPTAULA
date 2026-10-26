@@ -1,6 +1,7 @@
 import { activityStructure } from "@/lib/adaptation/structure";
 import type { AnalysisActivity, AnalysisVisual } from "@/lib/schemas/material-analysis";
 import { isLabel } from "./page-model";
+import { lettersIn } from "@/lib/visuals/marks";
 
 /**
  * The printed marks a figure carries and the activity is about (docs/VISUAL_RESOURCES.md § Figuras con marcas): the letters that
@@ -30,30 +31,13 @@ export const isMark = (text: string) => isLabel(text) || isMeasure(text) || isUn
 /** A text line made only of marks («8 cm», «A», «1 2», «?»). */
 export const isMarkLine = (text: string) => isMeasure(text) || text.trim().split(/\s+/).every((t) => isLabel(t) || isUnknown(t));
 
-const LETTERS = "ABCDEFGH";
-const range = (from: string, to: string, alphabet: string) => {
-  const a = alphabet.indexOf(from);
-  const b = alphabet.indexOf(to);
-  return a >= 0 && b > a && b - a <= 7 ? alphabet.slice(a, b + 1).split("") : [];
-};
 const numberRange = (from: number, to: number) => (to > from && to - from <= 9 ? Array.from({ length: to - from + 1 }, (_, i) => String(from + i)) : []);
-
-/** «A, B, C y D», «A–D», «A a D», «de la A a la D», «las letras D (flor), C (hoja), B (tallo) y A (raíz)». */
-function lettersIn(text: string): string[] {
-  const r = /\b(?:de la\s+)?([A-H])\s*(?:[–—-]|\s+a\s+(?:la\s+)?)\s*([A-H])\b/.exec(text);
-  if (r) return range(r[1]!, r[2]!, LETTERS);
-  const list = /\b([A-H](?:\s*,\s*[A-H])+\s+y\s+[A-H])\b/.exec(text);
-  if (list) return list[1]!.split(/\s*,\s*|\s+y\s+/);
-  // Each letter followed by the part it names, in brackets: only right after the word «letra(s)», so a stray capital never counts.
-  const named = /\bletras?\s+((?:[A-H]\s*\([^)]{1,40}\)\s*(?:,|\by\b)\s*)+[A-H]\s*\([^)]{1,40}\))/.exec(text);
-  return named ? [...named[1]!.replace(/\([^)]*\)/g, "").matchAll(/\b([A-H])\b/g)].map((m) => m[1]!) : [];
-}
 
 /** «1–4», «del 1 al 4», «1 a 4», «1, 2, 3 y 4», «1 del mar al vapor, 2 del vapor a las nubes, 3 …». */
 function numbersIn(text: string): string[] {
   const r = /\b(?:del\s+)?(\d)\s*(?:[–—-]|\s+al?\s+)\s*(\d)\b/.exec(text);
   if (r) return numberRange(Number(r[1]), Number(r[2]));
-  const list = /\b(\d(?:\s*,\s*\d)+\s+y\s+\d)\b/.exec(text);
+  const list = /\b(\d{1,3}(?:\s*,\s*\d{1,3})+(?:\s+y\s+\d{1,3})?)\b/.exec(text);
   if (list) return list[1]!.split(/\s*,\s*|\s+y\s+/);
   // An enumeration whose items each START with their number (after «:», «,», «;» or «y»): only a run 1, 2, … n with n ≥ 2 counts.
   const leading = [...text.matchAll(/(?:[:;,]|\by)\s*(\d)\s+(?!(?:mm|cm|dm|m|km)\b)(?=\p{L})/gu)].map((m) => Number(m[1]));
@@ -69,12 +53,13 @@ export function expectedMarks(visual: Pick<AnalysisVisual, "title" | "descriptio
   const fields = activities.flatMap((a) => activityStructure(a).fields ?? []).map((f) => f.label.trim());
 
   let letters: string[] = [];
-  if (/\bletras?\b/.test(words)) letters = lettersIn(own).length > 0 ? lettersIn(own) : activities.map((a) => lettersIn(`${a.instruction} ${a.context ?? ""}`)).find((l) => l.length > 0) ?? [];
+  if (/\b(?:letras?|etiquetas?|vertices?|columnas?)\b/.test(words)) letters = lettersIn(own).length > 0 ? lettersIn(own) : activities.map((a) => lettersIn(`${a.instruction} ${a.context ?? ""}`)).find((l) => l.length > 0) ?? [];
   const fieldLetters = fields.filter((f) => /^[A-H]$/.test(f));
   if (letters.length === 0 && fieldLetters.length >= 2) letters = fieldLetters;
 
   let numbers: string[] = [];
-  if (/\b(flechas?|numerad[oa]s?|pasos?)\b/.test(words)) numbers = numbersIn(own).length > 0 ? numbersIn(own) : activities.map((a) => numbersIn(`${a.instruction} ${a.context ?? ""}`)).find((n) => n.length > 0) ?? [];
+  const numbered = /\b(flechas?|numerad[oa]s?|pasos?|filas?)\b|\b(?:senalad[oa]s?|marcad[oa]s?|indicad[oa]s?|identificad[oa]s?) con (?:los )?numeros?\b|\b(?:indican?|representan?|senalan?) (?:los )?numeros?\b/;
+  if (numbered.test(words) || /\bnumeros?\s+\d/.test(normalize(own))) numbers = numbersIn(own).length > 0 ? numbersIn(own) : activities.map((a) => numbersIn(`${a.instruction} ${a.context ?? ""}`)).find((n) => n.length > 0) ?? [];
   const fieldNumbers = fields.map((f) => /^(?:flecha|paso|proceso)\s+(\d)$/i.exec(f)?.[1]).filter((n): n is string => n !== undefined);
   if (numbers.length === 0 && fieldNumbers.length >= 2) numbers = fieldNumbers;
 

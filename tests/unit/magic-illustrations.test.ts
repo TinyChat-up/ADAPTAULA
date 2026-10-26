@@ -45,6 +45,15 @@ function cell(withIllustrations: boolean, result: IllustrationOutcome = approved
 }
 
 describe("case B · the scheme of the cell, not in the PDF and not an exact figure", () => {
+  it("conserva el motivo concreto de rechazo del brief sin guardar texto libre del proveedor", async () => {
+    const c = cell(true, { ok: false, reason: "brief_rejected", detail: ["markers_do_not_match_activity", "answer_leaked", "markers_do_not_match_activity", "texto privado del documento"] });
+    const plan = await c.resolve();
+    expect(outcome(plan, "vis_1")).toMatchObject({
+      category: "unresolved_visual",
+      illustrationRejection: { reason: "brief_rejected", codes: ["markers_do_not_match_activity", "answer_leaked"] },
+    });
+    expect(JSON.stringify(plan)).not.toContain("texto privado");
+  });
   it("a NEW illustration, reviewed and approved, stands in for it; the activity stays as written («Observa el esquema…»)", async () => {
     const c = cell(true);
     const plan = await c.resolve();
