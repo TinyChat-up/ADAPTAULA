@@ -58,6 +58,16 @@ describe("/precios tells the truth", () => {
     expect(html).not.toMatch(/50 recursos visuales|Hasta 30 clases|Hasta 10 clases|Varios perfiles a la vez|Historial completo|Historial de 30 días/);
   });
 
+  it("only the private pilot account sees a link to its test checkout on Max; Pro stays unavailable and nothing else is sold", () => {
+    const html = renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans(), pilotMax: true }));
+    expect(html.match(/href="\/app\/uso#piloto-privado"/g)).toHaveLength(1);
+    expect(html).toContain("Probar Max");
+    expect(html).toContain("Stripe en modo prueba");
+    expect(html).not.toContain("En preparación");
+    expect(html).toContain("Contratación no disponible");
+    expect(renderToStaticMarkup(createElement(PricingGrid, { plans: seededPlans() }))).not.toContain("piloto-privado");
+  });
+
   it("'Cómo funciona' does not promise a quick adaptation without a profile nor a free-text request", () => {
     const text = STEPS.map((s) => s.text).join(" ");
     expect(text).not.toMatch(/adaptación rápida|Indica qué quieres adaptar/);

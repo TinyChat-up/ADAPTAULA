@@ -21,7 +21,7 @@ export function planBullets(plan: PublicPlan): string[] {
   return out;
 }
 
-function PlanCard({ plan, highlighted }: { plan: PublicPlan; highlighted: boolean }) {
+function PlanCard({ plan, highlighted, pilot }: { plan: PublicPlan; highlighted: boolean; pilot: boolean }) {
   const free = plan.monthly_price_cents === 0;
   return (
     <div className={cn("flex min-w-0 flex-col rounded-card border bg-surface p-5 [overflow-wrap:anywhere] sm:p-7", highlighted ? "border-primary/40" : "border-border")}>
@@ -45,18 +45,25 @@ function PlanCard({ plan, highlighted }: { plan: PublicPlan; highlighted: boolea
         ))}
       </ul>
       <div className="mt-6 space-y-2">
-        {free ? <LinkButton href="/registro" variant="primary" className="w-full">Empezar gratis</LinkButton> : (
+        {free ? <LinkButton href="/registro" variant="primary" className="w-full">Empezar gratis</LinkButton> : pilot ? (
+          <LinkButton href="/app/uso#piloto-privado" variant="primary" className="w-full">Probar Max</LinkButton>
+        ) : (
           <div className="rounded-control border border-border bg-muted px-4 py-3 text-center text-sm font-medium">
             {plan.slug === "max" ? "En preparación" : "Contratación no disponible"}
           </div>
         )}
-        {!free && <p className="text-center text-xs text-muted-foreground">Todavía no se puede contratar este plan.</p>}
+        {!free && (
+          <p className="text-center text-xs text-muted-foreground">
+            {pilot ? "Prueba privada de tu cuenta, con Stripe en modo prueba." : "Todavía no se puede contratar este plan."}
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-export function PricingGrid({ plans }: { plans: PublicPlan[] }) {
+/** `pilotMax` is resolved on the server (pilotOfferAvailable); it only links to the private checkout, never sells Max publicly. */
+export function PricingGrid({ plans, pilotMax = false }: { plans: PublicPlan[]; pilotMax?: boolean }) {
   if (plans.length === 0) {
     return <Alert tone="warning" title="No hemos podido cargar los planes">Vuelve a intentarlo en unos minutos.</Alert>;
   }
@@ -64,7 +71,7 @@ export function PricingGrid({ plans }: { plans: PublicPlan[] }) {
     <div className="space-y-4">
       <div className={cn("grid gap-6", plans.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2")}>
         {plans.map((p) => (
-          <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} />
+          <PlanCard key={p.slug} plan={p} highlighted={p.slug === "pro"} pilot={pilotMax && p.slug === "max"} />
         ))}
       </div>
       {/* The numbers are read from the plans table; they are launch values, not a final commercial commitment (docs/PRODUCT.md). */}
@@ -74,10 +81,10 @@ export function PricingGrid({ plans }: { plans: PublicPlan[] }) {
   );
 }
 
-export function PricingSection({ plans }: { plans: PublicPlan[] }) {
+export function PricingSection({ plans, pilotMax = false }: { plans: PublicPlan[]; pilotMax?: boolean }) {
   return (
     <Section id="precios" title="Precios" intro="Empieza con Free. Consulta la capacidad prevista de los próximos planes." tone="surface">
-      <PricingGrid plans={plans} />
+      <PricingGrid plans={plans} pilotMax={pilotMax} />
     </Section>
   );
 }

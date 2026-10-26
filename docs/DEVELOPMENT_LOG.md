@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Cabecera pública con sesión y acceso al piloto Max desde Precios
+
+- Base `b6b612b` (#67 integrada), rama `claude/variables-expuestas-repo-f2o2et`. Motivo: con sesión iniciada, «Ver planes» llevaba a `/precios`, cuya cabecera mostraba siempre «Entrar»; la docente creía haber perdido la sesión y no encontraba el piloto (solo estaba en `/app/uso`).
+- La cabecera y el menú móvil públicos leen la sesión en servidor y muestran «Ir a la app» si la hay. Las páginas públicas entran en el `proxy` solo para refrescar la sesión (nunca redirigen).
+- La tarjeta Max de `/precios` y de la landing enlaza a `/app/uso#piloto-privado` solo si `pilotOfferAvailable()` (servidor): propietario del workspace personal del piloto, configuración del piloto válida y migración 030 aplicada. Para cualquier otra cuenta, Pro y Max siguen sin poder contratarse. `pilotConfigFor()` comparte la regla con `/app/uso`.
+- Pruebas: `pricing-truth` (unidad) cubre la tarjeta del piloto y su ausencia; `pricing-stage4` (E2E) comprueba que con sesión no aparece «Entrar» ni el enlace del piloto en una cuenta normal; `public-stage4b` 6/6. Unidad 1.548/1.548, typecheck y build correctos, lint sin errores (un aviso previo). Suite E2E completa no ejecutada (cambio acotado). Sin Stripe, IA ni SQL.
+
 ## 2026-10-23 — Piloto privado de Stripe TEST y Max, destino producción
 
 - Autorización de destino: el fundador decide trabajar en producción; no se interpreta como activar cobros LIVE ni autorizar generación pagada. #66 integrada; base `e016d8b`, rama `codex/stripe-piloto-produccion`.

@@ -9,7 +9,7 @@ const NAV: NavItem[] = [
   { href: "/privacidad", label: "Privacidad" },
 ];
 
-export function MarketingHeader() {
+export function MarketingHeader({ signedIn = false }: { signedIn?: boolean }) {
   return (
     <header className="surface-glass sticky top-0 z-40 border-x-0 border-t-0 shadow-none">
       <div className="mx-auto flex min-h-20 max-w-7xl flex-wrap items-center justify-between gap-y-2 px-5 py-2 sm:px-8">
@@ -22,14 +22,22 @@ export function MarketingHeader() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 md:flex">
-          <LinkButton href="/login" variant="ghost" size="sm">
-            Entrar
-          </LinkButton>
-          <LinkButton href="/registro" variant="secondary" size="sm">
-            Empezar gratis
-          </LinkButton>
+          {signedIn ? (
+            <LinkButton href="/app" variant="secondary" size="sm">
+              Ir a la app
+            </LinkButton>
+          ) : (
+            <>
+              <LinkButton href="/login" variant="ghost" size="sm">
+                Entrar
+              </LinkButton>
+              <LinkButton href="/registro" variant="secondary" size="sm">
+                Empezar gratis
+              </LinkButton>
+            </>
+          )}
         </div>
-        <MobileNav items={NAV} />
+        <MobileNav items={NAV} signedIn={signedIn} />
       </div>
     </header>
   );

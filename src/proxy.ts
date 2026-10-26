@@ -5,8 +5,9 @@ export async function proxy(request: NextRequest) {
   return updateSession(request);
 }
 
-// Marketing pages never touch Supabase, so they stay out of the proxy. The user-facing APIs are included only
-// so the session cookie is refreshed; they answer 401 themselves instead of redirecting.
+// The public pages are included only so a signed-in teacher's session is refreshed there too: their header and the
+// private Max pilot read it (they never redirect). The user-facing APIs are included for the same reason; they answer
+// 401 themselves instead of redirecting.
 export const config = {
-  matcher: ["/app/:path*", "/admin/:path*", "/api/uploads/:path*", "/api/materials/:path*", "/login", "/registro", "/forgot-password", "/reset-password"],
+  matcher: ["/", "/precios", "/como-funciona", "/privacidad", "/terminos", "/cookies", "/app/:path*", "/admin/:path*", "/api/uploads/:path*", "/api/materials/:path*", "/login", "/registro", "/forgot-password", "/reset-password"],
 };
