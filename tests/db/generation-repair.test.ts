@@ -9,6 +9,9 @@ import type { DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-
 import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
 import { mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
+import { cellGlossary, shortCellGlossary } from "../support/glossary-budget-case";
+import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
+import type { MaterialDocument } from "@/lib/schemas/material-document";
 
 /**
  * «Hacer magia» and a generation that does not pass its audit (the real Matemáticas 4.º case and what a bounded automatic repair
@@ -50,10 +53,11 @@ const unauthorizedOn = (id: string) => (draft: DraftGeneratedSegmentsV2): DraftG
 });
 
 let n = 0;
-async function teacher(gen: ReturnType<typeof generator>, plan = planner) {
+async function teacher(gen: ReturnType<typeof generator>, plan = planner, profile?: FunctionalProfile) {
   const u = await createUser(db, `repair-${++n}@example.com`);
   const material = await seedMaterial(db, u, mathAnalysis());
   const learner = await seedLearner(db, u);
+  if (profile) await db.query('update public.learner_profiles set functional_profile=$1::jsonb where id=$2',[JSON.stringify(profile),learner]);
   const spy = newSpy();
   const orchestrator = makeDeps(db, scriptedServices(spy, { planner: plan, generator: gen }));
   orchestrator.entitlements = dbEntitlements(orchestrator.store);
@@ -128,6 +132,50 @@ describe("«Hacer magia»: bounded automatic repair of a generation that fails i
     expect(entry).toMatchObject({ action: "approved", restrictions: [expect.stringMatching(/como máximo 40 palabras visibles/)] });
     expect(t.spy.generator).toBe(2);
     expect(await entitlement(id)).toBe("consumed");
+  });
+
+  it("la reparación recibe el fragmento anterior, solo de la decisión fallida, para corregirlo en vez de empezar a ciegas", async () => {
+    let repair: GenInput | null = null;
+    const t = await teacher(generator((d, call, input) => {
+      if (call === 1) return {...d,segments:d.segments.map(s=>s.decision_id==='dec_1'?{...s,supports:[longChecklist]}:s)};
+      repair = input;
+      return d;
+    }));
+    const id = await t.start("automatic"); await t.runAll(id);
+    expect(repair).toMatchObject({only:['dec_1'],repairFrom:[{decision_id:'dec_1',target:'act_1',supports:[longChecklist]}]});
+    expect(await t.status(id)).toMatchObject({delivered:true,generationsUsed:2});
+    expect(t.spy.generator).toBe(2);
+  });
+
+  it("glosario de cinco términos: la segunda llamada recibe el fragmento para abreviarlo y conserva todos los términos",async()=>{
+    const decisions=[{...realDecisions()[3]!,target:'act_4',dimensions:['vocabulary_support' as const],strategies:['vocabulary_support' as const],supports:[{kind:'glossary' as const,uses_task_data:false}]}];
+    let calls=0;
+    const t=await teacher(async(_inner,_call,input)=>{
+      calls++;
+      if(calls===2)expect(input.repairFrom).toMatchObject([{decision_id:'dec_1',target:'act_4',supports:[cellGlossary]}]);
+      return {draft:{segments:[{decision_id:'dec_1',target:'act_4',supports:[calls===1?cellGlossary:shortCellGlossary]}],skipped:[],blocked:[],change_summary:['Glosario sintético']},runs:[]} as never;
+    },plannerWith(decisions),{schema_version:1,supports:{vocabulary_support:'medium'},limits:{},allowances:{}});
+    const id=await t.start('automatic');await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({delivered:true,generationsUsed:2});
+    expect(calls).toBe(2);expect(await entitlement(id)).toBe('consumed');
+    const row=await q<{document:MaterialDocument}>('select document from public.adaptation_versions where adaptation_id=$1 order by version desc limit 1',[id]);
+    const glossary=row[0]!.document.pages.flatMap(p=>p.blocks).find(b=>b.type==='vocabulary');
+    expect(glossary?.type === 'vocabulary' ? glossary.items.map(i=>i.term) : []).toEqual(cellGlossary.items.map(i=>i.term));
+  });
+
+  it("no entrega un glosario que cabe solo porque la reparación eliminó un término",async()=>{
+    const decisions=[{...realDecisions()[3]!,target:'act_4',dimensions:['vocabulary_support' as const],strategies:['vocabulary_support' as const],supports:[{kind:'glossary' as const,uses_task_data:false}]}];
+    let calls=0;
+    const t=await teacher(async()=>{
+      calls++;
+      const glossary=calls===1?cellGlossary:{...shortCellGlossary,items:shortCellGlossary.items.slice(1)};
+      return {draft:{segments:[{decision_id:'dec_1',target:'act_4',supports:[glossary]}],skipped:[],blocked:[],change_summary:['Ensayo de pérdida']},runs:[]} as never;
+    },plannerWith(decisions),{schema_version:1,supports:{vocabulary_support:'medium'},limits:{},allowances:{}});
+    const id=await t.start('automatic');await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({status:'failed',delivered:false,error:{code:'generator_validation'}});
+    expect(calls).toBe(2);expect(await entitlement(id)).toBe('reserved');
+    const rows=await q<{payload:{diagnosis:{failures:Array<{rule:string}>}}}>("select payload from public.adaptation_artifacts where adaptation_id=$1 and kind='execution_report' and payload ? 'diagnosis'",[id]);
+    expect(rows.some(r=>r.payload.diagnosis.failures.some(f=>f.rule==='glossary_terms_preserved'))).toBe(true);
   });
 
   it("a decision that fails again after its repair is NOT dropped when a need it attends (here a MEDIUM one) has no other support: honest stop", async () => {

@@ -7,6 +7,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { ModelFacingAnalysis } from "./model-input";
 import type { ReviewedPlan } from "./plan-review";
 import type { PedagogicalReviewContext } from "./review-context";
+import type { DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 
 /**
  * Service boundaries of the adaptation pipeline (docs/ADAPTATION.md § Arquitectura). Each AI step is an interface that
@@ -47,6 +48,8 @@ export interface GeneratorInput {
    * the previous generation by the server. Absent: every decision the plan asks to write.
    */
   only?: readonly string[];
+  /** Server-selected over-budget supports of the previous attempt; untrusted material, never instructions. */
+  repairFrom?: readonly Pick<DraftGeneratedSegmentsV2["segments"][number], "decision_id" | "target" | "supports">[];
 }
 
 export interface ReviewerInput {

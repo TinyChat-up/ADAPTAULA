@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Reparación localizada con el apoyo que excedió su presupuesto
+
+- Base `1a72c1c`, rama `codex/reparacion-glosario-presupuesto`, #72 integrada. El fundador aporta `generator_validation`, dos generaciones, y el glosario de 32 palabras frente a 24+6. Contador correcto: no era un fallo de Stripe/PDF.
+- Regresión primero: prueba PGlite falla porque la segunda generación no recibe el apoyo anterior. La reparación ahora recibe solo el fragmento afectado como material no confiable, recuento y restricción vigente. Verificación determinista de términos preservados, diagnóstico `glossary_terms_preserved` y contabilidad de llamadas conservada.
+- [Evidencias y límites](qa/glosario-presupuesto/README.md). Éxito local con respuesta manual programada de 22 palabras; no se acredita eficacia del modelo real ni se recupera automáticamente la adaptación de producción. Sin cambios de límites, prompts publicados, modelos, CLARO, migraciones ni servicios remotos. Resultados finales y PR pendientes de cierre.
+
 ## 2026-10-26 — Apoyos visuales Max con consentimiento por adaptación
 
 - Base `33be83c`, rama `codex/max-apoyos-opt-in`. #67–#71 integradas y ninguna PR abierta al iniciar.

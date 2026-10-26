@@ -8,11 +8,11 @@ import { DraftGeneratedSegmentsSchema, type DraftGeneratedSegments } from "@/lib
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { decisionsToGenerate, normalizeGenerated, type NormalizedGeneration } from "./generated";
-import { authorizedKinds, decisionSupportBudget, decisionsToGenerateV2, designatedRewriter, normalizeGeneratedV2 } from "./generated-v2";
+import { authorizedKinds, decisionSupportBudget, decisionsToGenerateV2, designatedRewriter, normalizeGeneratedV2, supportVisibleWords } from "./generated-v2";
 import { instructionWords } from "./proportion";
 import { appliedDecisions, type ReviewedPlan } from "./plan-review";
 import { statedAnswer } from "@/lib/analysis/answers";
-import { RejectedStageOutput, rejectedRun, type MaterialGenerator, type StageRunRecord } from "./services";
+import { RejectedStageOutput, rejectedRun, type GeneratorInput, type MaterialGenerator, type StageRunRecord } from "./services";
 
 /**
  * The real generator: one model call that turns the APPROVED decisions into the fragments they change or add (never the whole
@@ -39,7 +39,7 @@ export interface GeneratorPromptInput {
       guidance: string | null;
     }>;
   };
-  material: Array<{ decision_id: string; source: unknown; preserves: Array<{ id: string; type: string; importance: string; value: string }> }>;
+  material: Array<{ decision_id: string; source: unknown; previous_supports?: DraftGeneratedSegmentsV2["segments"][number]["supports"]; preserves: Array<{ id: string; type: string; importance: string; value: string }> }>;
 }
 
 function sourceOf(analysis: MaterialAnalysis, target: string): unknown {
@@ -135,11 +135,12 @@ export interface GeneratorPromptInputV2 {
   material: Array<{ decision_id: string; source: unknown; preserves: Array<{ id: string; type: string; importance: string; value: string }> }>;
 }
 
-export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: AdaptationContext, only?: readonly string[]): GeneratorPromptInputV2 {
+export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: MaterialAnalysis, context: AdaptationContext, only?: readonly string[], repairFrom?: GeneratorInput["repairFrom"]): GeneratorPromptInputV2 {
   // `only`: a localized repair asks for the affected decisions alone; the policies (who rewrites, budgets) still read the whole plan.
   const writing = new Set(decisionsToGenerateV2(reviewed.effective.decisions, analysis, context).map((d) => d.id).filter((id) => !only || only.includes(id)));
   const applied = appliedDecisions(reviewed).filter((rd) => writing.has(rd.id));
   const activityOf = (target: string) => analysis.activities.find((a) => a.id === target);
+  const previousOf = (id: string, target: string) => only?.includes(id) ? repairFrom?.find((s) => s.decision_id === id && s.target === target) : undefined;
   return {
     approved: {
       language: context.education.language,
@@ -148,6 +149,8 @@ export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: Material
       decisions: applied.map((rd) => {
         const d = rd.effective!;
         const activity = activityOf(d.target);
+        const previous = previousOf(d.id, d.target);
+        const previousWords = previous?.supports.reduce((sum, s) => sum + supportVisibleWords(s), 0);
         return {
           id: d.id,
           target: d.target,
@@ -155,7 +158,7 @@ export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: Material
           intensity: d.intensity,
           supports: [...authorizedKinds(d)],
           response_target: d.response_target ?? null,
-          restrictions: rd.restrictions,
+          restrictions: [...rd.restrictions, ...(previous && previousWords !== undefined ? [`Corrige los previous_supports de esta decisión, no redactes otros desde cero. El intento anterior suma ${previousWords} palabras visibles; el máximo es ${decisionSupportBudget(d, activity)}, incluyendo términos, definiciones y títulos. Conserva todos los términos necesarios autorizados y su significado; abrevia las definiciones sin cortar frases, suprimir conceptos ni añadir respuestas. Si no es posible cumplir todas las restricciones, devuelve blocked para esta decisión.`] : [])],
           guidance: d.note ?? null,
           // Per DECISION, never per activity: only the decision that rewrites this instruction may rewrite it.
           instruction_policy: activity ? (designatedRewriter(reviewed.effective.decisions, analysis, context, d.target) === d.id ? "rewrite" : "keep") : null,
@@ -169,6 +172,7 @@ export function buildGeneratorInputV2(reviewed: ReviewedPlan, analysis: Material
       const activity = activityOf(d.target);
       return {
         decision_id: d.id,
+          ...(previousOf(d.id, d.target) ? { previous_supports: previousOf(d.id, d.target)!.supports } : {}),
         source: activity
           ? { id: activity.id, kind: "activity", label: activity.label, instruction: activity.instruction, context: activity.context }
           : { kind: "document", outline: { activities: analysis.activities.map((a) => ({ id: a.id, label: a.label, type: a.type })) } },
@@ -192,6 +196,7 @@ export interface GeneratorCallParams {
   version?: number;
   /** v2 only: a localized repair sends just these decisions. */
   only?: readonly string[];
+  repairFrom?: GeneratorInput["repairFrom"];
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -199,11 +204,11 @@ export interface GeneratorCallParams {
 export const GENERATOR_TIMEOUT_MS = 150_000;
 
 /** The messages of a generator request, for the version asked for. Exposed so the evals and tests inspect exactly what a model would receive. */
-export function generatorRequestParts(params: Pick<GeneratorCallParams, "analysis" | "context" | "reviewed" | "version" | "only">) {
+export function generatorRequestParts(params: Pick<GeneratorCallParams, "analysis" | "context" | "reviewed" | "version" | "only" | "repairFrom">) {
   const version = params.version ?? ACTIVE_ADAPTATION_PROMPT_VERSIONS.material_generator;
   if (version === 2) {
     const prompt = getMaterialGenerator(2);
-    const input = buildGeneratorInputV2(params.reviewed, params.analysis, params.context, params.only);
+    const input = buildGeneratorInputV2(params.reviewed, params.analysis, params.context, params.only, params.repairFrom);
     return { prompt, input, parts: (prompt as typeof import("@prompts/material-generator/v2").MATERIAL_GENERATOR_V2).buildUserParts(input) };
   }
   const prompt = getMaterialGenerator(1);
@@ -279,8 +284,8 @@ export function normalizeGeneration(version: number, draft: unknown, reviewed: R
 /** `MaterialGenerator` backed by a real model, for the pipeline. A rejected answer throws; there is no repair here. */
 export function createModelGenerator(deps: { selection: ModelSelection; provider: AIProvider; maxOutputTokens: number; version?: number }): MaterialGenerator {
   return {
-    generate: async ({ context, analysis, reviewed, only }) => {
-      const { response, run } = await callGenerator({ ...deps, analysis, context, reviewed, ...(only ? { only } : {}) });
+    generate: async ({ context, analysis, reviewed, only, repairFrom }) => {
+      const { response, run } = await callGenerator({ ...deps, analysis, context, reviewed, ...(only ? { only } : {}), ...(repairFrom ? { repairFrom } : {}) });
       const parsed = parseGeneratorResponse(response, deps.version ?? 1);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";

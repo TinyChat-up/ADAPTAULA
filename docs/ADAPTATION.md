@@ -1,5 +1,7 @@
 # Adaptación — núcleo pedagógico (Fase 4)
 
+> **Hotfix de reparación contextual (2026-10-26):** al corregir un `support_out_of_budget`, el generador recibe únicamente los apoyos previos de las decisiones afectadas, como material no confiable, y su recuento. No aumentan presupuestos ni intentos. Tras normalizar se verifica que el glosario conserve sus términos; la revisión completa sigue juzgando las definiciones. [Reproducción y límites](qa/glosario-presupuesto/README.md). Los apartados de fases iniciales que siguen son históricos.
+
 Cómo pasamos de `MaterialAnalysis v3 + FunctionalProfile` a `AdaptationPlan → MaterialDocument → PedagogicalReview` sin cambiar por accidente lo que el docente quiere enseñar o evaluar. Estado: **base arquitectónica offline implementada** (contratos, reglas deterministas, mocks, evals y tests). No hay todavía prompts ni llamadas reales para planificar, generar o revisar.
 
 Código: `src/lib/adaptation/` (lógica) y `src/lib/schemas/{adaptation-context,adaptation-plan,material-document,pedagogical-review}.ts` (contratos). Decisión de arquitectura: ADR-020 en `docs/ARCHITECTURE.md`.
