@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { FunctionalProfileSchema } from "@/lib/schemas/functional-profile";
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { logger } from "@/lib/logger";
+import { visualSupportResult } from "../presentation/visual-support-result";
 import { AdaptationError } from "./errors";
 import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning, reopenPlanReview, submitPlanReview, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
@@ -350,6 +351,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const unresolvedNeeds = [...new Set(forLastReview.flatMap((r) => r.automatic?.outcomes ?? []).filter((o) => o.kind === "unresolved").flatMap((o) => o.uncovered))];
   const merged = latest("pedagogical_review") as { review?: PedagogicalReview; pending?: string[] } | undefined;
   const deterministic = latest("deterministic_review") as { review?: PedagogicalReview } | undefined;
+  const version = await deps.reader.getVersion(adaptationId, snapshot.adaptation.current_version || null);
   const extra: StatusArtifacts = {
     planValidation: validation?.classification ? { counts: validation.classification.counts } : null,
     execution: execution?.execution ?? null,
@@ -357,7 +359,8 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     pending: merged?.pending ?? [],
     hasPlan: artifacts.some((a) => a.kind === "plan"),
     hasPlanReview: artifacts.some((a) => a.kind === "plan_review"),
-    hasVersion: (await deps.reader.getVersion(adaptationId, null)) !== null,
+    hasVersion: version !== null,
+    visualSupportResult: (snapshot.adaptation.context_snapshot as { visual_supports?: { requested?: boolean } } | null)?.visual_supports?.requested === true && version ? visualSupportResult(version.document) : null,
     latestReviewKind: ((lastReview?.payload as { reviewer?: { kind?: "auto" | "teacher" | "eval" } } | undefined)?.reviewer?.kind ?? null),
     automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
     unresolvedNeeds,

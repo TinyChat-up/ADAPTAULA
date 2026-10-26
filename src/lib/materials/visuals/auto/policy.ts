@@ -397,12 +397,14 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     }
     done("unresolved_visual", { action: "unresolved", reason: "support_unavailable" });
   }
-  // Only one additional context scene, and only for an actual language/visual barrier in a verbal problem.
+  // One additional context scene for a language/visual barrier; scientific open questions can need one too.
   // It is optional: quantities and the evaluated operation stay in the task, never in a generated drawing.
-  if (input.visualSupports === true && functionalNeeds.some((d) => ["visual_math_support", "number_sense_support", "visual_support", "literal_language", "background_knowledge_support"].includes(d))) {
-    const activity = input.analysis.activities.find((a) => a.type === "problem_solving" && !outcomes.some((n) => n.activityIds.includes(a.id)) && !allBlocks(input.document).some((b) => b.type === "image" && b.trace.source_refs.includes(a.id)));
+  if (input.visualSupports === true && !outcomes.some((n) => n.essential && n.resolution.action === "unresolved") && functionalNeeds.some((d) => ["visual_math_support", "number_sense_support", "visual_support", "literal_language", "background_knowledge_support", "vocabulary_support", "receptive_language_support"].includes(d))) {
+    const blocks = allBlocks(input.document);
+    const contextualTypes = new Set(["problem_solving", "open_question", "short_answer", "reading_comprehension", "experiment"]);
+    const activity = input.analysis.activities.find((a) => contextualTypes.has(a.type) && !outcomes.some((n) => n.activityIds.includes(a.id)) && !blocks.some((b) => b.type === "image" && (b.trace.source_refs.includes(a.id) || blocks.some((task) => task.type === "activity" && task.trace.source_refs.includes(a.id) && task.resource_block_ids?.includes(b.id)))));
     if (activity) {
-      const purpose = "Comprender la situación del problema sin mostrar cantidades, operaciones ni resultados. Escena contextual sencilla, sin decoración.";
+      const purpose = "Comprender el contexto de la actividad sin representar ni nombrar su respuesta, ni mostrar cantidades, operaciones o resultados. No reemplaza las figuras del original. Solo crear una escena si reduce una barrera de comprensión; si sería decoración o resolvería la pregunta, rechazarla.";
       const outcome = await illustrate(activity.id, [activity], null, purpose);
       const need: VisualNeedOutcome = { key: activity.id, origin: "referenced", essential: false, activityIds: [activity.id], category: outcome?.ok ? "generated_illustration" : "rewritable_without_visual", resolution: outcome?.ok ? { action: "illustration", asset: outcome.asset, alt: outcome.asset.alt } : { action: "omit", reason: outcome && !outcome.ok ? outcome.reason : "optional_support_unavailable" }, attempts: [outcome ? "illustrate" : "omit"] };
       outcomes.push({ ...need, contract: { ...contractOf(need, null), reason: "teacher_requested_context_support" } });

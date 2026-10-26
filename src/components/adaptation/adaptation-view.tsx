@@ -238,7 +238,14 @@ export function AdaptationView({
         )
       ) : null}
       {screen === "automatic_incomplete" ? <AutomaticIncompletePanel dto={status} materialId={context.materialId} busy={busy} canWrite={canWrite} onEdit={edit} cancel={cancel} /> : null}
-      {screen === "ready" ? <ReadyPanel dto={status} materialId={context.materialId} info={readyInfo} /> : null}
+      {screen === "ready" ? <>
+        {status.visualSupportResult ? <Alert tone="info" title="Resultado de los apoyos visuales">
+          <p>{status.visualSupportResult.generated === 0 ? "Esta ficha no incorpora ninguna ilustración generada con IA." : `Ilustraciones generadas con IA incorporadas: ${status.visualSupportResult.generated}.`}</p>
+          <p>Figuras del original: {status.visualSupportResult.original}. Representaciones exactas: {status.visualSupportResult.structured}.</p>
+          <p>No se añaden imágenes para completar el cupo. Puedes consultar la finalidad de los recursos disponibles y revisar el PDF antes de usarlo.</p>
+        </Alert> : null}
+        <ReadyPanel dto={status} materialId={context.materialId} info={readyInfo} />
+      </> : null}
       {screen === "blocked" ? <BlockedPanel dto={status} materialId={context.materialId} busy={busy} canWrite={canWrite} onReopen={() => void run(actions.reopen, () => setSaved(null))} /> : null}
       {screen === "failed" ? <FailedPanel dto={shown} materialId={context.materialId} busy={busy} onRetry={(acknowledge) => void run(() => actions.retry({ acknowledgeAmbiguous: acknowledge }), runNow)} cancel={cancel} /> : null}
       {screen === "cancelled" ? <CancelledPanel materialId={context.materialId} /> : null}

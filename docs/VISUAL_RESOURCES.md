@@ -1,5 +1,7 @@
 # Recursos visuales (Phase 8.2A)
 
+> **Ciencias y transparencia (2026-10-26):** la escena contextual adicional puede evaluarse también en preguntas abiertas, respuestas cortas, comprensión y experimentos con una barrera pertinente, no solo en problemas. No reemplaza esquemas evaluados. La ficha entregada informa del resultado de sus recursos guardados, incluido cero ilustraciones IA. [Alcance, pruebas y límites](qa/ciencias-apoyos-visuales/README.md). No hay generación real validada en esta sesión.
+
 > **Decisión docente Max (2026-10-26):** «Crear con apoyos visuales», desmarcado por defecto, registra consentimiento en el contexto de cada adaptación. La generación premium exige ese consentimiento persistido, además de las puertas anteriores. Ejemplo exacto automático acotado y escena contextual opcional: [contrato, evidencia y límites](qa/max-apoyos-opt-in/README.md). Los recursos imprescindibles siguen sin poder omitirse para entregar una ficha incompleta.
 
 > **Continuidad del piloto (2026-10-23):** se prepara un modo privado `production-pilot` con Stripe TEST y concesión de siete días (migración 030), por decisión posterior del fundador. No cambia el catálogo público ni activa servicios por sí mismo. [Estado y procedimiento](qa/stripe-piloto-produccion/README.md).

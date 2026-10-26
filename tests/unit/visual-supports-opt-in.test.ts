@@ -62,3 +62,30 @@ it('escena aprobada se vincula al ejercicio y no transforma los datos',async()=>
   const resolved=applyVisualResolution(f.document,plan), blocks=allBlocks(resolved);expect(blocks[0]).toMatchObject({type:'image',source:{kind:'generated',essential:false}});expect(blocks[1]).toMatchObject({prompt:'Calcula: 3/4 - 1/4.'});
   expect(applyVisualResolution(resolved,plan)).toEqual(resolved);
 });
+
+it('ciencias con pregunta abierta y vocabulario explicado: intenta apoyo contextual sin reemplazar figuras originales',async()=>{
+  const f=supportedFraction();
+  f.analysis.activities[0]!.type='open_question';f.analysis.activities[0]!.response_format='write_text';
+  f.analysis.activities[0]!.instruction='Una célula muscular necesita mucha energía. Justifica tu respuesta usando la tabla.';
+  const illustrate=vi.fn().mockResolvedValue({ok:false,reason:'review_rejected',detail:[]});
+  const plan=await resolveMagicVisuals({readyOriginals:async()=>new Set(),illustrate},{analysis:f.analysis,document:f.document,requiredVisuals:[],stage:'eso',subject:'biologia',visualSupports:true,functionalNeeds:['vocabulary_support']});
+  expect(illustrate).toHaveBeenCalledOnce();
+  expect(plan.needs[0]).toMatchObject({essential:false,resolution:{action:'omit',reason:'review_rejected'}});
+  expect(applyVisualResolution(f.document,plan)).toEqual(f.document);
+});
+
+it('una tarea de relación con su figura sigue usando el original y no solicita otro dibujo',async()=>{
+  const f=supportedFraction();f.analysis.activities[0]!.type='matching';
+  const illustrate=vi.fn();
+  await resolveMagicVisuals({readyOriginals:async()=>new Set(),illustrate},{analysis:f.analysis,document:f.document,requiredVisuals:[],stage:'eso',visualSupports:true,functionalNeeds:['visual_support']});
+  expect(illustrate).not.toHaveBeenCalled();
+});
+
+it('no añade otra imagen a una pregunta que ya tiene un recurso visual enlazado',async()=>{
+  const f=supportedFraction();f.analysis.activities[0]!.type='open_question';
+  const task=f.document.pages[0]!.blocks[0]!;if(task.type!=='activity')throw new Error('fixture');task.resource_block_ids=['blk_existing'];
+  f.document.pages[0]!.blocks.unshift({id:'blk_existing',type:'image',source:{kind:'figure',provenance:'generated',spec:{spec_version:1,kind:'fraction_bar',parts:4,shaded:[]}},alt_text:'Figura disponible',trace:{origin:'support',source_refs:[],decision_ids:[]}});
+  const illustrate=vi.fn();
+  await resolveMagicVisuals({readyOriginals:async()=>new Set(),illustrate},{analysis:f.analysis,document:f.document,requiredVisuals:[],stage:'eso',visualSupports:true,functionalNeeds:['visual_support']});
+  expect(illustrate).not.toHaveBeenCalled();
+});
