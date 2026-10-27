@@ -153,13 +153,23 @@ export function constraintsPreserved(input: ReviewInput): CheckResult {
   return result("constraints_preserved", status, targets, `Restricciones alteradas: ${list(problems)}`);
 }
 
-/** The text the ORIGINAL sheet prints (statements, texts, table cells and chart labels), never the analyzer's own descriptions. */
-function originalSheetText(analysis: MaterialAnalysis): string {
+/**
+ * The text the ORIGINAL sheet prints (statements, texts, table cells and chart labels), never the analyzer's own descriptions.
+ * With `refs`, only the activities, texts and visuals a protected element is linked to; without them, the whole sheet.
+ */
+function originalSheetText(analysis: MaterialAnalysis, refs?: ReadonlySet<string>): string {
+  const linked = (id: string) => !refs || refs.has(id);
   return [
-    ...analysis.activities.map((a) => `${a.label ?? ""} ${a.instruction} ${a.context ?? ""}`),
-    ...analysis.texts.map((t) => t.text),
-    ...analysis.visuals.flatMap((v) => [...(v.table ? [v.table.headers.join(" "), ...v.table.rows.map((r) => r.join(" "))] : []), ...(v.chart ? v.chart.categories : [])]),
+    ...analysis.activities.filter((a) => linked(a.id)).map((a) => `${a.label ?? ""} ${a.instruction} ${a.context ?? ""}`),
+    ...analysis.texts.filter((t) => linked(t.id)).map((t) => t.text),
+    ...analysis.visuals.filter((v) => linked(v.id)).flatMap((v) => [...(v.table ? [v.table.headers.join(" "), ...v.table.rows.map((r) => r.join(" "))] : []), ...(v.chart ? v.chart.categories : [])]),
   ].join(" ");
+}
+
+/** Whole words only: «energía» is not kept by «sinergía», nor «célula» by «células» (accents and case aside). */
+export function containsTerm(text: string, term: string): boolean {
+  const needle = normalizeText(term).trim().replace(/\s+/g, " ").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  return needle.length > 0 && new RegExp(`(?<![\\p{L}\\p{N}])${needle}(?![\\p{L}\\p{N}])`, "u").test(normalizeText(text));
 }
 
 /** «Usar las palabras energía y nutrientes» → «energía», «nutrientes»: the analyzer often words the requirement, not a bare list. */
@@ -181,17 +191,20 @@ export function requiredTerms(value: string): string[] {
  */
 export function protectedElementsPreserved({ analysis, document }: ReviewInput): CheckResult {
   const { statuses, problems, targets, note } = collector();
-  const whole = normalizeText(textOf(allBlocks(document)));
-  const original = normalizeText(originalSheetText(analysis));
   for (const p of analysis.protected_elements) {
     if ((CONSTRAINT_TYPES as readonly string[]).includes(p.type)) continue; // checked by constraints_preserved
     const severity: CheckStatus = p.importance === "essential" ? "FAIL" : p.importance === "important" ? "WARN" : "PASS";
     if (severity === "PASS") continue;
     const missingResources = p.resource_ids.filter((r) => blocksFor(document, r).length === 0);
     const missingActivities = p.activity_ids.filter((a) => activityBlocks(document, a).length === 0);
+    // Where the element lives: the activities and resources it is linked to (a word the activity requires is not kept because
+    // another activity happens to use it), or the whole sheet when the requirement is global (no link).
+    const linked = [...p.activity_ids, ...p.resource_ids];
+    const sheet = linked.length > 0 ? textOf([...new Set(linked.flatMap((r) => blocksFor(document, r)))]) : textOf(allBlocks(document));
     const terms = p.type === "required_vocabulary" ? requiredTerms(p.value) : [];
-    const printed = terms.filter((t) => original.includes(normalizeText(t)));
-    const missingTerms = printed.filter((t) => !whole.includes(normalizeText(t)));
+    const source = originalSheetText(analysis, linked.length > 0 ? new Set(linked) : undefined);
+    const printed = terms.filter((t) => containsTerm(source, t));
+    const missingTerms = printed.filter((t) => !containsTerm(sheet, t));
     const unverifiableTerms = terms.filter((t) => !printed.includes(t));
     const scope = p.activity_ids.length > 0 ? textOf(p.activity_ids.flatMap((a) => blocksFor(document, a))) : textOf(allBlocks(document));
     const originalText = analysis.activities.filter((a) => p.activity_ids.includes(a.id)).map((a) => `${a.instruction} ${a.context ?? ""}`).join(" ");

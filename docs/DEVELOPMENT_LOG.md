@@ -9,12 +9,13 @@
   - `requiredTerms` quita la introducción («usar las palabras…») y separa los términos;
   - solo se exige un término que la ficha original imprime; uno que no figura en su texto queda en WARN para la revisión semántica, nunca en PASS ni en FAIL;
   - el detalle dice qué falta: el recurso, la actividad, el término, el número o la cita.
+- Ajuste: el vocabulario se busca solo en las actividades y recursos vinculados al elemento (o en toda la ficha si no hay vínculo), y por palabra completa (`containsTerm`). «energía» en otra actividad, o dentro de otra palabra, no cuenta como conservada.
 - Reparación (`orchestrator.ts`): el mismo fallo determinista de conservación sobre las mismas decisiones, después de una reparación, ya no gasta otra generación. Se para con su diagnóstico.
 - Advertencias del caso, sin cambios:
   - `answers_not_leaked` WARN: respuestas inferidas textuales que no se pueden excluir por coincidencia y piden revisión semántica. Por diseño.
   - `functional_supports_applied` WARN: la necesidad `visual_support` del perfil no quedó atendida. Es una observación pedagógica real.
   - El FAIL falso impedía que la revisión con IA llegara a resolverlas.
-- Pruebas: `tests/unit/protected-vocabulary.test.ts` (regresión del caso) y `adaptation-review.test.ts`, 30/30. Typecheck y lint sin errores. Sin E2E, sin suites completas y sin IA.
+- Pruebas: `tests/unit/protected-vocabulary.test.ts` (regresión del caso y del término en otra actividad) y `adaptation-review.test.ts`, 33/33; los cuatro ficheros de unidad del generador y de «Hacer magia» que usan esta comprobación, 124/124. Typecheck y lint sin errores. Sin E2E, sin suites completas y sin IA.
 
 ## 2026-10-27 — Material con adaptaciones: reanálisis, retirada, eliminación y fallos explicados
 

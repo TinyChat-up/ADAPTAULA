@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requiredTerms } from "@/lib/adaptation/review-checks";
+import { containsTerm, requiredTerms } from "@/lib/adaptation/review-checks";
 import { argumentationAnalysis } from "../../evals/adaptation/fixtures";
 import { PROFILES } from "../../evals/adaptation/scenarios";
 import { contextFor, documentOf, mutate, planOf, statusOf } from "./adaptation-helpers";
@@ -34,6 +34,36 @@ describe("required vocabulary is the words the sheet asks for, not the analyzer'
     const check = statusOf(analysis, plan, ctx, lost, "protected_elements_preserved");
     expect(check.status).toBe("FAIL");
     expect(check.detail).toMatch(/falta el término «energía»/);
+  });
+
+  it("a word the activity requires is not kept because ANOTHER activity uses it", () => {
+    const { analysis, activity } = cellCase();
+    const other = analysis.activities.find((a) => a.id !== activity)!.id;
+    const ctx = contextFor(analysis, PROFILES.language);
+    const plan = planOf(analysis, ctx, []);
+    const moved = mutate(
+      mutate(documentOf(analysis, plan, ctx), (b) => b.type === "activity" && b.trace.source_refs.includes(activity), (b) => (b.type === "activity" ? { ...b, prompt: "Explica por qué las mitocondrias son importantes en las células musculares. Usa la palabra nutrientes." } : b)),
+      (b) => b.type === "activity" && b.trace.source_refs.includes(other),
+      (b) => (b.type === "activity" ? { ...b, prompt: `${b.prompt} Piensa en la energía.` } : b),
+    );
+    const check = statusOf(analysis, plan, ctx, moved, "protected_elements_preserved");
+    expect(check.status).toBe("FAIL");
+    expect(check.detail).toMatch(/prt_6: falta el término «energía»/);
+  });
+
+  it("whole words only: a term inside another word is not the term", () => {
+    expect(containsTerm("Usa las palabras Energía y nutrientes.", "energía")).toBe(true);
+    expect(containsTerm("La sinergia entre órganos", "energía")).toBe(false);
+    expect(containsTerm("los micronutrientes", "nutrientes")).toBe(false);
+    expect(containsTerm("la membrana  plasmática", "membrana plasmática")).toBe(true);
+  });
+
+  it("a requirement without links is global: the word may be anywhere on the sheet", () => {
+    const { analysis } = cellCase();
+    analysis.protected_elements[0]!.activity_ids = [];
+    const ctx = contextFor(analysis, PROFILES.language);
+    const plan = planOf(analysis, ctx, []);
+    expect(statusOf(analysis, plan, ctx, documentOf(analysis, plan, ctx), "protected_elements_preserved").status).toBe("PASS");
   });
 
   it("a term the original text never prints cannot be verified by matching: a WARN for the semantic review, never a FAIL", () => {
