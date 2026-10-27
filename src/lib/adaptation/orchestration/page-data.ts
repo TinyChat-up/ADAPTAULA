@@ -3,6 +3,9 @@ import { getSupabase } from "@/lib/auth/session";
 import { WRITE_ROLES, type WorkspaceContext } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { getMaterialDetail, getSubjects } from "@/lib/materials/repository";
+import { parseStoredAnalysis } from "@/lib/analysis/parse";
+import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import { fingerprint } from "../fingerprint";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog } from "@/lib/profiles/repository";
 import { buildContextView, type AdaptationContextView } from "@/lib/adaptation/presentation/context";
@@ -48,7 +51,7 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string, opti
   const row = await deps.reader.getAdaptation(id);
   if (!row) return null;
 
-  const [detail, catalog, subjects, planResult, version, profileName] = await Promise.all([
+  const [detail, catalog, subjects, planResult, version, profileName, pinned] = await Promise.all([
     getMaterialDetail(ctx.workspace.id, row.material_id),
     getCatalog(),
     getSubjects(),
@@ -58,10 +61,12 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string, opti
       : Promise.resolve(null),
     status.phase === "ready" && row.current_version > 0 ? deps.reader.getVersion(id, row.current_version) : Promise.resolve(null),
     profileNameOf(supabase, id),
+    pinnedAnalysisFingerprint(supabase, id),
   ]);
   if (!detail) return null;
 
-  const { material, analysis } = detail;
+  const { material } = detail;
+  const analysis = await analysisOfAdaptation(supabase, row.material_id, pinned, detail.analysis);
   const labels = labelsFor(catalog, material.stage_slug, material.grade_slug);
   return {
     status,
@@ -78,6 +83,24 @@ export async function loadAdaptationPage(ctx: WorkspaceContext, id: string, opti
     profileName,
     canWrite: actor.canWrite,
   };
+}
+
+async function pinnedAnalysisFingerprint(supabase: Awaited<ReturnType<typeof getSupabase>>, adaptationId: string): Promise<string | null> {
+  const { data } = await supabase.from("adaptations").select("analysis_fingerprint").eq("id", adaptationId).maybeSingle();
+  return (data?.analysis_fingerprint as string | null | undefined) ?? null;
+}
+
+/**
+ * The analysis the adaptation was made with (migration 033), read with the USER's client (RLS: members of its workspace): the
+ * material's current one only while it is still the same; otherwise its immutable copy. Never another analysis: if neither
+ * matches (an analysis replaced before 033), the screen shows no analysis-derived labels rather than the wrong ones.
+ */
+async function analysisOfAdaptation(supabase: Awaited<ReturnType<typeof getSupabase>>, materialId: string, pinned: string | null, current: MaterialAnalysis | null): Promise<MaterialAnalysis | null> {
+  if (!pinned) return current;
+  if (current && fingerprint(current) === pinned) return current;
+  const { data } = await supabase.from("material_analysis_snapshots").select("analysis").eq("material_id", materialId).eq("fingerprint", pinned).maybeSingle();
+  const parsed = data ? parseStoredAnalysis(data.analysis).analysis : null;
+  return parsed && fingerprint(parsed) === pinned ? parsed : null;
 }
 
 async function profileNameOf(supabase: Awaited<ReturnType<typeof getSupabase>>, adaptationId: string): Promise<string | null> {

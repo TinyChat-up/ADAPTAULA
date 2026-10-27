@@ -268,3 +268,23 @@ export function limitLines(decision: { supports: readonly string[]; preserves: R
   const derived = decision.supports.length > 0 ? decision.preserves.filter((p) => LIMITING_TYPES.has(p.type)).map((p) => `La ayuda no debe resolver ni sustituir: ${p.value}`) : [];
   return [...new Set([...decision.restrictions, ...derived])];
 }
+
+/**
+ * Why a generation could not be delivered, per recorded failure category (generation-recovery.ts): what is wrong, said to a
+ * teacher. Never the rule's internal name, the model's output or a prompt.
+ */
+export const DIAGNOSIS_COPY: Readonly<Record<string, string>> = {
+  structure_loss: "la adaptación no conserva toda la estructura de la actividad (falta una parte o su espacio para responder)",
+  data_loss: "la adaptación no conserva toda la información necesaria (datos, condiciones o elementos que hay que mantener)",
+  answer_leak: "la adaptación dejaba ver la respuesta",
+  duplicate_support: "los apoyos añadidos eran demasiado largos o se repetían",
+  format_incompatible: "la forma de responder cambiaba lo que se evalúa",
+  unauthorized_block: "la ficha incluía cambios que no estaban en la propuesta aprobada",
+  not_executed: "no se aplicaron todos los cambios de la propuesta",
+  traceability: "no se podía comprobar de dónde salía parte del contenido",
+  schema: "una parte generada no tenía un formato válido",
+  json: "una parte generada no tenía un formato válido",
+  visual_unresolved: "falta una imagen imprescindible del original",
+  pedagogical_review: "la revisión pedagógica encontró un problema que no se puede corregir automáticamente",
+  cost_or_limit: "se alcanzó el límite de intentos o de coste de esta ficha",
+};

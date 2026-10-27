@@ -10,6 +10,7 @@ export const PUBLIC_SERVICE_ERRORS: Readonly<Record<ServiceError, { status: numb
   invalid: { status: 422, message: "Revisa los datos y vuelve a intentarlo." },
   stale_analysis: { status: 409, message: "El análisis del material ha cambiado. Vuelve a crear la adaptación." },
   invalid_state: { status: 409, message: "Esta adaptación no está en un estado en el que se pueda hacer eso." },
+  material_archived: { status: 409, message: "Este material está retirado de la biblioteca. Restáuralo para crear una adaptación nueva; sus adaptaciones anteriores siguen disponibles." },
   stale_review: { status: 409, message: "La propuesta cambió mientras la revisabas. Recárgala y revísala de nuevo." },
   review_required: { status: 409, message: "Antes de generar la ficha tienes que revisar la propuesta." },
   unsupported_execution: { status: 409, message: "Alguna decisión aprobada no se puede aplicar todavía. Revisa la propuesta." },

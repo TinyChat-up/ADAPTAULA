@@ -31,6 +31,8 @@ export interface MaterialFilters {
   status?: MaterialStatus | undefined;
   search?: string | undefined;
   sort?: "recent" | "oldest" | "title" | undefined;
+  /** The materials withdrawn from the library («Retirados»); by default they are hidden everywhere. */
+  archived?: boolean | undefined;
 }
 
 export async function listMaterials(workspaceId: string, filters: MaterialFilters = {}): Promise<MaterialRow[]> {
@@ -38,6 +40,8 @@ export async function listMaterials(workspaceId: string, filters: MaterialFilter
   let query = supabase.from("materials").select(MATERIAL_COLUMNS).eq("workspace_id", workspaceId);
   // Half-uploaded rows are plumbing, not materials: they are not listed.
   query = query.neq("status", "uploading");
+  // A material whose definitive deletion did not finish is listed with the withdrawn ones, where the teacher can finish it.
+  query = filters.archived ? query.or("archived_at.not.is.null,deletion_requested_at.not.is.null") : query.is("archived_at", null).is("deletion_requested_at", null);
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.stage) query = query.eq("stage_slug", filters.stage);
   if (filters.grade) query = query.eq("grade_slug", filters.grade);
@@ -55,7 +59,9 @@ export async function countMaterials(workspaceId: string): Promise<number> {
     .from("materials")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
-    .neq("status", "uploading");
+    .neq("status", "uploading")
+    .is("archived_at", null)
+    .is("deletion_requested_at", null);
   if (error) throw new Error("No se han podido contar los materiales.");
   return count ?? 0;
 }

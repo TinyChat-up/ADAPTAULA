@@ -28,13 +28,15 @@ export const MaterialRowSchema = z.object({
   page_count: z.number().nullable(),
   confirmed_fields: z.array(z.string()),
   failure_code: z.string().nullable(),
+  archived_at: z.string().nullable(),
+  deletion_requested_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 export type MaterialRow = z.infer<typeof MaterialRowSchema>;
 
 export const MATERIAL_COLUMNS =
-  "id, title, stage_slug, grade_slug, subject_slug, topic, source_type, status, page_count, confirmed_fields, failure_code, created_at, updated_at";
+  "id, title, stage_slug, grade_slug, subject_slug, topic, source_type, status, page_count, confirmed_fields, failure_code, archived_at, deletion_requested_at, created_at, updated_at";
 
 export interface MaterialFileRow {
   id: string;

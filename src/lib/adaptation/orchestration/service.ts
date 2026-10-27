@@ -5,10 +5,11 @@ import { logger } from "@/lib/logger";
 import { visualSupportResult } from "../presentation/visual-support-result";
 import { AdaptationError } from "./errors";
 import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning, reopenPlanReview, submitPlanReview, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { activityName, groupActivities } from "@/lib/analysis/activity-groups";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { projectPreserves, projectRestrictions } from "./plan-projection";
 import { buildStatusDto, failureOf, isRetryable, type AdaptationStatusDto, type StatusArtifacts } from "./status";
-import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow, type CreationMode } from "./store";
+import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow, type CreationMode, type PipelineSnapshot } from "./store";
 import type { AdaptationStatus } from "./state-machine";
 import { isDelivered } from "./state-machine";
 import type { PipelineVersions } from "./versions";
@@ -29,7 +30,8 @@ export interface Actor {
 }
 
 export interface AdaptationReader {
-  getMaterial(id: string): Promise<{ id: string; workspace_id: string; title: string; status: string; analysis: unknown; stage_slug: string | null; grade_slug: string | null; subject_slug: string | null } | null>;
+  /** `archived_at` / `deletion_requested_at` (migration 033): a withdrawn or deleting material starts no new adaptation. */
+  getMaterial(id: string): Promise<{ id: string; workspace_id: string; title: string; status: string; analysis: unknown; stage_slug: string | null; grade_slug: string | null; subject_slug: string | null; archived_at?: string | null; deletion_requested_at?: string | null } | null>;
   getLearnerProfile(id: string): Promise<{ id: string; workspace_id: string; stage_slug: string | null; grade_slug: string | null; functional_profile: unknown } | null>;
   getAdaptation(id: string): Promise<{ id: string; workspace_id: string; material_id: string; status: string; current_version: number; delivered_at: string | null } | null>;
   getVersion(adaptationId: string, version: number | null): Promise<{ id: string; version: number; document: unknown; review: unknown; source: string; created_at: string } | null>;
@@ -54,6 +56,7 @@ export type ServiceError =
   | "invalid"
   | "stale_analysis"
   | "invalid_state"
+  | "material_archived"
   | "stale_review"
   | "review_required"
   | "unsupported_execution"
@@ -108,7 +111,9 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
   const no = denied(actor);
   if (no) return no;
   const material = await deps.reader.getMaterial(request.materialId);
-  if (!material || material.workspace_id !== actor.workspaceId) return notFound;
+  if (!material || material.workspace_id !== actor.workspaceId || material.deletion_requested_at) return notFound;
+  // Its history stays readable; a new adaptation waits until the teacher restores it (the database refuses it too).
+  if (material.archived_at) return { ok: false, code: "material_archived" };
   if (material.status !== "analyzed") return { ok: false, code: "invalid", detail: ["El material no está analizado"] };
 
   let profile = { functional_profile: { schema_version: 1, supports: {}, limits: {}, allowances: {} } as unknown, stage_slug: null as string | null, grade_slug: null as string | null };
@@ -342,7 +347,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const artifacts = await deps.reader.getArtifacts(adaptationId, STATUS_KINDS);
   const latest = (kind: ArtifactKind) => artifacts.filter((a) => a.kind === kind).at(-1)?.payload as Record<string, unknown> | undefined;
   const validation = latest("plan_validation") as { classification?: { counts: { valid: number; review: number; blocked: number } } } | undefined;
-  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> } };
+  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> }; diagnosis?: RecordedDiagnosis };
   const reports = artifacts.filter((a) => a.kind === "execution_report").map((a) => a.payload as Report);
   // The real preflight report (a recorded stop carries no execution), and what was recorded for the latest review.
   const execution = reports.filter((r) => r.execution).at(-1);
@@ -365,7 +370,32 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
     unresolvedNeeds,
   };
-  return { ok: true, data: buildStatusDto(snapshot, extra) };
+  const dto = buildStatusDto(snapshot, extra);
+  // Only once nothing is running and nothing was delivered: the latest recorded diagnosis, for the latest review if there is one.
+  const stopped = !dto.delivered && (dto.progress === "failed" || dto.phase === "automatic_incomplete" || dto.phase === "blocked");
+  const diagnosis = stopped
+    ? ([...forLastReview].reverse().find((r) => r.diagnosis)?.diagnosis ?? [...reports].reverse().find((r) => r.diagnosis)?.diagnosis)
+    : undefined;
+  return { ok: true, data: diagnosis ? { ...dto, qualityDiagnosis: describeDiagnosis(diagnosis, snapshot, latest("plan")) } : dto };
+}
+
+type RecordedDiagnosis = { stage: "generation" | "review"; failures: Array<{ category: string; decisions?: string[]; refs?: string[] }> };
+
+/** Categories and the activities each one names (through the decision's target when the failure names a decision). */
+function describeDiagnosis(diagnosis: RecordedDiagnosis, snapshot: PipelineSnapshot, plan: Record<string, unknown> | undefined): NonNullable<AdaptationStatusDto["qualityDiagnosis"]> {
+  const analysis = parseStoredAnalysis(snapshot.analysis.analysis).analysis;
+  const groups = analysis ? groupActivities(analysis.activities) : [];
+  const decisions = new Map(((plan?.decisions as Array<{ id?: string; target?: string }> | undefined) ?? []).flatMap((d) => (d.id && d.target ? [[d.id, d.target] as const] : [])));
+  const byCategory = new Map<string, Set<string>>();
+  for (const f of diagnosis.failures ?? []) {
+    const names = byCategory.get(f.category) ?? new Set<string>();
+    for (const ref of [...(f.refs ?? []), ...(f.decisions ?? []).map((d) => decisions.get(d) ?? "")]) {
+      const name = ref.startsWith("act_") ? activityName(groups, ref) : null;
+      if (name) names.add(name);
+    }
+    byCategory.set(f.category, names);
+  }
+  return { stage: diagnosis.stage, items: [...byCategory].map(([category, names]) => ({ category, activities: [...names] })) };
 }
 
 export interface PlanDecisionDto {

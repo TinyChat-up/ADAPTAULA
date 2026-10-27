@@ -14,7 +14,7 @@ import { listMaterials, getSubjects } from "@/lib/materials/repository";
 import { MATERIAL_STATUSES, STATUS_LABELS, type MaterialStatus } from "@/lib/materials/types";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog } from "@/lib/profiles/repository";
-import { deleteMaterialAction, retryAnalysisAction } from "../actions";
+import { retryAnalysisAction, setArchivedAction } from "../actions";
 
 export const metadata: Metadata = { title: "Materiales" };
 
@@ -31,16 +31,17 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
   const stage = catalog.stages.find((s) => s.slug === first(params.etapa))?.slug;
   const grade = catalog.grades.find((g) => g.slug === first(params.curso) && (!stage || g.stage_slug === stage))?.slug;
   const subject = subjects.find((s) => s.slug === first(params.asignatura))?.slug;
+  const archivedView = first(params.retirados) === "1";
   const filtered = Boolean(status || stage || grade || subject || search || sort !== "recent");
   const selectedFilters = [status, stage, grade, subject, sort !== "recent" ? sort : undefined].filter(Boolean).length;
-  const materials = await listMaterials(ctx.workspace.id, { status, stage, grade, subject, search, sort });
+  const materials = await listMaterials(ctx.workspace.id, { status, stage, grade, subject, search, sort, archived: archivedView });
 
   return (
     <div className="space-y-8">
       <PageHeader
         icon={FolderOpen}
-        title="Materiales"
-        description="Encuentra un original y retoma sus adaptaciones desde la misma ficha."
+        title={archivedView ? "Materiales retirados" : "Materiales"}
+        description={archivedView ? "Materiales que retiraste de tu biblioteca. Sus adaptaciones se conservan; puedes restaurarlos cuando quieras." : "Encuentra un original y retoma sus adaptaciones desde la misma ficha."}
         actions={
           <LinkButton href="/app/adaptar">
             Subir material
@@ -48,8 +49,17 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
         }
       />
       {first(params.aviso) === "eliminado" ? <Alert tone="success">Material eliminado.</Alert> : null}
+      {first(params.aviso) === "retirado" ? <Alert tone="success">Material retirado de la biblioteca. Sus adaptaciones se conservan; lo encontrarás en «Materiales retirados».</Alert> : null}
+      <nav aria-label="Biblioteca" className="flex flex-wrap gap-4 text-sm font-medium">
+        {archivedView ? (
+          <Link href="/app/materiales" className="text-primary underline underline-offset-4">Volver a la biblioteca</Link>
+        ) : (
+          <Link href="/app/materiales?retirados=1" className="text-primary underline underline-offset-4">Ver materiales retirados</Link>
+        )}
+      </nav>
 
       <form method="get" className="min-w-0 space-y-4 border-b border-border pb-6 [&_input]:min-w-0 [&_select]:min-w-0">
+        {archivedView ? <input type="hidden" name="retirados" value="1" /> : null}
         <TextField label="Buscar por título" name="buscar" maxLength={80} defaultValue={search ?? ""} placeholder="Nombre de la ficha" />
         <details className="group rounded-control border border-border bg-surface p-3">
           <summary className="cursor-pointer py-1 font-medium marker:text-primary"><span>Filtros y orden</span>{selectedFilters > 0 ? <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedFilters} {selectedFilters === 1 ? "activo" : "activos"}</span> : null}</summary>
@@ -82,7 +92,7 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
             Filtrar
           </Button>
           {filtered ? (
-            <LinkButton href="/app/materiales" variant="ghost">
+            <LinkButton href={archivedView ? "/app/materiales?retirados=1" : "/app/materiales"} variant="ghost">
               Limpiar
             </LinkButton>
           ) : null}
@@ -98,9 +108,13 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
             </LinkButton>
           </EmptyState>
         ) : (
-          <EmptyState icon={FolderOpen} title="Todavía no has subido ningún material." description="Sube una ficha que ya utilizas y la analizaremos para dejarla lista.">
-            <LinkButton href="/app/adaptar" variant="secondary">Subir mi primera ficha</LinkButton>
-          </EmptyState>
+          archivedView ? (
+            <EmptyState icon={FolderOpen} title="No has retirado ningún material." description="Los materiales que retires de la biblioteca aparecerán aquí, con sus adaptaciones intactas." />
+          ) : (
+            <EmptyState icon={FolderOpen} title="Todavía no has subido ningún material." description="Sube una ficha que ya utilizas y la analizaremos para dejarla lista.">
+              <LinkButton href="/app/adaptar" variant="secondary">Subir mi primera ficha</LinkButton>
+            </EmptyState>
+          )
         )
       ) : (
         <ul className="editorial-list">
@@ -123,10 +137,10 @@ export default async function MaterialsPage({ searchParams }: PageProps<"/app/ma
                   <LinkButton href={`/app/materiales/${m.id}`} variant="secondary" size="sm">
                     Abrir ficha
                   </LinkButton>
-                  <MaterialActions
-                    {...(m.status === "failed" || m.status === "uploaded" ? { retry: retryAnalysisAction.bind(null, m.id), retryLabel: m.status === "failed" ? "Reintentar" : "Analizar" } : {})}
-                    remove={deleteMaterialAction.bind(null, m.id)}
-                  />
+                  {m.deletion_requested_at ? <span className="text-sm text-danger">Eliminación pendiente</span> : <MaterialActions
+                    {...(!archivedView && (m.status === "failed" || m.status === "uploaded") ? { retry: retryAnalysisAction.bind(null, m.id), retryLabel: m.status === "failed" ? "Reintentar" : "Analizar" } : {})}
+                    {...(archivedView ? { restore: setArchivedAction.bind(null, m.id, false) } : { archive: setArchivedAction.bind(null, m.id, true) })}
+                  />}
                 </div>
               </li>
             );

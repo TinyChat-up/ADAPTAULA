@@ -1,6 +1,6 @@
 import type { AdaptationStatusDto, ProgressStage } from "@/lib/adaptation/orchestration/status";
 import type { CreationMode } from "@/lib/adaptation/orchestration/store";
-import { STAGES, STATUS_COPY, checkCopy, failureCopy } from "./copy";
+import { DIAGNOSIS_COPY, STAGES, STATUS_COPY, checkCopy, failureCopy } from "./copy";
 
 /**
  * What the screen shows for a status DTO. Every branch reads the server's own flags (`nextAction`, `canRetry`, `canCancel`,
@@ -63,3 +63,17 @@ export function failureView(dto: Pick<AdaptationStatusDto, "error" | "canRetry" 
 }
 
 export const readyTitle = (dto: Pick<AdaptationStatusDto, "review">) => (dto.review?.verdict === "approved_with_warnings" ? STATUS_COPY.readyWithWarnings : STATUS_COPY.ready);
+
+const joinNames = (names: readonly string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} y ${names.at(-1)}`);
+
+/**
+ * «No hemos podido completar la actividad 3 porque la adaptación no conserva toda la información necesaria.» One line per recorded
+ * category, from the pipeline's own diagnosis; nothing invented when none was recorded.
+ */
+export function diagnosisLines(dto: Pick<AdaptationStatusDto, "qualityDiagnosis">): string[] {
+  return (dto.qualityDiagnosis?.items ?? []).map((item) => {
+    const why = DIAGNOSIS_COPY[item.category] ?? DIAGNOSIS_COPY.pedagogical_review!;
+    const what = item.activities.length > 0 ? joinNames(item.activities) : "la ficha";
+    return `No hemos podido completar ${what} porque ${why}.`;
+  });
+}

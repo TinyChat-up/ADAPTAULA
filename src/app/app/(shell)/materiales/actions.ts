@@ -8,7 +8,8 @@ import { hasRole } from "@/lib/auth/workspace-select";
 import { formatDay } from "@/lib/format/date";
 import { analysisQuotaMessage, describeServiceError } from "@/lib/materials/messages";
 import { getMaterialDetail, getSubjects, updateMaterialContext } from "@/lib/materials/repository";
-import { deleteMaterial, requestAnalysis } from "@/lib/materials/service";
+import { purgeMaterial, setMaterialArchived } from "@/lib/materials/lifecycle";
+import { requestAnalysis } from "@/lib/materials/service";
 import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { getCatalog } from "@/lib/profiles/repository";
 import { fieldErrorsFrom } from "@/lib/schemas/auth";
@@ -90,18 +91,32 @@ export async function retryAnalysisAction(materialId: string): Promise<MaterialA
   return { ok: true };
 }
 
-export async function deleteMaterialAction(materialId: string): Promise<MaterialActionResult> {
+/** «Retirar de la biblioteca» / «Restaurar»: only hides or shows it again; adaptations, files and quotas are untouched. */
+export async function setArchivedAction(materialId: string, archived: boolean): Promise<MaterialActionResult> {
   const ctx = await requireWorkspace();
-  const result = await deleteMaterial(ctx, materialId);
+  const result = await setMaterialArchived(ctx, materialId, archived);
+  if (!result.ok) return { ok: false, message: describeServiceError(result.code) };
+  revalidatePath("/app/materiales");
+  revalidatePath(`/app/materiales/${materialId}`);
+  if (archived) redirect("/app/materiales?aviso=retirado");
+  return { ok: true };
+}
+
+const PURGE_MESSAGES = {
+  confirmation_stale: "Las adaptaciones de este material han cambiado desde que abriste la confirmación. Revísalo y vuelve a intentarlo.",
+  busy: "Hay un análisis o una adaptación en curso con este material. Espera a que termine (o cancélala) y vuelve a intentarlo.",
+  storage: "No hemos podido borrar todos los archivos. El material queda oculto y no se usará; vuelve a pulsar «Eliminar definitivamente» para terminar.",
+} as const;
+
+/** «Eliminar definitivamente», with its adaptations. `expectedAdaptations` is what the teacher saw in the confirmation. */
+export async function purgeMaterialAction(materialId: string, expectedAdaptations: number): Promise<MaterialActionResult> {
+  const ctx = await requireWorkspace();
+  const result = await purgeMaterial(ctx, materialId, expectedAdaptations);
   if (!result.ok) {
-    return {
-      ok: false,
-      message:
-        result.code === "has_adaptations"
-          ? "Este material tiene adaptaciones. Elimínalas antes de borrar el material."
-          : describeServiceError(result.code === "unexpected" ? "unexpected" : result.code),
-    };
+    const code = result.code;
+    return { ok: false, message: code === "confirmation_stale" || code === "busy" || code === "storage" ? PURGE_MESSAGES[code] : describeServiceError(code) };
   }
   revalidatePath("/app/materiales");
+  revalidatePath("/app/adaptaciones");
   redirect("/app/materiales?aviso=eliminado");
 }

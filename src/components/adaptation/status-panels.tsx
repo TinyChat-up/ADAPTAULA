@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/layout";
 import { PdfDownload } from "@/components/material/pdf-download";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { AUTOMATIC_STOP_COPY, DEFERRED_NOTE, STATUS_COPY } from "@/lib/adaptation/presentation/copy";
-import { failureView, readyTitle, stageStates, warningLines, workingCopy } from "@/lib/adaptation/presentation/view-model";
+import { diagnosisLines, failureView, readyTitle, stageStates, warningLines, workingCopy } from "@/lib/adaptation/presentation/view-model";
 import { formatDateTime } from "@/lib/format/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -181,7 +181,7 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
 }
 
 export function BlockedPanel({ dto, materialId, busy, canWrite, onReopen }: { dto: AdaptationStatusDto; materialId: string; busy: boolean; canWrite: boolean; onReopen: () => void }) {
-  const lines = warningLines({ review: dto.review, execution: null });
+  const lines = [...new Set([...diagnosisLines(dto), ...warningLines({ review: dto.review, execution: null })])];
   return (
     <Card className="space-y-4 border-danger/40">
       <Alert tone="danger" title={STATUS_COPY.blocked.title}>
@@ -193,6 +193,7 @@ export function BlockedPanel({ dto, materialId, busy, canWrite, onReopen }: { dt
           Ya se han preparado tres versiones de esta ficha y ninguna ha superado la comprobación de calidad. No se prepararán más para esta adaptación. Si quieres intentarlo de nuevo, crea una adaptación nueva desde el material.
         </p>
       ) : null}
+      {!dto.regenerationAvailable && canWrite ? <LinkButton variant="secondary" href={`/app/materiales/${materialId}#adaptar`}>Crear una adaptación nueva</LinkButton> : null}
       {canWrite && dto.nextAction === "review_plan" ? (
         <div className="space-y-2">
           <p className="text-sm">Revisa cómo se ha adaptado el material, cambia lo que necesites y vuelve a crear la ficha.</p>
@@ -214,6 +215,7 @@ export function FailedPanel({ dto, materialId, busy, onRetry, cancel }: { dto: A
       <Alert tone={view.ambiguous ? "warning" : "danger"} title={view.ambiguous ? "No se pudo confirmar el resultado del último intento." : STATUS_COPY.failed.title}>
         <p>{view.ambiguous ? "Si lo intentas de nuevo, el proceso se repetirá desde ese paso." : view.message}</p>
       </Alert>
+      {diagnosisLines(dto).length > 0 ? <WarningsList lines={diagnosisLines(dto)} /> : null}
       <div className="flex flex-wrap items-center gap-3">
         {view.canRetry && view.ambiguous ? (
           <ConfirmDialog

@@ -57,7 +57,7 @@ export const resolveVersionsFromEnv = () => resolvePipelineVersions(serverEnv() 
 export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
   return {
     async getMaterial(id) {
-      const { data } = await supabase.from("materials").select("id, workspace_id, title, status, analysis, stage_slug, grade_slug, subject_slug").eq("id", id).maybeSingle();
+      const { data } = await supabase.from("materials").select("id, workspace_id, title, status, analysis, stage_slug, grade_slug, subject_slug, archived_at, deletion_requested_at").eq("id", id).maybeSingle();
       return data ?? null;
     },
     async getLearnerProfile(id) {
