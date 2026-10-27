@@ -58,7 +58,8 @@ export async function deletionImpact(workspaceId: string, materialId: string): P
 
 const FilesSchema = z.object({
   adaptations: z.number().int().min(0),
-  files: z.array(z.object({ bucket: z.enum([SOURCE_BUCKET, "generated-assets"]), path: z.string().min(1) })),
+  // Every bucket Adaptaula writes (migration 006): originals, generated images and crops, and persisted PDF exports (none today).
+  files: z.array(z.object({ bucket: z.enum([SOURCE_BUCKET, "generated-assets", "exports"]), path: z.string().min(1) })),
 });
 
 export type PurgeError = LifecycleError | "confirmation_stale" | "busy" | "storage";
@@ -82,7 +83,7 @@ export async function purgeMaterial(ctx: WorkspaceContext, materialId: string, e
     logger.error("material_purge_paths_rejected", { workspaceId: ctx.workspace.id, materialId });
     return { ok: false, code: "unexpected" };
   }
-  for (const bucket of [SOURCE_BUCKET, "generated-assets"] as const) {
+  for (const bucket of [SOURCE_BUCKET, "generated-assets", "exports"] as const) {
     const paths = plan.data.files.filter((f) => f.bucket === bucket).map((f) => f.path);
     for (let i = 0; i < paths.length; i += 100) {
       // Removing an object that is already gone is not an error: a repeated deletion goes on from where it stopped.

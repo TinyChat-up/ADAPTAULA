@@ -95,12 +95,16 @@ $$;
 revoke all on function public.set_material_archived(uuid, boolean) from public, anon;
 grant execute on function public.set_material_archived(uuid, boolean) to authenticated;
 
--- Nothing new starts on a material being deleted: no adaptation and no job (analysis, stage, image).
+-- Nothing new starts on a material being deleted: no adaptation and no job (analysis, stage, image). A withdrawn material keeps
+-- its history (its adaptations go on and can be retried) but starts no NEW adaptation until it is restored.
 create or replace function public.refuse_deleting_material()
 returns trigger language plpgsql set search_path = '' as $$
 begin
   if new.material_id is not null and exists (select 1 from public.materials m where m.id = new.material_id and m.deletion_requested_at is not null) then
     raise exception using errcode = 'P0001', message = 'material_deleting';
+  end if;
+  if tg_table_name = 'adaptations' and exists (select 1 from public.materials m where m.id = new.material_id and m.archived_at is not null) then
+    raise exception using errcode = 'P0001', message = 'material_archived';
   end if;
   return new;
 end;
@@ -151,6 +155,9 @@ begin
       join public.adaptations a on a.id = g.adaptation_id where a.material_id = p_material
     union all select jsonb_build_object('bucket', 'generated-assets', 'path', r.storage_path) from public.adaptation_visual_resources r
       join public.adaptations a on a.id = r.adaptation_id where a.material_id = p_material and r.storage_path is not null
+    -- Today a PDF is rendered on each download and never stored; an export that WAS persisted lives in the `exports` bucket.
+    union all select jsonb_build_object('bucket', 'exports', 'path', e.storage_path) from public.exports e
+      join public.adaptations a on a.id = e.adaptation_id where a.material_id = p_material and e.storage_path is not null
   ) files;
   return jsonb_build_object('adaptations', v_count, 'files', v_files);
 end;

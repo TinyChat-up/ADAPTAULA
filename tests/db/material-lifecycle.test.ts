@@ -55,8 +55,11 @@ describe("«Retirar de la biblioteca»", () => {
     expect((await one<{ archived_at: string | null }>("select archived_at from public.materials where id = $1", [m])).archived_at).not.toBeNull();
     expect((await one<{ status: string }>("select status from public.adaptations where id = $1", [a])).status).toBe("ready");
     await expect(as(db, "authenticated", other.id, () => db.query("select public.set_material_archived($1, false)", [m]))).rejects.toThrow(/material_not_found/);
+    // Withdrawn: its adaptations stay readable, but the database starts no new one until it is restored.
+    await expect(adaptation(u, m)).rejects.toThrow(/material_archived/);
     await as(db, "authenticated", u.id, () => db.query("select public.set_material_archived($1, false)", [m]));
     expect((await one<{ archived_at: string | null }>("select archived_at from public.materials where id = $1", [m])).archived_at).toBeNull();
+    await adaptation(u, m);
   });
 });
 
@@ -69,6 +72,8 @@ describe("«Eliminar definitivamente» with adaptations", () => {
     await db.query("insert into public.usage_events (workspace_id, kind, units, idempotency_key) values ($1, 'adaptation', 1, $2)", [u.workspaceId, `k-${a}`]);
     await db.query("insert into public.ai_runs (workspace_id, adaptation_id, purpose, model_alias, provider, model, status) values ($1, $2, 'generate', 'STANDARD', 'mock', 'm', 'success')", [u.workspaceId, a]).catch(() => undefined);
     await db.query("insert into public.material_files (material_id, workspace_id, bucket, storage_path, mime_type, size_bytes) values ($1, $2, 'source-materials', $3, 'application/pdf', 10)", [m, u.workspaceId, `${u.workspaceId}/${u.id}/${m}/f.pdf`]);
+    // A persisted export (none is written today) is listed with its bucket; an export without a stored file is not.
+    await db.query("insert into public.exports (workspace_id, adaptation_id, version, visual_template, status, storage_path) values ($1, $2, 1, 'estandar', 'ready', $3), ($1, $2, 2, 'estandar', 'pending', null)", [u.workspaceId, a, `${u.workspaceId}/${a}/v1.pdf`]);
 
     await expect(service(() => db.query("select public.begin_material_deletion($1, $2, $3, 1)", [m, u.workspaceId, u.id]))).rejects.toThrow(/confirmation_stale/);
     const other = await user();
@@ -77,7 +82,10 @@ describe("«Eliminar definitivamente» with adaptations", () => {
 
     const begun = await service(() => one<{ r: { adaptations: number; files: Array<{ bucket: string; path: string }> } }>("select public.begin_material_deletion($1, $2, $3, 2) r", [m, u.workspaceId, u.id]));
     expect(begun.r.adaptations).toBe(2);
-    expect(begun.r.files).toEqual([{ bucket: "source-materials", path: `${u.workspaceId}/${u.id}/${m}/f.pdf` }]);
+    expect(begun.r.files).toEqual([
+      { bucket: "source-materials", path: `${u.workspaceId}/${u.id}/${m}/f.pdf` },
+      { bucket: "exports", path: `${u.workspaceId}/${a}/v1.pdf` },
+    ]);
     // Repeating the first step (a retry after a Storage failure) returns the same list; nothing new starts on the material.
     expect((await service(() => one<{ r: unknown }>("select public.begin_material_deletion($1, $2, $3, 99) r", [m, u.workspaceId, u.id]))).r).toEqual(begun.r);
     await expect(adaptation(u, m)).rejects.toThrow(/material_deleting/);

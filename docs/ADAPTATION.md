@@ -917,13 +917,14 @@ Evidencia: prueba real v3 (3/8 entregadas). Las causas, los cambios, los resulta
 
 - **Análisis fijado.** Cada adaptación guarda la huella de su análisis (`analysis_fingerprint`). Antes de un reanálisis, el servidor copia el análisis vigente en `material_analysis_snapshots` (inmutable, por material y huella). `get_adaptation_pipeline` lee esa copia cuando existe, así que las adaptaciones anteriores conservan su análisis, plan, versiones y revisiones. Las nuevas usan el análisis nuevo. Sin la copia no empieza el reanálisis.
 - **Volver a analizar.** Visible en la ficha del material, junto a «Retirar de la biblioteca», también con adaptaciones creadas, fallidas o bloqueadas. Pide confirmación y explica que cuenta como un análisis del plan. La base de datos lo hace idempotente: un doble clic o dos pestañas dan un solo trabajo y una sola unidad de cuota.
-- **Retirar de la biblioteca.** Archivado lógico (`archived_at`) mediante `set_material_archived`, con rol de escritura. Desaparece de la biblioteca y de las listas para adaptar, aparece en «Materiales retirados» y se puede restaurar. No toca adaptaciones, archivos, PDF ni cuotas.
+- **Retirar de la biblioteca.** Archivado lógico (`archived_at`) mediante `set_material_archived`, con rol de escritura. Desaparece de la biblioteca y de las listas para adaptar, aparece en «Materiales retirados» y se puede restaurar. No toca adaptaciones, archivos, PDF ni cuotas. Sus adaptaciones se siguen consultando y pueden continuar, pero no se crea ninguna nueva hasta restaurarlo: lo comprueban `createAdaptationCommand` (`material_archived`) y un disparador en `adaptations`.
+- **Contexto de una adaptación antigua.** La pantalla de la adaptación (`page-data.ts`) toma las etiquetas del análisis fijado. Usa el análisis actual mientras su huella coincide y, si no, la copia de `material_analysis_snapshots`, leída con el cliente del usuario (RLS). Si no hay ninguno de los dos, no muestra datos de otro análisis.
 - **Eliminar definitivamente.** Está en «Más opciones del material». Muestra antes lo que se pierde (adaptaciones, versiones, imágenes, PDF) y exige marcar una casilla. Va en dos pasos recuperables:
   1. `begin_material_deletion`:
      - comprueba el número de adaptaciones confirmado y rechaza el material si hay trabajo en curso;
      - cancela las adaptaciones no entregadas y libera su reserva (una entregada sigue consumida);
      - marca el material y devuelve los ficheros que hay que borrar.
-  2. El servidor borra los ficheros en Storage.
+  2. El servidor borra los ficheros en Storage: originales (`source-materials`), recortes, ilustraciones e imágenes aportadas (`generated-assets`) y exportaciones persistidas (`exports`), solo las que tienen `storage_path`. Hoy los PDF se generan en cada descarga y no se guardan.
   3. `finish_material_deletion` borra las filas.
 
   Si Storage falla, el material queda oculto y marcado como «Eliminación pendiente», y repetir la acción continúa donde se quedó. Mientras está marcado no se crea nada nuevo sobre él (disparadores en `adaptations` y `adaptation_jobs`). Las relaciones SQL no cambian. `usage_events` se conserva y `ai_runs` mantiene su coste.

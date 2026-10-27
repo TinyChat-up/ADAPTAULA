@@ -155,7 +155,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
             <IdentifiedCard analysis={analysis} reused={meta?.source === "reused"} />
             <ReviewNotice analysis={analysis} />
             {/* The next step comes right after what was understood, not after every detail of the analysis. */}
-            {status === "analyzed" && !deleting ? (
+            {status === "analyzed" && !deleting && !archived ? (
               <div id="adaptar" data-workspace-next={canWrite ? true : undefined} tabIndex={-1} aria-label={canWrite ? "Elegir apoyos" : "Acceso de solo lectura"} className="scroll-mt-28">
                 <StartAdaptationCard
                   profiles={profileOptions}

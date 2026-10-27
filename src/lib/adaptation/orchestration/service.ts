@@ -30,7 +30,8 @@ export interface Actor {
 }
 
 export interface AdaptationReader {
-  getMaterial(id: string): Promise<{ id: string; workspace_id: string; title: string; status: string; analysis: unknown; stage_slug: string | null; grade_slug: string | null; subject_slug: string | null } | null>;
+  /** `archived_at` / `deletion_requested_at` (migration 033): a withdrawn or deleting material starts no new adaptation. */
+  getMaterial(id: string): Promise<{ id: string; workspace_id: string; title: string; status: string; analysis: unknown; stage_slug: string | null; grade_slug: string | null; subject_slug: string | null; archived_at?: string | null; deletion_requested_at?: string | null } | null>;
   getLearnerProfile(id: string): Promise<{ id: string; workspace_id: string; stage_slug: string | null; grade_slug: string | null; functional_profile: unknown } | null>;
   getAdaptation(id: string): Promise<{ id: string; workspace_id: string; material_id: string; status: string; current_version: number; delivered_at: string | null } | null>;
   getVersion(adaptationId: string, version: number | null): Promise<{ id: string; version: number; document: unknown; review: unknown; source: string; created_at: string } | null>;
@@ -55,6 +56,7 @@ export type ServiceError =
   | "invalid"
   | "stale_analysis"
   | "invalid_state"
+  | "material_archived"
   | "stale_review"
   | "review_required"
   | "unsupported_execution"
@@ -109,7 +111,9 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
   const no = denied(actor);
   if (no) return no;
   const material = await deps.reader.getMaterial(request.materialId);
-  if (!material || material.workspace_id !== actor.workspaceId) return notFound;
+  if (!material || material.workspace_id !== actor.workspaceId || material.deletion_requested_at) return notFound;
+  // Its history stays readable; a new adaptation waits until the teacher restores it (the database refuses it too).
+  if (material.archived_at) return { ok: false, code: "material_archived" };
   if (material.status !== "analyzed") return { ok: false, code: "invalid", detail: ["El material no está analizado"] };
 
   let profile = { functional_profile: { schema_version: 1, supports: {}, limits: {}, allowances: {} } as unknown, stage_slug: null as string | null, grade_slug: null as string | null };

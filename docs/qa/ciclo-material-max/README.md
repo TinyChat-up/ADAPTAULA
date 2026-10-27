@@ -41,7 +41,7 @@ Ahora la pantalla agrupa por la etiqueta impresa (`groupActivities`) y muestra �
   - el doble clic y las dos pestañas dan un solo trabajo, porque la función es idempotente con el material bloqueado.
 - **Retirar y restaurar:** no tocan cuotas, adaptaciones, archivos ni PDF.
 - **Eliminar definitivamente:**
-  - borra los archivos (original, recortes de figuras, imágenes generadas, imágenes aportadas por el docente) y luego las filas;
+  - borra los archivos (original, recortes de figuras, imágenes generadas, imágenes aportadas por el docente y exportaciones PDF persistidas en `exports`, si las hubiera) y luego las filas. Hoy ningún código guarda PDF: se generan al descargar;
   - no devuelve cuota consumida;
   - conserva el libro `usage_events` y el coste en `ai_runs`;
   - libera solo las reservas de adaptaciones no entregadas, como al cancelar;
@@ -53,6 +53,9 @@ Ahora la pantalla agrupa por la etiqueta impresa (`groupActivities`) y muestra �
   - eliminar con un trabajo en curso se rechaza (`material_busy`);
   - un fallo de Storage durante la eliminación deja el material en «Eliminación pendiente» y se puede repetir.
 - **Mensajes de fallo:** categorías y nombres de actividad, nunca contenido, prompts, modelos ni datos del alumnado.
+
+- **Material retirado:** sus adaptaciones se consultan y continúan, pero no se crean nuevas hasta restaurarlo (servidor y base de datos).
+- **Adaptación antigua tras un reanálisis:** su pantalla muestra el contexto del análisis fijado (copia de la 033), no el actual.
 
 ## 4. Guía corta: repetir la prueba Max
 
