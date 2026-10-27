@@ -1,5 +1,21 @@
 # Registro de desarrollo
 
+## 2026-10-27 — «Hacer magia» bloqueada por un falso rechazo de vocabulario protegido (prt_6)
+
+- Caso real, leído en Supabase producción con consultas de solo lectura: adaptación `2d78f548…` (célula, 1.º ESO, Max). Tres versiones con `deterministic_review` bloqueado por `protected_elements_preserved` FAIL en `prt_6`.
+- `prt_6` es `required_vocabulary`, esencial, en `act_7` (actividad 4). Su valor es «Usar las palabras energía y nutrientes». La consigna original dice «… Usa las palabras energía y nutrientes.».
+- Las tres versiones conservan esa frase y las dos palabras. La comprobación partía el valor por « y » y exigía «Usar las palabras energía» como texto literal, que ni el original imprime. Es un falso rechazo, no una pérdida de contenido. Por eso fallaban igual la reparación dirigida y la restauración del original.
+- Corrección (`review-checks.ts`):
+  - `requiredTerms` quita la introducción («usar las palabras…») y separa los términos;
+  - solo se exige un término que la ficha original imprime; uno que no figura en su texto queda en WARN para la revisión semántica, nunca en PASS ni en FAIL;
+  - el detalle dice qué falta: el recurso, la actividad, el término, el número o la cita.
+- Reparación (`orchestrator.ts`): el mismo fallo determinista de conservación sobre las mismas decisiones, después de una reparación, ya no gasta otra generación. Se para con su diagnóstico.
+- Advertencias del caso, sin cambios:
+  - `answers_not_leaked` WARN: respuestas inferidas textuales que no se pueden excluir por coincidencia y piden revisión semántica. Por diseño.
+  - `functional_supports_applied` WARN: la necesidad `visual_support` del perfil no quedó atendida. Es una observación pedagógica real.
+  - El FAIL falso impedía que la revisión con IA llegara a resolverlas.
+- Pruebas: `tests/unit/protected-vocabulary.test.ts` (regresión del caso) y `adaptation-review.test.ts`, 30/30. Typecheck y lint sin errores. Sin E2E, sin suites completas y sin IA.
+
 ## 2026-10-27 — Material con adaptaciones: reanálisis, retirada, eliminación y fallos explicados
 
 - Base `8b322ec` (#76 integrada), rama `claude/variables-expuestas-repo-f2o2et`. Encargo: que un docente repita pruebas sin perder trabajo ni cuota y entienda por qué no se entrega una ficha.
