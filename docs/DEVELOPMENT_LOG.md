@@ -1,5 +1,25 @@
 # Registro de desarrollo
 
+## 2026-10-27 — Material con adaptaciones: reanálisis, retirada, eliminación y fallos explicados
+
+- Base `8b322ec` (#76 integrada), rama `claude/variables-expuestas-repo-f2o2et`. Encargo: que un docente repita pruebas sin perder trabajo ni cuota y entienda por qué no se entrega una ficha.
+- Diagnóstico. No se ha leído la ejecución real (sin registros ni BD de producción) ni se ha reproducido con IA de pago. Demostrado en el código: el diagnóstico de cada parada se guardaba pero la pantalla no lo mostraba. Las 9 «actividades» son entradas del análisis (apartados incluidos). [Consultas y guía](qa/ciclo-material-max/README.md).
+- Migración 033 (sin aplicar):
+  - `material_analysis_snapshots` y `get_adaptation_pipeline` con el análisis fijado;
+  - `materials.archived_at` y `deletion_requested_at`;
+  - `set_material_archived`;
+  - `begin_material_deletion` y `finish_material_deletion`;
+  - disparadores que impiden crear trabajo sobre un material en eliminación.
+- Código:
+  - `src/lib/materials/lifecycle.ts`, con la copia antes de `forceReanalysis`, la retirada y la eliminación recuperable;
+  - acciones `setArchivedAction` y `purgeMaterialAction`;
+  - `MaterialActions` y `ConfirmDialog` (detalles y casilla obligatoria);
+  - ficha del material y lista con «Materiales retirados»;
+  - `qualityDiagnosis` en el estado y `diagnosisLines` en los paneles de parada, bloqueo y fallo, con «Crear una adaptación nueva»;
+  - `groupActivities` para contar actividades y apartados.
+- Eliminado: `deleteMaterial` y `deleteMaterialAction`, sustituidas por la eliminación en dos pasos. La relación SQL `ON DELETE RESTRICT` no cambia.
+- Pruebas: dos ficheros nuevos ejecutados una vez (8/8), typecheck y lint sin errores (un aviso previo). No se han ejecutado la suite completa, las E2E ni las capturas, por indicación. Riesgo: el listado lee columnas nuevas, así que **hay que aplicar 033 antes de desplegar**.
+
 ## 2026-10-26 — Perfiles: fortalezas declaradas, barreras contextuales y apoyos combinables
 
 [PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), abierta sin merge.

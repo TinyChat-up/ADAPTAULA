@@ -2,12 +2,12 @@
 
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Alert } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { AUTOMATIC_STOP_COPY, needLabels } from "@/lib/adaptation/presentation/copy";
-import { warningLines } from "@/lib/adaptation/presentation/view-model";
+import { diagnosisLines, warningLines } from "@/lib/adaptation/presentation/view-model";
 import { BackLinks, WarningsList } from "./status-panels";
 
 /**
@@ -34,7 +34,8 @@ export function AutomaticIncompletePanel({
   const reason = dto.automaticStop?.reason ?? "quality";
   const copy = AUTOMATIC_STOP_COPY[reason];
   const needs = needLabels(dto.automaticStop?.needs ?? []);
-  const lines = reason === "quality" ? warningLines({ review: dto.review, execution: null }) : [];
+  // The recorded diagnosis first (which activity, and why), then any finding of the review that is not already said.
+  const lines = reason === "quality" ? [...new Set([...diagnosisLines(dto), ...warningLines({ review: dto.review, execution: null })])] : [];
   const canEdit = canWrite && dto.nextAction === "review_plan";
   return (
     <Card className="space-y-4 border-warning/40">
@@ -44,7 +45,10 @@ export function AutomaticIncompletePanel({
       {needs.length > 0 ? <p className="text-sm">Necesidad sin atender automáticamente: {needs.join(" · ")}.</p> : null}
       {lines.length > 0 ? <WarningsList lines={lines} /> : null}
       {reason === "quality" && !dto.regenerationAvailable ? (
-        <p className="text-sm">Ya se han preparado tres versiones de esta ficha y ninguna ha superado la comprobación de calidad. Si quieres intentarlo de nuevo, crea una adaptación nueva desde el material.</p>
+        <div className="space-y-2">
+          <p className="text-sm">Ya se han preparado tres versiones de esta ficha y ninguna ha superado la comprobación de calidad. Si quieres intentarlo de nuevo, crea una adaptación nueva desde el material: el análisis del material se reutiliza y no se gasta nada hasta que se entregue una ficha.</p>
+          {canWrite ? <LinkButton variant="secondary" href={`/app/materiales/${materialId}#adaptar`}>Crear una adaptación nueva</LinkButton> : null}
+        </div>
       ) : null}
       <p className="text-sm text-muted-foreground">{canEdit || reason !== "quality" ? copy.hint : AUTOMATIC_STOP_COPY.qualityFinal}</p>
       <div className="flex flex-wrap items-center gap-3">

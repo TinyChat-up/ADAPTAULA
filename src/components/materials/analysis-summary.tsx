@@ -1,3 +1,4 @@
+import { groupActivities } from "@/lib/analysis/activity-groups";
 import { AlertTriangle, EyeOff, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
@@ -94,6 +95,16 @@ export function ReviewNotice({ analysis }: { analysis: MaterialAnalysis }) {
   );
 }
 
+/** «5 actividades (9 apartados o preguntas en total)»: what the sheet shows and what the analysis lists, both true. */
+function activityCountText(analysis: MaterialAnalysis): string {
+  const groups = groupActivities(analysis.activities).length;
+  const entries = analysis.activities.length;
+  const main = `${groups} ${groups === 1 ? "actividad" : "actividades"}`;
+  return groups === entries ? `${main} en total.` : `${main} (${entries} apartados o preguntas en total).`;
+}
+
+const isPart = (analysis: MaterialAnalysis, id: string) => groupActivities(analysis.activities).some((g) => g.ids.indexOf(id) > 0);
+
 export function ActivitiesList({ analysis }: { analysis: MaterialAnalysis }) {
   if (analysis.activities.length === 0) {
     return (
@@ -103,12 +114,12 @@ export function ActivitiesList({ analysis }: { analysis: MaterialAnalysis }) {
     );
   }
   return (
-    <Section title="Actividades detectadas" description={`${analysis.activities.length} en total.`}>
+    <Section title="Actividades detectadas" description={activityCountText(analysis)}>
       <ol className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface shadow-card">
         {analysis.activities.map((a, index) => (
           <li key={a.id} className="space-y-2 p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">Actividad {a.label ?? index + 1}</span>
+              <span className="font-semibold">{isPart(analysis, a.id) ? `Apartado ${a.label ?? index + 1}` : `Actividad ${a.label ?? index + 1}`}</span>
               <Badge>{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
               <Badge>Dificultad {DIFFICULTY_LABELS[a.difficulty].toLowerCase()}</Badge>
               <span className="text-xs text-muted-foreground">Página {a.page}</span>

@@ -67,6 +67,11 @@ export interface AdaptationStatusDto {
   regenerationAvailable: boolean;
   /** «Hacer magia» stopped without a finished sheet (phase `automatic_incomplete`); null otherwise. Needs are dimension keys. */
   automaticStop: { reason: AutomaticStopReason; needs: string[] } | null;
+  /**
+   * Why the last generation could not be delivered, from the diagnosis the pipeline recorded (categories and the activities they
+   * name, «la actividad 3»; never content, rules' internal names, prompts or models). Absent when nothing was recorded.
+   */
+  qualityDiagnosis?: { stage: "generation" | "review"; items: Array<{ category: string; activities: string[] }> } | null;
 }
 
 /**

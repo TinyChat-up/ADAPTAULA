@@ -5,10 +5,11 @@ import { logger } from "@/lib/logger";
 import { visualSupportResult } from "../presentation/visual-support-result";
 import { AdaptationError } from "./errors";
 import { cancelAdaptation, createAdaptation, enqueueGeneration, enqueuePlanning, reopenPlanReview, submitPlanReview, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { activityName, groupActivities } from "@/lib/analysis/activity-groups";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { projectPreserves, projectRestrictions } from "./plan-projection";
 import { buildStatusDto, failureOf, isRetryable, type AdaptationStatusDto, type StatusArtifacts } from "./status";
-import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow, type CreationMode } from "./store";
+import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow, type CreationMode, type PipelineSnapshot } from "./store";
 import type { AdaptationStatus } from "./state-machine";
 import { isDelivered } from "./state-machine";
 import type { PipelineVersions } from "./versions";
@@ -342,7 +343,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const artifacts = await deps.reader.getArtifacts(adaptationId, STATUS_KINDS);
   const latest = (kind: ArtifactKind) => artifacts.filter((a) => a.kind === kind).at(-1)?.payload as Record<string, unknown> | undefined;
   const validation = latest("plan_validation") as { classification?: { counts: { valid: number; review: number; blocked: number } } } | undefined;
-  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> } };
+  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> }; diagnosis?: RecordedDiagnosis };
   const reports = artifacts.filter((a) => a.kind === "execution_report").map((a) => a.payload as Report);
   // The real preflight report (a recorded stop carries no execution), and what was recorded for the latest review.
   const execution = reports.filter((r) => r.execution).at(-1);
@@ -365,7 +366,32 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
     unresolvedNeeds,
   };
-  return { ok: true, data: buildStatusDto(snapshot, extra) };
+  const dto = buildStatusDto(snapshot, extra);
+  // Only once nothing is running and nothing was delivered: the latest recorded diagnosis, for the latest review if there is one.
+  const stopped = !dto.delivered && (dto.progress === "failed" || dto.phase === "automatic_incomplete" || dto.phase === "blocked");
+  const diagnosis = stopped
+    ? ([...forLastReview].reverse().find((r) => r.diagnosis)?.diagnosis ?? [...reports].reverse().find((r) => r.diagnosis)?.diagnosis)
+    : undefined;
+  return { ok: true, data: diagnosis ? { ...dto, qualityDiagnosis: describeDiagnosis(diagnosis, snapshot, latest("plan")) } : dto };
+}
+
+type RecordedDiagnosis = { stage: "generation" | "review"; failures: Array<{ category: string; decisions?: string[]; refs?: string[] }> };
+
+/** Categories and the activities each one names (through the decision's target when the failure names a decision). */
+function describeDiagnosis(diagnosis: RecordedDiagnosis, snapshot: PipelineSnapshot, plan: Record<string, unknown> | undefined): NonNullable<AdaptationStatusDto["qualityDiagnosis"]> {
+  const analysis = parseStoredAnalysis(snapshot.analysis.analysis).analysis;
+  const groups = analysis ? groupActivities(analysis.activities) : [];
+  const decisions = new Map(((plan?.decisions as Array<{ id?: string; target?: string }> | undefined) ?? []).flatMap((d) => (d.id && d.target ? [[d.id, d.target] as const] : [])));
+  const byCategory = new Map<string, Set<string>>();
+  for (const f of diagnosis.failures ?? []) {
+    const names = byCategory.get(f.category) ?? new Set<string>();
+    for (const ref of [...(f.refs ?? []), ...(f.decisions ?? []).map((d) => decisions.get(d) ?? "")]) {
+      const name = ref.startsWith("act_") ? activityName(groups, ref) : null;
+      if (name) names.add(name);
+    }
+    byCategory.set(f.category, names);
+  }
+  return { stage: diagnosis.stage, items: [...byCategory].map(([category, names]) => ({ category, activities: [...names] })) };
 }
 
 export interface PlanDecisionDto {

@@ -912,3 +912,20 @@ Evidencia: prueba real v3 (3/8 entregadas). Las causas, los cambios, los resulta
 ### Figuras imprescindibles
 - **Motivo de la parada** (`visualStopCode`). Distingue función desactivada o no ofrecida (`visual_unavailable`), plan sin ilustraciones (`visual_plan`), cupo del mes (`visual_quota`) y no construible o servicio (`visual`).
 - **Página original completa como anexo.** Estudiada y no implementada (ADR-038).
+
+## Material con adaptaciones: reanálisis, retirada y eliminación (migración 033, 2026-10-27)
+
+- **Análisis fijado.** Cada adaptación guarda la huella de su análisis (`analysis_fingerprint`). Antes de un reanálisis, el servidor copia el análisis vigente en `material_analysis_snapshots` (inmutable, por material y huella). `get_adaptation_pipeline` lee esa copia cuando existe, así que las adaptaciones anteriores conservan su análisis, plan, versiones y revisiones. Las nuevas usan el análisis nuevo. Sin la copia no empieza el reanálisis.
+- **Volver a analizar.** Visible en la ficha del material, junto a «Retirar de la biblioteca», también con adaptaciones creadas, fallidas o bloqueadas. Pide confirmación y explica que cuenta como un análisis del plan. La base de datos lo hace idempotente: un doble clic o dos pestañas dan un solo trabajo y una sola unidad de cuota.
+- **Retirar de la biblioteca.** Archivado lógico (`archived_at`) mediante `set_material_archived`, con rol de escritura. Desaparece de la biblioteca y de las listas para adaptar, aparece en «Materiales retirados» y se puede restaurar. No toca adaptaciones, archivos, PDF ni cuotas.
+- **Eliminar definitivamente.** Está en «Más opciones del material». Muestra antes lo que se pierde (adaptaciones, versiones, imágenes, PDF) y exige marcar una casilla. Va en dos pasos recuperables:
+  1. `begin_material_deletion`:
+     - comprueba el número de adaptaciones confirmado y rechaza el material si hay trabajo en curso;
+     - cancela las adaptaciones no entregadas y libera su reserva (una entregada sigue consumida);
+     - marca el material y devuelve los ficheros que hay que borrar.
+  2. El servidor borra los ficheros en Storage.
+  3. `finish_material_deletion` borra las filas.
+
+  Si Storage falla, el material queda oculto y marcado como «Eliminación pendiente», y repetir la acción continúa donde se quedó. Mientras está marcado no se crea nada nuevo sobre él (disparadores en `adaptations` y `adaptation_jobs`). Las relaciones SQL no cambian. `usage_events` se conserva y `ai_runs` mantiene su coste.
+- **Por qué no se entrega una ficha.** El pipeline ya guardaba el diagnóstico de cada parada (`execution_report.diagnosis`: categoría, regla y unidades). Ahora el estado lo expone como `qualityDiagnosis`: categorías y actividades («la actividad 3»), nunca contenido, prompts ni modelos. La pantalla lo explica: «No hemos podido completar la actividad 3 porque…». Cuando ya no quedan generaciones, ofrece crear una adaptación nueva.
+- **Actividades y apartados.** El análisis registra como actividad todo lo que el alumno debe responder, de modo que «3a», «3b» o cada afirmación con letra cuentan por separado. `groupActivities` los agrupa por la etiqueta impresa («5 actividades (9 apartados o preguntas en total)»), sin cambiar el análisis ni el prompt.

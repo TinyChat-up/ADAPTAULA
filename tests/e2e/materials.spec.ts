@@ -204,7 +204,15 @@ test("listado, filtros y borrado (con el archivo)", async ({ page }) => {
   await expect(page.getByText("No hay materiales con estos filtros")).toBeVisible();
   await page.getByRole("link", { name: "Limpiar filtros" }).click();
 
-  await page.getByRole("button", { name: "Eliminar" }).click();
+  // Withdrawing is reversible and lives in the list; deleting for good lives in the material's «Más opciones».
+  await page.getByRole("button", { name: "Retirar de la biblioteca" }).click();
+  await expect(page.getByText(/Material retirado de la biblioteca/)).toBeVisible();
+  await expect(page.getByText("Todavía no has subido ningún material.")).toBeVisible();
+  await page.getByRole("link", { name: "Ver materiales retirados" }).click();
+  await page.getByRole("button", { name: "Restaurar en la biblioteca" }).click();
+  await page.goto(`/app/materiales/${id}`);
+  await page.locator("summary", { hasText: "Más opciones del material" }).click();
+  await page.getByRole("button", { name: "Eliminar", exact: true }).click();
   await page.getByRole("button", { name: "Eliminar material" }).click();
   await expect(page.getByText("Material eliminado.")).toBeVisible();
   await expect(page.getByText("Todavía no has subido ningún material.")).toBeVisible();

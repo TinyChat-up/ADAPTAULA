@@ -15,8 +15,9 @@ import { validateDeclaredFile, validateFileContent } from "./file-validation";
 import type { ServiceError } from "./service-errors";
 import { sha256Hex } from "./hash";
 import { inspectPdf } from "./pdf";
-import { createSignedUpload, downloadSource, removeSources } from "./storage";
+import { createSignedUpload, downloadSource } from "./storage";
 import { getMaterialDetail } from "./repository";
+import { snapshotCurrentAnalysis } from "./lifecycle";
 
 export type { ServiceError };
 
@@ -265,6 +266,8 @@ export async function requestAnalysis(ctx: WorkspaceContext, materialId: string,
 export async function queueAnalysis(ctx: WorkspaceContext, materialId: string, input: { force?: boolean }): Promise<QueueResult> {
   if (!hasRole(ctx.role, WRITE_ROLES)) return { ok: false, code: "forbidden" };
   if (!(await rateAllowed(`analyze:${ctx.workspace.id}`, 3600, ANALYSIS_LIMITS.analysesPerWorkspacePerHour))) return { ok: false, code: "rate_limited" };
+  // A new analysis replaces the current one: the adaptations made with it keep reading their own copy (migration 033).
+  if (input.force && !(await snapshotCurrentAnalysis(ctx.workspace.id, materialId))) return { ok: false, code: "unexpected" };
 
   const { data, error } = await createAdminClient().rpc("enqueue_analysis_job", {
     p_material: materialId,
@@ -276,34 +279,10 @@ export async function queueAnalysis(ctx: WorkspaceContext, materialId: string, i
     if (error.message.includes("analysis_limit_reached")) return { ok: false, code: "too_many_active" };
     if (error.message.includes("analysis_quota_exceeded")) return { ok: false, code: "quota_exceeded" };
     if (error.message.includes("ai_failure_budget_exhausted")) return { ok: false, code: "failure_budget" };
-    if (error.message.includes("material_not_found")) return { ok: false, code: "not_found" };
+    if (error.message.includes("material_not_found") || error.message.includes("material_deleting")) return { ok: false, code: "not_found" };
     logger.error("enqueue_failed", { workspaceId: ctx.workspace.id, materialId });
     return { ok: false, code: "unexpected" };
   }
   return { ok: true, jobId: String(data) };
 }
 
-export type DeleteResult = { ok: true } | { ok: false; code: "forbidden" | "not_found" | "has_adaptations" | "unexpected" };
-
-/**
- * Deletes a material and its stored file. The order matters for privacy: authorize, remove the file,
- * then the row (its jobs cascade). A material that already has adaptations is NOT deleted silently:
- * the database refuses (ON DELETE RESTRICT) and the teacher is told to remove those first.
- */
-export async function deleteMaterial(ctx: WorkspaceContext, materialId: string): Promise<DeleteResult> {
-  if (!hasRole(ctx.role, WRITE_ROLES)) return { ok: false, code: "forbidden" };
-  const detail = await getMaterialDetail(ctx.workspace.id, materialId);
-  if (!detail) return { ok: false, code: "not_found" };
-
-  const supabase = await getSupabase();
-  const { count } = await supabase.from("adaptations").select("id", { count: "exact", head: true }).eq("material_id", materialId);
-  if ((count ?? 0) > 0) return { ok: false, code: "has_adaptations" };
-
-  if (detail.file && !(await removeSources([detail.file.storage_path]))) {
-    logger.error("material_file_not_removed", { workspaceId: ctx.workspace.id, materialId });
-    return { ok: false, code: "unexpected" };
-  }
-  const { data, error } = await supabase.from("materials").delete().eq("workspace_id", ctx.workspace.id).eq("id", materialId).select("id");
-  if (error) return { ok: false, code: error.code === "23503" ? "has_adaptations" : "unexpected" };
-  return (data?.length ?? 0) > 0 ? { ok: true } : { ok: false, code: "not_found" };
-}

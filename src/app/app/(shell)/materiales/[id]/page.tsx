@@ -32,7 +32,8 @@ import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { createAdaptationFromMaterialAction } from "../../adaptaciones/actions";
 import { visualSupportOffer } from "@/lib/materials/visuals/illustrate/server";
-import { deleteMaterialAction, retryAnalysisAction, updateContextAction } from "../actions";
+import { deletionImpact } from "@/lib/materials/lifecycle";
+import { purgeMaterialAction, retryAnalysisAction, setArchivedAction, updateContextAction } from "../actions";
 
 export const metadata: Metadata = { title: "Material" };
 
@@ -40,12 +41,13 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
   const { id } = await params;
   const query = await searchParams;
   const ctx = await requireWorkspace();
-  const [detail, catalog, subjects, profiles, recent] = await Promise.all([
+  const [detail, catalog, subjects, profiles, recent, impact] = await Promise.all([
     getMaterialDetail(ctx.workspace.id, id),
     getCatalog(),
     getSubjects(),
     listProfiles(ctx.workspace.id),
     listAdaptations({ materialId: id, limit: 10 }),
+    deletionImpact(ctx.workspace.id, id),
   ]);
   if (!detail) notFound();
   const profileOptions = profiles.map((p) => ({ id: p.id, name: p.display_name, summary: summarizeProfile(p.functional_profile) }));
@@ -56,6 +58,12 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
 
   const { material, file, analysis, meta, analysisOutdated } = detail;
   const status = material.status as MaterialStatus;
+  const adaptationCount = impact?.adaptations ?? 0;
+  const deleting = material.deletion_requested_at !== null;
+  const archived = material.archived_at !== null;
+  const purge = impact ? { action: purgeMaterialAction.bind(null, material.id, impact.adaptations), impact } : undefined;
+  const kept = adaptationCount === 0 ? "Las adaptaciones que crees después usarán el análisis nuevo." : `${adaptationCount === 1 ? "La adaptación ya creada se conserva" : `Las ${adaptationCount} adaptaciones ya creadas se conservan`} con el análisis con el que se hicieron; las nuevas usarán el análisis nuevo.`;
+  const reanalyzeConfirm = `Se hará un análisis nuevo del archivo, que cuenta como un análisis de tu plan este mes. ${kept}`;
   const labels = labelsFor(catalog, material.stage_slug, material.grade_slug);
   const subjectName = subjects.find((s) => s.slug === material.subject_slug)?.name;
   const resolved = resolveContext(material, analysis);
@@ -81,6 +89,34 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
         {labels.grade ? <Badge>{labels.grade}</Badge> : null}
       </div>
 
+      {deleting ? (
+        <Card className="space-y-3 border-danger/40">
+          <Alert tone="danger" title="Eliminación pendiente">
+            Este material se está eliminando y ya no se usa. Si la eliminación no terminó, vuelve a intentarlo.
+          </Alert>
+          {canWrite && purge ? <MaterialActions purge={purge} /> : null}
+        </Card>
+      ) : archived ? (
+        <Card className="space-y-3">
+          <Alert tone="info" title="Retirado de la biblioteca">
+            No aparece en tu biblioteca ni en las listas para adaptar. Sus adaptaciones se conservan y siguen disponibles.
+          </Alert>
+          {canWrite ? <MaterialActions restore={setArchivedAction.bind(null, material.id, false)} /> : null}
+        </Card>
+      ) : canWrite && (status === "analyzed" || status === "failed") ? (
+        <div className="space-y-2">
+          <MaterialActions
+            {...(status === "analyzed" ? { retry: retryAnalysisAction.bind(null, material.id), retryLabel: "Volver a analizar", retryConfirm: reanalyzeConfirm } : {})}
+            archive={setArchivedAction.bind(null, material.id, true)}
+          />
+          {adaptationCount > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {adaptationCount === 1 ? "Este material tiene 1 adaptación." : `Este material tiene ${adaptationCount} adaptaciones.`} Volver a analizarlo o retirarlo no las cambia.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <DocumentWorkspace
         nextLabel={status === "analyzed" ? canWrite ? "Elegir apoyos" : "Ver análisis" : "Ver estado"}
         document={file ? <OriginalDocument key={file.id} materialId={material.id} file={{
@@ -104,7 +140,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
             <Alert tone="danger" title="No hemos podido analizar este material.">
               {failureMessage(material.failure_code)}
             </Alert>
-            {canWrite ? <MaterialActions retry={retryAnalysisAction.bind(null, material.id)} remove={deleteMaterialAction.bind(null, material.id)} /> : null}
+            {canWrite && !deleting ? <MaterialActions retry={retryAnalysisAction.bind(null, material.id)} {...(purge ? { purge } : {})} /> : null}
           </Card>
         ) : null}
 
@@ -119,7 +155,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
             <IdentifiedCard analysis={analysis} reused={meta?.source === "reused"} />
             <ReviewNotice analysis={analysis} />
             {/* The next step comes right after what was understood, not after every detail of the analysis. */}
-            {status === "analyzed" ? (
+            {status === "analyzed" && !deleting ? (
               <div id="adaptar" data-workspace-next={canWrite ? true : undefined} tabIndex={-1} aria-label={canWrite ? "Elegir apoyos" : "Acceso de solo lectura"} className="scroll-mt-28">
                 <StartAdaptationCard
                   profiles={profileOptions}
@@ -156,12 +192,11 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
             />
           </WorkspaceDisclosure>
         ) : null}
-        {canWrite && (status === "analyzed" || status === "uploaded") ? (
+        {canWrite && !deleting && !IN_PROGRESS.includes(status) && status !== "failed" ? (
           <WorkspaceDisclosure title="Más opciones del material">
             <MaterialActions
-              retry={retryAnalysisAction.bind(null, material.id)}
-              retryLabel={status === "analyzed" ? "Volver a analizar" : "Analizar"}
-              remove={deleteMaterialAction.bind(null, material.id)}
+              {...(status === "uploaded" ? { retry: retryAnalysisAction.bind(null, material.id), retryLabel: "Analizar" } : {})}
+              {...(purge ? { purge } : {})}
             />
           </WorkspaceDisclosure>
         ) : null}

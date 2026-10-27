@@ -1,3 +1,4 @@
+import { groupActivities } from "@/lib/analysis/activity-groups";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 
 /**
@@ -38,7 +39,7 @@ export function buildContextView(input: {
     stage: input.stage,
     grade: input.grade,
     subject: input.subject,
-    activityCount: analysis?.activities.length ?? 0,
+    activityCount: analysis ? groupActivities(analysis.activities).length : 0,
     targets: {},
     hints: {},
     preserved: {},
