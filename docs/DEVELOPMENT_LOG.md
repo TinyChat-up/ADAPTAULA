@@ -1,5 +1,16 @@
 # Registro de desarrollo
 
+## 2026-10-26 — Perfiles: fortalezas declaradas, barreras contextuales y apoyos combinables
+
+[PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), abierta sin merge.
+
+- Base `7d3dc15`, #75 confirmada integrada y ninguna PR abierta al iniciar; rama `codex/perfiles-fortalezas-barreras`. Auditoría focalizada del formulario, catálogo, presets, persistencia y consumidores; issue #63 leída. [Decisiones, antes/después, perfil sintético y despliegue](qa/perfiles-dua/README.md).
+- Once tarjetas y flujo progresivo sin pasos obligatorios adicionales. Se distinguen imágenes para comprender, accesibilidad visual y carga visual. Fortalezas/barreras opcionales de catálogo, sugerencias elegidas por el docente y resumen en tres bloques. Frecuencia de apoyo sin inferir capacidad ni reducir currículo. Presets históricos conservados, suma sin borrar, sustitución confirmada, veinte estados para deshacer; cerrar un área ya no borra dimensiones.
+- JSONB V1/V2 compatible, `none` explícito distinto de no indicado, guardado/duplicación completos y contexto opcional de IDs sin alias ni texto libre. Revisión `updated_at` y escritura condicionada evitan sobrescrituras entre pestañas. Migración 032 impide degradación V2→V1 incluso desde clientes antiguos; aplicada dos veces solo en PGlite. Requiere autorización y aplicación antes del despliegue compartido. Sin conversión masiva y sin reversión destructiva a V1.
+- Unidad/BD completa: **2.049 correctas, 13 omitidas**, 152 archivos; PDF **80/80**; E2E completa **142 correctas, 4 omitidas** en 18,6 min, con BD local hasta 031 al inicio. Tras reiniciar con 032, **10/10 E2E** de perfiles y escritura REST autenticada directa. El montaje inicial de la prueba histórica intentaba crear V1 degradando V2: 032 lo rechazó correctamente; se corrigió para insertar una fila V1 genuina. PGlite/guardas finales **6/6**. No se repite la E2E general.
+- Typecheck, build, smoke raster/PDF y secretos correctos; lint sin errores, un aviso previo `_id`. Capturas reales con identidades ficticias en escritorio/móvil y cuotas locales del seed. Axe, teclado/foco, 320 px, texto 200 %, movimiento reducido y colores forzados; sin certificación WCAG ni sesión física con lector de pantalla.
+- Sin IA pagada, cambios de modelos/prompts, CLARO, cuotas, Stripe, datos remotos, merge o despliegue. No se valida pedagógicamente el generador real ni se implementa el motor curricular #63. Siguiente: revisar la PR, autorizar 032 antes de habilitar V2, comprobar perfiles ficticios con docentes y después abordar el uso pedagógico de observaciones en el pipeline.
+
 ## 2026-10-26 — Imágenes: recuperar las marcas del original antes de pedir una ilustración
 
 [PR #75](https://github.com/TinyChat-up/ADAPTAULA/pull/75), abierta sin merge.

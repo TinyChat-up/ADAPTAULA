@@ -1,0 +1,21 @@
+{
+  "display_name": "Nube-4 (ficticio)",
+  "stage_slug": "primaria",
+  "grade_slug": "4-primaria",
+  "functional_profile": {
+    "schema_version": 2,
+    "supports": {
+      "visual_support": "medium",
+      "worked_examples": "medium",
+      "instruction_chunking": "high",
+      "visual_density": "medium",
+      "high_contrast": "none"
+    },
+    "limits": {},
+    "allowances": {},
+    "observations": {
+      "strengths": ["oral_expression", "concrete_examples"],
+      "barriers": ["written_expression", "visual_load"]
+    }
+  }
+}

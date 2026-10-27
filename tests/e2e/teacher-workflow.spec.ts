@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { allowAdaptations } from "./adaptation-seed";
-import { makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
+import { applyProfilePreset, makePdf, signUpAndOnboard, uniqueEmail, uploadAndOpen, waitForAnalysis, workspaceOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -29,8 +29,7 @@ async function newProfileFromMaterial(page: Page, materialId: string) {
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
   // Needs, so the plan has decisions to show and change (the profile is the only source: nothing is asked again later).
-  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Atención, planificación y organización" });
-  await page.getByRole("button", { name: "Aplicar" }).click();
+  await applyProfilePreset(page, "Atención, planificación y organización");
   await page.getByRole("button", { name: "Crear perfil" }).click();
   // Back to the same material, with the new profile already chosen.
   await expect(page).toHaveURL(new RegExp(`/app/materiales/${materialId}\\?perfil=[0-9a-f-]{36}`));

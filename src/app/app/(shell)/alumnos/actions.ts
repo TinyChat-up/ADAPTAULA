@@ -20,11 +20,12 @@ import { LearnerProfileInputSchema, type LearnerProfileInput } from "@/lib/schem
 
 export type ProfileActionResult =
   | { ok: false; code: "validation"; message: string; fieldErrors: Partial<Record<string, string>> }
-  | { ok: false; code: "limit" | "not_found" | "forbidden" | "error"; message: string };
+  | { ok: false; code: "limit" | "not_found" | "conflict" | "forbidden" | "error"; message: string };
 
 const MESSAGES = {
   limit: "Has alcanzado el límite de perfiles de tu plan.",
   not_found: "No hemos encontrado ese perfil.",
+  conflict: "El perfil ha cambiado o utiliza una versión más reciente. Recarga la página antes de guardar para conservar todos sus datos.",
   forbidden: "Tu rol no permite modificar perfiles.",
   error: "No hemos podido guardar los cambios. Inténtalo de nuevo.",
 } as const;

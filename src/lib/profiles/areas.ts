@@ -11,7 +11,7 @@ export interface ProfileArea {
 /** Teacher-facing taxonomy. It is deliberately decoupled from the schema's `DIMENSION_GROUPS`. */
 export const PROFILE_AREAS = [
   { id: "reading", label: "Lectura", description: "Decodificar, leer con fluidez y manejar textos largos.", groups: ["reading"] },
-  { id: "comprehension", label: "Comprensión", description: "Entender ideas, inferir y recordar lo leído.", groups: ["comprehension"] },
+  { id: "comprehension", label: "Comprensión", description: "Entender ideas con lenguaje, ejemplos y representaciones.", groups: ["comprehension"] },
   { id: "language", label: "Lenguaje", description: "Vocabulario, construcción de frases y expresión.", groups: ["language"] },
   {
     id: "attention",
@@ -37,13 +37,17 @@ export type ProfileAreaId = (typeof PROFILE_AREAS)[number]["id"];
 
 export type KnownProfileArea = (typeof PROFILE_AREAS)[number];
 
+// `visual_support` is historically in the hearing schema group; teachers also use it for conceptual understanding.
+// Move only its disclosure in the form, preserving the stored dimension and all pipeline contracts.
+const AREA_OVERRIDES: Partial<Record<DimensionKey, ProfileAreaId>> = { visual_support: "comprehension" };
+
 export function dimensionsOfArea(area: ProfileArea): DimensionKey[] {
   const groups: readonly DimensionGroup[] = area.groups;
-  return (Object.keys(DIMENSIONS) as DimensionKey[]).filter((key) => groups.includes(DIMENSIONS[key].group));
+  return (Object.keys(DIMENSIONS) as DimensionKey[]).filter((key) => AREA_OVERRIDES[key] ? AREA_OVERRIDES[key] === area.id : groups.includes(DIMENSIONS[key].group));
 }
 
 export function areaOfDimension(key: DimensionKey): KnownProfileArea {
-  const area = PROFILE_AREAS.find((a) => (a.groups as readonly DimensionGroup[]).includes(DIMENSIONS[key].group));
+  const area = PROFILE_AREAS.find((a) => AREA_OVERRIDES[key] ? a.id === AREA_OVERRIDES[key] : (a.groups as readonly DimensionGroup[]).includes(DIMENSIONS[key].group));
   if (!area) throw new Error(`Dimensión sin área: ${key}`);
   return area;
 }

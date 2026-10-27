@@ -3,7 +3,7 @@ import { dimensionsOfArea, type ProfileArea } from "@/lib/profiles/areas";
 import { DIMENSION_COPY, LEVEL_OPTIONS } from "@/lib/profiles/copy";
 import type { DimensionKey, FunctionalProfile, SupportLevel } from "@/lib/schemas/functional-profile";
 
-function LevelControl({ dimension, value, onChange }: { dimension: DimensionKey; value: SupportLevel; onChange: (level: SupportLevel) => void }) {
+function LevelControl({ dimension, value, onChange }: { dimension: DimensionKey; value: SupportLevel | "unknown"; onChange: (level: SupportLevel | "unknown") => void }) {
   const copy = DIMENSION_COPY[dimension];
   const labelId = `label-${dimension}`;
   const hintId = `hint-${dimension}`;
@@ -24,7 +24,7 @@ function LevelControl({ dimension, value, onChange }: { dimension: DimensionKey;
           <label
             key={o.value}
             className={cn(
-              "flex min-h-9 cursor-pointer items-center rounded-control border border-border bg-surface px-3 text-sm has-[:checked]:font-semibold has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary",
+              "flex min-h-9 max-w-full cursor-pointer items-center rounded-control border border-border bg-surface px-3 text-sm has-[:checked]:font-semibold has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary",
               o.value === "none"
                 ? "has-[:checked]:border-foreground/40 has-[:checked]:bg-foreground/5"
                 : "has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:text-primary-foreground",
@@ -53,14 +53,14 @@ export function AreaControls({
 }: {
   area: ProfileArea;
   profile: FunctionalProfile;
-  onChange: (dimension: DimensionKey, level: SupportLevel) => void;
+  onChange: (dimension: DimensionKey, level: SupportLevel | "unknown") => void;
 }) {
   return (
     <details className="min-w-0 rounded-card border border-border bg-surface p-5">
       <summary className="min-h-7 cursor-pointer font-semibold">Ajustar {area.label.toLocaleLowerCase("es")}</summary>
       <div className="mt-3 divide-y divide-border">
         {dimensionsOfArea(area).map((key) => (
-          <LevelControl key={key} dimension={key} value={profile.supports[key] ?? "none"} onChange={(level) => onChange(key, level)} />
+          <LevelControl key={key} dimension={key} value={profile.supports[key] ?? "unknown"} onChange={(level) => onChange(key, level)} />
         ))}
       </div>
     </details>

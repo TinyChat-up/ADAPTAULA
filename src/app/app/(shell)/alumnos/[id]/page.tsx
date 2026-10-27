@@ -102,6 +102,7 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
           stage_slug: profile.stage_slug ?? "",
           grade_slug: profile.grade_slug ?? "",
           functional_profile: profile.functional_profile,
+          expected_updated_at: profile.updated_at,
         }}
         onSubmit={updateProfileAction.bind(null, id)}
       /> : <ProfileSummaryPanel summary={summarizeProfile(profile.functional_profile)} />}

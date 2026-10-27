@@ -21,7 +21,7 @@ export type LearnerProfileRecord = z.infer<typeof ProfileRowSchema>;
 
 const COLUMNS = "id, display_name, stage_slug, grade_slug, functional_profile, created_at, updated_at";
 
-export type WriteResult = { ok: true; id: string } | { ok: false; reason: "limit" | "not_found" | "error" };
+export type WriteResult = { ok: true; id: string } | { ok: false; reason: "limit" | "not_found" | "conflict" | "error" };
 
 function isLimitError(error: { message?: string } | null): boolean {
   return Boolean(error?.message?.includes("limit_reached:profiles"));
@@ -99,6 +99,12 @@ export async function createProfile(ctx: WorkspaceContext, input: LearnerProfile
 
 export async function updateProfile(workspaceId: string, id: string, input: LearnerProfileInput): Promise<WriteResult> {
   if (!ProfileIdSchema.safeParse(id).success) return { ok: false, reason: "not_found" };
+  let current: LearnerProfileRecord | null;
+  try { current = await getProfile(workspaceId, id); }
+  catch { return { ok: false, reason: "error" }; }
+  if (!current) return { ok: false, reason: "not_found" };
+  // Old clients cannot understand (and would drop) V2 observations. Never downgrade a stored profile silently.
+  if (current.functional_profile.schema_version > input.functional_profile.schema_version || input.expected_updated_at && input.expected_updated_at !== current.updated_at) return { ok: false, reason: "conflict" };
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("learner_profiles")
@@ -110,10 +116,11 @@ export async function updateProfile(workspaceId: string, id: string, input: Lear
     })
     .eq("workspace_id", workspaceId)
     .eq("id", id)
+    .eq("updated_at", current.updated_at)
     .is("archived_at", null)
     .select("id");
   if (error) return { ok: false, reason: "error" };
-  return data && data.length > 0 ? { ok: true, id } : { ok: false, reason: "not_found" };
+  return data && data.length > 0 ? { ok: true, id } : { ok: false, reason: "conflict" };
 }
 
 export async function deleteProfile(workspaceId: string, id: string): Promise<WriteResult> {

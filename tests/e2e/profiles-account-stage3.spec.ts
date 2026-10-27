@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { reserveAnalyses, signUpAndOnboard, uniqueEmail, workspaceOf } from "./helpers";
+import { applyProfilePreset, reserveAnalyses, signUpAndOnboard, uniqueEmail, workspaceOf } from "./helpers";
 
 const fake = `http://127.0.0.1:${process.env.FAKE_SUPABASE_PORT ?? 54399}`;
 const key = process.env.FAKE_SERVICE_KEY ?? "sb_secret_fakefakefakefakefake";
@@ -11,8 +11,7 @@ async function create(page: Page) {
   await page.getByLabel("Alias o iniciales").fill("Perfil de lectura");
   await page.getByLabel("Etapa", { exact: true }).selectOption("primaria");
   await page.getByLabel("Curso", { exact: true }).selectOption("3-primaria");
-  await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label: "Lectura y decodificación" });
-  await page.getByRole("button", { name: "Aplicar", exact: true }).click();
+  await applyProfilePreset(page, "Lectura y decodificación");
   await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
   await expect(page).toHaveURL(/aviso=creado/);
 }
@@ -48,7 +47,7 @@ test("perfiles: buscar, conservar apoyos al duplicar, límite real y adaptación
   await page.getByRole("button", { name: "Duplicar", exact: true }).click();
   await expect(page.getByText("Perfil duplicado. Ya puedes ajustarlo.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Duplicar", exact: true })).toBeDisabled();
-  await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("apoyo para decodificar al leer (mucho)");
+  await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("apoyo para decodificar al leer (habitual o imprescindible)");
   await page.getByLabel("Curso", { exact: true }).selectOption("5-primaria");
   await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
@@ -62,6 +61,7 @@ test("perfiles: buscar, conservar apoyos al duplicar, límite real y adaptación
   await expect(page.getByLabel("Curso", { exact: true })).toHaveValue("5-primaria");
   await capture(page, info, "perfil");
   const summary = page.getByText("Elegir otras áreas de apoyo", { exact: true });
+  await page.getByText("Personalizar más", { exact: true }).click();
   await summary.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /^Lectura/ })).toBeVisible();
@@ -129,7 +129,7 @@ test("perfiles: aislamiento y vista de lectura sin acciones de escritura", async
   await context.addCookies([{ name: "aw", value: workspace, url: new URL(url).origin }]);
   await reader.goto(url);
   await expect(reader.getByText(/Tu acceso es de solo lectura/)).toBeVisible();
-  await expect(reader.getByRole("heading", { name: "Así se aplicará" })).toBeVisible();
+  await expect(reader.getByRole("heading", { name: "Así acompañaremos su aprendizaje" })).toBeVisible();
   await expect(reader.getByRole("button", { name: /Duplicar|Eliminar|Guardar cambios/ })).toHaveCount(0);
   await expect(reader.getByLabel("Alias o iniciales")).toHaveCount(0);
   await reader.goto("/app/alumnos/nuevo");

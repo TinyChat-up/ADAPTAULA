@@ -201,6 +201,7 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
     conflicts: detectConflicts(new Set(needs.map((n) => n.dimension)), analysis, { literalTexts, writingActivities }),
     teacher_request: sanitizeRequest(input.teacherRequest),
     ...(input.visualSupports === true ? { visual_supports: { requested: true as const } } : {}),
+    ...(profile.observations && (profile.observations.strengths.length > 0 || profile.observations.barriers.length > 0) ? { learning_observations: profile.observations } : {}),
   };
   return { context: AdaptationContextSchema.parse(context), omitted };
 }

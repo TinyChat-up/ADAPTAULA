@@ -13,6 +13,8 @@ export const LearnerProfileInputSchema = z.object({
   stage_slug: z.string().regex(/^[a-z0-9-]+$/, "Elige una etapa."),
   grade_slug: z.string().regex(/^[a-z0-9-]+$/, "Elige un curso."),
   functional_profile: FunctionalProfileSchema,
+  /** Optimistic concurrency for edits; never a caller-selected workspace or permission. */
+  expected_updated_at: z.string().datetime({ offset: true }).optional(),
 });
 
 export type LearnerProfileInput = z.infer<typeof LearnerProfileInputSchema>;
