@@ -153,30 +153,76 @@ export function constraintsPreserved(input: ReviewInput): CheckResult {
   return result("constraints_preserved", status, targets, `Restricciones alteradas: ${list(problems)}`);
 }
 
+/**
+ * The text the ORIGINAL sheet prints (statements, texts, table cells and chart labels), never the analyzer's own descriptions.
+ * With `refs`, only the activities, texts and visuals a protected element is linked to; without them, the whole sheet.
+ */
+function originalSheetText(analysis: MaterialAnalysis, refs?: ReadonlySet<string>): string {
+  const linked = (id: string) => !refs || refs.has(id);
+  return [
+    ...analysis.activities.filter((a) => linked(a.id)).map((a) => `${a.label ?? ""} ${a.instruction} ${a.context ?? ""}`),
+    ...analysis.texts.filter((t) => linked(t.id)).map((t) => t.text),
+    ...analysis.visuals.filter((v) => linked(v.id)).flatMap((v) => [...(v.table ? [v.table.headers.join(" "), ...v.table.rows.map((r) => r.join(" "))] : []), ...(v.chart ? v.chart.categories : [])]),
+  ].join(" ");
+}
+
+/** Whole words only: «energía» is not kept by «sinergía», nor «célula» by «células» (accents and case aside). */
+export function containsTerm(text: string, term: string): boolean {
+  const needle = normalizeText(term).trim().replace(/\s+/g, " ").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  return needle.length > 0 && new RegExp(`(?<![\\p{L}\\p{N}])${needle}(?![\\p{L}\\p{N}])`, "u").test(normalizeText(text));
+}
+
+/** «Usar las palabras energía y nutrientes» → «energía», «nutrientes»: the analyzer often words the requirement, not a bare list. */
+const VOCABULARY_LEAD = /^(?:(?:hay que|debe|deben|se debe)\s+)?(?:usar|usa|utilizar|utiliza|emplear|emplea|incluir|incluye|mencionar|menciona|nombrar|nombra)\s+(?:(?:las|los)\s+)?(?:(?:palabras|t[eé]rminos|conceptos|vocabulario)\s*)?:?\s*/i;
+
+export function requiredTerms(value: string): string[] {
+  return value
+    .replace(VOCABULARY_LEAD, "")
+    .split(/[,;]| y | e /)
+    .map((t) => t.trim().replace(/^[«"'(]+|[»"').]+$/g, ""))
+    .filter((t) => t.length >= 3);
+}
+
+/**
+ * A protected element is checked by what the ORIGINAL sheet itself shows: its resources and activities, and the numbers, quotes
+ * and vocabulary its text prints. A term the original's text does not carry (the analyzer's own wording, or a word only visible
+ * inside a picture) cannot be verified by matching text: the unadapted sheet would fail it too, so it is a WARN for the semantic
+ * review, never a FAIL. Each finding says exactly what is missing.
+ */
 export function protectedElementsPreserved({ analysis, document }: ReviewInput): CheckResult {
   const { statuses, problems, targets, note } = collector();
-  const whole = textOf(allBlocks(document));
   for (const p of analysis.protected_elements) {
     if ((CONSTRAINT_TYPES as readonly string[]).includes(p.type)) continue; // checked by constraints_preserved
     const severity: CheckStatus = p.importance === "essential" ? "FAIL" : p.importance === "important" ? "WARN" : "PASS";
     if (severity === "PASS") continue;
     const missingResources = p.resource_ids.filter((r) => blocksFor(document, r).length === 0);
     const missingActivities = p.activity_ids.filter((a) => activityBlocks(document, a).length === 0);
-    let missingTerms: string[] = [];
-    if (p.type === "required_vocabulary") {
-      missingTerms = p.value.split(/[,;]| y /).map((t) => t.trim()).filter((t) => t.length >= 3 && !normalizeText(whole).includes(normalizeText(t)));
-    }
-    const scope = p.activity_ids.length > 0 ? textOf(p.activity_ids.flatMap((a) => blocksFor(document, a))) : whole;
+    // Where the element lives: the activities and resources it is linked to (a word the activity requires is not kept because
+    // another activity happens to use it), or the whole sheet when the requirement is global (no link).
+    const linked = [...p.activity_ids, ...p.resource_ids];
+    const sheet = linked.length > 0 ? textOf([...new Set(linked.flatMap((r) => blocksFor(document, r)))]) : textOf(allBlocks(document));
+    const terms = p.type === "required_vocabulary" ? requiredTerms(p.value) : [];
+    const source = originalSheetText(analysis, linked.length > 0 ? new Set(linked) : undefined);
+    const printed = terms.filter((t) => containsTerm(source, t));
+    const missingTerms = printed.filter((t) => !containsTerm(sheet, t));
+    const unverifiableTerms = terms.filter((t) => !printed.includes(t));
+    const scope = p.activity_ids.length > 0 ? textOf(p.activity_ids.flatMap((a) => blocksFor(document, a))) : textOf(allBlocks(document));
     const originalText = analysis.activities.filter((a) => p.activity_ids.includes(a.id)).map((a) => `${a.instruction} ${a.context ?? ""}`).join(" ");
     const missingNumbers = sharedTokens(p.value, originalText).filter((t) => t.kind === "number" && !hasToken(scope, t));
     const missingQuotes = quotedReferences(p.value).filter((q) => normalizeText(originalText).includes(normalizeText(q)) && !normalizeText(scope).includes(normalizeText(q)));
-    if (missingResources.length + missingActivities.length + missingTerms.length + missingNumbers.length + missingQuotes.length > 0) {
-      note(severity, `${p.id} («${p.value.slice(0, 50)}»)`, p.id, ...missingResources, ...missingActivities);
-    }
+    const missing = [
+      ...missingResources.map((r) => `falta el recurso ${r}`),
+      ...missingActivities.map((a) => `falta la actividad ${a}`),
+      ...missingTerms.map((t) => `falta el término «${t}»`),
+      ...missingNumbers.map((t) => `falta ${describeToken(t)}`),
+      ...missingQuotes.map((q) => `falta la cita «${q}»`),
+    ];
+    if (missing.length > 0) note(severity, `${p.id}: ${missing.slice(0, 3).join(", ")}`, p.id, ...missingResources, ...missingActivities);
+    else if (unverifiableTerms.length > 0 && severity === "FAIL") note("WARN", `${p.id}: «${list(unverifiableTerms)}» no figura en el texto del original; no se puede comprobar automáticamente`, p.id);
   }
   const status = worst(statuses);
   if (status === "PASS") return result("protected_elements_preserved", "PASS", [], "Los elementos protegidos siguen presentes");
-  return result("protected_elements_preserved", status, targets, `Elementos protegidos perdidos o alterados: ${list(problems)}`);
+  return result("protected_elements_preserved", status, targets, `${status === "FAIL" ? "Elementos protegidos perdidos o alterados" : "Elementos protegidos por confirmar"}: ${list(problems)}`);
 }
 
 export function requiredDataPreserved({ analysis, document }: ReviewInput): CheckResult {

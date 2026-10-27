@@ -872,6 +872,13 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
   }
   const signature = failureSignature(diagnosis);
   const repeated = await seenSignature(store, adaptationId, signature);
+  // The same deterministic preservation failure on the same decisions after a targeted repair (and after the original was put
+  // back): the generator is not what fails, so another generation would only spend a cycle. The honest stop, with its diagnosis.
+  if (repeated && failing.every((c) => c.method === "deterministic" && PRESERVING.has(c.check))) {
+    deps.log?.warn("automatic_correction_not_repeated", { adaptationId, checks: failing.map((c) => c.check).join(",") });
+    await recordDiagnosis(store, adaptationId, last.fingerprint, "review", diagnosis.map((d) => ({ ...d, repair: "none" as const })));
+    return null;
+  }
   const asks = new Map<string, Array<string | null>>();
   for (const { check, ids } of perCheck) for (const id of ids) addAsk(asks, id, repeated ? null : (REVIEW_RESTRICTIONS[check] ?? null));
   const repair = planRepair(raw.plan, previous, loaded, asks, CORRECTION_REASON);
