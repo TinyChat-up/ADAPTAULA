@@ -7,6 +7,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { PlanReview } from "@/lib/schemas/plan-review";
 import { answersOf, materialNumbers } from "./facts";
 import { normalizePlan } from "./plan";
+import { DIMENSION_STRATEGIES } from "./strategies";
 import { PlanDraftError, needRefTable, resolvePlanDraftV2 } from "./plan-v2";
 import { answerSignatures, approximateLeak, leakedSignature } from "./text";
 import { materialText } from "./v22/checks";
@@ -16,8 +17,10 @@ import { materialText } from "./v22/checks";
  * the same decisions; what the method made the planner declare travels beside it and is screened here:
  *  - teacher questions and barrier notes are free text that a teacher reads: one that reveals an inferred answer is withheld;
  *  - a cited precedent that was not sent with the request is reported (the planner cannot have read it);
- *  - a decision is WITHHELD from any automatic application when it is conditional or when the planner itself answered «yes» to a
- *    hint question that rules the resource out (all but P7, which is registered as a risk and asked).
+ *  - a decision is WITHHELD from any automatic application when it is conditional, when the planner itself answered «yes» to a
+ *    hint question that rules the resource out (all but P7, which is registered as a risk and asked), or when one of its strategies
+ *    serves none of the needs it cites (`DIMENSION_STRATEGIES`). The last rule is what makes the precedent selection safe: the
+ *    resources a decision can realise are exactly those of its needs' strategies, the ones the selection sends cases for.
  */
 
 /** P7 makes something of the original more visible: usable, but registered and asked. Every other «yes» rules the resource out. */
@@ -31,7 +34,7 @@ export interface RulesUse {
   included: string[];
 }
 
-export type DeclarationIssueCode = "precedent_not_sent" | "question_withheld" | "barrier_note_withheld" | "blocking_hint" | "conditional";
+export type DeclarationIssueCode = "precedent_not_sent" | "question_withheld" | "barrier_note_withheld" | "blocking_hint" | "conditional" | "strategy_not_for_need";
 
 export interface PlannerDeclarations {
   rules: RulesUse | null;
@@ -71,10 +74,13 @@ export function resolvePlanDraftV3(draftInput: unknown, analysis: MaterialAnalys
   parsed.decisions.forEach((d, i) => {
     const id = `dec_${i + 1}`;
     const blocking = (d.hint_yes ?? []).filter((q) => BLOCKING_HINTS.has(q));
+    const served = new Set(d.need_refs.flatMap((r) => (refs.has(r) ? DIMENSION_STRATEGIES[refs.get(r)!] : [])));
+    const foreign = d.strategies.filter((st) => !served.has(st));
+    if (foreign.length > 0) issues.push({ decision_id: id, code: "strategy_not_for_need", message: `${id}: ${foreign.join(", ")} no corresponde a las necesidades que cita; queda para el docente` });
     for (const p of d.precedents ?? []) if (!sent.has(p)) issues.push({ decision_id: id, code: "precedent_not_sent", message: `${id} cita ${p}, que no iba en la petición` });
     if (blocking.length > 0) issues.push({ decision_id: id, code: "blocking_hint", message: `${id}: el planificador responde «sí» a ${blocking.join(", ")}; queda para el docente` });
     if (d.status === "conditional") issues.push({ decision_id: id, code: "conditional", message: `${id} depende de la respuesta del docente (${d.question})` });
-    decisions[id] = { status: d.status, question: d.question ?? null, hint_yes: d.hint_yes ?? null, precedents: d.precedents ?? [], withheld: d.status === "conditional" || blocking.length > 0 };
+    decisions[id] = { status: d.status, question: d.question ?? null, hint_yes: d.hint_yes ?? null, precedents: d.precedents ?? [], withheld: d.status === "conditional" || blocking.length > 0 || foreign.length > 0 };
   });
 
   const teacher_questions = (parsed.teacher_questions ?? []).map((q) => {

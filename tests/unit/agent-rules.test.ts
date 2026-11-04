@@ -28,9 +28,12 @@ const FILES: Record<string, string> = {
       "D-900": {
         casos: [
           { id: "D900-E01", tipo: "error_corregido", recursos: ["espacios"], perfiles: ["B"], archivo: "casos/D900-E01.md" },
+          { id: "D900-E02", tipo: "error_corregido", recursos: ["conservacion"], perfiles: ["A"], archivo: "casos/D900-E02.md" },
           { id: "D900-R01", tipo: "alternativa_rechazada", recursos: ["imagenes"], perfiles: ["A"], archivo: "casos/D900-R01.md" },
           { id: "D900-A01", tipo: "decision_aceptada", recursos: ["segmentacion"], perfiles: ["A"], archivo: "casos/D900-A01.md" },
+          { id: "D900-A03", tipo: "decision_aceptada", recursos: ["finalidad"], perfiles: ["A"], archivo: "casos/D900-A03.md" },
           { id: "D900-P01", tipo: "pendiente", recursos: ["modalidad_entrega"], perfiles: ["A"], archivo: "casos/D900-P01.md" },
+          { id: "D900-P02", tipo: "pendiente", recursos: ["color", "conservacion"], perfiles: ["A"], archivo: "casos/D900-P02.md" },
           { id: "D900-A02", tipo: "decision_aceptada", recursos: ["perfil_C"], perfiles: ["C"], archivo: "casos/D900-A02.md" },
         ],
       },
@@ -41,6 +44,9 @@ const FILES: Record<string, string> = {
   "biblioteca/casos/D900-A01.md": "Caso sintético A01.",
   "biblioteca/casos/D900-P01.md": "Caso sintético P01.",
   "biblioteca/casos/D900-A02.md": "Caso sintético A02.",
+  "biblioteca/casos/D900-E02.md": "Caso sintético E02.",
+  "biblioteca/casos/D900-A03.md": "Caso sintético A03.",
+  "biblioteca/casos/D900-P02.md": "Caso sintético P02.",
 };
 
 function manifestOf(files: Record<string, string>): AgentRulesManifest {
@@ -60,7 +66,7 @@ describe("carga verificada de las reglas privadas", () => {
   it("carga el paquete íntegro: archivos estables en orden e índice de precedentes", async () => {
     const rules = await loadAgentRules(memory(FILES), manifestOf(FILES));
     expect(rules.stable.map((f) => f.path)).toEqual(["reglas.md", "guia.md"]);
-    expect(rules.precedents.map((p) => p.id)).toEqual(["D900-E01", "D900-R01", "D900-A01", "D900-P01", "D900-A02"]);
+    expect(rules.precedents.map((p) => p.id)).toEqual(["D900-E01", "D900-E02", "D900-R01", "D900-A01", "D900-A03", "D900-P01", "D900-P02", "D900-A02"]);
     expect(await rules.readCase("D900-A01")).toBe("Caso sintético A01.");
   });
 
@@ -99,19 +105,39 @@ describe("carga verificada de las reglas privadas", () => {
 });
 
 describe("selección de precedentes y bloque del prompt", () => {
-  it("errores corregidos y alternativas rechazadas van siempre; aceptados y pendientes solo si tocan un recurso posible", async () => {
+  it("A: solo los casos de los recursos que sus estrategias pueden realizar, más los generales", async () => {
     const rules = await loadAgentRules(memory(FILES), manifestOf(FILES));
     const a = selectPrecedents(rules.precedents, fractionsAnalysis(), contextFor(V22_PROFILES.A));
     expect(a.included).toEqual([
-      { id: "D900-E01", reason: "mandatory" },
-      { id: "D900-R01", reason: "mandatory" },
+      { id: "D900-E02", reason: "mandatory" },
       { id: "D900-A01", reason: "resource" },
+      { id: "D900-A03", reason: "general" },
     ]);
-    expect(a.excluded).toEqual(["D900-P01", "D900-A02"]);
-    // Without any need (profile C), the control cases go and individual-support resources do not.
+    // Spaces and response formats need a writing strategy; images need a visual one; colour, an attention one: A has none of them.
+    expect(a.excluded).toEqual([
+      { id: "D900-E01", reason: "resource_not_enabled" },
+      { id: "D900-R01", reason: "resource_not_enabled" },
+      { id: "D900-P01", reason: "resource_not_enabled" },
+      { id: "D900-P02", reason: "resource_not_enabled" },
+      { id: "D900-A02", reason: "control_with_needs" },
+    ]);
+  });
+
+  it("B: los errores y casos de espacios y formatos de respuesta, porque sus estrategias de escritura sí pueden tocarlos", async () => {
+    const rules = await loadAgentRules(memory(FILES), manifestOf(FILES));
+    const b = selectPrecedents(rules.precedents, fractionsAnalysis(), contextFor(V22_PROFILES.B));
+    expect(b.included.map((c) => c.id)).toEqual(["D900-E01", "D900-E02", "D900-A03", "D900-P01"]);
+  });
+
+  it("C: los casos de control, los obligatorios generales y los generales; nada de recursos individuales", async () => {
+    const rules = await loadAgentRules(memory(FILES), manifestOf(FILES));
     const c = selectPrecedents(rules.precedents, fractionsAnalysis(), contextFor(V22_PROFILES.C));
-    expect(c.included.map((x) => x.id)).toEqual(["D900-E01", "D900-R01", "D900-A02"]);
-    expect(possibleResources(fractionsAnalysis(), contextFor(V22_PROFILES.C)).has("segmentacion")).toBe(false);
+    expect(c.included).toEqual([
+      { id: "D900-E02", reason: "mandatory" },
+      { id: "D900-A03", reason: "general" },
+      { id: "D900-A02", reason: "control" },
+    ]);
+    expect(possibleResources(fractionsAnalysis(), contextFor(V22_PROFILES.C))).toEqual(new Set(["perfil_C"]));
   });
 
   it("el bloque lleva versión y huella, las reglas estables y los casos elegidos, y un cierre dentro del texto no lo termina", async () => {
@@ -121,6 +147,7 @@ describe("selección de precedentes y bloque del prompt", () => {
     expect(block.text.match(/<\/agent_rules>/g)).toHaveLength(1);
     expect(block.text).toContain("Caso sintético A01.");
     expect(block.text).not.toContain("Caso sintético P01.");
+    expect(block.text).not.toContain("Caso sintético E01.");
     expect(block.block_sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 });
@@ -146,7 +173,9 @@ describe.skipIf(!PRIVATE_DIR)("reglas V2.2 reales (solo con copia privada local)
     const rules = await loadAgentRules(await directoryRulesSource(PRIVATE_DIR!), AGENT_RULES_V22);
     expect(rules.precedents).toHaveLength(45);
     const block = await buildRulesBlock(rules, fractionsAnalysis(), contextFor(V22_PROFILES.A));
-    expect(block.selection.included.filter((c) => c.reason === "mandatory")).toHaveLength(14);
+    // Profile A: the corrected errors and rejected alternatives of its usable resources, never all 45 cases.
+    expect(block.selection.included.length).toBeLessThan(rules.precedents.length);
+    expect(block.selection.included.filter((c) => c.reason === "mandatory").length).toBeGreaterThan(0);
     // Length only: the text itself is never printed by tests.
     expect(block.text.length).toBeGreaterThan(50_000);
   });

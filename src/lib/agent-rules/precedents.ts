@@ -1,52 +1,88 @@
+import { DIMENSION_STRATEGIES } from "@/lib/adaptation/strategies";
 import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
-import type { DimensionKey } from "@/lib/schemas/functional-profile";
+import type { StrategyKey } from "@/lib/schemas/adaptation-plan";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { PrecedentEntry } from "./types";
 
 /**
- * Which precedents of the private library travel with one planner request (ADR-045), ported from the laboratory's selection and
- * adapted to the platform. Every corrected error and rejected alternative goes always: they are mandatory checks. Accepted and
- * pending cases go when they touch a resource this sheet and these needs make possible. The laboratory also filtered by the pilot
- * profile (A, B or C); real profiles are not those, so that filter is dropped and the selection only errs on the side of sending more.
+ * Which precedents of the private library travel with one planner request (ADR-045). The method's own rule is to read the
+ * corrected errors (E) and rejected alternatives (R) of the resources the plan may use, and the accepted (A) and pending (P) cases of
+ * those resources. «May use» is decided with the platform's own catalog, not with the pilot profiles of the laboratory:
+ *   active, applicable needs → their strategies (`DIMENSION_STRATEGIES`) → the library resources those strategies can realise.
+ * A resource no strategy of this context can realise cannot be used: the plan validator blocks any change without an active need
+ * (`unjustified_change`). Answer spaces are sized by `answer_space@v1` for every profile, not by the planner: the planner only reaches
+ * them through a response-format or writing strategy.
+ *
+ *  - E and R: sent when they touch a general resource or an enabled one (they are the mandatory checks of the method).
+ *  - A and P: sent when they only concern general resources, or when they touch an enabled specific resource.
+ *  - Control cases (`perfil_C`): sent only when the context has no active need.
  */
 
-/** Resources any plan may touch, whatever the sheet. */
-const GENERAL = ["conservacion", "solucion_propia", "finalidad", "derechos", "paginacion", "maquetacion", "alcance", "orden_secuencia", "contenido_añadido", "interpretacion_perfil", "infraapoyo", "barrera_residual", "control_experimental", "identificacion"];
-/** Answer spaces exist on every sheet with a written answer (`answer_space@v1` sizes them for every profile). */
-const ANSWER_SPACES = ["espacios", "cuadricula_renglones", "pista_por_espacio", "alineacion", "cajas"];
+/** Resources of the method that concern any plan, whatever the needs (conserving, own solution, purpose, rights, layout…). */
+export const GENERAL_RESOURCES = new Set(["conservacion", "solucion_propia", "finalidad", "derechos", "paginacion", "maquetacion", "alcance", "orden_secuencia", "contenido_añadido", "interpretacion_perfil", "infraapoyo", "barrera_residual", "control_experimental", "identificacion"]);
 
-const BY_NEED: Array<{ needs: DimensionKey[]; resources: string[] }> = [
-  { needs: ["writing_amount", "fine_motor_demand", "alternative_response", "expressive_language_support", "selection_based_response", "reduced_copying"], resources: ["alternativa_respuesta", "modalidad_entrega", "andamiaje_expresivo"] },
-  { needs: ["reading_chunk_size", "instruction_chunking", "working_memory_support", "planning_support", "text_length", "sentence_length", "explicit_expectations"], resources: ["segmentacion", "panel", "reformulacion", "rotulos_numeracion"] },
-  { needs: ["planning_support", "visual_support", "key_idea_highlighting", "visual_math_support"], resources: ["esquema"] },
-  { needs: ["emphasis_support", "key_idea_highlighting", "color_dependency", "high_contrast"], resources: ["marcas_tipograficas", "color"] },
-];
+const SPACES = ["espacios", "cuadricula_renglones", "pista_por_espacio", "alineacion", "cajas"];
+
+/** The library resources each platform strategy can realise in a decision. */
+export const RESOURCES_BY_STRATEGY: Record<StrategyKey, readonly string[]> = {
+  language_simplification: ["reformulacion"],
+  text_segmentation: ["segmentacion", "rotulos_numeracion", "panel"],
+  visual_load_reduction: ["imagenes"],
+  spatial_organization: ["segmentacion", "rotulos_numeracion", "panel"],
+  instruction_clarification: ["reformulacion", "segmentacion", "rotulos_numeracion"],
+  task_sequencing: ["segmentacion", "rotulos_numeracion"],
+  comprehension_support: ["marcas_tipograficas", "esquema", "panel"],
+  worked_example: [],
+  prior_knowledge_activation: [],
+  attention_focus: ["marcas_tipograficas", "color", "panel"],
+  working_memory_support: ["panel", "esquema"],
+  planning_support: ["esquema"],
+  response_choice: ["alternativa_respuesta", ...SPACES],
+  response_format: ["alternativa_respuesta", "modalidad_entrega", "andamiaje_expresivo", ...SPACES],
+  writing_load_reduction: ["alternativa_respuesta", "modalidad_entrega", ...SPACES],
+  visual_support: ["esquema", "color", "imagenes"],
+  vocabulary_support: [],
+  pacing: ["segmentacion"],
+  self_regulation: [],
+  extension: [],
+};
+
+export type PrecedentReason = "mandatory" | "general" | "resource" | "control";
 
 export interface PrecedentSelection {
+  /** Specific resources enabled by this context (the general ones are always available). */
   resources: string[];
-  included: Array<{ id: string; reason: "mandatory" | "resource" | "control" }>;
-  excluded: string[];
+  included: Array<{ id: string; reason: PrecedentReason }>;
+  excluded: Array<{ id: string; reason: "resource_not_enabled" | "control_with_needs" }>;
 }
 
-export function possibleResources(analysis: MaterialAnalysis, context: Pick<AdaptationContext, "needs">): Set<string> {
-  const out = new Set(GENERAL);
-  if (analysis.activities.some((a) => a.response_format !== "none")) for (const r of ANSWER_SPACES) out.add(r);
-  if (analysis.visuals.length > 0) out.add("imagenes");
-  const needs = new Set(context.needs.map((n) => n.dimension));
-  for (const rule of BY_NEED) if (rule.needs.some((n) => needs.has(n))) for (const r of rule.resources) out.add(r);
-  if (needs.size === 0) out.add("perfil_C");
+export function possibleResources(analysis: Pick<MaterialAnalysis, "visuals">, context: Pick<AdaptationContext, "needs">): Set<string> {
+  const out = new Set<string>();
+  for (const need of context.needs) for (const strategy of DIMENSION_STRATEGIES[need.dimension]) for (const r of RESOURCES_BY_STRATEGY[strategy]) out.add(r);
+  // Images can only be dealt with when the sheet has some.
+  if (analysis.visuals.length === 0) out.delete("imagenes");
+  if (context.needs.length === 0) out.add("perfil_C");
   return out;
 }
 
-export function selectPrecedents(index: readonly PrecedentEntry[], analysis: MaterialAnalysis, context: Pick<AdaptationContext, "needs">): PrecedentSelection {
-  const resources = possibleResources(analysis, context);
+export function selectPrecedents(index: readonly PrecedentEntry[], analysis: Pick<MaterialAnalysis, "visuals">, context: Pick<AdaptationContext, "needs">): PrecedentSelection {
+  const enabled = possibleResources(analysis, context);
   const included: PrecedentSelection["included"] = [];
-  const excluded: string[] = [];
+  const excluded: PrecedentSelection["excluded"] = [];
   for (const c of index) {
-    if (c.tipo === "error_corregido" || c.tipo === "alternativa_rechazada") included.push({ id: c.id, reason: "mandatory" });
-    else if (c.recursos.includes("perfil_C") && resources.has("perfil_C")) included.push({ id: c.id, reason: "control" });
-    else if (c.recursos.some((r) => r !== "perfil_C" && resources.has(r))) included.push({ id: c.id, reason: "resource" });
-    else excluded.push(c.id);
+    if (c.recursos.includes("perfil_C")) {
+      if (enabled.has("perfil_C")) included.push({ id: c.id, reason: "control" });
+      else excluded.push({ id: c.id, reason: "control_with_needs" });
+      continue;
+    }
+    const general = c.recursos.some((r) => GENERAL_RESOURCES.has(r));
+    const onlyGeneral = c.recursos.every((r) => GENERAL_RESOURCES.has(r));
+    const specific = c.recursos.some((r) => enabled.has(r));
+    const mandatory = c.tipo === "error_corregido" || c.tipo === "alternativa_rechazada";
+    if (mandatory && (general || specific)) included.push({ id: c.id, reason: "mandatory" });
+    else if (specific) included.push({ id: c.id, reason: "resource" });
+    else if (onlyGeneral) included.push({ id: c.id, reason: "general" });
+    else excluded.push({ id: c.id, reason: "resource_not_enabled" });
   }
-  return { resources: [...resources].sort(), included, excluded };
+  return { resources: [...enabled].sort(), included, excluded };
 }

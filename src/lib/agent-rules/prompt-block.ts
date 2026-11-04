@@ -21,11 +21,19 @@ export interface RulesBlock {
 /** Rule files are trusted, but a closing tag inside them must never end the block early. */
 const guard = (text: string) => text.replace(/<\/?agent_rules/gi, (m) => m.replace("<", "‹"));
 
+async function render(rules: AgentRules, ids: readonly string[]): Promise<string> {
+  const parts = rules.stable.map((f) => `# ===== ${f.path} =====\n${guard(f.text)}`);
+  for (const id of ids) parts.push(`# ===== precedente ${id} =====\n${guard(await rules.readCase(id))}`);
+  return `<agent_rules version="${rules.version}" sha256="${rules.package_sha256}">\n${parts.join("\n\n")}\n</agent_rules>`;
+}
+
 export async function buildRulesBlock(rules: AgentRules, analysis: MaterialAnalysis, context: Pick<AdaptationContext, "needs">): Promise<RulesBlock> {
   const selection = selectPrecedents(rules.precedents, analysis, context);
-  const parts = rules.stable.map((f) => `# ===== ${f.path} =====\n${guard(f.text)}`);
-  for (const c of selection.included) parts.push(`# ===== precedente ${c.id} =====\n${guard(await rules.readCase(c.id))}`);
-  const body = parts.join("\n\n");
-  const text = `<agent_rules version="${rules.version}" sha256="${rules.package_sha256}">\n${body}\n</agent_rules>`;
+  const text = await render(rules, selection.included.map((c) => c.id));
   return { text, version: rules.version, package_sha256: rules.package_sha256, block_sha256: createHash("sha256").update(text, "utf8").digest("hex"), selection };
+}
+
+/** Size of the block with EVERY precedent: the ceiling of any selection, used to bound a cost before the material is analysed. */
+export async function fullRulesBlockLength(rules: AgentRules): Promise<number> {
+  return (await render(rules, rules.precedents.map((p) => p.id))).length;
 }

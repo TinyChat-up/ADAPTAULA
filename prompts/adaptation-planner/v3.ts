@@ -24,6 +24,7 @@ const METHOD = `
 - "hint_yes": para todo recurso de presentación, visual o de espacio de respuesta (segment, reorganize, add_support, change_response_format o "visual"), pasa la prueba de pista de las reglas y lista las preguntas (P1 a P8) que respondes «sí». Lista vacía si todas son «no». Si una respuesta «sí» descarta el recurso, no lo propongas: busca otro o no intervengas.
 - "precedents": los identificadores de los casos de <agent_rules> que sigues (por ejemplo, D001-A02). Solo casos enviados.
 - "residual_barriers": las barreras que dejas sin atender a propósito (para no dar pistas o no reducir lo evaluado), con su actividad, las "need_refs" y una nota breve, sin respuestas.
+- Las estrategias de cada decisión se eligen entre las candidatas ("strategies") de las necesidades que cita. Una decisión con otra estrategia no se aplica sin el docente.
 - No intervenir es una decisión válida: sin decisión, el destino se conserva.`;
 
 export const ADAPTATION_PLANNER_V3 = {
@@ -43,5 +44,7 @@ export const ADAPTATION_PLANNER_V3 = {
     ];
   },
 
-  output: { name: "adaptation_plan", schema: DraftAdaptationPlanV3Schema, delivery: "prompted" as const },
+  // Native constrained decoding first (the contract fits the documented limits: `structured-limits.ts`); the provider falls back to
+  // the schema in the prompt if the API reports the grammar as too complex. What the schema cannot express is validated by Zod.
+  output: { name: "adaptation_plan_v3", schema: DraftAdaptationPlanV3Schema, delivery: "auto" as const },
 } as const;

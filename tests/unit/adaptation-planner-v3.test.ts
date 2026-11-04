@@ -33,7 +33,8 @@ const RULES: RulesBlock = {
 const USE: RulesUse = { version: "v9.9", package_sha256: "a".repeat(64), block_sha256: "b".repeat(64), included: ["D900-E01"] };
 
 const contextOf = (profile: FunctionalProfile, analysis = fractionsAnalysis()) => buildAdaptationContext({ profile, education: { stage: "primaria", grade: null, subject: null }, analysis, adaptationType: "accessibility" }).context;
-const decision = (over: Record<string, unknown> = {}) => ({ target: "act_2", action: "add_support", strategies: ["planning_support"], need_refs: ["need_1"], intensity: "light", supports: [{ kind: "checklist", uses_task_data: false }], status: "active", hint_yes: [], ...over });
+// need_1 of profile B is its strongest need (fine_motor_demand), served by «response_format».
+const decision = (over: Record<string, unknown> = {}) => ({ target: "act_2", action: "add_support", strategies: ["response_format"], need_refs: ["need_1"], intensity: "light", supports: [{ kind: "checklist", uses_task_data: false }], status: "active", hint_yes: [], ...over });
 
 describe("contrato DraftAdaptationPlan v3", () => {
   it("acepta un plan con las declaraciones del método", () => {
@@ -58,7 +59,7 @@ describe("petición al modelo", () => {
 
   it("el texto publicado de v3 queda fijado: un cambio es una versión nueva", async () => {
     const { createHash } = await import("node:crypto");
-    expect(createHash("sha256").update(ADAPTATION_PLANNER_V3.system).digest("hex")).toBe("2bc563a664bb0748b637a46a784264ce7b043aeccccffd95b3220756c702a7c3");
+    expect(createHash("sha256").update(ADAPTATION_PLANNER_V3.system).digest("hex")).toBe("ae6e0171f24facdab0d310776518c7e4992352f9037c5d201be74b721bf7cf28");
   });
 
   it("sin reglas verificadas, v3 no se ejecuta", () => {
@@ -249,4 +250,29 @@ describe("activación", () => {
     const analysis = fractionsAnalysis();
     expect(() => checkPlanDraft(3, {}, analysis, contextOf(V22_PROFILES.C, analysis))).toThrow(/todavía no está habilitado/);
   });
+});
+
+describe("salidas estructuradas (output_config.format)", () => {
+  it("el contrato v3 que se envía cumple los límites documentados y v3 usa la decodificación restringida, con respaldo", async () => {
+    const { zodOutputFormat } = await import("@anthropic-ai/sdk/helpers/zod");
+    const { checkStructuredLimits, STRUCTURED_OUTPUT_LIMITS } = await import("@/lib/ai/structured-limits");
+    const { AnthropicProvider, resetOutputModes } = await import("@/lib/ai/providers/anthropic");
+    const sent = zodOutputFormat(DraftAdaptationPlanV3Schema).schema as Record<string, unknown>;
+    const report = checkStructuredLimits(sent);
+    expect(report.problems).toEqual([]);
+    expect(report.optionalParameters).toBeLessThanOrEqual(STRUCTURED_OUTPUT_LIMITS.optionalParameters);
+    expect(report.unionParameters).toBeLessThanOrEqual(STRUCTURED_OUTPUT_LIMITS.unionParameters);
+    expect(ADAPTATION_PLANNER_V3.output.delivery).toBe("auto");
+
+    resetOutputModes();
+    const seen: Array<Record<string, unknown>> = [];
+    const message = { model: "claude-sonnet-5-5", content: [{ type: "text", text: "{}", citations: null }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } };
+    const client = { messages: { stream: (params: Record<string, unknown>) => (seen.push(params), { finalMessage: async () => message }) } };
+    await new AnthropicProvider(client as never).generateStructured({ selection: { alias: "STANDARD", provider: "anthropic", model: "claude-sonnet-5-5", effort: "high" }, system: "s", messages: [{ role: "user", content: [{ type: "text", text: "x" }] }], output: ADAPTATION_PLANNER_V3.output, maxOutputTokens: 100, timeoutMs: 1000 });
+    const format = (seen[0]!.output_config as { format?: { type: string; schema: unknown } }).format;
+    expect(format?.type).toBe("json_schema");
+    expect(format?.schema).toEqual(sent);
+    resetOutputModes();
+  });
+
 });
