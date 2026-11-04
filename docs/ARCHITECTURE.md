@@ -2,6 +2,16 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-044 — Agente pedagógico V2.2: registro de decisiones, validadores y material privado (2026-11-04)
+
+El laboratorio del agente V2.2 (Python, privado) no se porta entero. Su extractor, su generador de PDF y su verificación ya tienen equivalente en Adaptaula (análisis, CLARO, `validatePdf`); duplicarlos crearía un segundo análisis y un segundo generador. Se integran tres piezas:
+
+- **Registro de decisiones** (`decision-ledger.ts`): se deriva en servidor del plan v1, su validación, el contexto y el análisis. No cambia el plan, el prompt, la BD ni la UI. Lo que no se puede deducir de datos tipados queda como pendiente de revisión docente.
+- **Validadores V2.2** (`v22-checks.ts`): se ejecutan dentro de `validatePlan`. Cada uno declara su cobertura (determinista, parcial o juicio docente). Ninguno bloquea todavía; solo generan avisos para el docente, de modo que «Hacer magia», el generador, los apoyos visuales y las fichas entregadas se comportan igual.
+- **Fugas aproximadas**: se aplican a las respuestas inferidas textuales del análisis.
+
+Las reglas V2.2, la biblioteca de precedentes, el laboratorio y los materiales reales **no entran en el repositorio público ni en su historial**. Solo se citan identificadores. Un control de privacidad basado en rutas y huellas sin texto corre en pre-commit, `pnpm test`, `pnpm check` y CI (también commit a commit), porque `.gitignore` no protege de `git add -f` ni del texto pegado. Integración completa con el planificador real: pendiente, requiere un prompt nuevo y validación pagada autorizada. [Detalle](AGENTE_V22.md).
+
 ## ADR-043 — Observaciones declaradas y apoyos explícitos en perfiles (2026-10-26)
 
 El lector acepta `FunctionalProfile` V1 y V2 en el JSONB existente. V2 conserva fortalezas y barreras por IDs de un catálogo cerrado, y distingue ausencia de valoración de un `none` explícito. `supports`, límites y permisos siguen decidiendo la adaptación: ni una fortaleza ni una barrera activan dimensiones por sí solas. Tarjetas, presets y sugerencias actualizan ese mismo estado tras una acción docente. La observación se incorpora opcionalmente al contexto y al planificador, sin alias ni texto personal; un contexto sin observaciones conserva su fingerprint histórico. No cambia el currículo ni autoriza imágenes.
