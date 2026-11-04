@@ -37,9 +37,9 @@ node scripts/privacy/build-fingerprints.mjs <carpeta-o-archivo-privado>...
 | Separación del análisis privado y el plan | `model-input.ts` (sin respuestas inferidas para planificador y generador) | Ya existe |
 | VP1 esquema, VP2 integridad, VP5 coherencia | Zod, huellas y referencias de `validatePlan` | Ya existe |
 | VP3 · apoyo con dimensión activa | `unjustified_change` | Ya existe |
-| VP3 · límite de palabras por trozo | `v22-checks.ts › instructionChunks` | **Portado** |
-| VP3 · prueba de pista, parte determinista | `v22-checks.ts` | **Portado** (solo la parte determinista, ver abajo) |
-| VP3 · medios no autorizados | `v22-checks.ts › unauthorizedMeans` | **Portado** |
+| VP3 · límite de palabras por trozo | `v22/checks.ts › wordLimit` (reutiliza `instructionPieces` de la revisión) | **Portado** |
+| VP3 · prueba de pista, parte determinista | `v22/checks.ts` | **Portado** (solo la parte determinista, ver abajo) |
+| VP3 · medios no autorizados | `v22/checks.ts › conditionalMeans` | **Portado** |
 | VP4 · fugas aproximadas | `text.ts › approximateLeak` | **Portado** |
 | Autorizaciones firmadas | Revisión docente persistida (RLS) | No se porta: la plataforma ya autentica al docente |
 | Registro de decisiones del plan | `decision-ledger.ts` | **Nuevo**, derivado en servidor |
@@ -64,9 +64,11 @@ Ninguna de las ocho preguntas se verifica por completo de forma automática. El 
 | P5 · el recurso es el producto pedido | Juicio docente | — |
 | P6 · predeterminar la estructura de la respuesta | Juicio docente | — |
 | P7 · hacer visible una errata o ambigüedad | Parcial | Destino marcado como dudoso por el análisis |
-| P8 · espacios que sugieren extensión o tipo | Determinista | Tipo y pauta de los espacios de respuesta entre actividades comparables |
+| P8 · espacios que sugieren extensión o tipo | Determinista (el indicador) | Diferencias de tipo o de proporción que la ficha introduce entre actividades con el mismo espacio y el mismo producto en el original. Si el enunciado ya distingue los productos (calcular frente a escribir) o pide un número de resultados, no se marca. Que una diferencia marcada sea pista lo decide el docente |
 
-Ninguna comprobación V2.2 bloquea todavía una ficha. Todas llegan como revisión docente o como aviso del registro, para no cambiar el comportamiento de «Hacer magia» ni de las fichas ya entregadas.
+Ninguna comprobación V2.2 bloquea todavía una ficha. `auditAdaptation` (`src/lib/adaptation/v22/audit.ts`) ejecuta los validadores y construye el registro **aparte** de `validatePlan` y de la revisión pedagógica. No cambia el plan, el documento, el veredicto ni la entrega; en esta entrega tampoco se persiste ni se muestra en la interfaz. Así, «Hacer magia», el generador, los apoyos visuales y las fichas ya entregadas se comportan igual.
+
+Hallazgo de la primera ejecución: con la ficha sintética de fracciones, `answer_space@v1` da cuadrícula al cálculo y renglones a la respuesta escrita. P8 no lo marca porque el original ya pide productos distintos. Sin esa excepción, el aviso saltaría en casi todas las fichas mixtas de Matemáticas.
 
 ## Registro de decisiones
 

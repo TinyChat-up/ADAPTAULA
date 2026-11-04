@@ -353,14 +353,19 @@ export function visualLoadReasonable({ analysis, context, document }: ReviewInpu
   return result("visual_load_reasonable", "PASS", [], "Carga visual adecuada al perfil");
 }
 
+/** The pieces a student reads as one instruction: the first paragraph of the prompt and each step. */
+export function instructionPieces(b: Extract<Block, { type: "activity" | "instruction" }>): string[] {
+  const main = b.type === "activity" ? b.prompt : b.text;
+  return [main.split(/\n\s*\n/)[0] ?? main, ...(b.steps ?? [])];
+}
+
 export function readingLoadReasonable({ context, document }: ReviewInput): CheckResult {
   const { problems, targets, note } = collector();
   const max = context.limits.max_instruction_words;
   const sentenceNeed = context.needs.find((n) => n.dimension === "sentence_length");
   for (const b of allBlocks(document)) {
     if (b.type !== "activity" && b.type !== "instruction") continue;
-    const main = b.type === "activity" ? b.prompt : b.text;
-    const pieces = [main.split(/\n\s*\n/)[0] ?? main, ...(b.steps ?? [])];
+    const pieces = instructionPieces(b);
     if (max !== null && pieces.some((p) => wordCount(p) > max)) note("WARN", `${b.id} supera ${max} palabras por instrucción`, b.id);
     if (sentenceNeed && b.trace.origin !== "original") {
       const limit = sentenceNeed.level === "high" ? 15 : 20;
