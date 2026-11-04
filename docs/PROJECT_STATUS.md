@@ -6,7 +6,7 @@
 > - regresión A/B/C;
 > - control de material privado en pre-commit, pruebas y CI.
 >
-> No se porta ni el extractor ni el generador del laboratorio (CLARO sigue siendo el único). Reglas V2.2, biblioteca, laboratorio y materiales reales fuera del repositorio. [Correspondencia, resultados y plan de conexión con el planificador](AGENTE_V22.md), ADR-044. Sin IA de pago, despliegues ni migraciones.
+> No se porta ni el extractor ni el generador del laboratorio (CLARO sigue siendo el único). Reglas V2.2, biblioteca, laboratorio y materiales reales fuera del repositorio. [Correspondencia, resultados y plan de conexión con el planificador](AGENTE_V22.md), ADR-044. Pruebas: E2E 138 correctas, 6 omitidas y 4 fallidas (anteriores, también en `main`: `materials.spec.ts:110` y `:179`, de #77); CI de privacidad verificada en GitHub. Hallazgos P8 de `answer_space@v1` pendientes de decisión. Sin IA de pago, despliegues ni migraciones.
 
 Entrega actual: [PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), perfiles docentes con fortalezas, barreras y apoyos combinables; [alcance, capturas y pruebas](qa/perfiles-dua/README.md). #75 confirmada integrada en `7d3dc15` al iniciar. Rama `codex/perfiles-fortalezas-barreras`, sin merge.
 

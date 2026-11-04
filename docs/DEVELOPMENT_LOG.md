@@ -36,14 +36,21 @@
   - que se conservan los visuales necesarios y el veredicto;
   - la estabilidad.
 
-  Hallazgo: `answer_space@v1` introduce diferencias P8 entre actividades comparables (Geografía `act_1/act_3`; Argumentación `act_2`), también con C. Se registra y se avisa, sin cambiar `answer_space`.
+  Hallazgo **pendiente**: `answer_space@v1` introduce diferencias P8 entre actividades comparables (Geografía `act_1/act_3`; Argumentación `act_2`), también con C. Se registra y se avisa, sin cambiar `answer_space` ni el generador.
 - Pruebas:
   - nuevas: `private-content` (16), `decision-ledger` (9), `v22-checks` (16) y `v22-regression-abc` (24);
   - `pnpm test`: 158 archivos, 2.126 correctas y 15 omitidas;
   - PDF: 80/80;
   - typecheck correcto; lint sin errores (el aviso previo de `analysis-run-auth`);
   - build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` (árbol y `origin/main..HEAD`) correctos;
-  - E2E completa: E2E_PENDIENTE.
+  - E2E completa (Chromium 1243, `LANG=C.UTF-8`; 36,9 min): de 148, 138 correctas, 6 omitidas y 4 fallidas.
+    - Las 4 fallidas son anteriores a esta PR: `materials.spec.ts:110` (la unidad de cuota del reanálisis queda en 1, no en 2) y `:179` (no aparece «Restaurar en la biblioteca»), en escritorio y móvil. Ambas fallan igual sobre `main` `11ab50e` (comprobado con checkout de `main`, en escritorio). Vienen del flujo de reanálisis y retirada de #77, que se entregó sin E2E. No se corrigen aquí porque quedan fuera del alcance.
+    - Las 138 correctas incluyen dos repeticiones. `pdf-preview.spec.ts:42` en móvil agotó 180 s en la suite completa y pasó aislada (36 s), así que fue un tiempo de espera del entorno. Las pruebas de `materials.spec.ts` que la ejecución en serie había omitido tras el fallo pasaron al excluir las dos que fallan en `main` (28/28).
+  - CI de privacidad verificada en GitHub: ejecución 41881372792 (`pull_request`, `success`). Revisó los archivos versionados y 32 cambios en 6 commits de `origin/main..HEAD`, con 130 huellas de archivo y 8.068 de frase. Leído en los logs del job. El paso de `push` solo corre en `main` y no se ha ejecutado todavía. Que la CI detecta material privado solo está comprobado en local, con el mismo script: no se ha forzado un fallo en GitHub para no publicar nada.
+  - Revisión manual de privacidad de lo publicado (diff, mensajes de commit y cuerpo de la PR), buscando coincidencias de 5 palabras con las fuentes privadas:
+    - ninguna con el texto de MAT-007 ni MAT-024 ni con sus oráculos;
+    - el resto son identificadores, frases genéricas y una lista de palabras vacías del español;
+    - se retiraron de `AGENTE_V22.md` los resúmenes propios del significado de P1–P8, que siguen en el historial de commits anteriores.
 - Riesgos y límites:
   - una paráfrasis de un documento privado no se detecta, así que la revisión humana de la PR sigue siendo necesaria;
   - los validadores son heurísticos donde se declara «parcial»;
