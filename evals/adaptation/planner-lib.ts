@@ -10,6 +10,7 @@ import type { AdaptationType } from "@/lib/schemas/adaptation-type";
 import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { ModelSelection } from "@/lib/ai/types";
+import type { RulesBlock } from "@/lib/agent-rules/prompt-block";
 
 /**
  * Pieces of the real-planner experiment that do not call a provider: loading the stored analysis, the functional profile
@@ -63,8 +64,8 @@ export function loadStoredAnalysis(file: string): StoredAnalysisSource {
   };
 }
 
-export function buildExperimentContext(analysis: MaterialAnalysis, adaptationType: AdaptationType = "accessibility", policy: ContextPolicy = 1): AdaptationContext {
-  return buildAdaptationContext({ profile: EXECUTIVE_EXPERIMENT_PROFILE, education: { stage: null, grade: null, subject: null }, analysis, adaptationType, policy }).context;
+export function buildExperimentContext(analysis: MaterialAnalysis, adaptationType: AdaptationType = "accessibility", policy: ContextPolicy = 1, profile: FunctionalProfile = EXECUTIVE_EXPERIMENT_PROFILE): AdaptationContext {
+  return buildAdaptationContext({ profile, education: { stage: null, grade: null, subject: null }, analysis, adaptationType, policy }).context;
 }
 
 /** Words that must never reach a model: conditions/labels, alias fields, contact data. */
@@ -95,18 +96,22 @@ export interface PlannerPreflight {
   uncachedInputTokens: number;
   worstCaseUsd: number | null;
   forbiddenFound: string[];
+  /** v3: size of the private rules block (its text is never written to results). 0 for v1 and v2. */
+  rulesChars: number;
   contextFingerprint: string;
   analysisFingerprint: string;
   deterministic: boolean;
 }
 
-export function preflightPlanner(analysis: MaterialAnalysis, context: AdaptationContext, selection: ModelSelection, maxOutputTokens: number, version = 1): PlannerPreflight {
-  const { prompt, parts } = plannerRequestParts({ analysis, context, version });
+export function preflightPlanner(analysis: MaterialAnalysis, context: AdaptationContext, selection: ModelSelection, maxOutputTokens: number, version = 1, rules?: RulesBlock, profile: FunctionalProfile = EXECUTIVE_EXPERIMENT_PROFILE): PlannerPreflight {
+  const { prompt, parts } = plannerRequestParts({ analysis, context, version, ...(rules ? { rules } : {}) });
   const schemaText = schemaInstructions(prompt.output.schema);
   const userText = parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+  // The private rules are the project's own text and may name a diagnosis to forbid it: what is scanned is what describes the learner and the sheet.
+  const scanned = parts.filter((p) => !(rules && p.type === "text" && p.text === rules.text)).map((p) => (p.type === "text" ? p.text : "")).join("");
   const cacheableTokens = estimateTokens(prompt.system.length + schemaText.length);
   const uncachedInputTokens = estimateTokens(userText.length) + 50;
-  const again = buildExperimentContext(analysis, context.adaptation_type, context.policy_version ?? 1);
+  const again = buildExperimentContext(analysis, context.adaptation_type, context.policy_version ?? 1, profile);
   return {
     systemChars: prompt.system.length,
     schemaChars: schemaText.length,
@@ -115,7 +120,8 @@ export function preflightPlanner(analysis: MaterialAnalysis, context: Adaptation
     uncachedInputTokens,
     // Cold cache: the whole system + schema block is written (1.25x). The output is the hard cap of the call.
     worstCaseUsd: estimateCostUsd(selection.provider, selection.model, { inputTokens: uncachedInputTokens, cacheCreationInputTokens: cacheableTokens, cachedInputTokens: 0, outputTokens: maxOutputTokens }),
-    forbiddenFound: scanForbidden(`${prompt.system}\n${schemaText}\n${userText}`),
+    forbiddenFound: scanForbidden(`${prompt.system}\n${schemaText}\n${scanned}`),
+    rulesChars: rules?.text.length ?? 0,
     contextFingerprint: contextFingerprint(context),
     analysisFingerprint: fingerprint(analysis),
     deterministic: contextFingerprint(again) === contextFingerprint(context),

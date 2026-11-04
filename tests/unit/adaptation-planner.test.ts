@@ -31,7 +31,7 @@ describe("adaptation_planner@v1 is a published, immutable prompt", () => {
     expect(getAdaptationPlanner()).toBe(ADAPTATION_PLANNER_V1);
     expect(ADAPTATION_PLANNER_V1).toMatchObject({ key: "adaptation_planner", version: 1, schemaVersion: 1 });
     expect(ADAPTATION_PLANNER_V1.output).toMatchObject({ name: "adaptation_plan", delivery: "prompted" });
-    expect(() => getAdaptationPlanner(3)).toThrow(/adaptation_planner@v3/);
+    expect(() => getAdaptationPlanner(4)).toThrow(/adaptation_planner@v4/);
   });
 
   it("pins the published text: a change must be a new version, never an edit", () => {

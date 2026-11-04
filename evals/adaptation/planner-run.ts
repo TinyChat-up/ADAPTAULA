@@ -5,12 +5,24 @@
  *
  *   pnpm eval:adaptation:planner -- --analysis <results.json>                       # pre-flight only (no call, no cost)
  *   pnpm eval:adaptation:planner -- --analysis <results.json> --budget 0.10 --max-output-tokens 6000 --yes
+ *
+ * v3 (ADR-045) decides with the private V2.2 rules, read from a local copy outside any checkout and verified against the manifest;
+ * the profile can be one of the fictional A, B or C:
+ *   pnpm eval:adaptation:planner -- --analysis <results.json> --planner-version 3 --rules-dir <carpeta-privada> --profile B
+ * Results keep the rules' hashes and the precedent ids, never their text.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { classifyPlan } from "@/lib/adaptation/invariants";
 import { applicablePlan } from "@/lib/adaptation/plan";
 import { PlanDraftError, normalizePlanFor } from "@/lib/adaptation/plan-v2";
+import { normalizePlanV3 } from "@/lib/adaptation/plan-v3";
+import { directoryRulesSource } from "@/lib/agent-rules/local-source";
+import { loadAgentRules } from "@/lib/agent-rules/loader";
+import { AGENT_RULES_V22 } from "@/lib/agent-rules/manifest-v22";
+import { buildRulesBlock, type RulesBlock } from "@/lib/agent-rules/prompt-block";
+import { rulesUse } from "@/lib/adaptation/planner";
+import { V22_PROFILES } from "./v22-profiles";
 import { callPlanner, parsePlanResponse, plannerRequestParts } from "@/lib/adaptation/planner";
 import { STRATEGY_KEYS } from "@/lib/schemas/adaptation-plan";
 import { resolveModel, type ModelEnv } from "@/lib/ai/registry";
@@ -33,7 +45,12 @@ async function main() {
   const maxOutputTokens = Number(arg("--max-output-tokens") ?? "6000");
   const version = Number(arg("--planner-version") ?? "1");
   const policy = Number(arg("--context-policy") ?? "1");
-  if (version !== 1 && version !== 2) throw new Error("--planner-version debe ser 1 o 2.");
+  if (version !== 1 && version !== 2 && version !== 3) throw new Error("--planner-version debe ser 1, 2 o 3.");
+  const profileKey = arg("--profile");
+  if (profileKey !== null && !["A", "B", "C"].includes(profileKey)) throw new Error("--profile debe ser A, B o C.");
+  const profile = profileKey ? V22_PROFILES[profileKey as "A" | "B" | "C"] : EXECUTIVE_EXPERIMENT_PROFILE;
+  const rulesDir = arg("--rules-dir");
+  if (version === 3 && !rulesDir) throw new Error("v3 necesita --rules-dir <copia privada de las reglas, fuera del repositorio>.");
   if (policy !== 1 && policy !== 2) throw new Error("--context-policy debe ser 1 o 2.");
   const label = arg("--label") ?? `planner-v${version}`;
   const go = process.argv.includes("--yes");
@@ -42,15 +59,18 @@ async function main() {
   const selection = resolveModel("STANDARD", env);
   const source = loadStoredAnalysis(path.resolve(file));
   const { analysis } = source;
-  const context = buildExperimentContext(analysis, "accessibility", policy);
-  const pre = preflightPlanner(analysis, context, selection, maxOutputTokens, version);
-  const { prompt } = plannerRequestParts({ analysis, context, version });
+  const context = buildExperimentContext(analysis, "accessibility", policy, profile);
+  let rules: RulesBlock | undefined;
+  if (version === 3) rules = await buildRulesBlock(await loadAgentRules(await directoryRulesSource(rulesDir!), AGENT_RULES_V22), analysis, context);
+  const pre = preflightPlanner(analysis, context, selection, maxOutputTokens, version, rules, profile);
+  const { prompt } = plannerRequestParts({ analysis, context, version, ...(rules ? { rules } : {}) });
 
   console.log("Pre-flight (sin llamadas)");
   console.log(`  análisis: schema_version ${analysis.schema_version} · producido por ${source.producedBy.prompt} (${source.producedBy.alias}) · avisos de lectura: ${source.warnings.length}`);
   console.log(`  planificador: ${prompt.key}@v${prompt.version} · esquema del plan v${prompt.schemaVersion} · alias ${selection.alias} · ${selection.provider}:${selection.model} · esfuerzo ${selection.effort}`);
   console.log(`  contexto (política ${policy}): ${context.needs.length} necesidades (${context.needs.map((n) => n.dimension).join(", ")}) · huella ${pre.contextFingerprint.slice(0, 12)} · determinista: ${pre.deterministic ? "sí" : "NO"}`);
   console.log(`  tamaños: prompt ${pre.systemChars} car. · esquema ${pre.schemaChars} car. · entrada ${pre.userChars} car. → ≈ ${pre.cacheableTokens} tokens de bloque en caché + ${pre.uncachedInputTokens} de entrada`);
+  if (rules) console.log(`  reglas privadas: ${rules.version} · paquete ${rules.package_sha256.slice(0, 12)} · ${rules.selection.included.length} precedentes · ${pre.rulesChars} car. (verificadas; el texto no se guarda)`);
   console.log(`  diagnóstico/PII en lo que se enviaría: ${pre.forbiddenFound.length === 0 ? "ninguno" : pre.forbiddenFound.join(", ")}`);
   console.log(`  peor caso (caché fría, salida máxima ${maxOutputTokens}): $${pre.worstCaseUsd?.toFixed(4) ?? "?"} · presupuesto $${budget.toFixed(2)}`);
 
@@ -76,16 +96,18 @@ async function main() {
   console.log("\nLlamada real (una sola, sin reparación ni regeneración)…");
   let result: Record<string, unknown>;
   try {
-    const { response, run } = await callPlanner({ analysis, context, selection, provider, maxOutputTokens, version });
+    const { response, run } = await callPlanner({ analysis, context, selection, provider, maxOutputTokens, version, ...(rules ? { rules } : {}) });
     const parsed = parsePlanResponse(response, version);
     let plan = null;
     let validation = null;
     let classification = null;
     let effective = null;
     let normalizeError: string | null = null;
+    let declarations = null;
     if (parsed.outcome === "ok") {
       try {
-        plan = normalizePlanFor(version, parsed.draft, analysis, context);
+        if (version === 3) ({ plan, declarations } = normalizePlanV3(parsed.draft, analysis, context, rulesUse(rules!)));
+        else plan = normalizePlanFor(version, parsed.draft, analysis, context);
         const checked = applicablePlan(plan, analysis, context);
         validation = checked.validation;
         classification = classifyPlan(plan, validation);
@@ -94,7 +116,7 @@ async function main() {
         normalizeError = error instanceof PlanDraftError ? `${error.code}: ${error.message}`.slice(0, 500) : error instanceof Error ? error.message.slice(0, 500) : "error de normalización";
       }
     }
-    result = { response: { text: response.text, stopReason: response.stopReason, model: response.model }, run, parse: parsed, normalizeError, plan, validation, classification, effectivePlan: effective };
+    result = { response: { text: response.text, stopReason: response.stopReason, model: response.model }, run, parse: parsed, normalizeError, plan, declarations, validation, classification, effectivePlan: effective };
   } catch (error) {
     const failure = toAIError(error);
     result = { error: { code: failure.code, message: redactSecrets(failure.message) } };
@@ -108,7 +130,8 @@ async function main() {
     label,
     descriptor: { provider: selection.provider, alias: selection.alias, model: selection.model, effort: selection.effort, prompt: `${prompt.key}@v${prompt.version}`, schemaVersion: prompt.schemaVersion, contextPolicy: policy, maxOutputTokens, budget },
     analysisSource: { file: path.basename(file), producedBy: source.producedBy, fingerprint: pre.analysisFingerprint },
-    profile: EXECUTIVE_EXPERIMENT_PROFILE,
+    profile: profileKey ?? "executive",
+    rules: rules ? rulesUse(rules) : null,
     context,
     preflight: pre,
     strategies: STRATEGY_KEYS,

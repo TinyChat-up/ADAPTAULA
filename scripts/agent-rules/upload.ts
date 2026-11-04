@@ -11,7 +11,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { loadAgentRules, readVerified } from "../../src/lib/agent-rules/loader";
 import { AGENT_RULES_V22 } from "../../src/lib/agent-rules/manifest-v22";
-import { AGENT_RULES_BUCKET, directoryRulesSource } from "../../src/lib/agent-rules/sources";
+import { directoryRulesSource } from "../../src/lib/agent-rules/local-source";
+import { AGENT_RULES_BUCKET } from "../../src/lib/agent-rules/sources";
 
 async function main() {
   const [dir, flag] = process.argv.slice(2);

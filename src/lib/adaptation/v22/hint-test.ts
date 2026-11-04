@@ -28,15 +28,17 @@ export type HintFinding = Pick<HintCheck, "question" | "result" | "detail">;
  * The hint test of one decision. Questions without a finding stay `pending_review`; a decision that adds no resource is
  * `not_applicable` everywhere. A finding can never upgrade a teacher-judgment question.
  */
-export function hintTest(decision: Pick<Decision, "action" | "visual">, findings: readonly HintFinding[] = []): HintCheck[] {
+export function hintTest(decision: Pick<Decision, "action" | "visual">, findings: readonly HintFinding[] = [], declaredYes?: readonly HintQuestion[] | null): HintCheck[] {
   const applies = addsResource(decision);
+  // undefined: the planner declares nothing (v1, v2). null: a v3 planner that did not answer. A list: its «yes» answers.
+  const declared = (question: HintQuestion): HintCheck["declared"] => (declaredYes === undefined ? null : declaredYes === null ? "not_answered" : declaredYes.includes(question) ? "yes" : "no");
   return HINT_QUESTIONS.map((question) => {
     const coverage = HINT_COVERAGE[question];
-    if (!applies) return { question, coverage, result: "not_applicable", detail: null };
+    if (!applies) return { question, coverage, result: "not_applicable", detail: null, declared: declared(question) };
     const found = coverage === "teacher_judgment" ? undefined : findings.find((f) => f.question === question);
-    if (!found) return { question, coverage, result: "pending_review", detail: null };
+    if (!found) return { question, coverage, result: "pending_review", detail: null, declared: declared(question) };
     // A partial check that finds nothing has not shown that there is no hint.
     const result = found.result === "clear" && coverage === "partial" ? "not_detected" : found.result;
-    return { question, coverage, result, detail: found.detail };
+    return { question, coverage, result, detail: found.detail, declared: declared(question) };
   });
 }
