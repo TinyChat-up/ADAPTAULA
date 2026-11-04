@@ -172,3 +172,38 @@ export function averageSentenceLength(text: string): number {
   if (sentences.length === 0) return 0;
   return sentences.reduce((sum, s) => sum + wordCount(s), 0) / sentences.length;
 }
+
+/** Function words that say nothing about an answer's content. Kept short on purpose: a missing one only makes a match stricter. */
+const FUNCTION_WORDS = new Set([
+  "algo", "algun", "alguna", "algunas", "alguno", "algunos", "ante", "antes", "aqui", "cada", "como", "con", "contra", "cual", "cuales",
+  "cuando", "desde", "donde", "ella", "ellas", "ellos", "entre", "esas", "esos", "esta", "estas", "este", "esto", "estos", "hace", "hacen",
+  "hasta", "mientras", "mucho", "muchos", "nada", "otra", "otras", "otro", "otros", "para", "pero", "poco", "porque", "quien", "sobre",
+  "tambien", "tanto", "tiene", "tienen", "todo", "todos", "unas", "unos",
+]);
+
+/** Content words of a text (four letters or more, no function words, no digits), lowercase and without accents. */
+export function contentWords(text: string): string[] {
+  return normalizeText(text)
+    .split(/[^\p{L}]+/u)
+    .filter((w) => w.length >= 4 && !FUNCTION_WORDS.has(w));
+}
+
+/**
+ * Approximate leak (V2.2 laboratory, VP4): every content word of a textual answer appears inside a short window of the student
+ * text, in any order. It catches reorderings and light rewordings that `leakedSignature` misses. Answers with fewer than two
+ * content words are left to the exact check, and an answer the material itself already states is not new information.
+ */
+export function approximateLeak(studentText: string, answer: string, materialText: string): boolean {
+  const target = [...new Set(contentWords(answer))];
+  if (target.length < 2) return false;
+  const words = contentWords(studentText);
+  const windowSize = Math.max(8, target.length * 3);
+  const inWindow = (list: string[]) => {
+    for (let start = 0; start < list.length; start += 1) {
+      const window = new Set(list.slice(start, start + windowSize));
+      if (target.every((w) => window.has(w))) return true;
+    }
+    return false;
+  };
+  return inWindow(words) && !inWindow(contentWords(materialText));
+}

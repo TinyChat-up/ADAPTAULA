@@ -1,5 +1,64 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente pedagógico V2.2: registro de decisiones, validadores y control de privacidad
+
+- Base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22` (idéntica a `main` al empezar). Encargo: integrar componentes del laboratorio V2.2 sin sustituir el pipeline ni crear un segundo generador.
+- Fuentes leídas en local, **nunca versionadas**: bundle Git del laboratorio (8 commits, fases 1–4b, Python), reglas V2.2 congeladas (huella `fdda7e6d…` verificada) y materiales MAT-007 y MAT-024 con sus oráculos.
+- Inventario y decisión en [AGENTE_V22](AGENTE_V22.md) y ADR-044.
+  - Se integran el registro de decisiones, los validadores comprobables y los perfiles A/B/C como fixtures.
+  - No se portan:
+    - el extractor y el generador (ya existen el análisis y CLARO);
+    - la verificación del PDF;
+    - el gasto (ya existen `validatePdf` y `ai_runs`);
+    - las autorizaciones HMAC (la revisión docente ya está autenticada).
+- **Fase 0 · privacidad.** `scripts/privacy/`:
+  - rutas reservadas;
+  - huellas SHA-256 de 130 archivos privados;
+  - 8.068 huellas truncadas de frases normalizadas (sin texto).
+
+  Se ejecuta en pre-commit (`.githooks`, activado por `prepare`), en `pnpm test`, en `pnpm check:privacy` y en la CI (`.github/workflows/privacidad.yml`, commit a commit, sin secretos). Comprobado con copias locales: detecta la guía en mayúsculas y con cambios, el texto de un PDF real y un módulo del laboratorio.
+- **Fase 1 · registro.** `decision-ledger.ts` y su esquema:
+  - estado de cada decisión según la validación existente;
+  - necesidades no aplicadas: «explicada» solo con evidencia tipada, si no «pendiente de revisión»;
+  - barreras residuales solo demostrables;
+  - «no necesita» separado de «sin valorar»;
+  - prueba de pista con cobertura declarada.
+- **Fase 2 · validadores.** `v22/checks.ts` y `v22/audit.ts`:
+  - P8 determinista;
+  - P2, P3, P4 y P7 parciales;
+  - límite de palabras, medios condicionados y fugas aproximadas (`approximateLeak`).
+
+  P1, P5 y P6 siempre quedan para el juicio docente. Es una auditoría aparte de `validatePlan` y de la revisión: no bloquea ni cambia el veredicto, la ficha o la entrega. `instructionPieces` se extrajo de `readingLoadReasonable` sin cambiar su comportamiento.
+- **Fase 3 · regresión A/B/C.** Tres fichas sintéticas × tres perfiles con el pipeline simulado. Comprueba:
+  - que C no recibe apoyos individuales;
+  - que ninguna dimensión «no necesita» se usa;
+  - que lo no justificado queda idéntico;
+  - que se conservan los visuales necesarios y el veredicto;
+  - la estabilidad.
+
+  Hallazgo **pendiente**: `answer_space@v1` introduce diferencias P8 entre actividades comparables (Geografía `act_1/act_3`; Argumentación `act_2`), también con C. Se registra y se avisa, sin cambiar `answer_space` ni el generador.
+- Pruebas:
+  - nuevas: `private-content` (16), `decision-ledger` (9), `v22-checks` (16) y `v22-regression-abc` (24);
+  - `pnpm test`: 158 archivos, 2.126 correctas y 15 omitidas;
+  - PDF: 80/80;
+  - typecheck correcto; lint sin errores (el aviso previo de `analysis-run-auth`);
+  - build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` (árbol y `origin/main..HEAD`) correctos;
+  - E2E completa (Chromium 1243, `LANG=C.UTF-8`; 36,9 min): de 148, 138 correctas, 6 omitidas y 4 fallidas.
+    - Las 4 fallidas son anteriores a esta PR: `materials.spec.ts:110` (la unidad de cuota del reanálisis queda en 1, no en 2) y `:179` (no aparece «Restaurar en la biblioteca»), en escritorio y móvil. Ambas fallan igual sobre `main` `11ab50e` (comprobado con checkout de `main`, en escritorio). Vienen del flujo de reanálisis y retirada de #77, que se entregó sin E2E. No se corrigen aquí porque quedan fuera del alcance.
+    - Las 138 correctas incluyen dos repeticiones. `pdf-preview.spec.ts:42` en móvil agotó 180 s en la suite completa y pasó aislada (36 s), así que fue un tiempo de espera del entorno. Las pruebas de `materials.spec.ts` que la ejecución en serie había omitido tras el fallo pasaron al excluir las dos que fallan en `main` (28/28).
+  - CI de privacidad verificada en GitHub: ejecución 41881372792 (`pull_request`, `success`). Revisó los archivos versionados y 32 cambios en 6 commits de `origin/main..HEAD`, con 130 huellas de archivo y 8.068 de frase. Leído en los logs del job. El paso de `push` solo corre en `main` y no se ha ejecutado todavía. Que la CI detecta material privado solo está comprobado en local, con el mismo script: no se ha forzado un fallo en GitHub para no publicar nada.
+  - Revisión manual de privacidad de lo publicado (diff, mensajes de commit y cuerpo de la PR), buscando coincidencias de 5 palabras con las fuentes privadas:
+    - ninguna con el texto de MAT-007 ni MAT-024 ni con sus oráculos;
+    - el resto son identificadores, frases genéricas y una lista de palabras vacías del español;
+    - se retiraron de `AGENTE_V22.md` los resúmenes propios del significado de P1–P8, que siguen en el historial de commits anteriores.
+- Riesgos y límites:
+  - una paráfrasis de un documento privado no se detecta, así que la revisión humana de la PR sigue siendo necesaria;
+  - los validadores son heurísticos donde se declara «parcial»;
+  - el registro no se persiste ni se muestra todavía;
+  - los perfiles A/B/C del repositorio son datos ficticios (niveles por dimensión), no el documento de perfiles.
+- Simulado: todo el pipeline. Probado: unidad, BD local, PDF y E2E local. Pendiente de validar en producción: nada se ha desplegado ni migrado. Sin IA de pago.
+- Siguiente acción: decidir las cinco cuestiones de «Plan de conexión con el planificador» ([AGENTE_V22](AGENTE_V22.md)) y empezar por la etapa 1 (auditoría visible, sin IA ni migración).
+
 ## 2026-10-27 — «Hacer magia» bloqueada por un falso rechazo de vocabulario protegido (prt_6)
 
 - Caso real, leído en Supabase producción con consultas de solo lectura: adaptación `2d78f548…` (célula, 1.º ESO, Max). Tres versiones con `deterministic_review` bloqueado por `protected_elements_preserved` FAIL en `prt_6`.

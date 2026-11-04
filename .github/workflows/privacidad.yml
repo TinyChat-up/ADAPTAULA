@@ -1,0 +1,30 @@
+# Control de privacidad del repositorio público (ADR-044). No instala dependencias, no usa secretos y no despliega.
+name: Privacidad
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  material-privado:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Archivos versionados
+        run: node scripts/privacy/check-private-content.mjs
+      - name: Cada commit de la PR (también lo que se añadió y luego se borró)
+        if: github.event_name == 'pull_request'
+        run: node scripts/privacy/check-private-content.mjs --range "origin/${{ github.base_ref }}..HEAD"
+      - name: Cada commit del push
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: node scripts/privacy/check-private-content.mjs --range "${{ github.event.before }}..${{ github.sha }}"
