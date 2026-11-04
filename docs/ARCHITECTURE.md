@@ -21,7 +21,9 @@ El planificador `adaptation_planner@v3` decide con la metodología V2.2 y no sol
 
 **Activación.** v3 no es la versión activa. El orquestador la rechaza de forma explícita hasta que se persistan sus declaraciones y se valide con el modelo real, con autorización y presupuesto.
 
-**Selección de precedentes.** Se porta la del laboratorio sin su filtro por perfil piloto: los perfiles reales no son A, B ni C.
+**Selección de precedentes.** Los recursos posibles se derivan del catálogo de la plataforma: necesidades activas → estrategias (`DIMENSION_STRATEGIES`) → recursos que esas estrategias pueden realizar. Ya no se usan los perfiles piloto del laboratorio. v3 retiene cualquier decisión cuya estrategia no sirva a sus necesidades, así que una decisión aplicable solo puede realizar recursos cuyos precedentes se enviaron.
+
+**Entrega.** v3 usa salidas estructuradas (`delivery: "auto"`), con respaldo al prompt. Su esquema cumple los límites documentados (`structured-limits.ts`).
 
 **Excepción a la convención de prompts.** `prompts/<key>/vN.ts` sigue siendo la fuente del texto público. La parte privada se identifica por versión y huella, no por su texto. [Detalle](AGENTE_V22.md).
 

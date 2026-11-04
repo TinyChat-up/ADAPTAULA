@@ -131,30 +131,83 @@ Lo que el modelo declara nunca prueba nada:
 - un precedente citado que no iba en la petición se marca;
 - una pregunta o una nota que revela una respuesta inferida no se muestra.
 
-**Pre-vuelo con las reglas reales y las fichas sintéticas** (`STANDARD` = `claude-sonnet-5-5`, salida máxima de 32.000 tokens; tamaños y tabla de precios, sin llamar a la API):
+Una decisión cuya estrategia no sirve a ninguna de las necesidades que cita también se retiene para el docente (`strategy_not_for_need`).
 
-| Ficha | Perfil | Precedentes enviados | Reglas (tokens) | Entrada total v3 (v2) | Peor caso v3 (v2) |
-|---|---|---|---|---|---|
-| Fracciones | A / B / C | 43 / 42 / 40 de 45 | ≈ 61.700 / 61.200 / 59.700 | ≈ 69.000 (≈ 6.000) | ≈ 0,46 $ (0,33 $) |
-| Geografía | A / B / C | 43 / 42 / 40 | ídem | ≈ 69.900 (≈ 7.000) | ≈ 0,46 $ (0,34 $) |
-| Argumentación | A / B / C | 43 / 42 / 40 | ídem | ≈ 69.700 (≈ 6.800) | ≈ 0,46 $ (0,34 $) |
+## Selección de precedentes (optimizada antes de la primera prueba real)
 
-- El coste lo domina la salida máxima.
-- Sin portar la variante estricta del laboratorio, la selección apenas filtra.
-- La caché del bloque de reglas, que es estable, reduciría mucho el coste de las llamadas repetidas. No está medida.
+El propio método pide leer los errores corregidos (E) y las alternativas rechazadas (R) **de los recursos que se van a usar**, y los casos de esos recursos. «Que se pueden usar» se decide con el catálogo de la plataforma: necesidades activas y aplicables → sus estrategias (`DIMENSION_STRATEGIES`) → los recursos de la biblioteca que esas estrategias pueden realizar (`RESOURCES_BY_STRATEGY`).
 
-## Evaluación real (pendiente de autorización; presupuesto máximo previsto: 10 €)
+| Tipo de caso | Se envía si… |
+|---|---|
+| E y R | tocan un recurso general (conservar, solución propia, finalidad, paginación…) o uno habilitado |
+| A y P | solo tocan recursos generales, o tocan un recurso específico habilitado |
+| Control (`perfil_C`) | el contexto no tiene ninguna necesidad activa |
 
-1. Comprobar las condiciones de uso de MAT-007 y MAT-024. Usarlos solo en `evals/adaptation/private/`, que está ignorado y bajo el control de privacidad.
-2. Analizar cada material con `material_analyzer@v3`. **Es una llamada de pago por material.** Hoy no existe análisis de esos materiales en Adaptaula.
-3. Pre-vuelo de cada combinación (gratis):
+Por qué no se pierde cobertura:
 
-   ```bash
-   pnpm eval:adaptation:planner -- --analysis <análisis> --planner-version 3 --rules-dir <copia privada> --profile A
-   ```
+- **Recursos inalcanzables.** Un recurso que ninguna estrategia del contexto puede realizar no se puede usar: v3 retiene cualquier decisión cuya estrategia no sirva a sus necesidades. Los espacios de respuesta los dimensiona `answer_space@v1` para todos los perfiles, así que el planificador solo llega a ellos con estrategias de formato de respuesta o de escritura.
+- **Prueba por construcción** (`tests/unit/precedent-coverage.test.ts`, en CI). Se recorren las tres fichas, los 10 perfiles de prueba y cada necesidad por cada una de las 20 estrategias. Toda decisión aplicable solo realiza recursos de la selección, y toda estrategia ajena queda retenida.
+- **Prueba con el índice real** (solo con la copia privada local). Ningún caso excluido toca un recurso utilizable; todos los E y R con recurso utilizable van; todo recurso específico de la biblioteca es alcanzable por alguna estrategia.
 
-4. Campaña mínima: 2 materiales × 3 perfiles = 6 llamadas al planificador, con un peor caso de unos 2,8 $ más los dos análisis. Fijar antes un límite de gasto en la consola del proveedor.
-5. Revisión docente de las decisiones y declaraciones, comparadas con las salidas revisadas del laboratorio. Ningún resultado se convierte en regla sin un segundo caso.
+**Medida con las reglas reales.** Las reglas estables (DEC, guía, cómo consultar e índice) son fijas, unos 31.000 tokens, y nunca se recortan. Tokens estimados con caracteres / 2,4 (pesimista); con caracteres / 3, unos 20 % menos.
+
+| Perfil | Casos antes → ahora | Bloque de reglas (tokens) | Entrada total por petición | Peor caso por llamada |
+|---|---|---|---|---|
+| A | 43 → **30** | 61.700 → **51.400** (−17 %) | ≈ 69.000 → **58.700** | 0,46 → **0,44 $** |
+| B | 42 → **37** | 61.200 → **57.600** (−6 %) | ≈ 68.500 → **64.900** | 0,46 → **0,45 $** |
+| C | 40 → **19** | 59.700 → **43.000** (−28 %) | ≈ 66.800 → **50.100** | 0,46 → **0,42 $** |
+
+- Las cifras son de fracciones; geografía y argumentación dan lo mismo ±1.000 tokens.
+- El ahorro en dinero por llamada es pequeño: la salida máxima (32.000 × 10 $/M = 0,32 $) domina el peor caso.
+- Un recuento exacto necesita el endpoint de recuento de tokens, que también es una llamada a la API y no se ha hecho.
+
+## Salidas estructuradas
+
+Límites documentados en platform.claude.com («Structured outputs», leído el 2026-11-04):
+
+- 24 parámetros opcionales y 16 con unión por petición;
+- `additionalProperties: false` en todo objeto;
+- `minItems` solo 0 o 1;
+- sin `minLength`, `maxLength`, `minimum` ni `maximum`;
+- sin recursión ni `$ref` externos;
+- regex sin referencias hacia atrás, *lookaround* ni `\b`.
+
+`src/lib/ai/structured-limits.ts` los comprueba sobre el esquema **exacto** que enviaría el SDK (`zodOutputFormat`):
+
+| Esquema | Opcionales | Uniones | Problemas |
+|---|---|---|---|
+| plan v1 | 3 | 1 | 0 |
+| plan v2 | 6 | 1 | 0 |
+| **plan v3** | **11** | **1** | **0** |
+
+- **Entrega.** v3 usa entrega `auto`: decodificación restringida, con vuelta automática al esquema en el prompt si la API respondiera «Schema is too complex».
+- **Lo que valida Zod en local.** La prueba de pista obligatoria en los recursos y la existencia de las preguntas no se pueden expresar en el esquema. El SDK instalado también pasa `enum` y `pattern` a la descripción.
+- **Pendiente.** La API tiene límites internos de gramática que no publica: la compatibilidad solo quedará demostrada en la primera llamada real.
+
+## Piloto: MAT-007 con el perfil A (pendiente de tu autorización)
+
+- **Material.** MAT-007 es una ficha de 2 páginas (CeDeC) bajo **CC BY-SA 4.0 España**, según su propio pie. Permite usarla y adaptarla con atribución; si una adaptación se distribuyera, tendría que llevar la misma licencia. Se usa solo en privado.
+- **Comando.**
+
+  ```bash
+  pnpm eval:adaptation:pilot -- --material <ruta privada del PDF> --rules-dir <copia privada de las reglas> --profile A --budget-usd 1.00
+  ```
+
+  - Sin `--yes`: valida el material y las reglas y calcula las cotas, **sin llamar a la API**.
+  - Con `--yes` y la clave en el entorno: hace exactamente **dos llamadas**. Primero el análisis (una sola, salida ≤ 16.000 tokens). Después recalcula la cota del planificador con el análisis real y solo lo llama (una sola vez, salida ≤ 32.000 tokens) si el gasto más esa cota cabe en el presupuesto.
+  - Sin reparaciones ni regeneraciones.
+- **Resultados.** Van a `evals/adaptation/private/pilot-v22/`, ignorada por git y con control de privacidad: análisis, contexto, plan v1, declaraciones, validación y registro, con las huellas de las reglas y los precedentes enviados, nunca su texto. El terminal muestra solo huellas y métricas.
+- **Cota calculada hoy sin llamadas** (`STANDARD` = `claude-sonnet-5-5`, esfuerzo `medium` del registro; precios de `src/lib/ai/costs.ts`):
+
+| Llamada | Entrada máxima | Salida máxima | Coste máximo |
+|---|---|---|---|
+| Análisis de MAT-007 (2 páginas) | 17.400 tokens | 16.000 | 0,2035 $ |
+| Planificador v3 (todas las reglas, material ≤ 1,5 × la salida del análisis) | 96.469 tokens | 32.000 | 0,5612 $ |
+| **Total** | | | **≤ 0,7647 $ ≈ 0,68 €** (a 1,12 USD/EUR; revisa el tipo de cambio) |
+
+- **Por qué la cota es fiable.** La salida no puede superar `max_tokens`, y el razonamiento adaptativo cuenta dentro de ese límite. Toda la entrada se cobra como escritura de caché (1,25×), y el bloque de reglas se cuenta con los 45 precedentes. `tests/unit/pilot-v22.test.ts` comprueba que la cota previa nunca queda por debajo de la recalculada con el análisis.
+- **Margen.** Cabe con holgura en el presupuesto de 10 €.
+- **Antes de lanzarlo:** fijar un límite de gasto en la consola del proveedor y revisar el tipo de cambio.
 
 ## Activación (después de la evaluación)
 

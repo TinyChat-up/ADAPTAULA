@@ -1,5 +1,41 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente V2.2: selección de precedentes, salidas estructuradas y piloto acotado
+
+- Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 sigue inactiva. Sin llamadas a la API, sin subir las reglas a Supabase, sin migraciones remotas. **E2E no ejecutadas por indicación.**
+- **Selección de precedentes.**
+  - Los recursos posibles se derivan de necesidades activas → estrategias → recursos (`RESOURCES_BY_STRATEGY`).
+  - E y R se envían con recurso general o habilitado; A y P, si son generales o tocan un recurso habilitado; los casos de control, solo sin necesidades.
+  - Con las reglas reales:
+
+    | Perfil | Casos | Bloque de reglas (tokens) |
+    |---|---|---|
+    | A | 43 → 30 | 61.700 → 51.400 (−17 %) |
+    | B | 42 → 37 | −6 % |
+    | C | 40 → 19 | −28 % |
+
+  - El peor caso por llamada baja poco (0,46 → 0,42–0,45 $) porque lo domina la salida máxima.
+- **Hueco cerrado.** El validador no exige que la estrategia sirva a la dimensión citada. En v3, una decisión así queda retenida (`strategy_not_for_need`), y el prompt v3 lo indica (huella actualizada; no se había usado en ninguna llamada).
+- **Cobertura demostrada.**
+  - `precedent-coverage.test.ts`: por construcción, en CI.
+  - Con el índice real, en local: ningún excluido toca un recurso utilizable y ningún E/R utilizable falta.
+- **Salidas estructuradas.**
+  - Límites leídos en la documentación oficial.
+  - `structured-limits.ts`: el esquema exacto de v3 tiene 11 opcionales (límite 24), 1 unión (límite 16) y ningún problema.
+  - v3 pasa a entrega `auto`, con respaldo al prompt.
+  - La compilación de la gramática solo se demuestra con una llamada real.
+- **Piloto.**
+  - `pnpm eval:adaptation:pilot`: análisis más planificador v3, una llamada cada uno, con cota previa y recalculada.
+  - Sin `--yes` no llama; el material debe estar fuera del repositorio o en una carpeta ignorada.
+  - MAT-007 (2 páginas, CC BY-SA 4.0 España) con el perfil A: **≤ 0,7647 $ ≈ 0,68 €**. Calculado con el comando sin `--yes` y sin clave.
+- Pruebas:
+  - `pnpm test`: 164 archivos, 2.179 correctas y 18 omitidas (las que necesitan la copia privada);
+  - con la copia privada, 44/44 de reglas, v3 y cobertura;
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build, `check:privacy` y `check:secrets` correctos;
+  - E2E y smoke no ejecutados por indicación.
+- Siguiente acción: autorizar o no el piloto con `--yes` (MAT-007, perfil A, presupuesto ≤ 1 $), después de fijar el límite de gasto en la consola.
+
 ## 2026-11-04 — Agente V2.2: carga privada de la metodología y `adaptation_planner@v3`
 
 - Base: rama `feature/integracion-agente-v22` (PR #79, sin merge), porque se necesitan su registro y sus validadores. Rama nueva `feature/agente-v22-planificador-v3`.
