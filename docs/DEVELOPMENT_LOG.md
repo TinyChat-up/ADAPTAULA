@@ -1,5 +1,32 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente V2.2: garantías de gasto del piloto y compatibilidad con las ilustraciones
+
+- Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 inactiva. Sin llamadas a la API (ni siquiera al recuento), sin migraciones remotas, sin imágenes. **E2E no ejecutadas por indicación.**
+- **Presupuesto.** Las estimaciones por caracteres y por página quedan como comprobación previa sin red; ya no autorizan una llamada.
+  - `AnthropicProvider.countInputTokens` usa el endpoint oficial de recuento (gratuito; documentado como estimación «que puede diferir en una pequeña cantidad») con exactamente los parámetros de la llamada.
+  - Antes de cada llamada de pago se reserva (recuento × 1,10 + 1.000 tokens) cobrado como escritura de caché, más `max_tokens`, contra el 80 % del presupuesto. El uso real liquida; error, uso desconocido o coste mayor conservan la reserva y detienen.
+- **Llamadas no contabilizadas** (las tres se cierran en el piloto; el comportamiento por defecto de la aplicación no cambia):
+  - los reintentos del SDK (por defecto 2: `maxRetries: 0` en el piloto);
+  - el respaldo nativo → prompted de las salidas estructuradas (`promptedFallback: false` y modo fijo por salida);
+  - las reparaciones y regeneraciones (`singleCall`).
+
+  Un cliente medido registra cada petición.
+- **Comando.** `--count-tokens` (solo recuento) y `--yes` (pago). La parte de red está en `pilot-run.ts`, probada con transporte falso.
+- **Ilustraciones (solo análisis).** v3 puede pedir un apoyo visual por el flujo existente, y el consentimiento, el plan Max, la cuota, el límite por adaptación, el techo de 0,50 $ y la revisión se aplican dentro del servicio. Conexiones pendientes, documentadas en AGENTE_V22 (V1–V7):
+  - el contrato no permite pedir una ilustración de forma explícita;
+  - un apoyo esencial dependería de una imagen generada (DEC-013);
+  - el brief y la revisión de la imagen no reciben la finalidad ni las preguntas de pista;
+  - la escena de contexto la decide la política y no el planificador;
+  - el registro no muestra el resultado visual.
+- Pruebas:
+  - focalizadas: 11 archivos, 242 correctas y 3 omitidas (necesitan la copia privada);
+  - nueva `pilot-guarantees` (11);
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build y `check:privacy` correctos;
+  - E2E y la suite completa no ejecutadas por indicación (solo pruebas focalizadas).
+- Siguiente acción: autorizar o no la ejecución única del piloto con `--yes` (MAT-007, perfil A, 1 USD; límite seguro de 0,80 $).
+
 ## 2026-11-04 — Agente V2.2: selección de precedentes, salidas estructuradas y piloto acotado
 
 - Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 sigue inactiva. Sin llamadas a la API, sin subir las reglas a Supabase, sin migraciones remotas. **E2E no ejecutadas por indicación.**

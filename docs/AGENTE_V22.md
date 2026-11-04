@@ -187,27 +187,77 @@ Límites documentados en platform.claude.com («Structured outputs», leído el 
 ## Piloto: MAT-007 con el perfil A (pendiente de tu autorización)
 
 - **Material.** MAT-007 es una ficha de 2 páginas (CeDeC) bajo **CC BY-SA 4.0 España**, según su propio pie. Permite usarla y adaptarla con atribución; si una adaptación se distribuyera, tendría que llevar la misma licencia. Se usa solo en privado.
-- **Comando.**
+- **Tres modos** (`pnpm eval:adaptation:pilot`):
 
-  ```bash
-  pnpm eval:adaptation:pilot -- --material <ruta privada del PDF> --rules-dir <copia privada de las reglas> --profile A --budget-usd 1.00
-  ```
+  | Modo | Red | Qué hace |
+  |---|---|---|
+  | sin opciones | no | Valida material y reglas y estima la cota por caracteres. Es solo una comprobación previa: nunca autoriza una llamada |
+  | `--count-tokens` | sí, **gratis** | Cuenta la entrada exacta del análisis y la parte fija del planificador (sistema, esquema y los 45 precedentes) con el endpoint oficial de recuento. **Envía el material y las reglas a la API**: necesita autorización |
+  | `--yes` | sí, **de pago** | Lo anterior y, como mucho, dos llamadas de pago: análisis y planificador v3 |
 
-  - Sin `--yes`: valida el material y las reglas y calcula las cotas, **sin llamar a la API**.
-  - Con `--yes` y la clave en el entorno: hace exactamente **dos llamadas**. Primero el análisis (una sola, salida ≤ 16.000 tokens). Después recalcula la cota del planificador con el análisis real y solo lo llama (una sola vez, salida ≤ 32.000 tokens) si el gasto más esa cota cabe en el presupuesto.
-  - Sin reparaciones ni regeneraciones.
-- **Resultados.** Van a `evals/adaptation/private/pilot-v22/`, ignorada por git y con control de privacidad: análisis, contexto, plan v1, declaraciones, validación y registro, con las huellas de las reglas y los precedentes enviados, nunca su texto. El terminal muestra solo huellas y métricas.
-- **Cota calculada hoy sin llamadas** (`STANDARD` = `claude-sonnet-5-5`, esfuerzo `medium` del registro; precios de `src/lib/ai/costs.ts`):
+- **Garantías de gasto con `--yes`** (`evals/adaptation/pilot-run.ts`, `pilot-lib.ts`, `metered-client.ts`):
+  1. **Sin reintentos.** El cliente del SDK se crea con `maxRetries: 0` (por defecto, el SDK reintenta 2 veces los errores 408/409/429/5xx y los de conexión). Un cliente medido registra **cada** petición HTTP, recuentos incluidos.
+  2. **Sin respaldo de salidas estructuradas.** El modo de cada salida está fijado: análisis en `prompted` (su esquema supera el límite de gramática) y planificador v3 en `native`. Si la API rechaza el esquema, no hay segunda petición: se detiene.
+  3. **Sin reparaciones ni regeneraciones.** El análisis va con `singleCall` y el planificador se llama una vez.
+  4. **Recuento antes de pagar.** Antes de cada llamada de pago se cuenta su entrada exacta. El planificador se vuelve a contar ya con el análisis real.
+  5. **Reserva antes de pagar.** Cada llamada reserva su máximo: (recuento × 1,10 + 1.000 tokens) cobrados como escritura de caché (1,25×), más la salida completa (`max_tokens`, que también acota el razonamiento). La API documenta el recuento como una estimación que puede diferir «en una pequeña cantidad»: el 10 % y los 1.000 tokens cubren esa diferencia.
+  6. **Límite seguro: 80 % de `--budget-usd`** (0,80 $ con 1 USD). Si una reserva no cabe, no se llama.
+  7. **Liquidación con el uso real.** Si la llamada falla, no hay uso, hay más de una petición o el coste supera la reserva, la reserva se conserva entera y la ejecución se detiene. También se detiene, antes de pagar, si falla un recuento o falta el precio de un modelo.
+  8. **Pruebas sin red** (`tests/unit/pilot-guarantees.test.ts`). Con un `fetch` falso, el SDK con `maxRetries: 0` hace 1 petición ante un 529; con los valores por defecto, 3. Sin respaldo, un esquema rechazado es una sola petición. El recuento usa los mismos parámetros que la llamada. El piloto completo hace 3 recuentos y 2 llamadas de pago, y se detiene sin pagar en cada caso de incertidumbre.
+- **Resultados.** Van a `evals/adaptation/private/pilot-v22/`, ignorada por git y con control de privacidad: análisis, contexto, plan v1, declaraciones, validación, registro, peticiones y movimientos de la reserva, con las huellas de las reglas, nunca su texto. El terminal muestra solo huellas y métricas.
+- **Estimación previa sin red** (`STANDARD` = `claude-sonnet-5-5`, esfuerzo `medium`; precios de `src/lib/ai/costs.ts`):
 
-| Llamada | Entrada máxima | Salida máxima | Coste máximo |
+| Llamada | Salida máxima | Estimación sin red |
+|---|---|---|
+| Análisis de MAT-007 (2 páginas) | 16.000 | ≤ 0,2035 $ |
+| Planificador v3 | 32.000 | ≤ 0,5612 $ |
+| **Total** | | **≤ 0,7647 $ ≈ 0,68 €**, dentro del límite seguro de 0,80 $ |
+
+  La cota que manda es la **contada**: si, con el recuento y el margen, el análisis más el planificador superan 0,80 $, la ejecución se detiene antes de la primera llamada de pago. Por precio, el máximo absoluto de la ejecución es 0,80 $.
+- **Antes de lanzarlo:** fijar un límite de gasto en la consola del proveedor (una segunda barrera independiente) y revisar el tipo de cambio.
+
+## Apoyos visuales con OpenAI: compatibilidad y conexiones pendientes (análisis, sin implementar)
+
+**Lo que ya existe y se reutiliza** (`docs/VISUAL_RESOURCES.md` § Ilustraciones). Hoy solo «Hacer magia» puede llegar a una ilustración, y pasa por:
+
+1. una decisión del plan con `visual`, que deja un hueco de imagen «solicitado» en la ficha;
+2. la escalera de la política visual: original, reconstrucción, figura propia sin IA, **ilustración**, reescritura, sustitución o parada;
+3. el servicio de ilustraciones:
+   - `image_brief@v1`, con validación determinista: marcadores exactos, sin etiquetas que den la respuesta, sin datos exactos;
+   - una unidad de cuota `image`;
+   - la imagen con OpenAI (`IMAGE_QUALITY`);
+   - la revisión por visión `image_review@v1`, con aceptación del servidor;
+   - hasta un segundo intento;
+4. las barreras de producto:
+   - consentimiento docente persistido en el contexto (ADR-042);
+   - `FLAG_AI_IMAGES_ENABLED`;
+   - plan con `image_generation` (hoy solo Max, 50 al mes);
+   - como mucho 3 ilustraciones por adaptación;
+   - techo de 0,50 $ por adaptación, comprobado contra `ai_runs` antes de cada llamada;
+   - devolución de la unidad si la imagen no se aprueba.
+
+No hace falta otro generador. Todas esas barreras están **dentro** del servicio de ilustraciones, así que se aplicarán igual a lo que pida v3.
+
+**Qué puede hacer v3 hoy, sin cambios:**
+- **Decidir una imagen.** Puede proponer una decisión con `visual` (`new_representation` u `optional_support`) y su `purpose`. Esa decisión pasa la prueba de pista declarada y la criba de v3, que retiene para el docente lo condicionado, la pista declarada y la estrategia ajena.
+- **Selección de casos.** Con la estrategia `visual_support`, la selección envía los casos de imágenes y esquemas.
+- **Fugas.** Si el `purpose` revela una respuesta, lo bloquea `validatePlan`, y la fuga aproximada se detecta.
+- **Consentimiento.** v3 lo ve: `visual_supports.requested` viaja en el contexto del planificador. Sin consentimiento, el servicio no ilustra nada.
+- **Retención.** Una decisión retenida nunca llega a la política visual en «Hacer magia».
+
+**Conexiones que faltan:**
+
+| # | Hueco | Efecto hoy | Conexión propuesta |
 |---|---|---|---|
-| Análisis de MAT-007 (2 páginas) | 17.400 tokens | 16.000 | 0,2035 $ |
-| Planificador v3 (todas las reglas, material ≤ 1,5 × la salida del análisis) | 96.469 tokens | 32.000 | 0,5612 $ |
-| **Total** | | | **≤ 0,7647 $ ≈ 0,68 €** (a 1,12 USD/EUR; revisa el tipo de cambio) |
+| V1 | El contrato no distingue «figura dibujada» de «ilustración». `visualTreatment` solo produce los estilos `diagram` e `icon`, y la política solo ilustra primero `illustration`/`photo_like` | Un apoyo del plan se dibuja con nuestro renderer. Si no se puede y es opcional, se omite. **v3 no puede pedir una ilustración de forma explícita** | Contrato del planificador v4 (o del borrador): `visual.form` = `drawn` / `illustration`, que se traduce al estilo `illustration` del hueco |
+| V2 | Solo un apoyo **esencial** sin figura posible acaba en ilustración, y si no se consigue la ficha se para | Choca con DEC-013: nada indispensable puede depender de generar una imagen | Que una ilustración pedida por el plan sea **siempre opcional**. Las imágenes imprescindibles siguen por la vía actual del visual que falta del original |
+| V3 | `image_brief@v1` no recibe la finalidad de la actividad, la prueba de pista declarada ni los elementos cuya identificación se evalúa | El brief puede proponer marcar o etiquetar lo que el alumno debe identificar (P1), añadir información (P2) o ser el producto que se pide (P5) | `image_brief@v2`, que recibe la finalidad, el `purpose` cribado, los elementos protegidos de la actividad y los «no mostrar» derivados. Validación determinista nueva: ninguna etiqueta coincide con un elemento cuya identificación se evalúa |
+| V4 | `image_review@v1` comprueba la respuesta, el texto y la edad, pero no las pistas visuales (color o posición destacada, P3; número u orden revelado, P4) | Una imagen correcta puede dar pista por su composición | `image_review@v2` con las preguntas comprobables por visión. P1, P5 y P6 siguen siendo juicio docente |
+| V5 | La escena de contexto opcional («Hacer magia» con consentimiento) la elige la política, no el planificador | Con v3 activo habría imágenes no decididas por la metodología | Con v3, la escena solo se crea si existe una decisión v3 que la pide (y pasa la criba) |
+| V6 | El registro no muestra qué fue de cada imagen pedida (generada, dibujada, omitida, sin consentimiento o sin cuota) | El docente no ve por qué falta una ilustración | Añadir al registro el resultado de la política visual por decisión |
+| V7 | Las declaraciones de v3 no se persisten ni el orquestador las usa | Común a toda la activación de v3 | Ver «Activación» |
 
-- **Por qué la cota es fiable.** La salida no puede superar `max_tokens`, y el razonamiento adaptativo cuenta dentro de ese límite. Toda la entrada se cobra como escritura de caché (1,25×), y el bloque de reglas se cuenta con los 45 precedentes. `tests/unit/pilot-v22.test.ts` comprueba que la cota previa nunca queda por debajo de la recalculada con el análisis.
-- **Margen.** Cabe con holgura en el presupuesto de 10 €.
-- **Antes de lanzarlo:** fijar un límite de gasto en la consola del proveedor y revisar el tipo de cambio.
+**Coste y presupuesto de una futura prueba con imágenes.** Cada ilustración cuesta un brief, hasta 2 imágenes y hasta 2 revisiones, dentro del techo existente de 0,50 $ por adaptación. Una prueba de imágenes será una evaluación aparte, con su propia autorización y su propio techo. **En esta entrega no se generan imágenes reales.**
 
 ## Activación (después de la evaluación)
 
