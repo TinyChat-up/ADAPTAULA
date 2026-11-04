@@ -15,3 +15,9 @@ export const V22_PROFILES = {
   B: profile({ fine_motor_demand: "high", writing_amount: "medium", alternative_response: "low", expressive_language_support: "low", reading_level: "none", text_length: "none", vocabulary_complexity: "none", instruction_chunking: "none" }),
   C: emptyFunctionalProfile(),
 } satisfies Record<"A" | "B" | "C", FunctionalProfile>;
+
+/** Profile A states its limit per stage (15 words in Primaria, 20 in Secundaria); the platform stores one value per profile. */
+export const v22ProfileA = (stage: "primaria" | "eso" | "bachillerato"): FunctionalProfile => ({
+  ...V22_PROFILES.A,
+  limits: { max_instruction_words: stage === "primaria" ? 15 : 20 },
+});

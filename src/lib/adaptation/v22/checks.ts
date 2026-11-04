@@ -3,7 +3,7 @@ import type { AdaptationPlan } from "@/lib/schemas/adaptation-plan";
 import type { HintCoverage, HintQuestion } from "@/lib/schemas/decision-ledger";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { allBlocks, type Block, type MaterialDocument } from "@/lib/schemas/material-document";
-import { requestedResults } from "../answer-space";
+import { requestedResults, statedLines } from "../answer-space";
 import { activitiesOf } from "../decision-ledger";
 import { studentText } from "../document-text";
 import { answersOf } from "../facts";
@@ -77,8 +77,8 @@ function answerSpaces(analysis: MaterialAnalysis, doc: MaterialDocument): V22Fin
     const adapted = block ? ADAPTED_FAMILY[block.response.kind] : undefined;
     if (!original || !block || !adapted) return [];
     const lines = block.response.kind === "lines" ? block.response.lines : null;
-    // The room the statement itself asks for («escribe dos…») is not a hint: it is the baseline the proportion is measured against.
-    const baseline = Math.max(a.answer_area.lines ?? 1, requestedResults(a));
+    // The room the statement itself asks for («escribe dos…», «60-80 palabras») is not a hint: it is the baseline of the proportion.
+    const baseline = Math.max(a.answer_area.lines ?? 1, requestedResults(a), statedLines(a) ?? 0);
     return [{ id: a.id, product: a.response_format, original, adapted, baseline, lines, decisions: block.trace.decision_ids }];
   });
   const out: V22Finding[] = [];
@@ -90,13 +90,19 @@ function answerSpaces(analysis: MaterialAnalysis, doc: MaterialDocument): V22Fin
       const decision_ids = [...new Set([...a.decisions, ...b.decisions])];
       if (a.adapted !== b.adapted) {
         out.push({ check: "answer_space_homogeneity", question: "P8", coverage: "deterministic", result: "flagged", targets: [a.id, b.id], decision_ids, detail: `${a.id} y ${b.id} tenían el mismo tipo de espacio (${FAMILY_LABEL[a.original]}); la ficha les da ${FAMILY_LABEL[a.adapted]} y ${FAMILY_LABEL[b.adapted]}. Puede sugerir el tipo de respuesta: confirmar si el enunciado ya distingue los productos.` });
-      } else if (a.lines !== null && b.lines !== null && Math.abs(a.lines / b.lines / (a.baseline / b.baseline) - 1) > 0.1) {
+      } else if (a.lines !== null && b.lines !== null && disproportionate(a.lines, a.baseline, b.lines, b.baseline)) {
         out.push({ check: "answer_space_homogeneity", question: "P8", coverage: "deterministic", result: "flagged", targets: [a.id, b.id], decision_ids, detail: `${a.id} y ${b.id}: ${a.lines} y ${b.lines} renglones no conservan la proporción del original (${a.baseline} y ${b.baseline}). Puede sugerir la extensión esperada.` });
       }
     }
   }
   if (out.length === 0 && rows.length > 1) out.push({ check: "answer_space_homogeneity", question: "P8", coverage: "deterministic", result: "clear", targets: rows.map((r) => r.id), decision_ids: [], detail: "La ficha no introduce diferencias de tipo ni de proporción entre espacios que el original trataba igual." });
   return out;
+}
+
+/** More than 10 % off the original proportion and more than one whole line away from it, seen from either activity. */
+function disproportionate(aLines: number, aBase: number, bLines: number, bBase: number): boolean {
+  if (Math.abs(aLines / bLines / (aBase / bBase) - 1) <= 0.1) return false;
+  return Math.abs(bLines - (aLines * bBase) / aBase) > 1 && Math.abs(aLines - (bLines * aBase) / bBase) > 1;
 }
 
 /** P2 (partial): vocabulary terms that the original never uses. Information added by a help box is not judged here. */
