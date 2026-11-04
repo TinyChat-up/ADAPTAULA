@@ -1,41 +1,41 @@
 /**
- * Pilot of the V2.2 agent (ADR-045): ONE material, ONE profile, exactly two real calls when authorised:
- *   1. material_analyzer (single call, hard output cap) → MaterialAnalysis v3
- *   2. adaptation_planner@v3 with the verified private rules (single call, hard output cap) → plan v1 + declarations + ledger
- * Without --yes it makes NO call: it validates the inputs and prints the cost ceiling computed in advance (`pilot-lib.ts`). With
- * --yes it refuses to start when that ceiling exceeds --budget-usd, and refuses the planner call when the money already spent plus
- * the planner's recomputed ceiling would exceed it.
+ * Pilot of the V2.2 agent (ADR-045): ONE material, ONE profile, at most TWO paid calls, each counted and reserved before it is made.
+ *   1. material_analyzer (single call: no repair, no regeneration; prompted delivery, fixed) → MaterialAnalysis v3
+ *   2. adaptation_planner@v3 with the verified private rules (single call; native structured output, fixed) → plan v1 + declarations
  *
- *   pnpm eval:adaptation:pilot -- --material <pdf> --rules-dir <copia privada>                 cotas, sin llamadas
- *   pnpm eval:adaptation:pilot -- --material <pdf> --rules-dir <copia privada> --yes           las dos llamadas
+ *   pnpm eval:adaptation:pilot -- --material <pdf> --rules-dir <copia privada>                  sin red: cota por caracteres
+ *   pnpm eval:adaptation:pilot -- --material <pdf> --rules-dir <copia privada> --count-tokens   recuento gratuito, sin llamadas de pago
+ *   pnpm eval:adaptation:pilot -- --material <pdf> --rules-dir <copia privada> --yes            las dos llamadas de pago
  *
- * The material and the rules are private. The material must be outside any Git checkout or in a git-ignored private folder; the
- * results go to the git-ignored `evals/adaptation/private/pilot-v22/`. The terminal shows hashes, sizes and metrics only.
+ * Guarantees (pilot-lib.ts, metered-client.ts):
+ *  - the client is created with `maxRetries: 0` and every HTTP request is recorded: one request is one entry;
+ *  - structured-output fallback is OFF and each output's mode is fixed: a rejected schema stops the run instead of a second request;
+ *  - before each paid call its exact input is counted (free endpoint) and its ceiling reserved: counted × 1.10 + 1.000 tokens, all
+ *    priced as cache writes, plus the full `max_tokens`; reservations must fit in 80 % of --budget-usd;
+ *  - a complete answer settles with its real usage; an error, a missing usage or a cost above the reservation keeps the reservation
+ *    whole and stops. A failed count, a missing price or any other uncertainty stops before paying.
+ * Both --count-tokens and --yes send the material and the rules to the provider: they need the owner's authorisation. Results go to the
+ * git-ignored `evals/adaptation/private/pilot-v22/`; the terminal shows hashes, sizes and metrics only.
  */
+import Anthropic from "@anthropic-ai/sdk";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { validatePlan } from "@/lib/adaptation/invariants";
-import { normalizePlanV3 } from "@/lib/adaptation/plan-v3";
-import { callPlanner, parsePlanResponse, plannerRequestParts, rulesUse } from "@/lib/adaptation/planner";
-import { auditAdaptation } from "@/lib/adaptation/v22/audit";
 import { directoryRulesSource } from "@/lib/agent-rules/local-source";
 import { loadAgentRules } from "@/lib/agent-rules/loader";
 import { AGENT_RULES_V22 } from "@/lib/agent-rules/manifest-v22";
-import { buildRulesBlock, fullRulesBlockLength } from "@/lib/agent-rules/prompt-block";
-import { toAIError } from "@/lib/ai/errors";
+import { fullRulesBlock } from "@/lib/agent-rules/prompt-block";
 import { schemaInstructions } from "@/lib/ai/providers/anthropic";
 import { resolveModel, type ModelEnv } from "@/lib/ai/registry";
-import { createProvider } from "@/lib/ai/router";
 import { effectiveLimits } from "@/lib/materials/config";
 import { validateFileContent } from "@/lib/materials/file-validation";
 import { inspectPdf } from "@/lib/materials/pdf";
 import { redactSecrets } from "@/lib/security/redact";
 import { ADAPTATION_PLANNER_V3 } from "@prompts/adaptation-planner/v3";
-import { analyzeCase, resolveSelection } from "../material-analysis/harness";
-import { buildExperimentContext } from "./planner-lib";
-import { pilotBound, plannerBoundAfterAnalysis } from "./pilot-lib";
+import { resolveAnalyzer, resolveSelection } from "../material-analysis/harness";
+import { PilotBudget, pilotBound } from "./pilot-lib";
+import { runPilotCalls } from "./pilot-run";
 import { V22_PROFILES } from "./v22-profiles";
 
 const OUT_DIR = path.resolve(import.meta.dirname, "private/pilot-v22");
@@ -67,12 +67,13 @@ async function main() {
   if (!material || !rulesDir) throw new Error("Faltan --material <pdf> y --rules-dir <copia privada de las reglas>.");
   const profileKey = (arg("--profile") ?? "A") as keyof typeof V22_PROFILES;
   if (!(profileKey in V22_PROFILES)) throw new Error("--profile debe ser A, B o C.");
-  const budgetUsd = Number(arg("--budget-usd") ?? "1.00");
+  const budget = new PilotBudget(Number(arg("--budget-usd") ?? "1.00"));
   const usdPerEur = Number(arg("--usd-per-eur") ?? "1.12");
   const analysisMax = Number(arg("--analysis-max-output") ?? "16000");
   const plannerMax = Number(arg("--planner-max-output") ?? "32000");
-  const go = process.argv.includes("--yes");
-  const env = process.env as ModelEnv & { ANTHROPIC_API_KEY?: string; AI_ANALYSIS_ALIAS?: string; AI_ANALYSIS_EFFORT?: string };
+  const pay = process.argv.includes("--yes");
+  const count = pay || process.argv.includes("--count-tokens");
+  const env = process.env as ModelEnv & { ANTHROPIC_API_KEY?: string; AI_ANALYSIS_ALIAS?: string; AI_ANALYSIS_EFFORT?: string; AI_ANALYSIS_PROMPT_VERSION?: string };
 
   const file = path.resolve(material);
   if (!privateLocation(file)) throw new Error("El material está en una ruta que Git puede versionar. Muévelo fuera del repositorio o a una carpeta privada ignorada.");
@@ -84,75 +85,40 @@ async function main() {
   const label = `material-${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}`;
 
   const rules = await loadAgentRules(await directoryRulesSource(rulesDir), AGENT_RULES_V22);
+  const analyzer = resolveAnalyzer(null, env);
   const analysisSelection = resolveSelection({ mock: false, model: null, effort: null }, env);
   const plannerSelection = resolveModel("STANDARD", env);
+  const allRules = await fullRulesBlock(rules);
   const promptChars = ADAPTATION_PLANNER_V3.system.length + schemaInstructions(ADAPTATION_PLANNER_V3.output.schema).length;
-  const bound = pilotBound({ analysisSelection, plannerSelection, pages: inspection.pages, analysisMaxOutputTokens: analysisMax, plannerMaxOutputTokens: plannerMax, plannerPromptChars: promptChars, rulesAllChars: await fullRulesBlockLength(rules) });
+  const bound = pilotBound({ analysisSelection, plannerSelection, pages: inspection.pages, analysisMaxOutputTokens: analysisMax, plannerMaxOutputTokens: plannerMax, plannerPromptChars: promptChars, rulesAllChars: allRules.length });
 
-  console.log("Piloto V2.2 · cotas calculadas antes de cualquier llamada");
+  console.log("Piloto V2.2 · comprobación previa (sin red)");
   console.log(`  material: ${label} · ${inspection.pages} páginas · perfil ${profileKey} · reglas ${rules.version} (${rules.package_sha256.slice(0, 12)}…, verificadas)`);
-  console.log(`  1. análisis: ${analysisSelection.provider}:${analysisSelection.model} (${analysisSelection.effort}) · entrada ≤ ${bound.analysis.inputTokens} · salida ≤ ${analysisMax} → ≤ ${usd(bound.analysis.usd)}`);
-  console.log(`  2. planificador v3: ${plannerSelection.provider}:${plannerSelection.model} (${plannerSelection.effort}) · entrada ≤ ${bound.planner.inputTokens} · salida ≤ ${plannerMax} → ≤ ${usd(bound.planner.usd)}`);
-  console.log(`  total ≤ ${usd(bound.totalUsd)} ≈ ${(bound.totalUsd / usdPerEur).toFixed(2)} € (a ${usdPerEur} USD/EUR; revisa el tipo de cambio) · presupuesto ${usd(budgetUsd)}`);
-  if (bound.totalUsd > budgetUsd) {
-    console.log("\nNO se ejecuta: la cota supera el presupuesto.");
+  console.log(`  análisis ${analyzer.key}@v${analyzer.version} · ${analysisSelection.model} (${analysisSelection.effort}) · salida ≤ ${analysisMax} → ≤ ${usd(bound.analysis.usd)} (estimado)`);
+  console.log(`  planificador v3 · ${plannerSelection.model} (${plannerSelection.effort}) · salida ≤ ${plannerMax} → ≤ ${usd(bound.planner.usd)} (estimado)`);
+  console.log(`  total estimado ≤ ${usd(bound.totalUsd)} ≈ ${(bound.totalUsd / usdPerEur).toFixed(2)} € · límite seguro ${usd(budget.cap)} (80 % de ${usd(budget.budgetUsd)})`);
+  if (bound.totalUsd > budget.cap) {
+    console.log("\nNO se continúa: la estimación previa ya supera el límite seguro.");
     process.exitCode = 2;
     return;
   }
-  if (!go) {
-    console.log("\nSin llamadas. Añade --yes para ejecutar las dos llamadas reales (análisis y planificador).");
+  if (!count) {
+    console.log("\nSin red. --count-tokens mide la entrada exacta (gratis; envía el material y las reglas). --yes hace las llamadas de pago.");
     return;
   }
   if (!env.ANTHROPIC_API_KEY) throw new Error("Falta ANTHROPIC_API_KEY.");
 
-  const out: Record<string, unknown> = { version: 1, kind: "pilot-v22", startedAt: new Date().toISOString(), label, profile: profileKey, bound, budgetUsd };
-  let spent = 0;
-  const analysisProvider = createProvider(analysisSelection, { anthropicApiKey: env.ANTHROPIC_API_KEY, isProduction: false });
-  const analyzed = await analyzeCase({ id: label, title: label, stage: null, file: { kind: "pdf", data: bytes }, pageCount: inspection.pages, selection: analysisSelection, provider: analysisProvider, maxOutputTokens: analysisMax, singleCall: true });
-  spent += analyzed.report.costUsd ?? bound.analysis.usd;
-  out.analysis = { report: analyzed.report, analysis: analyzed.analysis };
-  console.log(`\n1. análisis: ${analyzed.analysis ? "válido" : "SIN análisis utilizable"} · coste ${usd(analyzed.report.costUsd ?? Number.NaN)}`);
-
-  if (analyzed.analysis) {
-    const analysis = analyzed.analysis;
-    const context = buildExperimentContext(analysis, "accessibility", 2, V22_PROFILES[profileKey]);
-    const block = await buildRulesBlock(rules, analysis, context);
-    const { parts } = plannerRequestParts({ analysis, context, version: 3, rules: block });
-    const userText = parts.slice(1).map((p) => (p.type === "text" ? p.text : "")).join("");
-    const plannerCeiling = plannerBoundAfterAnalysis(plannerSelection, { prompt: promptChars, rules: block.text.length, userText: userText.length }, plannerMax);
-    out.context = context;
-    out.rules = rulesUse(block);
-    console.log(`2. planificador: ${block.selection.included.length}/${rules.precedents.length} precedentes · cota ${usd(plannerCeiling)} · gastado ${usd(spent)}`);
-    if (spent + plannerCeiling > budgetUsd) {
-      console.log("   NO se llama al planificador: se superaría el presupuesto.");
-    } else {
-      try {
-        const plannerProvider = createProvider(plannerSelection, { anthropicApiKey: env.ANTHROPIC_API_KEY, isProduction: false });
-        const { response, run } = await callPlanner({ analysis, context, selection: plannerSelection, provider: plannerProvider, maxOutputTokens: plannerMax, version: 3, rules: block });
-        spent += run.estimatedCostUsd ?? plannerCeiling;
-        const parsed = parsePlanResponse(response, 3);
-        out.planner = { run, stopReason: response.stopReason, parse: parsed.outcome, issues: parsed.outcome === "ok" ? [] : parsed.issues, responseText: response.text };
-        if (parsed.outcome === "ok") {
-          const { plan, declarations } = normalizePlanV3(parsed.draft, analysis, context, rulesUse(block));
-          const validation = validatePlan(plan, analysis, context);
-          const audit = auditAdaptation({ plan, validation, context, analysis, declarations, profile: V22_PROFILES[profileKey] });
-          Object.assign(out, { plan, declarations, validation, ledger: audit.ledger, findings: audit.findings, not_checked: audit.not_checked });
-          const withheld = Object.values(declarations.decisions).filter((d) => d.withheld).length;
-          console.log(`   ${plan.decisions.length} decisiones (${withheld} retenidas para el docente) · ${declarations.teacher_questions.length} preguntas · ${declarations.residual_barriers.length} barreras declaradas · bloqueadas ${validation.issues.filter((i) => i.severity === "block").length}`);
-        } else console.log(`   respuesta no utilizable: ${parsed.outcome}`);
-        console.log(`   coste ${usd(run.estimatedCostUsd ?? Number.NaN)} · tokens entrada ${run.inputTokens} · salida ${run.outputTokens}`);
-      } catch (error) {
-        const failure = toAIError(error);
-        out.planner = { error: { code: failure.code, message: redactSecrets(failure.message) } };
-        console.log(`   error del proveedor: ${failure.code}`);
-      }
-    }
-  }
-  out.spentUsd = spent;
+  // One request is one entry: the SDK client never retries by itself.
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const startedAt = new Date().toISOString();
+  const { out, calls } = await runPilotCalls({ client, budget, analyzer, analysisSelection, plannerSelection, pdf: bytes, pages: inspection.pages, profile: profileKey, rules, allRules, analysisMax, plannerMax, pay, log: (line) => console.log(line) });
+  const record = { version: 2, kind: "pilot-v22", startedAt, label, profile: profileKey, estimate: bound, budgetUsd: budget.budgetUsd, safeCapUsd: budget.cap, ...out, calls, ledger: budget.events, committedUsd: budget.committedUsd, stopReason: budget.stopReason };
   mkdirSync(OUT_DIR, { recursive: true });
-  const target = path.join(OUT_DIR, `${String(out.startedAt).replace(/[:.]/g, "-")}-${label}-${profileKey}.json`);
-  writeFileSync(target, JSON.stringify(out, null, 2));
-  console.log(`\nGastado: ${usd(spent)} de ${usd(budgetUsd)}. Resultado privado: ${path.relative(process.cwd(), target)}`);
+  const target = path.join(OUT_DIR, `${startedAt.replace(/[:.]/g, "-")}-${label}-${profileKey}.json`);
+  writeFileSync(target, JSON.stringify(record, null, 2));
+  const paid = calls.filter((c) => c.kind === "message").length;
+  console.log(`\nPeticiones: ${calls.length - paid} recuentos (gratis) · ${paid} de pago · comprometido ${usd(budget.committedUsd)} de ${usd(budget.cap)}${budget.stopReason ? ` · detenido: ${budget.stopReason}` : ""}`);
+  console.log(`Resultado privado: ${path.relative(process.cwd(), target)}`);
 }
 
 void main().catch((error) => {

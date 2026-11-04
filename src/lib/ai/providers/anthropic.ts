@@ -8,7 +8,22 @@ import type { AIProvider, ContentPart, StopReason, StructuredRequest, Structured
 type StreamLike = { finalMessage(): Promise<Anthropic.Message> };
 /** The slice of the SDK we use, so tests can inject a fake without network. */
 export interface AnthropicClientLike {
-  messages: { stream(params: Anthropic.MessageStreamParams, options?: { signal?: AbortSignal; timeout?: number }): StreamLike };
+  messages: {
+    stream(params: Anthropic.MessageStreamParams, options?: { signal?: AbortSignal; timeout?: number }): StreamLike;
+    /** Free token-counting endpoint. Optional: only callers that budget a call before making it need it. */
+    countTokens?(params: Anthropic.MessageCountTokensParams): Promise<{ input_tokens: number }>;
+  };
+}
+
+/**
+ * Options for callers that must account for every request (a budget-capped evaluation). The defaults keep the production behaviour.
+ *  - `promptedFallback: false`: a native schema the API rejects is NOT retried in prompted mode; the error is thrown, so one
+ *    `generateStructured` is at most one request.
+ *  - `deliveries`: the mode of each output, by name, decided in advance (it overrides the request's own and any remembered fallback).
+ */
+export interface AnthropicProviderOptions {
+  promptedFallback?: boolean;
+  deliveries?: Readonly<Record<string, OutputMode>>;
 }
 
 /** Sonnet/Opus-class models take `output_config.effort`; Haiku does not. */
@@ -86,20 +101,31 @@ export function mapAnthropicError(error: unknown): AIError {
 export class AnthropicProvider implements AIProvider {
   readonly name = "anthropic" as const;
 
-  constructor(private readonly client: AnthropicClientLike) {}
+  constructor(
+    private readonly client: AnthropicClientLike,
+    private readonly options: AnthropicProviderOptions = {},
+  ) {}
 
   static fromApiKey(apiKey: string): AnthropicProvider {
     return new AnthropicProvider(new Anthropic({ apiKey, maxRetries: ANALYSIS_RETRY.sdkRetriesPerCall }));
   }
 
+  /** The mode this request would be sent in first. */
+  modeFor(request: StructuredRequest): OutputMode {
+    const fixed = this.options.deliveries?.[request.output.name];
+    if (fixed) return fixed;
+    return request.output.delivery === "prompted" || promptedOutputs.has(modeKey(request.selection.model, request.output.name)) ? "prompted" : "native";
+  }
+
   async generateStructured(request: StructuredRequest): Promise<StructuredResponse> {
-    const key = modeKey(request.selection.model, request.output.name);
-    if (request.output.delivery !== "prompted" && !promptedOutputs.has(key)) {
+    const mode = this.modeFor(request);
+    if (mode === "native") {
       try {
         return await this.send(request, "native");
       } catch (error) {
-        if (!isGrammarTooLarge(error)) throw mapAnthropicError(error);
-        promptedOutputs.add(key);
+        const fallback = this.options.promptedFallback !== false && !this.options.deliveries?.[request.output.name];
+        if (!fallback || !isGrammarTooLarge(error)) throw mapAnthropicError(error);
+        promptedOutputs.add(modeKey(request.selection.model, request.output.name));
       }
     }
     try {
@@ -109,10 +135,26 @@ export class AnthropicProvider implements AIProvider {
     }
   }
 
-  private async send(request: StructuredRequest, mode: OutputMode): Promise<StructuredResponse> {
-    const started = Date.now();
+  /**
+   * Input tokens of exactly what `generateStructured` would send first (same system, messages, schema and effort), from the free
+   * token-counting endpoint. The API documents the count as an estimate that may differ by a small amount: callers add a margin.
+   */
+  async countInputTokens(request: StructuredRequest): Promise<{ mode: OutputMode; inputTokens: number }> {
+    if (!this.client.messages.countTokens) throw new AIError("not_configured", "token counting is not available on this client");
+    const mode = this.modeFor(request);
+    const { max_tokens: _max, ...params } = this.params(request, mode);
+    void _max;
+    try {
+      const counted = await this.client.messages.countTokens(params as Anthropic.MessageCountTokensParams);
+      return { mode, inputTokens: counted.input_tokens };
+    } catch (error) {
+      throw mapAnthropicError(error);
+    }
+  }
+
+  private params(request: StructuredRequest, mode: OutputMode): Anthropic.MessageStreamParams {
     const effort = supportsEffort(request.selection.model) ? { effort: request.selection.effort } : {};
-    const params: Anthropic.MessageStreamParams = {
+    return {
       model: request.selection.model,
       max_tokens: request.maxOutputTokens,
       messages: request.messages.map((m) => ({ role: m.role, content: m.content.map(toBlock) })),
@@ -130,6 +172,11 @@ export class AnthropicProvider implements AIProvider {
             output_config: { ...effort },
           }),
     };
+  }
+
+  private async send(request: StructuredRequest, mode: OutputMode): Promise<StructuredResponse> {
+    const started = Date.now();
+    const params = this.params(request, mode);
 
     const message = await this.client.messages
       .stream(params, { ...(request.signal ? { signal: request.signal } : {}), timeout: request.timeoutMs })

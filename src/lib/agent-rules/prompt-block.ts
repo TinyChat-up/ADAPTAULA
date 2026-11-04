@@ -33,7 +33,11 @@ export async function buildRulesBlock(rules: AgentRules, analysis: MaterialAnaly
   return { text, version: rules.version, package_sha256: rules.package_sha256, block_sha256: createHash("sha256").update(text, "utf8").digest("hex"), selection };
 }
 
-/** Size of the block with EVERY precedent: the ceiling of any selection, used to bound a cost before the material is analysed. */
+/** The block with EVERY precedent: the ceiling of any selection, used to bound a cost before the material is analysed. */
+export function fullRulesBlock(rules: AgentRules): Promise<string> {
+  return render(rules, rules.precedents.map((p) => p.id));
+}
+
 export async function fullRulesBlockLength(rules: AgentRules): Promise<number> {
-  return (await render(rules, rules.precedents.map((p) => p.id))).length;
+  return (await fullRulesBlock(rules)).length;
 }
