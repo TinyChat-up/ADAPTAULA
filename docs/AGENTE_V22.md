@@ -1,6 +1,13 @@
 # Agente pedagógico V2.2 · integración en Adaptaula
 
-Estado: **integración parcial** (registro de decisiones y validadores deterministas). No es todavía la integración completa del agente V2.2: el planificador real no recibe la metodología V2.2 ni emite la prueba de pista. Decisión: [ADR-044](ARCHITECTURE.md).
+Estado (2026-11-04), en dos entregas:
+
+1. **PR #79**: registro de decisiones y validadores deterministas ([ADR-044](ARCHITECTURE.md)).
+2. **Rama `feature/agente-v22-planificador-v3`**:
+   - carga privada y verificada de las reglas y la biblioteca (fase A);
+   - `adaptation_planner@v3`, que **decide** con ellas (fase B, [ADR-045](ARCHITECTURE.md)).
+
+Todo está validado solo con modelos simulados. v3 **no está activo**: falta la evaluación con el modelo real, que no está autorizada, y conectar sus declaraciones al orquestador.
 
 ## Qué es privado y dónde está
 
@@ -105,67 +112,73 @@ Fichas sintéticas de `evals/adaptation/fixtures.ts`.
 
   Queda registrado y no se corrige en esta entrega.
 
-## Plan de conexión con el planificador real
+## Planificador v3: cómo usa la metodología (fases A y B)
 
-Objetivo: que `adaptation_planner` razone con la metodología V2.2 y que la plataforma compruebe y muestre lo que declara, sin publicar la documentación original. Cada etapa es una PR, con pruebas y sin merge automático.
+```
+reglas privadas (bucket agent-rules o copia local fuera del repo)
+  → loadAgentRules: tamaño y SHA-256 de cada archivo contra manifest-v22.ts (falla cerrado)
+  → buildRulesBlock: reglas estables + precedentes seleccionados, con versión y huella
+  → adaptation_planner@v3: primera parte de la petición; después, contexto y material (igual que v2)
+  → DraftAdaptationPlan v3 → AdaptationPlan v1 (sin cambios) + declaraciones cribadas
+  → revisión: sin docente, lo condicionado o con pista que descarta el recurso se rechaza
+  → generador, CLARO y apoyos visuales, igual que siempre
+  → registro de decisiones: lo declarado, aparte de lo que la plataforma comprueba
+```
 
-### Etapa 1 · Auditoría visible (sin IA ni gasto)
+Lo que el modelo declara nunca prueba nada:
+- un «sí» en la prueba de pista retiene la decisión para el docente, salvo en P7, que solo se registra;
+- un «no» no da por comprobada ninguna pregunta;
+- un precedente citado que no iba en la petición se marca;
+- una pregunta o una nota que revela una respuesta inferida no se muestra.
 
-- Ejecutar `auditAdaptation` en servidor al cargar la revisión del plan y la ficha entregada (`page-data`). Se recalcula bajo demanda, así que no hace falta migración.
-- Mostrar al docente un panel «Registro de decisiones», con el copy de `docs/UX.md` y sin nombres técnicos. Para cada actividad:
-  - qué se cambia y por qué necesidad;
-  - lo que queda pendiente de su revisión;
-  - los avisos P8, P2, P3, P4 y P7, con su cobertura («comprobado» o «indicio; revisar»).
-- Pruebas: unidad del modelo de vista, E2E de la pantalla de revisión (escritorio y móvil), accesibilidad.
+**Pre-vuelo con las reglas reales y las fichas sintéticas** (`STANDARD` = `claude-sonnet-5-5`, salida máxima de 32.000 tokens; tamaños y tabla de precios, sin llamar a la API):
 
-### Etapa 2 · Reglas privadas fuera del repositorio (requiere ADR y tu aprobación)
+| Ficha | Perfil | Precedentes enviados | Reglas (tokens) | Entrada total v3 (v2) | Peor caso v3 (v2) |
+|---|---|---|---|---|---|
+| Fracciones | A / B / C | 43 / 42 / 40 de 45 | ≈ 61.700 / 61.200 / 59.700 | ≈ 69.000 (≈ 6.000) | ≈ 0,46 $ (0,33 $) |
+| Geografía | A / B / C | 43 / 42 / 40 | ídem | ≈ 69.900 (≈ 7.000) | ≈ 0,46 $ (0,34 $) |
+| Argumentación | A / B / C | 43 / 42 / 40 | ídem | ≈ 69.700 (≈ 6.800) | ≈ 0,46 $ (0,34 $) |
 
-- Guardar las reglas V2.2 y la biblioteca en un almacén privado del servidor: un bucket privado de Supabase leído con el cliente admin (`server-only`) o una variable de entorno de Vercel.
-- En el repositorio solo quedan:
-  - el identificador y la huella SHA-256 de cada versión (`agent_rules@v2.2` → `fdda7e6d…`);
-  - el código que las carga, que verifica la huella y falla cerrado si no coincide.
-- `ai_runs` registra la huella de las reglas usadas, nunca su contenido.
-- Portar la selección de precedentes del laboratorio a TypeScript:
-  - siempre las reglas estables;
-  - todos los casos E/R del perfil;
-  - los casos A/P cuyos recursos coincidan con las operaciones posibles.
-- El índice de la biblioteca también es privado.
-- Alternativa, si prefieres no depender de un almacén: redactar en el prompt público solo las reglas comprobables, con redacción propia. La metodología queda entonces parcialmente pública. Recomiendo el almacén privado.
+- El coste lo domina la salida máxima.
+- Sin portar la variante estricta del laboratorio, la selección apenas filtra.
+- La caché del bloque de reglas, que es estable, reduciría mucho el coste de las llamadas repetidas. No está medida.
 
-### Etapa 3 · Contrato `adaptation_planner@v3` (sin gasto)
+## Evaluación real (pendiente de autorización; presupuesto máximo previsto: 10 €)
 
-- Nuevo prompt `prompts/adaptation-planner/v3.ts`. El texto público es solo la estructura y las reglas de la plataforma; las reglas V2.2 se insertan en servidor, delimitadas y con su huella.
-- El borrador v3 añade, por decisión:
-  - la prueba de pista declarada (las preguntas P1–P8 que el modelo responde «sí»);
-  - el estado («activa» o «condicionada», con su pregunta al docente);
-  - las barreras residuales declaradas;
-  - los precedentes citados.
-- Se normaliza a `AdaptationPlan v1` (sin cambiar el plan) más una parte «declarada» del registro.
-- Lo que declara el modelo nunca da nada por comprobado:
-  - un «sí» genera revisión docente;
-  - un «no» en P1, P5 o P6 sigue pendiente;
-  - un precedente citado que no estaba en la petición se marca, como el VP3 del laboratorio.
-- El esquema debe caber en las salidas estructuradas. El laboratorio midió que plan/1.1 excedía el límite de parámetros opcionales, así que el contrato v3 será compacto. Una prueba unitaria contará los opcionales del esquema generado.
-- Pruebas: planificador simulado v3, regresión A/B/C, contrato y límites del esquema.
+1. Comprobar las condiciones de uso de MAT-007 y MAT-024. Usarlos solo en `evals/adaptation/private/`, que está ignorado y bajo el control de privacidad.
+2. Analizar cada material con `material_analyzer@v3`. **Es una llamada de pago por material.** Hoy no existe análisis de esos materiales en Adaptaula.
+3. Pre-vuelo de cada combinación (gratis):
 
-### Etapa 4 · Evaluación con el modelo real (cuesta dinero: solo con autorización expresa)
+   ```bash
+   pnpm eval:adaptation:planner -- --analysis <análisis> --planner-version 3 --rules-dir <copia privada> --profile A
+   ```
 
-- Materiales MAT-007 y MAT-024 en `evals/adaptation/private/` (ignorado y bajo el control de privacidad), con los perfiles A, B y C.
-- Campaña mínima: 2 materiales × 3 perfiles = 6 llamadas al planificador. El laboratorio estimó un máximo de unos 0,55–0,58 € por llamada con 32 000 tokens de salida, así que el techo ronda los 3,5 €.
-  - Antes, medir el contexto con el recuento de tokens (también es una llamada que hay que autorizar).
-  - Fijar un límite de gasto en la consola del proveedor.
-- Se comparan las decisiones con las salidas revisadas del laboratorio. La revisión docente decide; ningún resultado se convierte en regla sin un segundo caso.
+4. Campaña mínima: 2 materiales × 3 perfiles = 6 llamadas al planificador, con un peor caso de unos 2,8 $ más los dos análisis. Fijar antes un límite de gasto en la consola del proveedor.
+5. Revisión docente de las decisiones y declaraciones, comparadas con las salidas revisadas del laboratorio. Ningún resultado se convierte en regla sin un segundo caso.
 
-### Etapa 5 · Activación
+## Activación (después de la evaluación)
 
-- Activar v3 (`ACTIVE_ADAPTATION_PROMPT_VERSIONS`) solo después de revisar la etapa 4.
-- Promover cada comprobación de aviso a `review` cuando haya evidencia. Ninguna pasa a `block` sin una decisión docente.
-- Decidir la política de `answer_space@v1` ante P8: espacios homogéneos entre actividades comparables, o confirmación docente.
+- Persistir las declaraciones de v3 junto a la versión del plan. Esto sí exige migración.
+- Conectar `normalizePlanV3` y `withholdForTeacher` en el orquestador. Hoy `checkPlanDraft` rechaza v3 de forma explícita.
+- Subir las reglas al bucket:
 
-### Decisiones pendientes
+  ```bash
+  node --env-file=.env.local --import tsx scripts/agent-rules/upload.ts <copia> --upload
+  ```
 
-1. Almacén privado de las reglas (recomendado) o reglas comprobables en un prompt público.
-2. Si el registro se persiste (migración) o se recalcula bajo demanda (recomendado al principio).
-3. Presupuesto y materiales de la etapa 4.
-4. Política de `answer_space@v1` frente a P8.
-5. Derechos de uso de MAT-007 y MAT-024 antes de usarlos fuera del laboratorio.
+  Configurar `AGENT_RULES_SOURCE=storage`.
+- Mostrar el registro y las preguntas al docente.
+- Cambiar `ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner` a 3. Una decisión aparte, con la E2E completa.
+
+## Riesgo residual de lo publicado en la PR #79
+
+Los commits `47711ce`…`db63904` de la rama `feature/integracion-agente-v22`, que es pública, contienen en `AGENTE_V22.md` un resumen de una línea, **redactado por nosotros**, del sentido de cada pregunta P1–P8. También hay una descripción breve de los perfiles A y B. Se retiraron en `12632b7`, pero siguen en el historial.
+
+- **Qué revelan:** la idea general de cada pregunta de pista. No revelan el texto de V2.2, sus decisiones DEC, su guía, los casos de la biblioteca, sus fuentes ni ningún material. La búsqueda de coincidencias de 5 palabras no encontró texto de los materiales.
+- **Valoración:** riesgo **bajo**. Son principios de diseño accesible conocidos en la literatura, y sin las reglas, los criterios de aplicación y la biblioteca no permiten reproducir el agente. El riesgo sube si se quiere proteger la metodología como secreto empresarial: lo publicado indica qué se evalúa, aunque no cómo.
+- **Opciones:**
+  - mantener el historial (recomendado si el riesgo se acepta);
+  - reescribir la rama de la #79 con squash y force-push. Necesita tu aprobación, y no borra copias, *forks* ni cachés ya hechas.
+
+  No se reescribe nada sin aprobación.
+

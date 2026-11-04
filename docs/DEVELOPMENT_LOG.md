@@ -1,5 +1,51 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente V2.2: carga privada de la metodología y `adaptation_planner@v3`
+
+- Base: rama `feature/integracion-agente-v22` (PR #79, sin merge), porque se necesitan su registro y sus validadores. Rama nueva `feature/agente-v22-planificador-v3`.
+- Decisiones del responsable:
+  - reglas y biblioteca en almacenamiento privado de Supabase, solo servidor, verificadas y sin registrar su contenido;
+  - registro de decisiones recalculado bajo demanda;
+  - presupuesto previsto de 10 €, sin llamadas reales autorizadas;
+  - P8 se valora por el producto de cada actividad, sin igualar espacios;
+  - MAT-007 y MAT-024 solo en pruebas privadas.
+- **Fase A** (`src/lib/agent-rules/`):
+  - `manifest-v22.ts`: 56 archivos, rutas, tamaños y SHA-256, comprobados contra el manifiesto del paquete. `package_sha256` `6eaf1113…`.
+  - `loader.ts`: verifica cada byte y falla cerrado.
+  - `sources.ts`: bucket privado con service role. `local-source.ts`: carpeta fuera de cualquier checkout.
+  - `server.ts`: caché por proceso sin reintentar con reglas no verificadas.
+  - `precedents.ts`: selección del laboratorio sin el filtro por perfil piloto.
+  - `prompt-block.ts`: bloque delimitado, solo huellas en los registros.
+  - Migración 034, solo local: bucket privado sin políticas de usuario y `ai_runs.rules_sha256`.
+  - `scripts/agent-rules/upload.ts`: solo verifica, salvo con `--upload`.
+  - Variables `AGENT_RULES_SOURCE` y `AGENT_RULES_DIR`.
+- **Privacidad en la práctica.** El pre-commit bloqueó el commit de la fase A por dos identificadores (un nombre de archivo del paquete y una lista de claves públicas del catálogo). Se añadieron `--explain` (línea y huella, sin texto) y `allowed-units.json` (excepciones revisadas con motivo). No se usó `--no-verify`.
+- **Fase B.**
+  - `DraftAdaptationPlan v3` y `prompts/adaptation-planner/v3.ts`: el sistema de v2 sin cambios más el método; las reglas son la primera parte de la petición; el texto queda fijado por huella.
+  - `plan-v3.ts`: normalización al plan v1, declaraciones cribadas y `withholdForTeacher`.
+  - `planner.ts`: v3 falla cerrado sin reglas y guarda `rulesSha256`.
+  - `pipeline.ts`: devuelve `declarations`; v1 y v2 sin cambios.
+  - El registro muestra lo declarado aparte (`declared`, `declarations`).
+  - Simulado v3 (`mock-v3.ts`).
+  - Orquestación: origen de reglas conectado para v3, pero `checkPlanDraft` la rechaza hasta su activación. La versión activa sigue siendo la 1.
+  - Arnés `eval:adaptation:planner` con `--planner-version 3 --rules-dir --profile A|B|C`.
+  - El pre-vuelo con las reglas reales estima unos 69.000 tokens de entrada y un peor caso de unos 0,46 $ por llamada. Medido sin llamadas.
+- Pruebas:
+  - nuevas: `agent-rules` (12 en total; 1 necesita la copia privada), BD `agent-rules` (3), `adaptation-planner-v3` (23 en total; 1 necesita la copia privada) y excepciones de privacidad (1);
+  - modificada: `adaptation-planner.test.ts` (v3 ya existe: se comprueba que no existe v4);
+  - con la copia privada local, las 2 pruebas de reglas reales pasan; en CI se omiten;
+  - `pnpm test`: 161 archivos, 2.163 correctas y 17 omitidas;
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` (árbol y 79 cambios en 9 commits) correctos;
+  - **E2E no ejecutadas por indicación: pendientes de validación posterior.**
+- Documentado: los dos fallos E2E previos (`materials.spec.ts:110` y `:179`) en `docs/qa/e2e-fallos-preexistentes/`, y el riesgo residual de los resúmenes de P1–P8 que siguen en el historial de la #79 (valorado bajo; no se reescribe sin aprobación).
+- Riesgos y límites:
+  - la selección envía 40–43 de 45 precedentes;
+  - las declaraciones de v3 no se persisten;
+  - la calidad pedagógica de v3 con un modelo real no está evaluada;
+  - el script de subida usa la clave de servicio fuera de `admin.ts` (herramienta de operador, no código de la app).
+- Siguiente acción: autorizar o no la evaluación real (análisis de MAT-007 y MAT-024, más 6 llamadas al planificador; peor caso de unos 2,8 $ más los análisis) siguiendo [AGENTE_V22](AGENTE_V22.md).
+
 ## 2026-11-04 — Agente pedagógico V2.2: registro de decisiones, validadores y control de privacidad
 
 - Base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22` (idéntica a `main` al empezar). Encargo: integrar componentes del laboratorio V2.2 sin sustituir el pipeline ni crear un segundo generador.

@@ -1,5 +1,11 @@
 # Estado compartido de Adaptaula
 
+> **Agente V2.2: reglas privadas y planificador v3 (2026-11-04):** rama `feature/agente-v22-planificador-v3`, sobre la PR #79 (sin merge). Componentes:
+> - Fase A: carga privada y verificada de las reglas V2.2 y la biblioteca (bucket `agent-rules`, migración 034 solo local, manifiesto de huellas, fallo cerrado).
+> - Fase B: `adaptation_planner@v3`, que decide con ellas y declara estado, prueba de pista, precedentes, preguntas y barreras. El plan v1, CLARO y los apoyos visuales no cambian.
+>
+> Solo modelos simulados. Sin IA de pago, despliegues ni migraciones remotas. v3 no está activo. **E2E no ejecutadas por indicación: pendientes de validación posterior.** [Estado, coste estimado y pasos de la evaluación real](AGENTE_V22.md), ADR-045. Fallos E2E previos, para corregir aparte: [materiales](qa/e2e-fallos-preexistentes/README.md).
+
 > **Agente pedagógico V2.2: registro de decisiones y validadores (2026-11-04):** base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22`; PR sin merge. Integración **parcial**: no es todavía la integración completa del agente V2.2. Componentes:
 > - registro de decisiones derivado del plan;
 > - validadores deterministas (P8 y la parte comprobable de P2, P3, P4 y P7, límite de palabras, medios condicionados, fugas aproximadas) como auditoría aparte, sin bloquear ni cambiar la entrega;
