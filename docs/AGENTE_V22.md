@@ -80,6 +80,90 @@ Hallazgo de la primera ejecución: con la ficha sintética de fracciones, `answe
 
 Solo afirma lo que se deduce de los datos. Lo que no puede deducirse aparece como «pendiente de revisión docente»; nunca se inventan barreras residuales ni justificaciones.
 
-## Siguiente paso
+## Resultados de la regresión A/B/C (pipeline simulado, sin IA)
 
-Conectar la metodología con el planificador real: ver «Plan de conexión con el planificador» en el registro de desarrollo de esta entrega.
+Fichas sintéticas de `evals/adaptation/fixtures.ts`.
+
+| Ficha | Perfil | Decisiones | Actividades cambiadas | Necesidades no aplicadas pendientes | Avisos V2.2 | Veredicto |
+|---|---|---|---|---|---|---|
+| Fracciones (Primaria) | A | 1 | 1/5 | 19 | — | con avisos |
+| | B | 2 | 2/5 | 12 | — | con avisos |
+| | C | 0 | 0/5 | 0 | — | con avisos |
+| Geografía (ESO) | A | 8 | 5/5 | 18 | P8 `act_1/act_3` | con avisos |
+| | B | 3 | 3/5 | 8 | P8 `act_1/act_3` | aprobada |
+| | C | 0 | 0/5 | 0 | P8 `act_1/act_3` | aprobada |
+| Argumentación (Bachillerato) | A | 5 | 5/5 | 14 | P8 sobre `act_2` (4 pares) | con avisos |
+| | B | 5 | 5/5 | 0 | — | con avisos |
+| | C | 0 | 0/5 | 0 | P8 sobre `act_2` (4 pares) | con avisos |
+
+- Las «pendientes» son necesidades activas que ninguna decisión aplica en esa actividad y cuyo motivo no se deduce de los datos. El registro no las justifica: las deja al docente.
+- Los avisos P8 aparecen también con C. Vienen de `answer_space@v1`, que es universal, y no de una decisión individual:
+  - en Geografía, dos cálculos con el mismo espacio original reciben cuadrícula y renglones;
+  - en Argumentación, una respuesta escrita se amplía más que las demás.
+
+  Queda registrado y no se corrige en esta entrega.
+
+## Plan de conexión con el planificador real
+
+Objetivo: que `adaptation_planner` razone con la metodología V2.2 y que la plataforma compruebe y muestre lo que declara, sin publicar la documentación original. Cada etapa es una PR, con pruebas y sin merge automático.
+
+### Etapa 1 · Auditoría visible (sin IA ni gasto)
+
+- Ejecutar `auditAdaptation` en servidor al cargar la revisión del plan y la ficha entregada (`page-data`). Se recalcula bajo demanda, así que no hace falta migración.
+- Mostrar al docente un panel «Registro de decisiones», con el copy de `docs/UX.md` y sin nombres técnicos. Para cada actividad:
+  - qué se cambia y por qué necesidad;
+  - lo que queda pendiente de su revisión;
+  - los avisos P8, P2, P3, P4 y P7, con su cobertura («comprobado» o «indicio; revisar»).
+- Pruebas: unidad del modelo de vista, E2E de la pantalla de revisión (escritorio y móvil), accesibilidad.
+
+### Etapa 2 · Reglas privadas fuera del repositorio (requiere ADR y tu aprobación)
+
+- Guardar las reglas V2.2 y la biblioteca en un almacén privado del servidor: un bucket privado de Supabase leído con el cliente admin (`server-only`) o una variable de entorno de Vercel.
+- En el repositorio solo quedan:
+  - el identificador y la huella SHA-256 de cada versión (`agent_rules@v2.2` → `fdda7e6d…`);
+  - el código que las carga, que verifica la huella y falla cerrado si no coincide.
+- `ai_runs` registra la huella de las reglas usadas, nunca su contenido.
+- Portar la selección de precedentes del laboratorio a TypeScript:
+  - siempre las reglas estables;
+  - todos los casos E/R del perfil;
+  - los casos A/P cuyos recursos coincidan con las operaciones posibles.
+- El índice de la biblioteca también es privado.
+- Alternativa, si prefieres no depender de un almacén: redactar en el prompt público solo las reglas comprobables, con redacción propia. La metodología queda entonces parcialmente pública. Recomiendo el almacén privado.
+
+### Etapa 3 · Contrato `adaptation_planner@v3` (sin gasto)
+
+- Nuevo prompt `prompts/adaptation-planner/v3.ts`. El texto público es solo la estructura y las reglas de la plataforma; las reglas V2.2 se insertan en servidor, delimitadas y con su huella.
+- El borrador v3 añade, por decisión:
+  - la prueba de pista declarada (las preguntas P1–P8 que el modelo responde «sí»);
+  - el estado («activa» o «condicionada», con su pregunta al docente);
+  - las barreras residuales declaradas;
+  - los precedentes citados.
+- Se normaliza a `AdaptationPlan v1` (sin cambiar el plan) más una parte «declarada» del registro.
+- Lo que declara el modelo nunca da nada por comprobado:
+  - un «sí» genera revisión docente;
+  - un «no» en P1, P5 o P6 sigue pendiente;
+  - un precedente citado que no estaba en la petición se marca, como el VP3 del laboratorio.
+- El esquema debe caber en las salidas estructuradas. El laboratorio midió que plan/1.1 excedía el límite de parámetros opcionales, así que el contrato v3 será compacto. Una prueba unitaria contará los opcionales del esquema generado.
+- Pruebas: planificador simulado v3, regresión A/B/C, contrato y límites del esquema.
+
+### Etapa 4 · Evaluación con el modelo real (cuesta dinero: solo con autorización expresa)
+
+- Materiales MAT-007 y MAT-024 en `evals/adaptation/private/` (ignorado y bajo el control de privacidad), con los perfiles A, B y C.
+- Campaña mínima: 2 materiales × 3 perfiles = 6 llamadas al planificador. El laboratorio estimó un máximo de unos 0,55–0,58 € por llamada con 32 000 tokens de salida, así que el techo ronda los 3,5 €.
+  - Antes, medir el contexto con el recuento de tokens (también es una llamada que hay que autorizar).
+  - Fijar un límite de gasto en la consola del proveedor.
+- Se comparan las decisiones con las salidas revisadas del laboratorio. La revisión docente decide; ningún resultado se convierte en regla sin un segundo caso.
+
+### Etapa 5 · Activación
+
+- Activar v3 (`ACTIVE_ADAPTATION_PROMPT_VERSIONS`) solo después de revisar la etapa 4.
+- Promover cada comprobación de aviso a `review` cuando haya evidencia. Ninguna pasa a `block` sin una decisión docente.
+- Decidir la política de `answer_space@v1` ante P8: espacios homogéneos entre actividades comparables, o confirmación docente.
+
+### Decisiones pendientes
+
+1. Almacén privado de las reglas (recomendado) o reglas comprobables en un prompt público.
+2. Si el registro se persiste (migración) o se recalcula bajo demanda (recomendado al principio).
+3. Presupuesto y materiales de la etapa 4.
+4. Política de `answer_space@v1` frente a P8.
+5. Derechos de uso de MAT-007 y MAT-024 antes de usarlos fuera del laboratorio.

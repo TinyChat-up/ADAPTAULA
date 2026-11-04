@@ -1,5 +1,57 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente pedagógico V2.2: registro de decisiones, validadores y control de privacidad
+
+- Base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22` (idéntica a `main` al empezar). Encargo: integrar componentes del laboratorio V2.2 sin sustituir el pipeline ni crear un segundo generador.
+- Fuentes leídas en local, **nunca versionadas**: bundle Git del laboratorio (8 commits, fases 1–4b, Python), reglas V2.2 congeladas (huella `fdda7e6d…` verificada) y materiales MAT-007 y MAT-024 con sus oráculos.
+- Inventario y decisión en [AGENTE_V22](AGENTE_V22.md) y ADR-044.
+  - Se integran el registro de decisiones, los validadores comprobables y los perfiles A/B/C como fixtures.
+  - No se portan:
+    - el extractor y el generador (ya existen el análisis y CLARO);
+    - la verificación del PDF;
+    - el gasto (ya existen `validatePdf` y `ai_runs`);
+    - las autorizaciones HMAC (la revisión docente ya está autenticada).
+- **Fase 0 · privacidad.** `scripts/privacy/`:
+  - rutas reservadas;
+  - huellas SHA-256 de 130 archivos privados;
+  - 8.068 huellas truncadas de frases normalizadas (sin texto).
+
+  Se ejecuta en pre-commit (`.githooks`, activado por `prepare`), en `pnpm test`, en `pnpm check:privacy` y en la CI (`.github/workflows/privacidad.yml`, commit a commit, sin secretos). Comprobado con copias locales: detecta la guía en mayúsculas y con cambios, el texto de un PDF real y un módulo del laboratorio.
+- **Fase 1 · registro.** `decision-ledger.ts` y su esquema:
+  - estado de cada decisión según la validación existente;
+  - necesidades no aplicadas: «explicada» solo con evidencia tipada, si no «pendiente de revisión»;
+  - barreras residuales solo demostrables;
+  - «no necesita» separado de «sin valorar»;
+  - prueba de pista con cobertura declarada.
+- **Fase 2 · validadores.** `v22/checks.ts` y `v22/audit.ts`:
+  - P8 determinista;
+  - P2, P3, P4 y P7 parciales;
+  - límite de palabras, medios condicionados y fugas aproximadas (`approximateLeak`).
+
+  P1, P5 y P6 siempre quedan para el juicio docente. Es una auditoría aparte de `validatePlan` y de la revisión: no bloquea ni cambia el veredicto, la ficha o la entrega. `instructionPieces` se extrajo de `readingLoadReasonable` sin cambiar su comportamiento.
+- **Fase 3 · regresión A/B/C.** Tres fichas sintéticas × tres perfiles con el pipeline simulado. Comprueba:
+  - que C no recibe apoyos individuales;
+  - que ninguna dimensión «no necesita» se usa;
+  - que lo no justificado queda idéntico;
+  - que se conservan los visuales necesarios y el veredicto;
+  - la estabilidad.
+
+  Hallazgo: `answer_space@v1` introduce diferencias P8 entre actividades comparables (Geografía `act_1/act_3`; Argumentación `act_2`), también con C. Se registra y se avisa, sin cambiar `answer_space`.
+- Pruebas:
+  - nuevas: `private-content` (16), `decision-ledger` (9), `v22-checks` (16) y `v22-regression-abc` (24);
+  - `pnpm test`: 158 archivos, 2.126 correctas y 15 omitidas;
+  - PDF: 80/80;
+  - typecheck correcto; lint sin errores (el aviso previo de `analysis-run-auth`);
+  - build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` (árbol y `origin/main..HEAD`) correctos;
+  - E2E completa: E2E_PENDIENTE.
+- Riesgos y límites:
+  - una paráfrasis de un documento privado no se detecta, así que la revisión humana de la PR sigue siendo necesaria;
+  - los validadores son heurísticos donde se declara «parcial»;
+  - el registro no se persiste ni se muestra todavía;
+  - los perfiles A/B/C del repositorio son datos ficticios (niveles por dimensión), no el documento de perfiles.
+- Simulado: todo el pipeline. Probado: unidad, BD local, PDF y E2E local. Pendiente de validar en producción: nada se ha desplegado ni migrado. Sin IA de pago.
+- Siguiente acción: decidir las cinco cuestiones de «Plan de conexión con el planificador» ([AGENTE_V22](AGENTE_V22.md)) y empezar por la etapa 1 (auditoría visible, sin IA ni migración).
+
 ## 2026-10-27 — «Hacer magia» bloqueada por un falso rechazo de vocabulario protegido (prt_6)
 
 - Caso real, leído en Supabase producción con consultas de solo lectura: adaptación `2d78f548…` (célula, 1.º ESO, Max). Tres versiones con `deterministic_review` bloqueado por `protected_elements_preserved` FAIL en `prt_6`.
