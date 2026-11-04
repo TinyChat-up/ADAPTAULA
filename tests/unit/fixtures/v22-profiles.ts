@@ -1,9 +1,8 @@
 import { emptyFunctionalProfile, type FunctionalProfile } from "@/lib/schemas/functional-profile";
 
 /**
- * Fictional profiles A, B and C used by the V2.2 pilots, as data only (dimension levels and one limit). They describe no real
- * learner and carry no diagnosis. A: reading long texts and organising work. B: writing by hand, without reading needs.
- * C: control, nothing assessed (which does not mean that nothing is needed).
+ * Fictional profiles A, B and C, as data only (dimension levels and one limit). They describe no real learner and carry no
+ * diagnosis. C has nothing assessed, which does not mean that nothing is needed.
  */
 const profile = (supports: FunctionalProfile["supports"], extra: Partial<FunctionalProfile> = {}): FunctionalProfile => ({ ...emptyFunctionalProfile(), ...extra, supports });
 

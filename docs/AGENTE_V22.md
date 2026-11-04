@@ -55,16 +55,18 @@ Ninguna de las ocho preguntas se verifica por completo de forma automática. El 
 - **parcial**: se comprueba un indicio, y que no se cumpla no demuestra la ausencia de pista;
 - **juicio docente**: no se comprueba y se presenta como pendiente.
 
-| Pregunta | Cobertura | Qué se mira |
+| Pregunta | Cobertura | Qué comprueba la plataforma |
 |---|---|---|
-| P1 · marcar lo que el alumno debe identificar | Juicio docente | — |
-| P2 · añadir información que el original no da | Parcial | Términos de glosario, ideas clave y recuadros que no aparecen en el material |
-| P3 · tratar distinto opciones equivalentes | Parcial | Formato de las opciones de una misma pregunta |
-| P4 · revelar número, orden o delimitación | Parcial | Huecos o casillas cuyo número coincide con una respuesta inferida |
-| P5 · el recurso es el producto pedido | Juicio docente | — |
-| P6 · predeterminar la estructura de la respuesta | Juicio docente | — |
-| P7 · hacer visible una errata o ambigüedad | Parcial | Destino marcado como dudoso por el análisis |
-| P8 · espacios que sugieren extensión o tipo | Determinista (el indicador) | Diferencias de tipo o de proporción que la ficha introduce entre actividades con el mismo espacio y el mismo producto en el original. Si el enunciado ya distingue los productos (calcular frente a escribir) o pide un número de resultados, no se marca. Que una diferencia marcada sea pista lo decide el docente |
+| P1 | Juicio docente | Nada |
+| P2 | Parcial | Términos de glosario de la ficha que no aparecen en el material. La información de un recuadro no se valora |
+| P3 | Parcial | Formato desigual (énfasis) entre las opciones de una misma pregunta |
+| P4 | Parcial | Número de espacios igual al de partes de la respuesta inferida, mayor que el del original y que el que pide el enunciado |
+| P5 | Juicio docente | Nada |
+| P6 | Juicio docente | Nada |
+| P7 | Parcial | Recurso añadido sobre un destino que el análisis marca como dudoso |
+| P8 | Determinista (el indicador) | Diferencias de tipo o de proporción que la ficha introduce entre actividades con el mismo espacio y el mismo producto en el original. No se marca lo que pide el propio enunciado (productos distintos, número de resultados, extensión). Que una diferencia marcada sea pista lo decide el docente |
+
+El significado de cada pregunta está en la documentación privada de V2.2 y no se reproduce aquí.
 
 Ninguna comprobación V2.2 bloquea todavía una ficha. `auditAdaptation` (`src/lib/adaptation/v22/audit.ts`) ejecuta los validadores y construye el registro **aparte** de `validatePlan` y de la revisión pedagógica. No cambia el plan, el documento, el veredicto ni la entrega; en esta entrega tampoco se persiste ni se muestra en la interfaz. Así, «Hacer magia», el generador, los apoyos visuales y las fichas ya entregadas se comportan igual.
 
