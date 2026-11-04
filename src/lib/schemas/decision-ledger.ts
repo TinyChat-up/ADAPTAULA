@@ -38,6 +38,11 @@ export const HintCheckSchema = z.object({
   coverage: z.enum(HINT_COVERAGES),
   result: z.enum(HINT_RESULTS),
   detail: z.string().max(240).nullable(),
+  /**
+   * What the planner v3 itself answered (ADR-045): a declaration, never a check. «no» does not clear anything; «yes» withholds the
+   * decision for the teacher. Null when the plan comes from a planner that declares nothing (v1, v2).
+   */
+  declared: z.enum(["yes", "no", "not_answered"]).nullable(),
 });
 export type HintCheck = z.infer<typeof HintCheckSchema>;
 
@@ -63,6 +68,10 @@ export const LedgerDecisionSchema = z.object({
   has_note: z.boolean(),
   issues: z.array(z.object({ flag: ReviewFlagSchema, severity: z.enum(FLAG_SEVERITIES) })).max(40),
   hint_test: z.array(HintCheckSchema).length(HINT_QUESTIONS.length),
+  /** Planner v3 declarations for this decision; null for v1 and v2. `withheld`: not applied without the teacher. */
+  declared: z
+    .object({ status: z.enum(["active", "conditional"]), question: z.string().max(10).nullable(), precedents: z.array(z.string().max(12)).max(6), withheld: z.boolean() })
+    .nullable(),
 });
 export type LedgerDecision = z.infer<typeof LedgerDecisionSchema>;
 
@@ -102,5 +111,17 @@ export const DecisionLedgerSchema = z.object({
   residual_barriers: z.array(ResidualBarrierSchema).max(300),
   /** Always false: the ledger only lists barriers it can prove. Absence of an entry is not absence of a barrier. */
   residual_barriers_complete: z.literal(false),
+  /**
+   * What a planner v3 declared under the V2.2 method, kept apart from what the platform proves: the rules used (hashes and ids), its
+   * questions for the teacher and the barriers it says it leaves. Every entry is pending the teacher's review. Null for v1 and v2.
+   */
+  declarations: z
+    .object({
+      rules: z.object({ version: z.string().max(20), package_sha256: z.string().regex(/^[a-f0-9]{64}$/), block_sha256: z.string().regex(/^[a-f0-9]{64}$/), precedents_sent: z.number().int().min(0) }).nullable(),
+      teacher_questions: z.array(z.object({ id: z.string().max(10), text: z.string().max(200).nullable(), decision_ids: z.array(DecisionIdSchema).max(30) })).max(8),
+      residual_barriers: z.array(z.object({ activity: ActivityRef, dimensions: z.array(DimensionKeySchema).max(4), note: z.string().max(160).nullable(), status: z.literal("pending_review") })).max(20),
+      issues: z.array(z.object({ decision_id: DecisionIdSchema.nullable(), code: z.string().max(40), message: z.string().max(240) })).max(80),
+    })
+    .nullable(),
 });
 export type DecisionLedger = z.infer<typeof DecisionLedgerSchema>;

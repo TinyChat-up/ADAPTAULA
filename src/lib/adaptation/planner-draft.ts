@@ -160,6 +160,9 @@ export function fixDraftV2(input: unknown): { draft: unknown; fixes: string[] } 
  * is reported as such (`normalization`), never as a malformed answer, and never resolved to a guessed need.
  */
 export function checkPlanDraft(version: number, input: unknown, analysis: MaterialAnalysis, context: AdaptationContext): DraftCheck {
+  // v3 is not wired into the orchestrator yet: its declarations must be kept and its conditional decisions withheld (ADR-045).
+  // Read as v1 every answer would look malformed and trigger paid repairs, so it stops here instead.
+  if (version === 3) throw new Error("adaptation_planner@v3 todavía no está habilitado en el orquestador (ADR-045).");
   const { draft, fixes } = version === 2 ? fixDraftV2(input) : { draft: input, fixes: [] as string[] };
   const parsed = version === 2 ? DraftAdaptationPlanV2Schema.safeParse(draft) : DraftAdaptationPlanSchema.safeParse(draft);
   if (!parsed.success) return { ok: false, kind: "schema", issues: zodIssues(parsed.error, draft), fixes };

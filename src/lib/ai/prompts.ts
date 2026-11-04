@@ -3,6 +3,7 @@ import { MATERIAL_ANALYZER_V2 } from "@prompts/material-analyzer/v2";
 import { MATERIAL_ANALYZER_V3 } from "@prompts/material-analyzer/v3";
 import { ADAPTATION_PLANNER_V1 } from "@prompts/adaptation-planner/v1";
 import { ADAPTATION_PLANNER_V2 } from "@prompts/adaptation-planner/v2";
+import { ADAPTATION_PLANNER_V3 } from "@prompts/adaptation-planner/v3";
 import { MATERIAL_GENERATOR_V1 } from "@prompts/material-generator/v1";
 import { MATERIAL_GENERATOR_V2 } from "@prompts/material-generator/v2";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
@@ -80,12 +81,15 @@ export function activeMaterialAnalyzer(version: number = ACTIVE_PROMPT_VERSIONS.
 }
 
 /** Prompts of the adaptation pipeline (Fase 4). Same rule: published versions are immutable. */
-export const ADAPTATION_PROMPTS = { adaptation_planner: { 1: ADAPTATION_PLANNER_V1, 2: ADAPTATION_PLANNER_V2 }, material_generator: { 1: MATERIAL_GENERATOR_V1, 2: MATERIAL_GENERATOR_V2 }, pedagogical_reviewer: { 1: PEDAGOGICAL_REVIEWER_V1 } } as const;
+export const ADAPTATION_PROMPTS = { adaptation_planner: { 1: ADAPTATION_PLANNER_V1, 2: ADAPTATION_PLANNER_V2, 3: ADAPTATION_PLANNER_V3 }, material_generator: { 1: MATERIAL_GENERATOR_V1, 2: MATERIAL_GENERATOR_V2 }, pedagogical_reviewer: { 1: PEDAGOGICAL_REVIEWER_V1 } } as const;
 export const ACTIVE_ADAPTATION_PROMPT_VERSIONS = { adaptation_planner: 1, material_generator: 1 } as const;
 
-/** Planner versions are immutable and coexist: v1 produced the frozen evidence, v2 is not the active one until it is validated. */
-export function getAdaptationPlanner(version: number = ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner): typeof ADAPTATION_PLANNER_V1 | typeof ADAPTATION_PLANNER_V2 {
-  const prompt = (ADAPTATION_PROMPTS.adaptation_planner as Record<number, typeof ADAPTATION_PLANNER_V1 | typeof ADAPTATION_PLANNER_V2 | undefined>)[version];
+/**
+ * Planner versions are immutable and coexist: v1 produced the frozen evidence; v2 and v3 are not active until they are validated.
+ * v3 decides with the private V2.2 rules (ADR-045) and cannot run without them.
+ */
+export function getAdaptationPlanner(version: number = ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner): typeof ADAPTATION_PLANNER_V1 | typeof ADAPTATION_PLANNER_V2 | typeof ADAPTATION_PLANNER_V3 {
+  const prompt = (ADAPTATION_PROMPTS.adaptation_planner as Record<number, typeof ADAPTATION_PLANNER_V1 | typeof ADAPTATION_PLANNER_V2 | typeof ADAPTATION_PLANNER_V3 | undefined>)[version];
   if (!prompt) throw new Error(`No existe adaptation_planner@v${version}.`);
   return prompt;
 }

@@ -10,6 +10,7 @@ import {
 import { DIMENSION_KEYS, type DimensionKey, type FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { OmittedNeed } from "./context";
+import type { PlannerDeclarations } from "./plan-v3";
 import { hintTest, type HintFinding } from "./v22/hint-test";
 
 /**
@@ -29,6 +30,8 @@ export interface LedgerInput {
   hintFindings?: ReadonlyMap<string, readonly HintFinding[]>;
   /** Activities whose instruction is still over the profile's word limit after the plan (`v22/checks.ts`). */
   overLimit?: readonly string[];
+  /** Planner v3 only: its screened declarations (`plan-v3.ts`). Pass the RAW plan with them, so withheld decisions are listed. */
+  declarations?: PlannerDeclarations | null;
 }
 
 /** Needs that only act on a written or marked response: without one, the activity gives them nothing to do. */
@@ -43,28 +46,30 @@ export function activitiesOf(analysis: MaterialAnalysis, target: string): string
   return resource ? [...resource.activity_ids] : [];
 }
 
-function statusOf(validation: PlanValidation, d: Decision): LedgerDecision["status"] {
+function statusOf(validation: PlanValidation, d: Decision, withheld: boolean): LedgerDecision["status"] {
   const issues = validation.issues.filter((i) => i.decision_id === d.id);
   if (issues.some((i) => i.severity === "block")) return "blocked";
-  if (issues.some((i) => i.severity === "review")) return "teacher_validation";
+  if (withheld || issues.some((i) => i.severity === "review")) return "teacher_validation";
   return "justified";
 }
 
 export function buildDecisionLedger(input: LedgerInput): DecisionLedger {
   const { plan, validation, context, analysis } = input;
 
+  const declared = input.declarations?.decisions ?? null;
   const decisions: LedgerDecision[] = plan.decisions.map((d) => ({
     id: d.id,
     target: d.target,
     activities: activitiesOf(analysis, d.target),
     action: d.action,
-    status: statusOf(validation, d),
+    status: statusOf(validation, d, declared?.[d.id]?.withheld ?? false),
     origin: d.action === "keep" && d.dimensions.length === 0 ? "none" : "individual",
     dimensions: [...d.dimensions],
     strategies: [...d.strategies],
     has_note: d.note !== undefined,
     issues: validation.issues.filter((i) => i.decision_id === d.id).map((i) => ({ flag: i.flag, severity: i.severity })),
-    hint_test: hintTest(d, input.hintFindings?.get(d.id)),
+    hint_test: hintTest(d, input.hintFindings?.get(d.id), declared ? (declared[d.id]?.hint_yes ?? null) : undefined),
+    declared: declared?.[d.id] ? { status: declared[d.id]!.status, question: declared[d.id]!.question, precedents: declared[d.id]!.precedents, withheld: declared[d.id]!.withheld } : null,
   }));
 
   // A need counts as applied on an activity when a decision that is not blocked uses it there; blocked when only blocked ones do.
@@ -120,6 +125,14 @@ export function buildDecisionLedger(input: LedgerInput): DecisionLedger {
       : null,
     residual_barriers,
     residual_barriers_complete: false,
+    declarations: input.declarations
+      ? {
+          rules: input.declarations.rules ? { version: input.declarations.rules.version, package_sha256: input.declarations.rules.package_sha256, block_sha256: input.declarations.rules.block_sha256, precedents_sent: input.declarations.rules.included.length } : null,
+          teacher_questions: input.declarations.teacher_questions,
+          residual_barriers: input.declarations.residual_barriers.map((b) => ({ ...b, status: "pending_review" as const })),
+          issues: input.declarations.issues,
+        }
+      : null,
   };
   return DecisionLedgerSchema.parse(ledger);
 }

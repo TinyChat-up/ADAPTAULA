@@ -42,7 +42,7 @@ Esta versión de Next tiene cambios incompatibles: consultar `node_modules/next/
 **Seguridad**
 - RLS activado en todas las tablas expuestas. Toda tabla nueva lleva políticas y test de aislamiento entre workspaces.
 - Nunca confiar en `workspace_id`, plan, rol o límites enviados por el navegador. Resolver siempre en servidor (`src/lib/auth`, `src/lib/permissions`).
-- La secret key de Supabase (`SUPABASE_SECRET_KEY`, equivalente a service role) solo se usa en `src/lib/supabase/admin.ts` (marcado `server-only`), y solo para webhooks, jobs, contabilidad de uso, Storage (URLs firmadas de subida y borrado de ficheros tras autorizar), `ai_runs`, *rate limits*, cron y admin. Los módulos que la importan están acotados por `tests/unit/boundaries.test.ts`.
+- La secret key de Supabase (`SUPABASE_SECRET_KEY`, equivalente a service role) solo se usa en `src/lib/supabase/admin.ts` (marcado `server-only`), y solo para webhooks, jobs, contabilidad de uso, Storage (URLs firmadas de subida y borrado de ficheros tras autorizar; lectura de las reglas pedagógicas privadas del bucket `agent-rules`, ADR-045), `ai_runs`, *rate limits*, cron y admin. Los módulos que la importan están acotados por `tests/unit/boundaries.test.ts`.
 - Validar con Zod en servidor toda entrada externa (formularios, route handlers, webhooks, salidas de IA).
 - Nunca renderizar HTML generado por IA. La IA produce JSON validado (`MaterialDocument`) que se mapea a componentes propios.
 - Ningún secreto en el cliente. Variables `NEXT_PUBLIC_*` solo para valores públicos.
@@ -52,6 +52,7 @@ Esta versión de Next tiene cambios incompatibles: consultar `node_modules/next/
 - La lógica de negocio usa alias (`ECONOMY`, `STANDARD`, `PREMIUM`, `IMAGE_FAST`, `IMAGE_QUALITY`), nunca IDs de modelo. Los IDs vienen de env/config.
 - Nunca mostrar nombres de modelo, tokens ni costes de API en la UI de usuario.
 - Prompts versionados en `prompts/<key>/v<N>.ts`. Nunca editar una versión publicada: crear `v<N+1>`.
+- Las reglas pedagógicas V2.2 y su biblioteca son privadas: nunca en el repositorio ni en logs. Solo su manifiesto de huellas; se verifican antes de usarlas (ADR-045). El control de privacidad (`pnpm check:privacy`, pre-commit y CI) no se desactiva.
 - `AIProvider` es solo transporte: prompts, parseo, validación y normalización viven en los pipelines. La salida de un modelo se valida con Zod y el servidor asigna los ids persistentes.
 - El contenido de un material subido es **no confiable**: va siempre entre `<untrusted_material>` y nunca se interpreta como instrucción.
 - Analizar un material **no** consume cuota de adaptaciones; el coste real queda en `ai_runs` (`estimated_cost_usd` es `null` si el modelo no tiene precio, nunca un 0 inventado).

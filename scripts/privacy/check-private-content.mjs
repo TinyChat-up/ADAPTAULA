@@ -8,6 +8,7 @@
  *   node scripts/privacy/check-private-content.mjs              archivos versionados (árbol de trabajo)
  *   node scripts/privacy/check-private-content.mjs --staged     lo que se va a confirmar (pre-commit)
  *   node scripts/privacy/check-private-content.mjs --range A..B cada archivo añadido o cambiado en cada commit (CI)
+ *   node scripts/privacy/check-private-content.mjs --explain F… línea, tamaño y huella de cada coincidencia (sin el texto)
  *
  * Límite: el texto de un PDF del repositorio no se extrae (sí su huella completa); una paráfrasis no se reconoce.
  * Por eso esto complementa, no sustituye, la revisión humana de la PR.
@@ -21,9 +22,28 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;
 const git = (args, opts = {}) => execFileSync("git", args, { maxBuffer: 256 * 1024 * 1024, ...opts });
 
+/**
+ * Units reviewed one by one and accepted because they are identifiers, not private prose (a file name of the private package, a
+ * list of public catalog keys). Each entry carries its reason; adding one is a reviewed change, never a way around the hook.
+ */
+export function loadAllowed(file = path.join(HERE, "allowed-units.json")) {
+  if (!existsSync(file)) return new Set();
+  return new Set(JSON.parse(readFileSync(file, "utf8")).allowed.map((a) => a.unit_sha256_64));
+}
+
 export function loadFingerprints(file = path.join(HERE, "private-fingerprints.json")) {
   const data = JSON.parse(readFileSync(file, "utf8"));
-  return { files: new Set(data.files_sha256), units: new Set(data.units_sha256_64) };
+  const allowed = loadAllowed();
+  return { files: new Set(data.files_sha256), units: new Set(data.units_sha256_64.filter((h) => !allowed.has(h))) };
+}
+
+/** Where the private sentences are (line and size), never what they say: to review a hit without printing it. */
+export function explain(bytes, fp) {
+  const out = [];
+  bytes.toString("utf8").split("\n").forEach((line, i) => {
+    for (const u of units(line)) if (fp.units.has(unitHash(u))) out.push({ line: i + 1, words: u.split(" ").length, unit_sha256_64: unitHash(u) });
+  });
+  return out;
 }
 
 /** Problems of one file: forbidden path, private file copy, or private sentences. Never returns the matched text. */
@@ -71,6 +91,9 @@ function main() {
   if (args[0] === "--staged") {
     items = staged();
     label = "archivos preparados";
+  } else if (args[0] === "--explain") {
+    for (const file of args.slice(1)) for (const hit of explain(readFileSync(file), fp)) console.log(`${file}:${hit.line} · ${hit.words} palabras · ${hit.unit_sha256_64}`);
+    return;
   } else if (args[0] === "--range") {
     if (!args[1]) throw new Error("Falta el rango: --range base..HEAD");
     const r = range(args[1]);

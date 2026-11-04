@@ -70,5 +70,7 @@ export function normalizePlanV2(draftInput: unknown, analysis: MaterialAnalysis,
 
 /** The normaliser of the draft's version: a v1 draft is never read with v2's rules, or the other way round. */
 export function normalizePlanFor(version: number, draftInput: unknown, analysis: MaterialAnalysis, context: AdaptationContext): AdaptationPlan {
+  // v3 carries declarations that this function would drop: it is read only by `normalizePlanV3`.
+  if (version === 3) throw new Error("Un borrador v3 se normaliza con normalizePlanV3 (plan-v3.ts).");
   return version === 2 ? normalizePlanV2(draftInput, analysis, context) : normalizePlan(draftInput, analysis, context);
 }

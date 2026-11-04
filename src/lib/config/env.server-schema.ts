@@ -44,6 +44,13 @@ export const ServerEnvSchema = z.object({
   MAX_SINGLE_JOB_COST_USD: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().positive().default(1.5)),
 
   CRON_SECRET: optional(z.string().min(16)),
+
+  /**
+   * Private pedagogical rules of adaptation_planner@v3 (ADR-045). `storage`: the private `agent-rules` bucket (service role).
+   * `directory`: a local copy outside any checkout, in AGENT_RULES_DIR, for private evaluations. Absent: v3 cannot run (fails closed).
+   */
+  AGENT_RULES_SOURCE: optional(z.enum(["storage", "directory"])),
+  AGENT_RULES_DIR: optional(z.string().min(1)),
   /** Stages recovered per cron run: one stage can take most of the 300 s budget, and the normal path never waits for the cron. */
   ADAPTATION_JOBS_PER_RUN: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(10).default(1)),
 

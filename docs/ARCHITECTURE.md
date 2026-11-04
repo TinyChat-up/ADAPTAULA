@@ -2,6 +2,31 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-045 — Reglas pedagógicas privadas y planificador v3 (2026-11-04)
+
+El planificador `adaptation_planner@v3` decide con la metodología V2.2 y no solo se comprueba después. Las reglas y la biblioteca de precedentes siguen siendo **privadas**:
+
+- **Origen.** Viven en el bucket privado `agent-rules` (migración 034, sin políticas para ningún rol de usuario), leído solo desde el servidor con service role. Para evaluaciones privadas también se acepta una copia local, siempre fuera de cualquier repositorio Git.
+- **Integridad.** El repositorio guarda solo su manifiesto: rutas, tamaños y SHA-256 (`src/lib/agent-rules/manifest-v22.ts`). Cada byte se verifica antes de usarlo, y la carga falla cerrada.
+- **Trazabilidad.** `ai_runs.rules_sha256` y el registro de decisiones guardan la huella del paquete, la del bloque enviado y los identificadores de los precedentes. Nunca el texto.
+
+**Contrato.** v3 escribe `DraftAdaptationPlan v3`, que se normaliza al mismo `AdaptationPlan v1` (CLARO, generador y apoyos visuales no cambian). Lo que el método obliga a declarar viaja aparte (`PlannerDeclarations`):
+- estado activa/condicionada;
+- prueba de pista;
+- precedentes;
+- preguntas al docente;
+- barreras residuales.
+
+**Cómo se usan las declaraciones.** Nunca prueban nada. Sin docente, una decisión condicionada o con una pista que descarta el recurso se rechaza y no se aplica.
+
+**Activación.** v3 no es la versión activa. El orquestador la rechaza de forma explícita hasta que se persistan sus declaraciones y se valide con el modelo real, con autorización y presupuesto.
+
+**Selección de precedentes.** Los recursos posibles se derivan del catálogo de la plataforma: necesidades activas → estrategias (`DIMENSION_STRATEGIES`) → recursos que esas estrategias pueden realizar. Ya no se usan los perfiles piloto del laboratorio. v3 retiene cualquier decisión cuya estrategia no sirva a sus necesidades, así que una decisión aplicable solo puede realizar recursos cuyos precedentes se enviaron.
+
+**Entrega.** v3 usa salidas estructuradas (`delivery: "auto"`), con respaldo al prompt. Su esquema cumple los límites documentados (`structured-limits.ts`).
+
+**Excepción a la convención de prompts.** `prompts/<key>/vN.ts` sigue siendo la fuente del texto público. La parte privada se identifica por versión y huella, no por su texto. [Detalle](AGENTE_V22.md).
+
 ## ADR-044 — Agente pedagógico V2.2: registro de decisiones, validadores y material privado (2026-11-04)
 
 El laboratorio del agente V2.2 (Python, privado) no se porta entero. Su extractor, su generador de PDF y su verificación ya tienen equivalente en Adaptaula (análisis, CLARO, `validatePdf`); duplicarlos crearía un segundo análisis y un segundo generador. Se integran tres piezas:
