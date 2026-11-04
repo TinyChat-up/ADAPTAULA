@@ -72,3 +72,16 @@ describe("control de material privado", () => {
     expect(ci).not.toMatch(/secrets\./);
   });
 });
+
+describe("excepciones revisadas", () => {
+  it("cada excepción es una huella con su motivo y no desactiva el resto", async () => {
+    const { loadAllowed } = await import("../../scripts/privacy/check-private-content.mjs");
+    const data = JSON.parse(readFileSync("scripts/privacy/allowed-units.json", "utf8")) as { allowed: Array<{ unit_sha256_64: string; reason: string }> };
+    for (const a of data.allowed) {
+      expect(a.unit_sha256_64).toMatch(/^[a-f0-9]{16}$/);
+      expect(a.reason.length).toBeGreaterThan(20);
+    }
+    expect(loadAllowed().size).toBe(data.allowed.length);
+    expect(loadFingerprints().units.size).toBeGreaterThan(8000);
+  });
+});
