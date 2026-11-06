@@ -1,5 +1,15 @@
 # Estado compartido de Adaptaula
 
+> **Piloto de V3 desde la interfaz (2026-11-06):** rama `feature/agente-v22-piloto-interfaz`, sobre la PR #80 (sin merge). Implementado y probado sin red:
+> - puerta del piloto: un workspace y un backend aislado, nunca producción;
+> - selector «actual / experimental V2.2» solo en ese workspace;
+> - versiones y reglas fijadas por adaptación;
+> - declaraciones persistidas y visibles en la revisión del plan: las decisiones retenidas esperan al docente, y «Hacer magia» se detiene;
+> - libro de gasto que cuenta y reserva cada petición de pago (migración 035);
+> - informe de costes por fase (vista SQL privada y `pnpm pilot:report`).
+>
+> **Nada desplegado ni activado; migración 035 solo local.** Staging **no existe** como entorno independiente: Preview y Producción comparten las variables de Supabase y de IA, y hay un único proyecto de Supabase (en pausa). [Guía, estado y pasos pendientes de autorización](qa/piloto-v22-interfaz/README.md), ADR-046. E2E no ejecutadas por indicación.
+
 > **Agente V2.2: reglas privadas y planificador v3 (2026-11-04):** rama `feature/agente-v22-planificador-v3`, sobre la PR #79 (sin merge). Componentes:
 > - Fase A: carga privada y verificada de las reglas V2.2 y la biblioteca (bucket `agent-rules`, migración 034 solo local, manifiesto de huellas, fallo cerrado).
 > - Fase B: `adaptation_planner@v3`, que decide con ellas y declara estado, prueba de pista, precedentes, preguntas y barreras. El plan v1, CLARO y los apoyos visuales no cambian.

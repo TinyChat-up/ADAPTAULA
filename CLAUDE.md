@@ -42,7 +42,7 @@ Esta versión de Next tiene cambios incompatibles: consultar `node_modules/next/
 **Seguridad**
 - RLS activado en todas las tablas expuestas. Toda tabla nueva lleva políticas y test de aislamiento entre workspaces.
 - Nunca confiar en `workspace_id`, plan, rol o límites enviados por el navegador. Resolver siempre en servidor (`src/lib/auth`, `src/lib/permissions`).
-- La secret key de Supabase (`SUPABASE_SECRET_KEY`, equivalente a service role) solo se usa en `src/lib/supabase/admin.ts` (marcado `server-only`), y solo para webhooks, jobs, contabilidad de uso, Storage (URLs firmadas de subida y borrado de ficheros tras autorizar; lectura de las reglas pedagógicas privadas del bucket `agent-rules`, ADR-045), `ai_runs`, *rate limits*, cron y admin. Los módulos que la importan están acotados por `tests/unit/boundaries.test.ts`.
+- La secret key de Supabase (`SUPABASE_SECRET_KEY`, equivalente a service role) solo se usa en `src/lib/supabase/admin.ts` (marcado `server-only`), y solo para webhooks, jobs, contabilidad de uso, Storage (URLs firmadas de subida y borrado de ficheros tras autorizar; lectura de las reglas pedagógicas privadas del bucket `agent-rules`, ADR-045), `ai_runs` y el libro de gasto del piloto (`ai_spend_reservations`, ADR-046), *rate limits*, cron y admin. Los módulos que la importan están acotados por `tests/unit/boundaries.test.ts`.
 - Validar con Zod en servidor toda entrada externa (formularios, route handlers, webhooks, salidas de IA).
 - Nunca renderizar HTML generado por IA. La IA produce JSON validado (`MaterialDocument`) que se mapea a componentes propios.
 - Ningún secreto en el cliente. Variables `NEXT_PUBLIC_*` solo para valores públicos.

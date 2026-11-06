@@ -1,5 +1,39 @@
 # Registro de desarrollo
 
+## 2026-11-06 — Piloto de V3 desde la interfaz: puerta, selector, versiones fijadas, libro de gasto e informe
+
+- Rama `feature/agente-v22-piloto-interfaz` sobre `feature/agente-v22-planificador-v3` (PR #80), PR sin merge. Sin llamadas de pago, sin despliegues, sin migraciones remotas, sin reglas subidas, sin imágenes. **E2E no ejecutadas por indicación.**
+- **Staging (solo lectura, 2026-11-06).** Un único proyecto Supabase de Adaptaula, en pausa; ningún staging. En Vercel, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` y `ANTHROPIC_API_KEY` son compartidas por Producción y Preview. Cada push a las ramas de #79 y #80 crea un Preview automático. Conclusión: **staging no es independiente**; hay que crearlo antes del piloto. `vercel.json` desactiva el despliegue automático de la rama nueva, para que abrirla no despliegue nada.
+- **C1 · Puerta** (`v22/pilot-gate.ts`, `lib/pilots/backend.ts`). Exige flag, modo `local`/`staging`, entorno distinto de producción, workspace autorizado, backend exacto, origen de reglas y presupuesto. Reutiliza la comprobación del piloto de imágenes, sin cambiar su comportamiento.
+- **C2 · Selector** (`planner-choice-field.tsx`). Solo en el workspace autorizado. El servidor lo vuelve a comprobar y lo rechaza (`forbidden`) antes de crear adaptación, reserva o trabajo.
+- **C3 · Versiones.** `PLANNER_V3_PILOT` (v3, salida 12.000) y `pipeline_versions.rules` (versión y huella del paquete). `frozenRules` detiene la etapa si las reglas cargadas no son las fijadas. El pipeline general sigue en v2; la versión activa, en v1.
+- **C4/C5 · Orquestador.**
+  - `checkPlanDraft(3)` aplica las mismas correcciones y referencias que v2, y después `normalizePlanV3`.
+  - El borrador guarda las reglas y precedentes usados (huellas e identificadores); la validación del plan guarda las declaraciones.
+  - «Hacer magia» rechaza lo retenido y se detiene en la revisión del plan.
+  - En la revisión, lo retenido empieza sin marcar, con motivo y pregunta; «Lo que queda en tus manos» muestra preguntas y barreras.
+  - `ai_runs.rules_sha256` se registra.
+  - El simulado de v3 queda conectado, para probar en local sin coste.
+- **C7 · Libro de gasto** (`ai/spend.ts`, `ai/spend-ledger.ts`, migración 035). Cada petición HTTP de pago a Anthropic, fallback incluido, se cuenta con el endpoint gratuito y reserva su cota antes de enviarse:
+  - admisión serializada por campaña;
+  - lo pendiente o retenido cuenta entero;
+  - el SDK no reintenta;
+  - las imágenes de pago se rechazan;
+  - se ignora en producción.
+
+  `pilot-lib` reutiliza la misma cota.
+- **C6 · Informe.** `ai_cost_report` y `ai_spend_summary` (solo `service_role`). `ai/cost-report.ts` agrupa por adaptación y fase, con el análisis aparte por material. `pnpm pilot:report` es de solo lectura, se niega con otro backend y escribe CSV/JSON en la carpeta privada; `--decisions` añade el registro de decisiones recalculado con la ficha generada.
+- **C9 · Documentación.** ADR-046 (y nota en ADR-045), guía `qa/piloto-v22-interfaz` (estado de staging, pasos 🔒, perfiles ficticios, procedimiento, presupuesto, desactivación), plantilla de valoración (MD y CSV) y bancos y particiones. CLAUDE.md: el libro de gasto se añade a los usos permitidos de la clave de servicio.
+- **Pruebas.**
+  - `pnpm test`: 168 archivos, 2.211 correctas y 18 omitidas, sin fallos. Nuevas: `planner-v3-pilot` (unidad, 12), `planner-v3-pilot` (BD, 4), `pilot-spend-ledger` (BD, 4). Actualizada: `adaptation-planner-v3`.
+  - Typecheck correcto; lint sin errores (el aviso previo).
+  - Build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` correctos.
+- **Riesgos.**
+  - Esquema v3 y tope de salida sin probar con el modelo real.
+  - El recuento es una estimación: el margen no es una garantía matemática, y el límite de la consola es la segunda barrera.
+  - Variables generales compartidas entre Preview y Producción.
+- Siguiente acción: decidir la creación del proyecto Supabase de staging y la separación de variables en Vercel. Después, los pasos 🔒 de la guía, en orden.
+
 ## 2026-11-04 — Agente V2.2: garantías de gasto del piloto y compatibilidad con las ilustraciones
 
 - Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 inactiva. Sin llamadas a la API (ni siquiera al recuento), sin migraciones remotas, sin imágenes. **E2E no ejecutadas por indicación.**
