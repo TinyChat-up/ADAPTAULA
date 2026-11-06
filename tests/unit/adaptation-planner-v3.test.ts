@@ -243,12 +243,27 @@ describe.skipIf(!PRIVATE_DIR)("cadena completa con las reglas V2.2 reales y un m
 });
 
 describe("activación", () => {
-  it("v3 no es la versión activa y el orquestador lo rechaza de forma explícita hasta su activación", async () => {
+  it("v3 no es la versión activa ni la del pipeline general: solo la elige la puerta del piloto (ADR-046)", async () => {
     const { ACTIVE_ADAPTATION_PROMPT_VERSIONS } = await import("@/lib/ai/prompts");
-    const { checkPlanDraft } = await import("@/lib/adaptation/planner-draft");
+    const { EXPERIMENTAL_PIPELINE, resolvePipelineVersions } = await import("@/lib/adaptation/orchestration/versions");
     expect(ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner).toBe(1);
+    expect(EXPERIMENTAL_PIPELINE.planner).toBe(2);
+    expect(resolvePipelineVersions({}).planner.prompt_version).toBe(2);
+  });
+
+  it("el orquestador lee un borrador v3 con su contrato: inválido es «schema», válido trae plan y declaraciones", async () => {
+    const { checkPlanDraft } = await import("@/lib/adaptation/planner-draft");
     const analysis = fractionsAnalysis();
-    expect(() => checkPlanDraft(3, {}, analysis, contextOf(V22_PROFILES.C, analysis))).toThrow(/todavía no está habilitado/);
+    const context = contextOf(V22_PROFILES.A, analysis);
+    expect(checkPlanDraft(3, {}, analysis, context)).toMatchObject({ ok: false, kind: "schema" });
+    const checked = checkPlanDraft(3, mockPlanDraftV3(analysis, context, null), analysis, context);
+    expect(checked.ok).toBe(true);
+    if (checked.ok) {
+      expect(checked.declarations).not.toBeNull();
+      expect(Object.keys(checked.declarations!.decisions)).toEqual(checked.plan.decisions.map((d) => d.id));
+    }
+    // Every other version carries no declarations.
+    expect(checkPlanDraft(2, mockPlanDraftV2(analysis, context), analysis, context)).toMatchObject({ ok: true, declarations: null });
   });
 });
 

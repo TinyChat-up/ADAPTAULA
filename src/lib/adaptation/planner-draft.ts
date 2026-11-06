@@ -2,9 +2,11 @@ import type { z } from "zod";
 import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import { DraftAdaptationPlanSchema, type AdaptationPlan, type PlanIssue } from "@/lib/schemas/adaptation-plan";
 import { DraftAdaptationPlanV2Schema } from "@/lib/schemas/adaptation-plan-draft-v2";
+import { DraftAdaptationPlanV3Schema } from "@/lib/schemas/adaptation-plan-draft-v3";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { normalizePlan } from "./plan";
 import { PlanDraftError, needRefTable, normalizePlanFor } from "./plan-v2";
+import { normalizePlanV3, type PlannerDeclarations, type RulesUse } from "./plan-v3";
 
 /**
  * The planner's draft, judged before it becomes a plan: diagnosed (what is wrong, where, never the model's text), repaired
@@ -49,7 +51,8 @@ export interface PlanDraftDiagnosis {
   final_reason?: string;
 }
 
-export type DraftCheck = { ok: true; plan: AdaptationPlan; fixes: string[]; draft: unknown } | { ok: false; kind: "schema" | "normalization"; issues: DraftIssue[]; fixes: string[] };
+/** `declarations` is set for a v3 draft only (ADR-045): what the method made the planner declare, screened (plan-v3.ts). */
+export type DraftCheck = { ok: true; plan: AdaptationPlan; fixes: string[]; draft: unknown; declarations: PlannerDeclarations | null } | { ok: false; kind: "schema" | "normalization"; issues: DraftIssue[]; fixes: string[] };
 
 const MAX_ISSUES = 20;
 const pathOf = (path: ReadonlyArray<PropertyKey>) => path.map(String).join(".") || "(raíz)";
@@ -159,14 +162,14 @@ export function fixDraftV2(input: unknown): { draft: unknown; fixes: string[] } 
  * The draft of the given version → the canonical plan, or the exact reasons why not. A need reference the context does not have
  * is reported as such (`normalization`), never as a malformed answer, and never resolved to a guessed need.
  */
-export function checkPlanDraft(version: number, input: unknown, analysis: MaterialAnalysis, context: AdaptationContext): DraftCheck {
-  // v3 is not wired into the orchestrator yet: its declarations must be kept and its conditional decisions withheld (ADR-045).
-  // Read as v1 every answer would look malformed and trigger paid repairs, so it stops here instead.
-  if (version === 3) throw new Error("adaptation_planner@v3 todavía no está habilitado en el orquestador (ADR-045).");
-  const { draft, fixes } = version === 2 ? fixDraftV2(input) : { draft: input, fixes: [] as string[] };
-  const parsed = version === 2 ? DraftAdaptationPlanV2Schema.safeParse(draft) : DraftAdaptationPlanSchema.safeParse(draft);
+export function checkPlanDraft(version: number, input: unknown, analysis: MaterialAnalysis, context: AdaptationContext, rules: RulesUse | null = null): DraftCheck {
+  // v3 is v2 plus the method's declarations: the same unequivocal fixes and need references, then `normalizePlanV3`, which keeps
+  // the declarations beside the canonical plan and decides what is withheld from any automatic application (ADR-045/046).
+  const v2Form = version === 2 || version === 3;
+  const { draft, fixes } = v2Form ? fixDraftV2(input) : { draft: input, fixes: [] as string[] };
+  const parsed = version === 3 ? DraftAdaptationPlanV3Schema.safeParse(draft) : version === 2 ? DraftAdaptationPlanV2Schema.safeParse(draft) : DraftAdaptationPlanSchema.safeParse(draft);
   if (!parsed.success) return { ok: false, kind: "schema", issues: zodIssues(parsed.error, draft), fixes };
-  if (version === 2) {
+  if (v2Form) {
     const known = new Set(needRefTable(context).map((n) => n.ref));
     const unknown: DraftIssue[] = [];
     (parsed.data as { decisions: Array<{ need_refs: string[] }> }).decisions.forEach((d, i) =>
@@ -177,8 +180,12 @@ export function checkPlanDraft(version: number, input: unknown, analysis: Materi
     if (unknown.length > 0) return { ok: false, kind: "normalization", issues: unknown.slice(0, MAX_ISSUES), fixes };
   }
   try {
+    if (version === 3) {
+      const { plan, declarations } = normalizePlanV3(parsed.data, analysis, context, rules);
+      return { ok: true, plan, fixes, draft: parsed.data, declarations };
+    }
     const plan = version === 2 ? normalizePlanFor(version, parsed.data, analysis, context) : normalizePlan(parsed.data, analysis, context);
-    return { ok: true, plan, fixes, draft: parsed.data };
+    return { ok: true, plan, fixes, draft: parsed.data, declarations: null };
   } catch (error) {
     if (error instanceof PlanDraftError) return { ok: false, kind: "normalization", issues: [{ path: "decisions", code: error.code, rule: "referencia inexistente" }], fixes };
     if (isZodError(error)) return { ok: false, kind: "normalization", issues: zodIssues(error), fixes };

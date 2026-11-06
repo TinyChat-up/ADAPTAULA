@@ -3,6 +3,7 @@ import { serverEnv } from "@/lib/config/env.server";
 import { ANALYSIS_DEFAULTS } from "./config";
 import { getMaterialAnalyzer, type AnalyzerDefinition } from "./prompts";
 import { resolveModel, type ModelEnv } from "./registry";
+import { pilotSpendMeter } from "./spend-ledger";
 import { createImageProvider, createProvider } from "./router";
 import type { AIProvider, ImageProvider, ModelSelection } from "./types";
 
@@ -22,6 +23,7 @@ export function getAnalysisRuntime(): AnalysisRuntime {
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     mockDelayMs: env.MOCK_AI_DELAY_MS,
     isProduction: process.env.VERCEL_ENV === "production",
+    spendMeter: pilotSpendMeter(),
   });
   return {
     analyzer: getMaterialAnalyzer(env.AI_ANALYSIS_PROMPT_VERSION),
@@ -47,11 +49,12 @@ export function providerFor(selection: ModelSelection): AIProvider {
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     mockDelayMs: env.MOCK_AI_DELAY_MS,
     isProduction: process.env.VERCEL_ENV === "production",
+    spendMeter: pilotSpendMeter(),
   });
 }
 
 /** Image provider for a selection resolved from an IMAGE_* alias: credentials from the environment, never the model. */
 export function imageProviderFor(selection: ModelSelection): ImageProvider {
   const env = serverEnv();
-  return createImageProvider(selection, { openaiApiKey: env.OPENAI_API_KEY, isProduction: process.env.VERCEL_ENV === "production" });
+  return createImageProvider(selection, { openaiApiKey: env.OPENAI_API_KEY, isProduction: process.env.VERCEL_ENV === "production", spendMeter: pilotSpendMeter() });
 }

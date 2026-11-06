@@ -261,17 +261,16 @@ No hace falta otro generador. Todas esas barreras están **dentro** del servicio
 
 ## Activación (después de la evaluación)
 
-- Persistir las declaraciones de v3 junto a la versión del plan. Esto sí exige migración.
-- Conectar `normalizePlanV3` y `withholdForTeacher` en el orquestador. Hoy `checkPlanDraft` rechaza v3 de forma explícita.
-- Subir las reglas al bucket:
+Hecho para el piloto restringido ([ADR-046](ARCHITECTURE.md), [guía](qa/piloto-v22-interfaz/README.md)):
+- las declaraciones se guardan con la validación del plan, sin migración de tipos de artefacto;
+- `normalizePlanV3` y la retención de decisiones están conectados al orquestador;
+- las preguntas, los motivos y las barreras se muestran al docente;
+- v3 solo se puede elegir en el workspace y el backend autorizados.
 
-  ```bash
-  node --env-file=.env.local --import tsx scripts/agent-rules/upload.ts <copia> --upload
-  ```
-
-  Configurar `AGENT_RULES_SOURCE=storage`.
-- Mostrar el registro y las preguntas al docente.
-- Cambiar `ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner` a 3. Una decisión aparte, con la E2E completa.
+Pendiente:
+- subir las reglas al bucket de **staging** (🔒) con `AGENT_RULES_SOURCE=storage`;
+- valorar los resultados del piloto;
+- cambiar la versión activa (`ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner`) o el pipeline general a v3: una decisión aparte, con la E2E completa.
 
 ## Riesgo residual de lo publicado en la PR #79
 

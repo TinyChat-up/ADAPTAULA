@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { ANALYSIS_RETRY } from "../config";
 import { AIError } from "../errors";
+import type { SpendMeter } from "../spend";
 import type { AIProvider, ContentPart, StopReason, StructuredRequest, StructuredResponse } from "../types";
 
 type StreamLike = { finalMessage(): Promise<Anthropic.Message> };
@@ -24,6 +25,12 @@ export interface AnthropicClientLike {
 export interface AnthropicProviderOptions {
   promptedFallback?: boolean;
   deliveries?: Readonly<Record<string, OutputMode>>;
+  /**
+   * Pilot deployments (ADR-046): every HTTP request this provider makes, the structured-output fallback included, is counted and
+   * admitted by the meter BEFORE it is sent, and settled after. Use with an SDK client created with `maxRetries: 0`, so that one
+   * admitted request is one HTTP request.
+   */
+  meter?: SpendMeter;
 }
 
 /** Sonnet/Opus-class models take `output_config.effort`; Haiku does not. */
@@ -106,7 +113,9 @@ export class AnthropicProvider implements AIProvider {
     private readonly options: AnthropicProviderOptions = {},
   ) {}
 
-  static fromApiKey(apiKey: string): AnthropicProvider {
+  static fromApiKey(apiKey: string, meter?: SpendMeter): AnthropicProvider {
+    // Metered: no SDK retries (each retry would be an unadmitted request); the jobs' own retries go through the meter again.
+    if (meter) return new AnthropicProvider(new Anthropic({ apiKey, maxRetries: 0 }), { meter });
     return new AnthropicProvider(new Anthropic({ apiKey, maxRetries: ANALYSIS_RETRY.sdkRetriesPerCall }));
   }
 
@@ -175,25 +184,35 @@ export class AnthropicProvider implements AIProvider {
   }
 
   private async send(request: StructuredRequest, mode: OutputMode): Promise<StructuredResponse> {
-    const started = Date.now();
     const params = this.params(request, mode);
-
-    const message = await this.client.messages
-      .stream(params, { ...(request.signal ? { signal: request.signal } : {}), timeout: request.timeoutMs })
-      .finalMessage();
+    const meter = this.options.meter;
+    // Admitted before anything is sent; a refusal (count, price, budget, ledger) means no request at all.
+    const ticket = meter ? await meter.admit({ provider: "anthropic", model: params.model, maxOutputTokens: params.max_tokens, count: () => this.count(params) }) : null;
+    const started = Date.now();
+    let message: Anthropic.Message;
+    try {
+      message = await this.client.messages.stream(params, { ...(request.signal ? { signal: request.signal } : {}), timeout: request.timeoutMs }).finalMessage();
+    } catch (error) {
+      // Possibly billed (a cut stream), never with a known usage: the whole reservation stays.
+      if (meter && ticket) await meter.settle(ticket, null);
+      throw error;
+    }
     const text = message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
-    return {
-      text,
-      stopReason: STOP_REASONS[message.stop_reason ?? ""] ?? "other",
-      usage: {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-        cachedInputTokens: message.usage.cache_read_input_tokens ?? 0,
-        cacheCreationInputTokens: message.usage.cache_creation_input_tokens ?? 0,
-      },
-      provider: "anthropic",
-      model: message.model,
-      latencyMs: Date.now() - started,
+    const usage = {
+      inputTokens: message.usage.input_tokens,
+      outputTokens: message.usage.output_tokens,
+      cachedInputTokens: message.usage.cache_read_input_tokens ?? 0,
+      cacheCreationInputTokens: message.usage.cache_creation_input_tokens ?? 0,
     };
+    if (meter && ticket) await meter.settle(ticket, usage);
+    return { text, stopReason: STOP_REASONS[message.stop_reason ?? ""] ?? "other", usage, provider: "anthropic", model: message.model, latencyMs: Date.now() - started };
+  }
+
+  /** The free count of exactly these parameters (without `max_tokens`, which the endpoint does not take). */
+  private async count(params: Anthropic.MessageStreamParams): Promise<number> {
+    if (!this.client.messages.countTokens) throw new AIError("not_configured", "token counting is not available on this client");
+    const { max_tokens: _max, ...rest } = params;
+    void _max;
+    return (await this.client.messages.countTokens(rest as Anthropic.MessageCountTokensParams)).input_tokens;
   }
 }

@@ -40,7 +40,16 @@ export type FormAction =
  * without touching anything creates the same sheet. The teacher only changes what they want to change.
  */
 export function initialFormState(plan: AdaptationPlanDto): FormState {
-  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" ? ("reject" as const) : ("approve" as const), edit: {} }]));
+  // A decision the V2.2 method withholds (ADR-046) starts unchecked too: it is applied only if the teacher chooses it.
+  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" || d.method?.withheld === true ? ("reject" as const) : ("approve" as const), edit: {} }]));
+}
+
+/** The notice of a decision the V2.2 method withholds: why, and the question it depends on (teacher language, ADR-046). */
+export function methodNotice(decision: AdaptationPlanDto["decisions"][number]): string | undefined {
+  const m = decision.method;
+  if (!m?.withheld) return undefined;
+  const reasons = m.reasons.length > 0 ? ` ${m.reasons.join(" ")}` : "";
+  return `Espera tu decisión: no se aplicará si no la eliges.${reasons}${m.question ? ` Pregunta: ${m.question}` : ""}`;
 }
 
 /** True while every decision is still as recommended («Restaurar recomendación» has nothing to restore). */

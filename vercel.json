@@ -12,5 +12,10 @@
       "path": "/api/cron/adaptations",
       "schedule": "30 3 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "feature/agente-v22-piloto-interfaz": false
+    }
+  }
 }

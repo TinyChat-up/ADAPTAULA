@@ -3,6 +3,7 @@ import { createMockGenerator, createMockPlanner, createMockReviewer } from "../m
 import type { StageRunRecord } from "../services";
 import type { PipelineServices } from "./orchestrator";
 import type { PipelineVersions } from "./versions";
+import { createMockPlannerV3 } from "../mock-v3";
 
 /**
  * The pipeline's stages when an adaptation was CREATED with the mock provider frozen in its versions (local development and the
@@ -45,7 +46,11 @@ export const isMockPipeline = (versions: PipelineVersions) => [versions.planner,
 
 export function mockPipelineServices(versions: PipelineVersions, analysis: MaterialAnalysis, delayMs = 0): PipelineServices {
   const version = (c: Component) => (c.prompt_version >= 2 ? 2 : 1);
-  const planner = createMockPlanner(analysis, version(versions.planner));
+  // v3 (pilot, ADR-046): the deterministic v3 stand-in. It reads no private rules; its record names the frozen package only.
+  const planner =
+    versions.planner.prompt_version === 3 && versions.rules
+      ? createMockPlannerV3(analysis, { version: versions.rules.version, package_sha256: versions.rules.package_sha256, block_sha256: versions.rules.package_sha256, included: [] })
+      : createMockPlanner(analysis, version(versions.planner));
   const generator = createMockGenerator(version(versions.generator));
   const reviewer = createMockReviewer();
   return {

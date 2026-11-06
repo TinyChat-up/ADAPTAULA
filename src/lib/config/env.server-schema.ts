@@ -59,6 +59,16 @@ export const ServerEnvSchema = z.object({
   AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),
   AI_IMAGES_PILOT_WORKSPACE_ID: optional(z.uuid()),
   AI_IMAGES_PILOT_SUPABASE_URL: optional(z.url()),
+  /**
+   * Pilot of `adaptation_planner@v3` from the interface (ADR-046): one workspace, one isolated backend, never production.
+   * The spend ledger (AI_PILOT_BUDGET_USD) meters EVERY paid AI request of the deployment; without it V3 cannot be chosen.
+   */
+  FLAG_PLANNER_V3_PILOT: flag(false),
+  AI_PLANNER_V3_PILOT_MODE: optional(z.enum(["local", "staging"])),
+  AI_PLANNER_V3_PILOT_WORKSPACE_ID: optional(z.uuid()),
+  AI_PLANNER_V3_PILOT_SUPABASE_URL: optional(z.url()),
+  AI_PILOT_BUDGET_USD: optional(z.coerce.number().positive().max(100)),
+  AI_PILOT_CAMPAIGN: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-z0-9][a-z0-9-]{2,40}$/, "minúsculas, cifras y guiones").default("piloto-v22-1")),
   FLAG_MULTI_PROFILE_GENERATION: flag(true),
   FLAG_SCHOOL_WORKSPACES: flag(false),
   FLAG_GOOGLE_AUTH: flag(false),
