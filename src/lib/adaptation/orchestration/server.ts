@@ -9,6 +9,9 @@ import { createModelGenerator } from "../generator";
 import { createModelPlanner } from "../planner";
 import { buildRulesBlock } from "@/lib/agent-rules/prompt-block";
 import { getAgentRules } from "@/lib/agent-rules/server";
+import { AGENT_RULES_V22 } from "@/lib/agent-rules/manifest-v22";
+import { frozenRules } from "@/lib/agent-rules/frozen";
+import { plannerV3PilotAllowed } from "../v22/pilot-server";
 import { createModelReviewer } from "../reviewer";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
@@ -18,7 +21,7 @@ import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
 import type { AdaptationReader, ServiceDeps } from "./service";
 import { AdaptationStore, ARTIFACT_KINDS, type RpcClient } from "./store";
-import { modelSelectionOf, resolvePipelineVersions, type PipelineVersions } from "./versions";
+import { modelSelectionOf, resolvePipelineVersions, type PipelineVersions, type RulesFreeze } from "./versions";
 
 /**
  * Production wiring. The ONLY file of the pipeline that touches the service-role client (workers and the application layer
@@ -45,7 +48,7 @@ export function productionServices(versions: PipelineVersions, analysis: Paramet
       maxOutputTokens: versions.planner.max_output_tokens,
       version: versions.planner.prompt_version,
       // v3 decides with the verified private rules (ADR-045); a load that fails stops the stage, it never runs without them.
-      ...(versions.planner.prompt_version === 3 ? { rulesFor: async (context: Parameters<typeof buildRulesBlock>[2]) => buildRulesBlock(await getAgentRules(), analysis, context) } : {}),
+      ...(versions.planner.prompt_version === 3 ? { rulesFor: async (context: Parameters<typeof buildRulesBlock>[2]) => buildRulesBlock(frozenRules(await getAgentRules(), versions.rules), analysis, context) } : {}),
     }),
     generator: createModelGenerator({ selection: selection(versions.generator), provider: providerFor(selection(versions.generator)), maxOutputTokens: versions.generator.max_output_tokens, version: versions.generator.prompt_version }),
     reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer)), maxOutputTokens: versions.reviewer.max_output_tokens }),
@@ -61,7 +64,10 @@ export const orchestratorDeps = (): OrchestratorDeps => {
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */
-export const resolveVersionsFromEnv = () => resolvePipelineVersions(serverEnv() as ModelEnv);
+export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, options);
+
+/** The rules package a pilot adaptation is frozen with: the published manifest, offered only where the gate allows it. */
+export const plannerV3PilotRules = (workspaceId: string): RulesFreeze | null => (plannerV3PilotAllowed(workspaceId) ? { version: AGENT_RULES_V22.version, package_sha256: AGENT_RULES_V22.package_sha256 } : null);
 
 /** `AdaptationReader` over the USER's client (RLS): a row of another workspace is simply not there. */
 export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
@@ -96,5 +102,5 @@ export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
 }
 
 export function serviceDeps(supabase: SupabaseClient): ServiceDeps {
-  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv, visualSupportOffer };
+  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv, visualSupportOffer, plannerV3Pilot: plannerV3PilotRules };
 }

@@ -171,6 +171,8 @@ export interface AiRunRow {
   input_fingerprint: string | null;
   output_fingerprint: string | null;
   job_attempt: number | null;
+  /** Planner v3 only: the hash of the rules package the call used (never its text). */
+  rules_sha256?: string;
 }
 
 export interface CreateAdaptationArgs {

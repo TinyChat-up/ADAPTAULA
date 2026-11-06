@@ -94,6 +94,8 @@ export interface RejectionDetail {
   json?: unknown;
   outputTokens: number;
   maxOutputTokens: number;
+  /** Planner v3: the verified rules and precedents of the rejected call (ids and hashes), for its deterministic fix. */
+  rules?: import("./plan-v3").RulesUse;
 }
 
 export class RejectedStageOutput extends AIError {

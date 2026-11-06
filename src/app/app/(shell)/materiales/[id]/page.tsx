@@ -32,6 +32,7 @@ import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { createAdaptationFromMaterialAction } from "../../adaptaciones/actions";
 import { visualSupportOffer } from "@/lib/materials/visuals/illustrate/server";
+import { plannerV3PilotAllowed } from "@/lib/adaptation/v22/pilot-server";
 import { deletionImpact } from "@/lib/materials/lifecycle";
 import { purgeMaterialAction, retryAnalysisAction, setArchivedAction, updateContextAction } from "../actions";
 
@@ -55,6 +56,8 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
   const preselected = typeof query.perfil === "string" && profileOptions.some((p) => p.id === query.perfil) ? query.perfil : undefined;
   const canWrite = hasRole(ctx.role, WRITE_ROLES);
   const visualOffer = canWrite && detail.material.status === "analyzed" ? await visualSupportOffer(ctx.workspace.id) : null;
+  // Only the authorised pilot workspace of an isolated backend sees the planner choice (ADR-046); the server checks it again.
+  const plannerPilot = canWrite && plannerV3PilotAllowed(ctx.workspace.id);
 
   const { material, file, analysis, meta, analysisOutdated } = detail;
   const status = material.status as MaterialStatus;
@@ -162,6 +165,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
                   initialProfileId={preselected}
                   canWrite={canWrite}
                   visualSupportOffer={visualOffer}
+                  plannerPilot={plannerPilot}
                   newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
                   create={createAdaptationFromMaterialAction.bind(null, material.id)}
                 />

@@ -1,4 +1,5 @@
 import { estimateCostUsd } from "@/lib/ai/costs";
+import { COUNT_MARGIN, requestCeilingUsd } from "@/lib/ai/spend";
 import type { ModelSelection } from "@/lib/ai/types";
 
 /**
@@ -66,10 +67,12 @@ export function plannerBoundAfterAnalysis(selection: ModelSelection, chars: { pr
  * amount, so the reservation adds 10 % and 1.000 tokens to it, prices every input token as a cache write (1.25x) and the output
  * at its hard cap (`max_tokens`, which also bounds adaptive thinking).
  */
-export const COUNT_MARGIN = { factor: 1.1, extraTokens: 1_000 } as const;
+export { COUNT_MARGIN };
 
 export function callCeilingUsd(selection: ModelSelection, countedInputTokens: number, maxOutputTokens: number): number {
-  return price(selection, Math.ceil(countedInputTokens * COUNT_MARGIN.factor) + COUNT_MARGIN.extraTokens, maxOutputTokens);
+  const usd = requestCeilingUsd(selection.provider, selection.model, countedInputTokens, maxOutputTokens);
+  if (usd === null) throw new Error(`No hay precio para ${selection.provider}:${selection.model}: no se puede acotar el gasto.`);
+  return usd;
 }
 
 /** Safety margin of the pilot budget: calls are reserved against 80 % of it. */
