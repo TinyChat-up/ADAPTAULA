@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mockPlanDraftV3 } from "@/lib/adaptation/mock-v3";
 import { dbEntitlements } from "@/lib/adaptation/orchestration/entitlements-db";
 import { runPlanningStage } from "@/lib/adaptation/orchestration/orchestrator";
-import { createAdaptationCommand, createAndStartAdaptation, getAdaptationPlan, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
+import { createAdaptationCommand, createAndStartAdaptation, getAdaptationMethodNotes, getAdaptationPlan, submitPlanReviewCommand, type Actor, type ServiceDeps } from "@/lib/adaptation/orchestration/service";
 import { processAdaptationStage } from "@/lib/adaptation/orchestration/worker";
 import { resolvePipelineVersions, type PipelineVersions, type RulesFreeze } from "@/lib/adaptation/orchestration/versions";
 import type { RulesUse } from "@/lib/adaptation/plan-v3";
@@ -130,5 +130,14 @@ describe("las decisiones condicionadas esperan al docente", () => {
     expect(submitted.ok).toBe(true);
     const review = (await q<{ payload: { entries: Array<{ decision_id: string; action: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review' order by created_at", [id])).at(-1)!.payload;
     expect(review.entries.find((e) => e.decision_id === "dec_1")!.action).toBe("approved");
+    // The «yes» only lifts the withholding: the same pipeline then generates and reviews the sheet, and the advisory notes are
+    // computed from the real artifacts (an empty or non-empty list, never an error). Another planner's adaptation has none.
+    for (let i = 0; i < 6 && (await processAdaptationStage(t.orchestrator, id)); i++);
+    const notes = await getAdaptationMethodNotes(t.deps, t.actor, id);
+    expect(notes.ok).toBe(true);
+    if (notes.ok) expect(Array.isArray(notes.data)).toBe(true);
+    const plain = await createAdaptationCommand(t.deps, t.actor, { materialId: t.material, learnerProfileId: t.learner, adaptationType: "accessibility", requestKey: `v3pilot-key-${n}-g` });
+    if (!plain.ok) throw new Error("no creada");
+    expect(await getAdaptationMethodNotes(t.deps, t.actor, plain.data.adaptationId)).toEqual({ ok: true, data: [] });
   });
 });
