@@ -87,7 +87,7 @@ export function zodIssues(error: z.ZodError, root?: unknown): DraftIssue[] {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const OPTIONAL_NULLABLE = ["note", "response_target", "visual", "preserves", "supports", "flags"] as const;
+const OPTIONAL_NULLABLE = ["note", "response_target", "visual", "preserves", "supports", "flags", "question", "hint_yes", "precedents"] as const;
 const DEDUPED = ["strategies", "need_refs", "preserves", "flags"] as const;
 const TRIMMED = ["target", "action", "intensity", "response_target"] as const;
 const NOTE_MAX = 160;
@@ -144,6 +144,12 @@ export function fixDraftV2(input: unknown): { draft: unknown; fixes: string[] } 
       }
       return d;
     });
+  }
+  for (const key of ["teacher_questions", "residual_barriers"] as const) {
+    if (draft[key] === null) {
+      delete draft[key];
+      fixes.push(`${key}: null → ausente`);
+    }
   }
   if (draft.summary === null) {
     draft.summary = [];

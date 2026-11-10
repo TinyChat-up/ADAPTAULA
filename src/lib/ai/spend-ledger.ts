@@ -6,19 +6,16 @@ import { createSpendMeter, type SpendLedger, type SpendMeter } from "./spend";
 
 /**
  * The pilot's spend ledger over the database (migration 035, ADR-046): admissions serialised by a lock per campaign, service role
- * only. Active only where AI_PILOT_BUDGET_USD is set and the deployment is NOT production: a budget copied into production by
- * mistake must never stop real users, so there it is ignored (and said in the log).
+ * only. Metered per WORKSPACE (ADR-047): only the authorised pilot workspace (AI_PLANNER_V3_PILOT_WORKSPACE_ID) with a budget
+ * (AI_PILOT_BUDGET_USD) goes through the ledger, on any deployment, so a budget can never stop another workspace's calls.
  */
-let warned = false;
 
-export function pilotSpendMeter(): SpendMeter | undefined {
+export function pilotSpendMeter(workspaceId: string | null | undefined): SpendMeter | undefined {
   const env = serverEnv();
-  if (!env.AI_PILOT_BUDGET_USD) return undefined;
-  if (process.env.VERCEL_ENV === "production") {
-    if (!warned) logger.warn("ai_spend_ignored_in_production", { campaign: env.AI_PILOT_CAMPAIGN });
-    warned = true;
-    return undefined;
-  }
+  if (!env.AI_PILOT_BUDGET_USD || !env.AI_PLANNER_V3_PILOT_WORKSPACE_ID) return undefined;
+  // Only the authorised pilot workspace is metered (ADR-047): every other workspace's calls never see the ledger, so a budget
+  // can never stop a real user. A call with no known workspace is not metered either.
+  if (!workspaceId || workspaceId !== env.AI_PLANNER_V3_PILOT_WORKSPACE_ID) return undefined;
   const campaign = env.AI_PILOT_CAMPAIGN;
   const budget = env.AI_PILOT_BUDGET_USD;
   const ledger: SpendLedger = {

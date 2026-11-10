@@ -2,6 +2,18 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-047 — V2.2 en producción para un solo workspace, confirmaciones del docente y avisos (2026-11-10)
+
+Sustituye a la parte de ADR-046 que excluía la producción: el piloto se hace sobre la plataforma desplegada, sin otro entorno.
+
+- **Puerta** (`v22/pilot-gate.ts`). Nuevo modo `production-pilot`, válido **solo** con `VERCEL_ENV=production` (y `local`/`staging` nunca en producción). Exige el workspace autorizado, la URL de Supabase exacta, origen de reglas y presupuesto. Sin cualquiera de ellos, todos los workspaces siguen con el planificador actual.
+- **Gasto por workspace** (`ai/spend-ledger.ts`). El libro de gasto mide **solo** las llamadas del workspace autorizado (`providerFor`, `imageProviderFor` y el análisis reciben el workspace). Ningún otro workspace pasa por el libro, de modo que el presupuesto no puede frenar a otro usuario. Mientras las imágenes de pago no estén medidas, se bloquean para ese workspace (V1–V7); las de los demás no cambian.
+- **Una pausa no es un fallo.** «Hacer magia» con decisiones retenidas por el método muestra «Hay decisiones que necesitan tu respuesta» (`teacher_decision`), no «No hemos podido completar…».
+- **Confirmaciones.** `PlanReview.confirmations` guarda la respuesta del docente (Sí, No, No lo sé) a cada decisión retenida. **El servidor** rechaza (`invalid_review`, sin persistir nada) aprobar o editar una retenida sin «Sí». En la pantalla, «No» y «No lo sé» dejan la decisión fuera.
+- **Avisos tras generar.** Los controles de #79 se recalculan bajo demanda sobre la ficha generada (`getAdaptationMethodNotes`) y se muestran como avisos orientativos. No bloquean ni cambian la entrega.
+- **Contrato V3 tolerante.** Un `null` en un campo opcional se corrige sin llamada. Una prueba de pista ausente o una condicionada sin pregunta válida **retiene** la decisión (`declaration_missing`) en lugar de provocar una reparación de pago que reenvía todas las reglas.
+- **Caché.** La cabecera estable de las reglas (los archivos fijos, los mismos en cada petición) se marca cacheable; la selección de precedentes y el material van después. El texto enviado y su huella no cambian. El ahorro real depende de que dos peticiones caigan dentro de la vida de la caché del proveedor y no está medido.
+
 ## ADR-046 — Piloto de V3 desde la interfaz: puerta, versiones fijadas y libro de gasto (2026-11-06)
 
 El docente prueba `adaptation_planner@v3` desde la interfaz habitual, en un entorno aislado, sin cambiar nada para el resto.

@@ -15,7 +15,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "feature/agente-v22-piloto-interfaz": false
+      "feature/agente-v22-piloto-interfaz": false,
+      "feature/agente-v22-activacion-workspace": false
     }
   }
 }

@@ -22,7 +22,7 @@ export type ImageMediaType = "image/jpeg" | "image/png" | "image/webp";
 
 /** Provider-neutral message content. Each provider translates it to its own wire format. */
 export type ContentPart =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; /** The provider may cache the request up to the end of this block (Anthropic: ephemeral). */ cache?: boolean }
   | { type: "pdf"; data: Uint8Array }
   | { type: "image"; mediaType: ImageMediaType; data: Uint8Array };
 

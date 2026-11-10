@@ -51,7 +51,7 @@ export function plannerRequestParts(params: Pick<PlannerCallParams, "analysis" |
     // Fails closed: v3 decides with the verified rules or does not run at all.
     if (!params.rules) throw new AIError("not_configured", "adaptation_planner@v3 necesita las reglas pedagógicas verificadas");
     const prompt = getAdaptationPlanner(3) as typeof import("@prompts/adaptation-planner/v3").ADAPTATION_PLANNER_V3;
-    return { prompt, parts: prompt.buildUserParts({ rules: params.rules.text, context: plannerContextV2(params.context), material: modelFacingAnalysisV2(params.analysis), ...(params.repairOf ? { repairOf: params.repairOf } : {}) }) };
+    return { prompt, parts: prompt.buildUserParts({ rules: params.rules.parts ?? params.rules.text, context: plannerContextV2(params.context), material: modelFacingAnalysisV2(params.analysis), ...(params.repairOf ? { repairOf: params.repairOf } : {}) }) };
   }
   if (version === 2) {
     const prompt = getAdaptationPlanner(2) as typeof import("@prompts/adaptation-planner/v2").ADAPTATION_PLANNER_V2;

@@ -9,7 +9,8 @@ import { fingerprint } from "../fingerprint";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog } from "@/lib/profiles/repository";
 import { buildContextView, type AdaptationContextView } from "@/lib/adaptation/presentation/context";
-import { getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlanDto } from "./service";
+import { getAdaptationMethodNotes, getAdaptationPlan, getAdaptationStatus, type Actor, type AdaptationPlanDto } from "./service";
+import type { MethodNote } from "../v22/notes";
 import { serviceDeps } from "./server";
 import { listState, type ListState } from "@/lib/adaptation/presentation/list";
 import type { AdaptationStatusDto } from "./status";
@@ -195,4 +196,10 @@ async function pendingDelivered(supabase: Awaited<ReturnType<typeof getSupabase>
     }),
   );
   return new Set(pending.filter((x): x is string => x !== null));
+}
+
+/** The V2.2 checks on the generated sheet for the adaptation page (advisory, recomputed on demand; empty for other planners). */
+export async function loadMethodNotes(ctx: WorkspaceContext, adaptationId: string): Promise<MethodNote[]> {
+  const result = await getAdaptationMethodNotes(serviceDeps(await getSupabase()), { userId: ctx.user.id, workspaceId: ctx.workspace.id, canWrite: hasRole(ctx.role, WRITE_ROLES) }, adaptationId);
+  return result.ok ? result.data : [];
 }

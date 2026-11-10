@@ -59,6 +59,8 @@ export const PlanReviewSchema = z
     reviewer: z.object({ kind: z.enum(["teacher", "eval", "auto"]), label: z.string().max(40).optional() }),
     reviewed_at: z.string().max(40),
     entries: z.array(PlanReviewEntrySchema).max(60),
+    /** Planner V2.2 (ADR-047): the teacher's answer for each decision the method withheld. Approving one needs `yes`. */
+    confirmations: z.array(z.object({ decision_id: DecisionIdSchema, answer: z.enum(["yes", "no", "unknown"]) }).strict()).max(60).optional(),
   })
   .superRefine((review, ctx) => {
     const seen = new Set<string>();

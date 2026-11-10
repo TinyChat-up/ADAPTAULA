@@ -23,7 +23,7 @@ import { createVisionLocator, type VisionLocator } from "./vision";
  * request through an authorised route) AFTER the material was authorised by its adaptation. Nothing here is reachable from the
  * browser.
  */
-export function autoRunDeps(): AutoRunDeps {
+export function autoRunDeps(workspaceId: string): AutoRunDeps {
   const admin = createAdminClient();
   return {
     admin: visualAdmin(admin),
@@ -52,7 +52,7 @@ export function autoRunDeps(): AutoRunDeps {
         if (error && error.code !== "23505") throw new Error("spec_insert_failed");
       },
     },
-    vision: productionVision(),
+    vision: productionVision(workspaceId),
     async recordAiRun(run, ids) {
       const { error } = await admin.from("ai_runs").insert({ ...toAiRunRow(run, { workspaceId: ids.workspaceId, jobId: null, materialId: ids.materialId }), adaptation_id: ids.adaptationId });
       if (error) logger.warn("ai_run_record_failed", { purpose: run.purpose, code: error.code ?? null });
@@ -67,7 +67,7 @@ export function autoRunDeps(): AutoRunDeps {
 export async function prepareAdaptationVisuals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string }): Promise<AutoRunSummary> {
   const { data: material } = await createAdminClient().from("materials").select("workspace_id, content_hash").eq("id", input.materialId).maybeSingle();
   if (!material || material.workspace_id !== input.workspaceId) return { status: "nothing_to_locate" };
-  const summary = await prepareVisuals(autoRunDeps(), { ...input, sourceSha256: material.content_hash });
+  const summary = await prepareVisuals(autoRunDeps(input.workspaceId), { ...input, sourceSha256: material.content_hash });
   const outcomes = "result" in summary && summary.result ? Object.values(summary.result.visuals) : [];
   const count = (choice: string) => outcomes.filter((o) => o.choice === choice).length;
   logger.info("automatic_visuals", { adaptationId: input.adaptationId, status: summary.status, kept: count("A"), located: count("B"), reconstructed: count("C"), unresolved: count("D"), visionPages: "result" in summary && summary.result ? summary.result.vision_pages : 0 });
@@ -96,7 +96,7 @@ export async function resolveAdaptationVisuals(input: { workspaceId: string; mat
       },
       corroborate: async (visual, activityTexts) => (owned ? corroborateSpec({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual, activityTexts }) : null),
       corroborateTable: async (visual) => owned ? corroborateTable({ admin: visualAdmin(admin) }, { materialId: input.materialId, sourceSha256: material.content_hash, visual }) : null,
-      assistants: productionAssistants(),
+      assistants: productionAssistants(input.workspaceId),
       ...(await productionIllustrate(input)),
       recordAiRun: async (run) => {
         const { error } = await admin.from("ai_runs").insert({ ...toAiRunRow(run, { workspaceId: input.workspaceId, jobId: null, materialId: input.materialId }), adaptation_id: input.adaptationId });
@@ -126,23 +126,23 @@ async function productionIllustrate(input: { workspaceId: string; adaptationId: 
   } };
 }
 
-function productionAssistants(): VisualAssistants | null {
+function productionAssistants(workspaceId: string): VisualAssistants | null {
   try {
     const selection = resolveModel("STANDARD", serverEnv() as ModelEnv);
     if (selection.provider === "mock") return null;
-    return createVisualAssistants(selection, providerFor(selection));
+    return createVisualAssistants(selection, providerFor(selection, workspaceId));
   } catch {
     return null;
   }
 }
 
 /** The vision fallback through the STANDARD alias, or none (no real provider configured: geometry only). */
-function productionVision(): VisionLocator | null {
+function productionVision(workspaceId: string): VisionLocator | null {
   try {
     const env = serverEnv();
     const selection = resolveModel("STANDARD", env as ModelEnv);
     if (selection.provider === "mock") return null;
-    return createVisionLocator(selection, providerFor(selection));
+    return createVisionLocator(selection, providerFor(selection, workspaceId));
   } catch {
     return null;
   }

@@ -39,7 +39,7 @@ export function AutomaticIncompletePanel({
   const canEdit = canWrite && dto.nextAction === "review_plan";
   return (
     <Card className="space-y-4 border-warning/40">
-      <Alert tone="warning" title={AUTOMATIC_STOP_COPY.title}>
+      <Alert tone="warning" title={reason === "teacher_decision" ? AUTOMATIC_STOP_COPY.teacherDecisionTitle : AUTOMATIC_STOP_COPY.title}>
         <p>{copy.body}</p>
       </Alert>
       {needs.length > 0 ? <p className="text-sm">Necesidad sin atender automáticamente: {needs.join(" · ")}.</p> : null}

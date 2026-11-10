@@ -101,7 +101,7 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
               throw new AIError("bad_request", "unsupported stored file type");
             })();
 
-    const runtime = getAnalysisRuntime();
+    const runtime = getAnalysisRuntime(job.workspace_id);
     const setStep = async (step: "analyzing" | "validating" | "saving", progress: number) => {
       await admin.from("adaptation_jobs").update({ step, progress }).eq("id", job.id).eq("attempts", job.attempts).eq("status", "processing");
     };

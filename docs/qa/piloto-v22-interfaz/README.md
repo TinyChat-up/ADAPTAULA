@@ -117,3 +117,17 @@ Es privado: contiene contenido de los materiales. La misma consulta está dispon
 - **Recuento.** El recuento oficial es una estimación; el margen del 10 % más 1.000 tokens lo cubre en la práctica, pero no es una garantía matemática. El límite de la consola es la segunda barrera.
 - **Variables compartidas.** Mientras Preview y Producción compartan variables generales, una rama nueva distinta de esta usaría la base de datos de producción.
 - **E2E.** No se han ejecutado por indicación; siguen pendientes, junto con los dos fallos previos de `materials.spec.ts` ([detalle](../e2e-fallos-preexistentes/README.md)).
+
+## 9. Activación en producción para un solo workspace (ADR-047)
+
+Sustituye al plan de un Supabase de staging separado. Todo requiere autorización expresa, en este orden:
+
+1. **Copia de seguridad** de la base actual (hay datos de otros usuarios).
+2. **Comparar el esquema antes de tocar el historial de migraciones.** El historial está vacío aunque las tablas existen, así que `supabase db push` intentaría reaplicar todo. No marques 001–033 como aplicadas solo porque existan sus tablas: compara con una base local construida desde las migraciones (`supabase db diff` contra esa copia, tablas, columnas, funciones y políticas) y repara el historial (`supabase migration repair --status applied …`) solo si no hay diferencias.
+3. **Aplicar solo 034 y 035** (añaden objetos; no tocan filas), con el código ya desplegado.
+4. **Subir las reglas** al bucket `agent-rules` de producción (`scripts/agent-rules/upload.ts`, con verificación previa).
+5. **Variables de Production** en Vercel: `AGENT_RULES_SOURCE=storage`, `FLAG_PLANNER_V3_PILOT=true`, `AI_PLANNER_V3_PILOT_MODE=production-pilot`, `AI_PLANNER_V3_PILOT_WORKSPACE_ID=8e6baa28-9efd-45c3-b5fd-37b70647d149`, `AI_PLANNER_V3_PILOT_SUPABASE_URL` (la de producción), `AI_PILOT_BUDGET_USD=10`, `AI_PILOT_CAMPAIGN`. Límite de gasto en la consola de Anthropic.
+6. **Fusionar y desplegar.** Hasta aquí nadie ve V2.2.
+7. Comprobar con el planificador actual (PDF incluido) y después con V2.2 desde tu cuenta.
+
+Los Preview están desactivados a nivel de proyecto. Los antiguos siguen existiendo tras el acceso de Vercel con las variables de producción de su momento.

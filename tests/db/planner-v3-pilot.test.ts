@@ -117,7 +117,16 @@ describe("las decisiones condicionadas esperan al docente", () => {
     const plan = await getAdaptationPlan(t.deps, t.actor, id);
     if (!plan.ok) throw new Error(plan.code);
     const entries = plan.data.decisions.map((d) => ({ decision_id: d.id, action: d.status === "blocked" ? "rejected" : "approved", reason: "prueba" }));
-    const submitted = await submitPlanReviewCommand(t.deps, t.actor, id, { schema_version: 1, plan_fingerprint: plan.data.planFingerprint, entries });
+    const body = { schema_version: 1, plan_fingerprint: plan.data.planFingerprint, entries };
+    // Without the teacher's answer, the withheld decision cannot be approved (the server decides, not the screen); «no» and
+    // «no lo sé» are not a yes either, and nothing is persisted.
+    const before = (await q("select id from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review'", [id])).length;
+    for (const answer of [undefined, "no", "unknown"] as const) {
+      const refused = await submitPlanReviewCommand(t.deps, t.actor, id, answer ? { ...body, confirmations: [{ decision_id: "dec_1", answer }] } : body);
+      expect(refused.ok).toBe(false);
+    }
+    expect((await q("select id from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review'", [id])).length).toBe(before);
+    const submitted = await submitPlanReviewCommand(t.deps, t.actor, id, { ...body, confirmations: [{ decision_id: "dec_1", answer: "yes" }] });
     expect(submitted.ok).toBe(true);
     const review = (await q<{ payload: { entries: Array<{ decision_id: string; action: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review' order by created_at", [id])).at(-1)!.payload;
     expect(review.entries.find((e) => e.decision_id === "dec_1")!.action).toBe("approved");

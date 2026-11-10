@@ -131,6 +131,7 @@ export function PlanReviewForm({
             disabled={pending}
             onChoose={(choice) => dispatch({ type: "choose", id: decision.id, choice })}
             onEdit={(patch) => dispatch({ type: "edit", id: decision.id, patch })}
+            onConfirm={(answer) => dispatch({ type: "confirm", id: decision.id, answer })}
           />
         ))}
       </ol>

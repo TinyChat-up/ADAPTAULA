@@ -39,7 +39,7 @@ const supportsEffort = (model: string) => /^claude-(opus|sonnet|fable|mythos)-/.
 function toBlock(part: ContentPart): Anthropic.ContentBlockParam {
   switch (part.type) {
     case "text":
-      return { type: "text", text: part.text };
+      return part.cache ? { type: "text", text: part.text, cache_control: { type: "ephemeral" } } : { type: "text", text: part.text };
     case "pdf":
       return { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(part.data).toString("base64") } };
     case "image":

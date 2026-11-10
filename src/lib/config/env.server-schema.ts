@@ -64,7 +64,7 @@ export const ServerEnvSchema = z.object({
    * The spend ledger (AI_PILOT_BUDGET_USD) meters EVERY paid AI request of the deployment; without it V3 cannot be chosen.
    */
   FLAG_PLANNER_V3_PILOT: flag(false),
-  AI_PLANNER_V3_PILOT_MODE: optional(z.enum(["local", "staging"])),
+  AI_PLANNER_V3_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),
   AI_PLANNER_V3_PILOT_WORKSPACE_ID: optional(z.uuid()),
   AI_PLANNER_V3_PILOT_SUPABASE_URL: optional(z.url()),
   AI_PILOT_BUDGET_USD: optional(z.coerce.number().positive().max(100)),

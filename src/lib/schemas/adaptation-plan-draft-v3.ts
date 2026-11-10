@@ -52,11 +52,8 @@ export const DraftAdaptationPlanV3Schema = z
       if (questions.has(q.id)) ctx.addIssue({ code: "custom", path: ["teacher_questions", i, "id"], message: `Pregunta duplicada: ${q.id}` });
       questions.add(q.id);
     });
-    plan.decisions.forEach((d, i) => {
-      const resource = (RESOURCE_ACTIONS_V3 as readonly string[]).includes(d.action) || d.visual !== undefined;
-      if (resource && d.hint_yes === undefined) ctx.addIssue({ code: "custom", path: ["decisions", i, "hint_yes"], message: "Un recurso de presentación, visual o de espacio necesita la prueba de pista (lista vacía si todas son «no»)" });
-      if (d.status === "conditional" && !d.question) ctx.addIssue({ code: "custom", path: ["decisions", i, "question"], message: "Una decisión condicionada necesita su pregunta al docente" });
-      if (d.question && !questions.has(d.question)) ctx.addIssue({ code: "custom", path: ["decisions", i, "question"], message: `La pregunta ${d.question} no está en teacher_questions` });
-    });
+    // Missing or inconsistent declarations (no hint test on a resource, a conditional without its question, a question that is not
+    // listed) are NOT contract failures: a failure triggers a paid repair that resends every rule. `resolvePlanDraftV3` withholds
+    // such a decision for the teacher instead (ADR-047).
   });
 export type DraftAdaptationPlanV3 = z.infer<typeof DraftAdaptationPlanV3Schema>;
