@@ -188,7 +188,9 @@ describe("«Hacer magia» after a quality review that fails", () => {
   it("the generation limit holds: at most three generations, then an honest stop (no more regenerations, no new unit)", async () => {
     const t = await teacher({
       planner: plannerOf([checklistDoc, plannerAct5, stepsAct3]),
-      reviewer: (inner, _c, input) => reviewWith(inner, input, { check: "no_infantilization", status: "FAIL", targets: [firstAdapted(input)], detail: "Tono infantil" }),
+      // The finding is about dec_3 (act_3): its need stays covered by the document-level checklist, which reaches act_3. (A finding on
+      // the document-level decision could not be left out: no other decision reaches every activity.)
+      reviewer: (inner, _c, input) => reviewWith(inner, input, { check: "no_infantilization", status: "FAIL", targets: ["dec_3"], detail: "Tono infantil" }),
     });
     const id = await t.magic();
     await t.runAll(id);

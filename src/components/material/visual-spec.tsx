@@ -150,6 +150,27 @@ function Steps({ spec, label }: { spec: Extract<VisualSpec, { kind: "steps" }>; 
   );
 }
 
+/** The original's scheme of boxes joined by arrows, redrawn from its printed labels (same markup on screen and in print). */
+function Flow({ spec, label }: { spec: Extract<VisualSpec, { kind: "flow" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      {spec.title ? <p className="ms-vsupport-title">{spec.title}</p> : null}
+      <ol className="ms-vflow">
+        {spec.items.map((item, i) => (
+          <li key={i}>
+            <span className="ms-vflow-box">{item}</span>
+            {i < spec.items.length - 1 ? (
+              <span className="ms-vflow-arrow" aria-hidden>
+                →
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /** A new support: vocabulary cards (a term and a short cue). */
 function Cards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cards" }>; label: string }) {
   return (
@@ -183,5 +204,7 @@ export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: strin
       return <Steps spec={spec} label={label} />;
     case "cards":
       return <Cards spec={spec} label={label} />;
+    case "flow":
+      return <Flow spec={spec} label={label} />;
   }
 }

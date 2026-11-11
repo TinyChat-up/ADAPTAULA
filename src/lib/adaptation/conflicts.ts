@@ -1,4 +1,5 @@
 import type { ConflictResolution } from "@/lib/schemas/adaptation-context";
+import { CLOSED_RESPONSES, type AdaptationPlan, type Decision } from "@/lib/schemas/adaptation-plan";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { answersOf, evaluatesOperation, isOpenActivity, protectedFor } from "./facts";
@@ -115,4 +116,39 @@ export function detectConflicts(active: ReadonlySet<DimensionKey>, analysis: Mat
   }
 
   return conflicts;
+}
+
+const REWRITING = new Set<string>(["rephrase", "reduce", "remove"]);
+const VISUAL_KINDS = new Set<string>(["visual_cue"]);
+const isClosedResponse = (d: Decision) => d.response_target !== undefined && (CLOSED_RESPONSES as readonly string[]).includes(d.response_target);
+const visualAids = (d: Decision) => d.supports.filter((s) => VISUAL_KINDS.has(s.kind)).length + (d.visual !== undefined || d.strategies.includes("visual_support") ? 1 : 0);
+
+/**
+ * A detected conflict is already RESOLVED by its guidance (the planner receives it, the executors follow it): a decision on its
+ * target is a problem only if it does what the guidance forbids. Merely touching the same target is not a contradiction, and is
+ * never shown to anyone as one. An unknown conflict key keeps the cautious reading (violated), so a new rule cannot be skipped by
+ * forgetting to describe it here. Pure and deterministic.
+ */
+export function conflictViolated(conflict: ConflictResolution, d: Decision, plan: Pick<AdaptationPlan, "decisions">): boolean {
+  switch (conflict.key) {
+    case "reading_load_vs_literal_text":
+      // The source text is kept word for word: dividing, glossing and highlighting are the way; rewriting or cutting is not.
+      return REWRITING.has(d.action) || d.strategies.includes("language_simplification");
+    case "added_visuals_vs_visual_load": {
+      // At most one visual aid per activity, and no decoration.
+      const sameTarget = plan.decisions.filter((x) => x.target === d.target);
+      return sameTarget.reduce((n, x) => n + visualAids(x), 0) > 1;
+    }
+    case "examples_vs_answer":
+      return d.supports.some((x) => x.kind === "worked_example" && x.uses_task_data);
+    case "writing_reduction_vs_evaluated_writing":
+    case "selection_vs_open_reasoning":
+      return isClosedResponse(d) || d.action === "remove" || (conflict.key === "writing_reduction_vs_evaluated_writing" && d.action === "reduce" && d.strategies.includes("writing_load_reduction"));
+    case "segmentation_vs_integrated_product":
+      return d.action === "remove" || d.action === "reduce";
+    case "inference_support_vs_evaluated_inference":
+      return d.supports.some((x) => x.uses_task_data);
+    default:
+      return true;
+  }
 }

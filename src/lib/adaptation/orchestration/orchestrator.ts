@@ -7,7 +7,7 @@ import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
-import { resolveAutomatically } from "../automatic-resolution";
+import { reaches, resolveAutomatically } from "../automatic-resolution";
 import { VISUAL_STOP_CODES, applyVisualResolution, unresolvedEssential, visualStopCode, type VisualResolutionPlan, type VisualStopCode } from "../visual-policy";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { addVisualSupports } from "../visual-supports";
@@ -25,7 +25,9 @@ import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { checkPlanDraft, repairNotes, type PlanDraftDiagnosis } from "../planner-draft";
-import { withheldWithoutConfirmation, withholdForTeacher, type PlannerDeclarations, type RulesUse } from "../plan-v3";
+import { resolveWithheldAutonomously } from "../autonomous-resolution";
+import { justifyDecisions } from "@/lib/profiles/strength-leverage";
+import { withheldWithoutConfirmation, type PlannerDeclarations, type RulesUse } from "../plan-v3";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
@@ -658,8 +660,9 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
   if (!raw) return null;
   if ((await store.listArtifacts(adaptationId, "plan_review")).some((a) => a.input_fingerprint === raw.fingerprint)) return null;
   const resolution = resolveAutomatically(raw.plan, loaded.analysis, loaded.context);
-  // v3 (ADR-046): a decision the method withheld (conditional, a blocking hint, a strategy foreign to its needs) is never applied
-  // without the teacher. The server's review rejects it with its reason and HOLDS: the adaptation waits for the teacher's review.
+  // v3 (ADR-046/047): a decision the method withheld (conditional, a hint that could give the answer, a strategy foreign to its
+  // needs) is resolved here without asking anyone: a safe variant, an alternative, or the original kept (`autonomous-resolution`).
+  // «Hacer magia» never waits for a teacher's «yes»; every resolution and its cause stay in the report for the teacher to read later.
   let declarations: PlannerDeclarations | null;
   try {
     declarations = await currentDeclarations(store, snapshot, loaded);
@@ -667,10 +670,19 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
     if (error instanceof AdaptationError) return null;
     throw error;
   }
-  const withheld = declarations ? Object.entries(declarations.decisions).filter(([, d]) => d.withheld).map(([id]) => id) : [];
-  const review = declarations ? withholdForTeacher(resolution.review, declarations) : resolution.review;
-  // Saved in every case (audit, and what the status reads); held when a high need is left without any executable decision.
-  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id), ...(withheld.length > 0 ? { withheld_v22: withheld } : {}) } }, { hold: resolution.unresolved.length > 0 || withheld.length > 0 });
+  const autonomous = declarations ? resolveWithheldAutonomously(resolution.review, raw.plan, declarations, loaded.analysis, loaded.context) : { review: resolution.review, resolutions: [], uncovered: [] };
+  // Keeping the original is not solving a barrier: a HIGH need that no other applied decision (or the presentation) covers is an
+  // honest stop, named, never a sheet declared valid with an essential need left open.
+  const lost = new Map(autonomous.uncovered.map((u) => [u.decision_id, u.dimensions]));
+  const outcomes = resolution.outcomes.map((o) => (lost.has(o.decision_id) ? { ...o, kind: "unresolved" as const, reason: "Conservar el original deja sin atender una necesidad importante del perfil que ninguna otra decisión cubre", uncovered: lost.get(o.decision_id)! } : o));
+  const unresolved = outcomes.filter((o) => o.kind === "unresolved").map((o) => o.decision_id);
+  const review = autonomous.review;
+  // Why each applied decision exists: the need, the declared barrier it reduces, the declared strength it takes advantage of and what
+  // it keeps. From the profile's own declarations (no model, no student data), kept for the teacher to consult afterwards.
+  const applied = new Set(review.entries.filter((e) => e.action !== "rejected").map((e) => e.decision_id));
+  const justifications = justifyDecisions(raw.plan.decisions.filter((d) => applied.has(d.id)), loaded.context.learning_observations);
+  // Saved in every case (audit, and what the status reads); held only when a high need has no executable decision at all.
+  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes, unresolved, ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), justifications } }, { hold: unresolved.length > 0 });
   if (!submitted.ok || !submitted.executable) {
     deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;
@@ -741,9 +753,12 @@ const budgetRestriction = (words: number) => `Los apoyos de esta decisión deben
  * that stays nor the presentation. A sheet that passes every check but silently lost one of the profile's adaptations is not
  * finished, so this is the condition for ever leaving a decision out automatically.
  */
-function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][], drop: ReadonlySet<string>, context: AdaptationContext): boolean {
+function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][], drop: ReadonlySet<string>, context: AdaptationContext, analysis: MaterialAnalysis): boolean {
   const kept = effective.filter((d) => !drop.has(d.id));
-  return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim))));
+  // For an ESSENTIAL (high) need, «covered» means by a decision that REACHES the dropped one's target: the same dimension on another
+  // activity does not help this one. Medium and low needs keep their earlier reading (any remaining decision of that dimension).
+  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
+  return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim) && (!high.has(dim) || reaches(k, d, analysis)))));
 }
 
 /**
@@ -771,7 +786,7 @@ function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, a
     restricted.push(e.decision_id);
     return { ...e, restrictions: [...current, ...missing] };
   });
-  if (drop.size > 0 && losesCoverage(effective, drop, loaded.context)) return null;
+  if (drop.size > 0 && losesCoverage(effective, drop, loaded.context, loaded.analysis)) return null;
   const review: PlanReview = { ...previous, entries: entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: dropReason.slice(0, 160) } : e)) };
   const check = reviewPlan(raw, review, loaded.analysis, loaded.context);
   if (planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid) return null;

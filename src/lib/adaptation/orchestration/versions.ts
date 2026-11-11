@@ -16,7 +16,7 @@ import { ADAPTATION_PLAN_SCHEMA_VERSION } from "@/lib/schemas/adaptation-plan";
 export const PIPELINE_KIND = "experimental-1" as const;
 
 /** The experimental pipeline's components. Existing versions stay published; this is the choice for NEW adaptations only. */
-export const EXPERIMENTAL_PIPELINE = { planner: 2, contextPolicy: 2, generator: 2, reviewer: 1, analysisSchema: 3 } as const;
+export const EXPERIMENTAL_PIPELINE = { planner: 2, contextPolicy: 3, generator: 2, reviewer: 1, analysisSchema: 3 } as const;
 
 /** Output budgets measured in the real runs (docs/ADAPTATION.md); persisted so a later change never alters a pending job. */
 export const PIPELINE_OUTPUT_LIMITS = { planner: 4000, generator: 3000, reviewer: 2000 } as const;
@@ -51,7 +51,7 @@ export const PipelineVersionsSchema = z
     analysis_schema: z.literal(3),
     planner: Component,
     plan_schema: z.literal(1),
-    context_policy: z.union([z.literal(1), z.literal(2)]),
+    context_policy: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     generator: Component,
     document_schema: z.literal(1),
     reviewer: Component,

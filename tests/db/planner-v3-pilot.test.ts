@@ -81,16 +81,20 @@ describe("elegir V3 lo decide la puerta del servidor", () => {
 });
 
 describe("las decisiones condicionadas esperan al docente", () => {
-  it("«Hacer magia» con v3 se detiene en la revisión del plan: la decisión retenida se rechaza con su motivo y no se genera nada", async () => {
+  it("«Hacer magia» con v3 resuelve lo retenido sin preguntar al docente: conserva el original con su causa y sigue hasta generar", async () => {
     const t = await teacher(() => RULES);
     const created = await createAndStartAdaptation(t.deps, t.actor, { materialId: t.material, learnerProfileId: t.learner, adaptationType: "accessibility", requestKey: `v3pilot-key-${n}-e`, creationMode: "automatic", planner: "v22" });
     if (!created.ok) throw new Error(created.code);
     const id = created.data.adaptationId;
     for (let i = 0; i < 6 && (await processAdaptationStage(t.orchestrator, id)); i++);
-    expect((await q<{ status: string }>("select status from public.adaptations where id = $1", [id]))[0]!.status).toBe("awaiting_plan_review");
-    expect(t.spy.generator).toBe(0);
+    // Nobody is asked: the plan is not left waiting at the review, the sheet is finished with the original kept for that decision.
+    expect((await q<{ status: string }>("select status from public.adaptations where id = $1", [id]))[0]!.status).toBe("ready");
     const reviews = await q<{ payload: { reviewer: { kind: string }; entries: Array<{ decision_id: string; action: string; reason: string }> } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_review'", [id]);
-    expect(reviews.at(-1)!.payload.entries.find((e) => e.decision_id === "dec_1")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/V2\.2/) });
+    expect(reviews.at(-1)!.payload.entries.find((e) => e.decision_id === "dec_1")).toMatchObject({ action: "rejected", reason: expect.stringMatching(/original/) });
+    // The cause and the resolution stay in the report (trace), and the justification of what was applied is kept next to it.
+    const report = await q<{ payload: { automatic?: { withheld_resolved?: Array<{ decision_id: string; cause: string; kind: string }>; justifications?: unknown[] } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'execution_report' and payload ? 'automatic' order by created_at limit 1", [id]);
+    expect(report[0]!.payload.automatic?.withheld_resolved).toEqual([expect.objectContaining({ decision_id: "dec_1", cause: "conditional", kind: "kept_original" })]);
+    expect(Array.isArray(report[0]!.payload.automatic?.justifications)).toBe(true);
 
     // The declarations travel with the plan's validation (ids and hashes of the rules, never their text) …
     const validation = (await q<{ payload: { declarations: { rules: RulesUse; decisions: Record<string, { withheld: boolean }> } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'plan_validation'", [id]))[0]!.payload;

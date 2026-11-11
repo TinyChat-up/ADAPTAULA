@@ -10,6 +10,10 @@ export const STRENGTHS = {
   everyday_connections: "Relaciona conceptos con situaciones cotidianas.",
   inquiry: "Muestra interés por investigar y descubrir.",
   subject_knowledge: "Aporta conocimientos en los contenidos que conoce.",
+  chooses_options: "Responde con seguridad cuando puede elegir entre opciones.",
+  step_lists: "Se organiza bien con listas de pasos y marcas de progreso.",
+  short_tasks: "Rinde mejor con tareas cortas y bien separadas.",
+  graphic_organizers: "Aprovecha esquemas, tablas y organizadores gráficos.",
 } as const;
 
 export const BARRIERS = {

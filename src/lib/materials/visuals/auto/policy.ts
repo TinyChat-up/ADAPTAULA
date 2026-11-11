@@ -12,6 +12,7 @@ import { DIMENSIONS, type DimensionKey } from "@/lib/schemas/functional-profile"
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import type { AnalysisActivity, AnalysisVisual, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { drawableFamily, generateEquivalentFigure } from "@/lib/visuals/from-task";
+import { flowClaim, flowFigure } from "@/lib/visuals/from-analysis";
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, specIssues, type VisualSpec } from "@/lib/visuals/spec";
 import type { RewriteDraft, SubstituteDraft, SupportDraft, VisualAssistants } from "./assistants";
 import { ILLUSTRATION_LIMITS, type IllustrationOutcome, type IllustrationRequest } from "../illustrate/service";
@@ -34,6 +35,11 @@ export interface MagicVisualDeps {
    */
   corroborate?(visual: AnalysisVisual, activityTexts: readonly string[]): Promise<VisualSpec | null>;
   corroborateTable?(visual: AnalysisVisual): Promise<TableEvidence | null>;
+  /**
+   * The labels of a scheme of boxes and arrows, ONLY if the stored original corroborates what the analysis claims (its PDF text
+   * layer and the ink between the boxes, `auto/flow.ts`). Absent → no scheme is redrawn: the analysis alone is one claim, not evidence.
+   */
+  corroborateFlow?(visual: AnalysisVisual): Promise<readonly string[] | null>;
   /** Absent → no model rung (the deterministic ones still run). */
   assistants?: VisualAssistants | null;
   /**
@@ -320,6 +326,19 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
       if (spec) {
         done("reconstructable_structured_visual", { action: "figure", spec, provenance: "reconstruction" });
         continue;
+      }
+      // 2b · A scheme of boxes and arrows: redrawn only with the ORIGINAL's own evidence (arrow glyphs with their direction, labels, boxes), and only
+      // exactly what the analysis claimed. Without that evidence nothing is drawn (the stop below stays honest).
+      if (visual && flowClaim(visual) && deps.corroborateFlow) {
+        attempts.push("reconstruct_flow");
+        const printed = await deps.corroborateFlow(visual).catch(() => null);
+        const claim = flowClaim(visual)!;
+        const same = printed && printed.length === claim.length && printed.every((l, i) => normalizeText(l) === normalizeText(claim[i]!));
+        const figure = same ? flowFigure(claim, visual.title) : null;
+        if (figure) {
+          done("reconstructable_structured_visual", { action: "figure", spec: figure, provenance: "reconstruction" });
+          continue;
+        }
       }
       if (!need.essential) {
         attempts.push("omit");

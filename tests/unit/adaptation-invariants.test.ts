@@ -48,7 +48,8 @@ describe("writing: reduced only when it is not what is assessed", () => {
   it("supporting evaluated writing (planner, starters) is fine", () => {
     const issues = issuesOf(bach, bachWriting, [decision({ target: "act_5", action: "add_support", strategies: ["planning_support"], dimensions: ["writing_amount"], supports: [{ kind: "planner", uses_task_data: false }] })]);
     expect(issues.filter((i) => i.startsWith("block:"))).toEqual([]);
-    expect(issues).toContain("review:needs_conflict");
+    // The conflict is already resolved by its guidance (planning support, never selection): following it is not a contradiction.
+    expect(issues).not.toContain("review:needs_conflict");
   });
 });
 
@@ -95,7 +96,8 @@ describe("data, visuals and source texts", () => {
     }
     const seg = issuesOf(bach, bachWriting, [decision({ target: "ctt_1", action: "segment", strategies: ["text_segmentation"], dimensions: ["text_length"], preserves: allPreserved(bach, "ctt_1") })]);
     expect(seg.filter((i) => i.startsWith("block:"))).toEqual([]);
-    expect(seg).toContain("review:needs_conflict");
+    // Dividing the text is what the guidance asks for: it is not shown as a contradiction (only rewriting it would be).
+    expect(seg).not.toContain("review:needs_conflict");
   });
 });
 

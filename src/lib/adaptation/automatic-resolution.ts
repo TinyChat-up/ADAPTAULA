@@ -59,7 +59,7 @@ const LENGTH_STRATEGIES = new Set<StrategyKey>(["language_simplification", "text
 const isClosed = (d: Pick<Decision, "response_target">) => d.response_target !== undefined && (CLOSED_RESPONSES as readonly string[]).includes(d.response_target);
 
 /** Alternatives to try, in order: each one is a reviewer edit (target, needs and protected elements cannot change). */
-function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: DecisionEdits; reason: string }> {
+export function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: DecisionEdits; reason: string }> {
   const out: Array<{ edits: DecisionEdits; reason: string }> = [];
   const activity = analysis.activities.some((a) => a.id === d.target);
   const text = analysis.texts.find((t) => t.id === d.target);
@@ -80,8 +80,23 @@ function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: Dec
   return out;
 }
 
+/**
+ * Whether the effect of decision `by` actually REACHES what decision `of` targets. A need is not covered because some decision
+ * somewhere uses the same dimension: it is covered for THAT activity when the other decision acts on the same target, on the
+ * resource the activity works with (or on the activity that uses it), or is a support for the whole document. A decision on another
+ * activity does not help this one.
+ */
+export function reaches(by: Pick<Decision, "target">, of: Pick<Decision, "target">, analysis: MaterialAnalysis): boolean {
+  if (by.target === of.target || by.target === "document") return true;
+  const activityOf = (id: string) => analysis.activities.find((a) => a.id === id);
+  const a = activityOf(of.target);
+  if (a && a.resource_ids.includes(by.target)) return true;
+  const b = activityOf(by.target);
+  return b !== undefined && b.resource_ids.includes(of.target);
+}
+
 /** The candidate edit is applied only if the invariants accept it and something can execute it. */
-function viable(raw: AdaptationPlan, d: Decision, edits: DecisionEdits, analysis: MaterialAnalysis, context: AdaptationContext): boolean {
+export function viable(raw: AdaptationPlan, d: Decision, edits: DecisionEdits, analysis: MaterialAnalysis, context: AdaptationContext): boolean {
   const edited: Decision = { ...d, ...edits };
   const check = validatePlan({ ...raw, decisions: raw.decisions.map((x) => (x.id === d.id ? edited : x)) }, analysis, context);
   if (check.issues.some((i) => i.severity === "block" && i.decision_id === d.id)) return false;
@@ -122,7 +137,7 @@ export function resolveAutomatically(raw: AdaptationPlan, analysis: MaterialAnal
 
   // 2. What each left-out decision would leave uncovered, against what WILL be executed.
   const executing = raw.decisions.filter((d) => plan.get(d.id)?.kind !== "open");
-  const covered = (d: Decision, dim: DimensionKey) => isResolvedByPresentation(dim, context.presentation) || executing.some((o) => o.id !== d.id && o.dimensions.includes(dim));
+  const covered = (d: Decision, dim: DimensionKey) => isResolvedByPresentation(dim, context.presentation) || executing.some((o) => o.id !== d.id && o.dimensions.includes(dim) && reaches(o, d, analysis));
   const level = (dim: DimensionKey) => context.needs.find((n) => n.dimension === dim)?.level ?? null;
 
   const outcomes: AutomaticDecisionOutcome[] = [];

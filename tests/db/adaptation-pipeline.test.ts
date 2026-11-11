@@ -69,7 +69,7 @@ describe("alta, versiones fijadas e idempotencia", () => {
 
     const row = (await db.query<{ pipeline_versions: Record<string, unknown>; context_snapshot: unknown; profile_snapshot: unknown; status: string }>("select pipeline_versions, context_snapshot, profile_snapshot, status from public.adaptations where id = $1", [first.adaptationId])).rows[0]!;
     expect(row.status).toBe("queued");
-    expect(row.pipeline_versions).toMatchObject({ planner: { prompt_version: 2 }, context_policy: 2, generator: { prompt_version: 2 }, reviewer: { prompt_version: 1 }, analysis_schema: 3, plan_schema: 1, document_schema: 1, review_schema: 1 });
+    expect(row.pipeline_versions).toMatchObject({ planner: { prompt_version: 2 }, context_policy: 3, generator: { prompt_version: 2 }, reviewer: { prompt_version: 1 }, analysis_schema: 3, plan_schema: 1, document_schema: 1, review_schema: 1 });
     const stored = JSON.stringify(row.context_snapshot) + JSON.stringify(row.profile_snapshot);
     expect(stored).not.toMatch(/Marta|display_name|contextual_tags|notes|learner/i);
     expect(row.profile_snapshot).toEqual({ minimized: true });

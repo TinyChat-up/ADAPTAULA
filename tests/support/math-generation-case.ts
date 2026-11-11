@@ -36,6 +36,14 @@ export function realDecisions(a: MaterialAnalysis = mathAnalysis()): DraftDecisi
   ];
 }
 
+/**
+ * A seventh decision that covers the working-memory need ON THE SAME ACTIVITY as another one (an essential need is covered for an
+ * activity only by a decision that reaches that activity, never by one on a different activity). Its generated segment goes with it.
+ */
+export const coverDecision = (a: MaterialAnalysis, target: "act_2" | "act_3"): DraftDecision =>
+  d({ target, action: "add_support", strategies: ["working_memory_support"], dimensions: ["working_memory_support"], intensity: "light", preserves: preserved(a, target), supports: [{ kind: "reminder", uses_task_data: false }] });
+export const coverSegment = (target: "act_2" | "act_3") => ({ decision_id: "dec_7", target, supports: [{ kind: "reminder" as const, text: "Lee con calma todos los datos antes de empezar a resolver." }] });
+
 export const dec3Rewrite = { lead: "Vas a sumar dos fracciones con el mismo denominador.", steps: ["Calcula 2/5 + 1/5.", "Simplifica el resultado si se puede.", "Escribe el resultado como fracción.", "Comprueba tu cálculo con las tiras de fracciones que tienes arriba en la ficha."] };
 /** What the model answered (same shapes and word counts as the real artifact). */
 export const realDraft: DraftGeneratedSegmentsV2 = DraftGeneratedSegmentsV2Schema.parse({

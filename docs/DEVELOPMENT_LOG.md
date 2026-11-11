@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-11 — «Hacer magia» autónomo: el estanque, conflictos, retenciones de V2.2 y perfil como centro
+
+- Rama `feature/hacer-magia-autonomo` sobre `feature/agente-v22-activacion-workspace` (PR #83). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago.
+- **Diagnóstico** (solo lectura de Supabase): la adaptación del estanque usó el planificador **anterior (v2)**, no V2.2. Parada `visual_unavailable` por un esquema de recuadros y flechas sin familia dibujable; avisos «Dos ayudas podrían contradecirse» = falso positivo del validador. Detalle y trazabilidad: `docs/qa/hacer-magia-autonomo/README.md`.
+- **Cambios:** figura `flow` que solo se redibuja con evidencia del original (flechas como glifos de la capa de texto con su sentido, etiquetas —también partidas en líneas— y cajas dibujadas; probado con el PDF real del estanque; el texto y la descripción del análisis no son dos testigos); `needs_conflict` solo ante una violación real; resolución autónoma de decisiones retenidas por V2.2 (`autonomous-resolution.ts`) con comprobación de que conservar el original no deja una necesidad alta sin cubrir PARA ESA ACTIVIDAD (`reaches`; si la deja, parada honesta; misma corrección en `resolveAutomatically` y `losesCoverage`); política de contexto 3 (las fortalezas solo desempatan); justificaciones por decisión; 4 fortalezas nuevas.
+- **Pruebas:** `tests/unit/hacer-magia-autonomo.test.ts` (23), más actualizadas las que fijaban el comportamiento anterior.
+- Pendiente de validar en producción: repetir la ficha del estanque tras el despliegue. Pendiente de construir: `adaptation_planner@v4` evaluado, pantalla de consulta de decisiones, ampliación del perfil.
+
 ## 2026-11-11 — Integración final de V2.2 en `main` (PR única) y activación preparada
 
 - **Migraciones y reglas ya aplicadas en Supabase `jidhormdauthfbpxxydt` (implementado y comprobado).** Historial de 35 migraciones (034 `agent_rules` y 035 `pilot_spend_ledger` incluidas); esquema remoto = migraciones 001–035 objeto a objeto; reversión de la 035 en `docs/qa/migraciones-034-035/reversion-035.sql`. Las 56 reglas están en `agent-rules/v2.2/` (bucket privado, sin política de lectura): rutas, tamaños y ETag iguales a los de la copia verificada por SHA-256. La verificación SHA-256 desde el servidor (`upload.ts --verify-remote`) la ejecuta el propietario.

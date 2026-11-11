@@ -12,6 +12,7 @@ import {
 import { OBJECTIVES_MAY_CHANGE } from "@/lib/schemas/adaptation-type";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { activityById, answersOf, constraintsOf, evaluatesOperation, evaluatesOwnWork, evaluatesWriting, hasExtensionRequirement, isLiteralSourceText, isOpenActivity, materialNumbers, protectedFor, textById } from "./facts";
+import { conflictViolated } from "./conflicts";
 import { contextFingerprint } from "./context";
 import { fingerprint } from "./fingerprint";
 import { actionFitsStrategies } from "./strategies";
@@ -144,7 +145,7 @@ export function validatePlan(plan: AdaptationPlan, analysis: MaterialAnalysis, c
     }
 
     if (context.material.ambiguous_targets.includes(d.target) && d.action !== "keep") add("ambiguous_source", "review", d, "El original es dudoso en este punto: revisar antes de adaptarlo");
-    const conflict = context.conflicts.find((c) => c.targets.includes(d.target) && c.dimensions.some((dim) => d.dimensions.includes(dim)));
+    const conflict = context.conflicts.find((c) => c.targets.includes(d.target) && c.dimensions.some((dim) => d.dimensions.includes(dim)) && conflictViolated(c, d, plan));
     if (conflict) add("needs_conflict", "review", d, conflict.guidance);
     if (context.audience.infantilization_guard && d.strategies.includes("visual_support") && d.visual?.mode === "new_representation") {
       add("infantilization_risk", "info", d, "Apoyo visual nuevo en Secundaria: informativo y sobrio, solo si aporta una función");

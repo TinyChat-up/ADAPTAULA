@@ -15,7 +15,8 @@ import { ExecutionBlockedError, planExecutability, type ExecutabilityReport } fr
 import { autoReview, reviewPlan, type ReviewedPlan } from "./plan-review";
 import { applicablePlan } from "./plan";
 import { normalizePlanFor } from "./plan-v2";
-import { normalizePlanV3, withholdForTeacher, type PlannerDeclarations } from "./plan-v3";
+import { resolveWithheldAutonomously } from "./autonomous-resolution";
+import { normalizePlanV3, type PlannerDeclarations } from "./plan-v3";
 import { buildReview } from "./review";
 import { buildPedagogicalReviewContext } from "./review-context";
 import { buildReviewScoped } from "./reviewer";
@@ -89,10 +90,11 @@ export async function runAdaptation(input: ContextInput, deps: PipelineDeps): Pr
     checked = applicablePlan(raw, analysis, context);
   }
   const { declarations } = normalized;
-  // Without a teacher, what the v3 planner declared conditional (or a hint) is withheld, never applied automatically.
+  // Without a teacher, what the v3 planner declared conditional (or a hint) is resolved safely and internally: a safe variant, an
+  // alternative, or the original kept. It is never applied as the planner wrote it, and never handed to a teacher.
   const automatic = () => {
     const review = autoReview(raw, analysis, context);
-    return declarations ? withholdForTeacher(review, declarations) : review;
+    return declarations ? resolveWithheldAutonomously(review, raw, declarations, analysis, context).review : review;
   };
   const review = deps.humanReview ? deps.humanReview(raw) : automatic();
   const reviewed = reviewPlan(raw, review, analysis, context);

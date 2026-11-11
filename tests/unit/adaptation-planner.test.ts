@@ -176,8 +176,9 @@ describe("what the validators do with a model's plan", () => {
       const plan = planOf(geo, ctx, [decision({ ...base, dimensions, supports: [{ kind: "worked_example", uses_task_data: false }] })]);
       return classifyPlan(plan, validatePlan(plan, geo, ctx)).decisions[0]!.issues.map((i) => `${i.severity}:${i.flag}`);
     };
-    // With the need that asks for it only the context's own conflict notice remains (examples vs not revealing the answer).
-    expect(analogous(["worked_examples"])).toEqual(["review:needs_conflict"]);
+    // With the need that asks for it nothing remains: the context's conflict (examples vs not revealing the answer) is resolved by the
+    // analogous data itself, so it is not raised as a contradiction.
+    expect(analogous(["worked_examples"])).toEqual([]);
     expect(analogous(["working_memory_support"])).toContain("review:cognitive_demand_reduced");
   });
 

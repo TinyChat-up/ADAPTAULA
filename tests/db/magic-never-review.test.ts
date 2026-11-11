@@ -14,7 +14,10 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
-import { dec3Rewrite, mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
+import { coverDecision, coverSegment, dec3Rewrite, mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
+
+/** The real plan plus a working-memory decision on act_3 itself: leaving dec_2 out keeps that need covered ON THAT ACTIVITY. */
+const withCover = [...realDecisions(), coverDecision(mathAnalysis(), "act_3")];
 
 /**
  * HOTFIX «Hacer magia sigue obligando al docente a revisar» (Matemáticas 4.º de Primaria, fracciones). A magic adaptation whose
@@ -48,7 +51,7 @@ const restrictionsOf = (input: GenInput, id: string) => input.reviewed.decisions
 /** The real answer restricted to the applied decisions; `tweak` plays what the model got wrong this time. */
 const generator = (tweak: (draft: DraftGeneratedSegmentsV2, call: number, input: GenInput) => DraftGeneratedSegmentsV2 = (d) => d) => async (_inner: MaterialGenerator, call: number, input: GenInput) => {
   const applied = new Set(input.reviewed.effective.decisions.map((d) => d.id));
-  const draft = { ...realDraft, segments: realDraft.segments.filter((s) => applied.has(s.decision_id)) };
+  const draft = { ...realDraft, segments: [...realDraft.segments, coverSegment("act_3")].filter((s) => applied.has(s.decision_id)) };
   return { draft: tweak(draft, call, input), runs: [] } as never;
 };
 
@@ -219,7 +222,7 @@ describe("magic + revealed answer: only the offending support is regenerated", (
 
   it("the 3-generation limit holds: repairs stop at the third generation (honest stop), never a fourth, and more visits do nothing", async () => {
     // Rounds 1-2: the reviewer finds the worked example of dec_2 revealing the answer (restricted, then left out: its need stays
-    // covered by dec_4). Round 3: a finding about the whole sheet. Three generations, then the stop.
+    // covered on the same activity by dec_7). Round 3: a finding about the whole sheet. Three generations, then the stop.
     const reviewer = async (inner: PedagogicalReviewer, call: number, input: Parameters<PedagogicalReviewer["review"]>[0]) => {
       if (call >= 3) return wholeSheetFail(inner, call, input);
       const out = await inner.review(input);
@@ -227,7 +230,7 @@ describe("magic + revealed answer: only the offending support is regenerated", (
       const draft = out.draft as AiReviewDraft;
       return { ...out, draft: { checks: [...draft.checks.filter((c) => c.check !== "answers_not_leaked"), { check: "answers_not_leaked" as const, status: "FAIL" as const, targets: [...(example ? [example.id] : []), "act_3"], detail: "El ejemplo resuelve la actividad" }] } } as never;
     };
-    const t = await teacher({ reviewer });
+    const t = await teacher({ reviewer, decisions: withCover });
     const id = await t.start("automatic");
     await t.visit(id);
     const end = await t.status(id);
@@ -245,16 +248,16 @@ describe("magic + revealed answer: only the offending support is regenerated", (
   });
 
   it("an answer revealed again after the restriction: that support is left out only because its need stays covered, and the sheet is delivered", async () => {
-    const t = await teacher({ generator: generator((d) => ({ ...d, segments: d.segments.map((s) => (s.target === "act_3" ? { ...s, supports: s.supports.map((x) => (x.kind === "worked_example" ? revealing : x)) } : s)) })) });
+    const t = await teacher({ decisions: withCover, generator: generator((d) => ({ ...d, segments: d.segments.map((s) => (s.target === "act_3" && s.decision_id === "dec_2" ? { ...s, supports: s.supports.map((x) => (x.kind === "worked_example" ? revealing : x)) } : s)) })) });
     const id = await t.start("automatic");
     await t.visit(id);
     expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 3 });
     neverMandatory(t.seen);
     const last = (await planReviews(id)).at(-1)!.payload.entries;
     expect(last.filter((e) => e.action === "rejected").map((e) => e.decision_id)).toEqual(["dec_2"]);
-    // dec_2 attended working memory: dec_4 still does.
+    // dec_2 attended working memory on act_3: dec_7 still does, on the same activity.
     const doc = await documentOf(t, id);
-    expect(allBlocks(doc).some((b) => b.trace.decision_ids.includes("dec_4"))).toBe(true);
+    expect(allBlocks(doc).some((b) => b.trace.decision_ids.includes("dec_7"))).toBe(true);
     expect(textOf(doc)).not.toContain("= 3/5");
   });
 });

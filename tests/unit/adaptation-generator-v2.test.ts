@@ -63,7 +63,7 @@ describe("the Bachillerato mirror reproduces the real structure the experiments 
   it("5 activities, a 10-word and a 31-word instruction, the review of the experiment applied (dec_2,3,4,6,7)", () => {
     expect(bach.activities).toHaveLength(5);
     expect(bachReviewed.effective.decisions.map((d) => d.id)).toEqual(["dec_2", "dec_3", "dec_4", "dec_6", "dec_7"]);
-    expect(bachReviewed.classification.counts).toEqual({ valid: 6, review: 2, blocked: 0 });
+    expect(bachReviewed.classification.counts).toEqual({ valid: 8, review: 0, blocked: 0 });
     expect(bach.activities.map((a) => instructionNeedsRewrite(a, null))).toEqual([false, false, false, false, true]);
   });
 });
