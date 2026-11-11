@@ -98,7 +98,7 @@ describe("Fase 4 · el estanque: una figura esencial ya no cancela la ficha cuan
 
 describe("el esquema se dibuja igual en pantalla y en el PDF", () => {
   it("recuadros y flechas, con su etiqueta accesible; las flechas son decorativas para el lector de pantalla", () => {
-    const html = renderToStaticMarkup(createElement(VisualSpecView, { spec: flowFromAnalysis({ kind: "diagram", ...POND })!, label: "Relación alimentaria del estanque" }));
+    const html = renderToStaticMarkup(createElement(VisualSpecView, { spec: flowFromAnalysis(POND)!, label: "Relación alimentaria del estanque" }));
     expect(html).toContain('data-spec="flow"');
     expect(html).toContain('aria-label="Relación alimentaria del estanque"');
     expect([...html.matchAll(/ms-vflow-box/g)]).toHaveLength(4);
@@ -108,7 +108,7 @@ describe("el esquema se dibuja igual en pantalla y en el PDF", () => {
 });
 
 describe("flowFromAnalysis: solo lo que el análisis imprime, completo y en orden", () => {
-  const ok = { kind: "diagram" as const, ...POND };
+  const ok = { ...POND };
   it("redibuja cadenas de 2 a 6 recuadros", () => {
     expect(flowFromAnalysis(ok)).toMatchObject({ kind: "flow", items: ["Algas", "Larvas de insectos", "Ranas", "Garzas"] });
     expect(VisualSpecSchema.safeParse(flowFromAnalysis(ok)).success).toBe(true);
