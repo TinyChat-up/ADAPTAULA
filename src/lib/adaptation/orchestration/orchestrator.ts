@@ -25,6 +25,7 @@ import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { checkPlanDraft, repairNotes, type PlanDraftDiagnosis } from "../planner-draft";
+import { withheldWithoutConfirmation, withholdForTeacher, type PlannerDeclarations, type RulesUse } from "../plan-v3";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
@@ -71,7 +72,7 @@ export interface PipelineServices {
 export interface OrchestratorDeps {
   store: AdaptationStore;
   /** Builds the AI services from the PERSISTED versions (alias, model, limits). It must not read the environment. */
-  services: (versions: PipelineVersions, analysis: MaterialAnalysis) => PipelineServices;
+  services: (versions: PipelineVersions, analysis: MaterialAnalysis, workspaceId?: string) => PipelineServices;
   entitlements?: AdaptationEntitlements;
   leaseSeconds?: number;
   retryBackoffSeconds?: number;
@@ -160,6 +161,7 @@ function runRow(run: StageRunRecord, ids: { workspaceId: string; adaptationId: s
     input_fingerprint: inputFp,
     output_fingerprint: outputFp,
     job_attempt: ids.jobAttempt,
+    ...(run.rulesSha256 ? { rules_sha256: run.rulesSha256 } : {}),
   };
 }
 
@@ -324,9 +326,9 @@ async function stopOnAmbiguity(deps: OrchestratorDeps, run: StageRun, loaded: Lo
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** A planner call, persisted under its own input fingerprint BEFORE anything is derived from it (and reused on resume). */
-async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loaded, services: PipelineServices, callFp: string, repairOf?: Parameters<AdaptationPlanner["plan"]>[0]["repairOf"], maxOutputTokens?: number): Promise<unknown> {
+async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loaded, services: PipelineServices, callFp: string, repairOf?: Parameters<AdaptationPlanner["plan"]>[0]["repairOf"], maxOutputTokens?: number): Promise<{ draft: unknown; rules: RulesUse | null }> {
   const existing = await deps.store.findArtifact(run.job.adaptation_id, "planner_draft", { inputFingerprint: callFp });
-  if (existing) return existing.payload.draft;
+  if (existing) return { draft: existing.payload.draft, rules: (existing.payload.rules as RulesUse | undefined) ?? null };
   if (!(await deps.store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
   let answered;
   try {
@@ -340,16 +342,18 @@ async function plannerDraft(deps: OrchestratorDeps, run: StageRun, loaded: Loade
   // The call happened and may have cost money: it is recorded BEFORE anything that can be refused (a cancelled job loses its
   // lease, so a late answer is audited but can never persist an artifact).
   for (const r of answered.runs) await deps.store.recordAiRun(runRow(r, run.ids, callFp, outputFp));
-  await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, outputFp, { draft: answered.draft, version: loaded.versions.planner.prompt_version, repair: repairOf !== undefined });
+  // v3: which verified rules and precedents travelled (hashes and ids, never text), so a resume screens the same declarations.
+  const rules = answered.rules ?? null;
+  await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, outputFp, { draft: answered.draft, version: loaded.versions.planner.prompt_version, repair: repairOf !== undefined, ...(rules ? { rules } : {}) });
   await deps.store.clearProviderCall(run.lease.jobId, run.lease.attempt);
-  return answered.draft;
+  return { draft: answered.draft, rules };
 }
 
 /** More room for an answer that was cut off: double the version's budget, within a fixed ceiling (bounded cost). */
 export const PLANNER_REPAIR_OUTPUT_CEILING = 16_000;
 const truncationBudget = (versionBudget: number) => Math.min(versionBudget * 2, PLANNER_REPAIR_OUTPUT_CEILING);
 
-type DraftAttempt = { ok: true; plan: AdaptationPlan } | { ok: false; diagnosis: PlanDraftDiagnosis };
+type DraftAttempt = { ok: true; plan: AdaptationPlan; declarations: PlannerDeclarations | null } | { ok: false; diagnosis: PlanDraftDiagnosis };
 
 /**
  * One planner answer judged: the model's draft (or the parsed value of a rejected one) gets its unequivocal fixes, the contract and
@@ -361,9 +365,10 @@ async function draftAttempt(deps: OrchestratorDeps, run: StageRun, loaded: Loade
   const budget = maxOutputTokens ?? loaded.versions.planner.max_output_tokens;
   const base = { stage: "planning" as const, schema: `DraftAdaptationPlan v${version}`, prompt_version: version, max_output_tokens: budget, repair_attempted: repairOf !== undefined };
   let draft: unknown;
+  let rules: RulesUse | null = null;
   let outputTokens: number | null = null;
   try {
-    draft = await plannerDraft(deps, run, loaded, services, callFp, repairOf, maxOutputTokens);
+    ({ draft, rules } = await plannerDraft(deps, run, loaded, services, callFp, repairOf, maxOutputTokens));
   } catch (error) {
     if (!(error instanceof RejectedStageOutput) || !error.detail || error.detail.kind === "refused") throw error;
     // The call's outcome is known (an answer, rejected): this attempt is not ambiguous any more.
@@ -374,18 +379,20 @@ async function draftAttempt(deps: OrchestratorDeps, run: StageRun, loaded: Loade
     }
     draft = detail.json;
     outputTokens = detail.outputTokens;
-    const fixed = checkPlanDraft(version, draft, loaded.analysis, loaded.context);
+    // A rejected answer carries no rules record of its own: the rules of this call are the ones the error reports, if any.
+    rules = detail.rules ?? null;
+    const fixed = checkPlanDraft(version, draft, loaded.analysis, loaded.context, rules);
     if (fixed.ok) {
-      await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, fingerprint({ input: callFp, draft: fixed.draft }), { draft: fixed.draft, version, repair: repairOf !== undefined, deterministic_fixes: fixed.fixes });
+      await deps.store.putArtifact(run.job.adaptation_id, run.lease, "planner_draft", callFp, fingerprint({ input: callFp, draft: fixed.draft }), { draft: fixed.draft, version, repair: repairOf !== undefined, deterministic_fixes: fixed.fixes, ...(rules ? { rules } : {}) });
       deps.log?.warn("planner_draft_fixed", { adaptationId: run.job.adaptation_id, fixes: fixed.fixes.join("; ").slice(0, 400) });
-      return { ok: true, plan: fixed.plan };
+      return { ok: true, plan: fixed.plan, declarations: fixed.declarations };
     }
     return { ok: false, diagnosis: { ...base, kind: fixed.kind, issues: fixed.issues, truncated: false, output_tokens: outputTokens, deterministic_fixes: fixed.fixes } };
   }
-  const checked = checkPlanDraft(version, draft, loaded.analysis, loaded.context);
+  const checked = checkPlanDraft(version, draft, loaded.analysis, loaded.context, rules);
   if (checked.ok) {
     if (checked.fixes.length > 0) deps.log?.warn("planner_draft_fixed", { adaptationId: run.job.adaptation_id, fixes: checked.fixes.join("; ").slice(0, 400) });
-    return { ok: true, plan: checked.plan };
+    return { ok: true, plan: checked.plan, declarations: checked.declarations };
   }
   return { ok: false, diagnosis: { ...base, kind: checked.kind, issues: checked.issues, truncated: false, output_tokens: outputTokens, deterministic_fixes: checked.fixes } };
 }
@@ -458,7 +465,7 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
     const current = (await store.getPipeline(adaptationId))!.adaptation.status as AdaptationStatus;
     if (current === "queued") await advance(store, adaptationId, current, "planning");
 
-    const services = deps.services(loaded.versions, loaded.analysis);
+    const services = deps.services(loaded.versions, loaded.analysis, loaded.snapshot.adaptation.workspace_id);
     await store.setStep(job.id, job.attempts, "planning", 30);
 
     let first = await draftAttempt(deps, run, loaded, services, inputFp);
@@ -481,6 +488,7 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
       first = second;
     }
     let plan = first.plan;
+    let declarations = first.declarations;
     let checked = applicablePlan(plan, loaded.analysis, loaded.context);
     if (!checked.validation.valid && !repairUsed) {
       // Whatever still blocks is never applied; a repair that breaks the contract keeps the first plan (its blocked decisions out).
@@ -489,6 +497,7 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
       const repaired = await draftAttempt(deps, run, loaded, services, repairFp, issues);
       if (repaired.ok) {
         plan = repaired.plan;
+        declarations = repaired.declarations;
         checked = applicablePlan(plan, loaded.analysis, loaded.context);
       } else {
         await recordDraftRejection(deps, run, repairFp, { ...repaired.diagnosis, repair_attempted: true, final_reason: "la reparación de los bloqueos no cumple el contrato: se conserva el primer plan" });
@@ -499,7 +508,9 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
     const planFp = fingerprint(plan);
     await store.setStep(job.id, job.attempts, "validating", 80);
     await store.putArtifact(adaptationId, run.lease, "plan", inputFp, planFp, plan);
-    await store.putArtifact(adaptationId, run.lease, "plan_validation", inputFp, fingerprint({ validation, classification }), { plan_fingerprint: planFp, validation, classification });
+    // v3: the method's declarations travel with the validation of the plan they belong to (ADR-046). They are the model's own
+    // statements (screened), not derivable later; the decision ledger is recomputed on demand from them.
+    await store.putArtifact(adaptationId, run.lease, "plan_validation", inputFp, fingerprint({ validation, classification, declarations }), { plan_fingerprint: planFp, validation, classification, ...(declarations ? { declarations } : {}) });
     if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
     await store.transition(adaptationId, "planning", "awaiting_plan_review");
     return { outcome: "completed", status: "awaiting_plan_review", jobId: job.id };
@@ -527,6 +538,19 @@ async function currentPlan(store: AdaptationStore, snapshot: PipelineSnapshot, l
 }
 
 /**
+ * The v3 declarations of the current plan (ADR-046), stored with its validation; null for every other planner. Read with a schema:
+ * an artifact is data, and a malformed one counts as «no declarations» only for plans that are not v3.
+ */
+async function currentDeclarations(store: AdaptationStore, snapshot: PipelineSnapshot, loaded: Loaded): Promise<PlannerDeclarations | null> {
+  if (loaded.versions.planner.prompt_version !== 3) return null;
+  const artifact = await store.findArtifact(snapshot.adaptation.id, "plan_validation", { inputFingerprint: planningFingerprint(snapshot.adaptation, loaded.versions) });
+  const declarations = (artifact?.payload as { declarations?: PlannerDeclarations } | undefined)?.declarations;
+  // A v3 plan without its declarations cannot tell what to withhold: nothing is applied automatically.
+  if (!declarations || typeof declarations.decisions !== "object") throw new AdaptationError("invalid_input", "el plan v3 no conserva sus declaraciones");
+  return declarations;
+}
+
+/**
  * Registers a teacher's review. Never overwrites an earlier one (each is a new, immutable artifact tied to the raw plan's
  * fingerprint). A review that approves a blocked decision, leaves an edit still blocked, or belongs to another plan is refused
  * and not persisted. A valid one builds the effective plan and runs the execution preflight: with an `unsupported` decision
@@ -548,6 +572,19 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
   if (!raw) return { ok: false, code: "plan_review_required", detail: ["no hay plan que revisar"] };
   const parsed = PlanReviewSchema.safeParse(reviewInput);
   if (!parsed.success) return { ok: false, code: "invalid_review", detail: parsed.error.issues.slice(0, 5).map((i) => i.message) };
+  // Planner V2.2 (ADR-047): a decision the method withheld is applied only with the teacher's explicit «yes». Checked here, never
+  // trusted to the screen: a review that approves or edits one without it is refused and not persisted.
+  if (parsed.data.reviewer.kind !== "auto") {
+    let declarations: PlannerDeclarations | null;
+    try {
+      declarations = await currentDeclarations(store, snapshot, loaded);
+    } catch (error) {
+      if (error instanceof AdaptationError) return { ok: false, code: "invalid_input", detail: [error.message] };
+      throw error;
+    }
+    const unconfirmed = withheldWithoutConfirmation(parsed.data, declarations);
+    if (unconfirmed.length > 0) return { ok: false, code: "invalid_review", detail: unconfirmed.map((id) => `${id}: decisión retenida sin confirmación del docente`) };
+  }
   const review: PlanReview = normalizeTeacherEdits(raw.plan, parsed.data);
 
   let reviewed: ReviewedPlan;
@@ -621,8 +658,19 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
   if (!raw) return null;
   if ((await store.listArtifacts(adaptationId, "plan_review")).some((a) => a.input_fingerprint === raw.fingerprint)) return null;
   const resolution = resolveAutomatically(raw.plan, loaded.analysis, loaded.context);
+  // v3 (ADR-046): a decision the method withheld (conditional, a blocking hint, a strategy foreign to its needs) is never applied
+  // without the teacher. The server's review rejects it with its reason and HOLDS: the adaptation waits for the teacher's review.
+  let declarations: PlannerDeclarations | null;
+  try {
+    declarations = await currentDeclarations(store, snapshot, loaded);
+  } catch (error) {
+    if (error instanceof AdaptationError) return null;
+    throw error;
+  }
+  const withheld = declarations ? Object.entries(declarations.decisions).filter(([, d]) => d.withheld).map(([id]) => id) : [];
+  const review = declarations ? withholdForTeacher(resolution.review, declarations) : resolution.review;
   // Saved in every case (audit, and what the status reads); held when a high need is left without any executable decision.
-  const submitted = await submitPlanReview(deps, adaptationId, resolution.review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id) } }, { hold: resolution.unresolved.length > 0 });
+  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id), ...(withheld.length > 0 ? { withheld_v22: withheld } : {}) } }, { hold: resolution.unresolved.length > 0 || withheld.length > 0 });
   if (!submitted.ok || !submitted.executable) {
     deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;
@@ -1124,7 +1172,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     let current = (await store.getPipeline(adaptationId))!.adaptation.status as AdaptationStatus;
     if (current === "generation_queued") current = await advance(store, adaptationId, current, "generating");
 
-    const services = deps.services(loaded.versions, loaded.analysis);
+    const services = deps.services(loaded.versions, loaded.analysis, loaded.snapshot.adaptation.workspace_id);
     const generatorVersion = loaded.versions.generator.prompt_version;
     await store.setStep(job.id, job.attempts, "generating", 30);
 

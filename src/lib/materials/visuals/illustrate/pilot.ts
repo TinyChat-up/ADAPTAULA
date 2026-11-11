@@ -1,3 +1,5 @@
+import { pilotBackendAllows } from '@/lib/pilots/backend';
+
 /** Explicit server-only deployment configuration, never an entitlement supplied by a browser. */
 export interface ImagePilotConfig {
   AI_IMAGES_PILOT_WORKSPACE_ID?: string;
@@ -9,11 +11,5 @@ export function imagePilotAllows(config: ImagePilotConfig, workspaceId: string, 
   if (!config.AI_IMAGES_PILOT_MODE || !config.AI_IMAGES_PILOT_WORKSPACE_ID || config.AI_IMAGES_PILOT_WORKSPACE_ID !== workspaceId) return false;
   if (vercelEnv === 'production' && config.AI_IMAGES_PILOT_MODE !== 'production-pilot') return false;
   if (config.AI_IMAGES_PILOT_MODE === 'production-pilot' && vercelEnv !== 'production') return false;
-  try {
-    const actual = new URL(backendUrl);
-    const allowed = new URL(config.AI_IMAGES_PILOT_SUPABASE_URL ?? '');
-    if (actual.href !== allowed.href || actual.username || actual.password || actual.search || actual.hash || actual.pathname !== '/') return false;
-    if (config.AI_IMAGES_PILOT_MODE === 'local') return ['localhost', '127.0.0.1', '[::1]'].includes(actual.hostname);
-    return actual.protocol === 'https:' && /^[a-z0-9]+\.supabase\.co$/.test(actual.hostname);
-  } catch { return false; }
+  return pilotBackendAllows(config.AI_IMAGES_PILOT_MODE, config.AI_IMAGES_PILOT_SUPABASE_URL, backendUrl);
 }

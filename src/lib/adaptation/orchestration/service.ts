@@ -12,7 +12,14 @@ import { buildStatusDto, failureOf, isRetryable, type AdaptationStatusDto, type 
 import { FailureBudgetError, GenerationLimitError, NotFoundError, type ArtifactKind, type ArtifactRow, type CreationMode, type PipelineSnapshot } from "./store";
 import type { AdaptationStatus } from "./state-machine";
 import { isDelivered } from "./state-machine";
-import type { PipelineVersions } from "./versions";
+import type { PipelineVersions, RulesFreeze } from "./versions";
+import type { PlannerDeclarations } from "../plan-v3";
+import { projectMethod, type DecisionMethodDto, type PlanMethodDto } from "../v22/method-projection";
+import { auditAdaptation } from "../v22/audit";
+import { methodNotes, type MethodNote } from "../v22/notes";
+import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
+import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
+import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,
@@ -44,8 +51,13 @@ export interface AdaptationReader {
 export interface ServiceDeps {
   orchestrator: OrchestratorDeps;
   reader: AdaptationReader;
-  /** The versions for NEW adaptations (resolved once, then persisted). */
-  resolveVersions: () => PipelineVersions;
+  /** The versions for NEW adaptations (resolved once, then persisted). `plannerV3` only after the pilot gate allowed it. */
+  resolveVersions: (options?: { plannerV3?: RulesFreeze }) => PipelineVersions;
+  /**
+   * The V3 pilot (ADR-046): the rules package a NEW adaptation of this workspace may be planned with, or null when the pilot gate
+   * refuses it (any other workspace, deployment or backend). Absent: no pilot at all.
+   */
+  plannerV3Pilot?: (workspaceId: string) => RulesFreeze | null;
   now?: () => Date;
   visualSupportOffer?: (workspaceId: string) => Promise<{ remaining: number; maxPerAdaptation: number } | null>;
 }
@@ -105,7 +117,12 @@ export interface CreateAdaptationRequest {
   requestKey?: string;
   /** «Hacer magia» (`automatic`) or «Revisar antes de crear» (`review`, the default). */
   creationMode?: CreationMode;
+  /** `v22`: the experimental planner, honoured only where the server's pilot gate allows it (never decided by the browser). */
+  planner?: PlannerChoice;
 }
+
+export const PLANNER_CHOICES = ["current", "v22"] as const;
+export type PlannerChoice = (typeof PLANNER_CHOICES)[number];
 
 export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, request: CreateAdaptationRequest): Promise<ServiceResult<{ adaptationId: string }>> {
   const no = denied(actor);
@@ -130,6 +147,12 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
     if (!offer) return { ok: false, code: "visual_supports_unavailable" };
     if (offer.remaining <= 0) return { ok: false, code: "visual_supports_exhausted" };
   }
+  let plannerV3: RulesFreeze | undefined;
+  if (request.planner === "v22") {
+    const rules = deps.plannerV3Pilot?.(actor.workspaceId) ?? null;
+    if (!rules) return { ok: false, code: "forbidden" };
+    plannerV3 = rules;
+  }
 
   try {
     const { adaptationId } = await createAdaptation(deps.orchestrator, {
@@ -145,7 +168,7 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
       visualSupports: request.visualSupports === true,
       title: (request.title ?? material.title).slice(0, 200),
       requestKey: request.requestKey ?? randomUUID(),
-      versions: deps.resolveVersions(),
+      versions: deps.resolveVersions(plannerV3 ? { plannerV3 } : {}),
       creationMode: request.creationMode ?? "review",
     });
     return { ok: true, data: { adaptationId } };
@@ -347,7 +370,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const artifacts = await deps.reader.getArtifacts(adaptationId, STATUS_KINDS);
   const latest = (kind: ArtifactKind) => artifacts.filter((a) => a.kind === kind).at(-1)?.payload as Record<string, unknown> | undefined;
   const validation = latest("plan_validation") as { classification?: { counts: { valid: number; review: number; blocked: number } } } | undefined;
-  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> }; diagnosis?: RecordedDiagnosis };
+  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }>; withheld_v22?: string[] }; diagnosis?: RecordedDiagnosis };
   const reports = artifacts.filter((a) => a.kind === "execution_report").map((a) => a.payload as Report);
   // The real preflight report (a recorded stop carries no execution), and what was recorded for the latest review.
   const execution = reports.filter((r) => r.execution).at(-1);
@@ -369,6 +392,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     latestReviewKind: ((lastReview?.payload as { reviewer?: { kind?: "auto" | "teacher" | "eval" } } | undefined)?.reviewer?.kind ?? null),
     automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
     unresolvedNeeds,
+    methodHold: forLastReview.some((r) => (r.automatic?.withheld_v22?.length ?? 0) > 0),
   };
   const dto = buildStatusDto(snapshot, extra);
   // Only once nothing is running and nothing was delivered: the latest recorded diagnosis, for the latest review if there is one.
@@ -414,6 +438,8 @@ export interface PlanDecisionDto {
   restrictions: string[];
   status: "valid" | "review" | "blocked";
   issues: Array<{ flag: string; severity: string; message: string }>;
+  /** Planner V2.2 (pilot, ADR-046) only: whether the method withholds it for the teacher, and why. */
+  method?: DecisionMethodDto;
 }
 
 export interface AdaptationPlanDto {
@@ -423,6 +449,8 @@ export interface AdaptationPlanDto {
   summary: string[];
   counts: { valid: number; review: number; blocked: number };
   review: { submitted: boolean; executable: boolean | null; blockers: string[] };
+  /** Planner V2.2 only: the questions for the teacher and the barriers that remain. */
+  method?: PlanMethodDto;
 }
 
 /** The current raw plan for the (future) review screen: decisions with the validator's verdict, never provider output or prompts. */
@@ -439,6 +467,7 @@ export async function getAdaptationPlan(deps: ServiceDeps, actor: Actor, adaptat
   const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
   const analysis = snapshot ? parseStoredAnalysis(snapshot.analysis.analysis).analysis : null;
   const reviews = artifacts.filter((a) => a.kind === "plan_review" && a.input_fingerprint === plan.fingerprint).at(-1)?.payload as { entries?: Array<{ decision_id: string; restrictions?: string[] }> } | undefined;
+  const method = projectMethod((validation.payload as { declarations?: PlannerDeclarations }).declarations);
   return {
     ok: true,
     data: {
@@ -458,11 +487,13 @@ export async function getAdaptationPlan(deps: ServiceDeps, actor: Actor, adaptat
           restrictions: projectRestrictions(reviews?.entries?.find((e) => e.decision_id === d.id)?.restrictions),
           status: c?.status ?? "valid",
           issues: (c?.issues ?? []).map((i) => ({ flag: i.flag, severity: i.severity, message: i.message })),
+          ...(method?.decisions[String(d.id)] ? { method: method.decisions[String(d.id)]! } : {}),
         };
       }),
       summary: ((plan.payload as { summary?: string[] }).summary ?? []).slice(0, 6),
       counts: classification.counts,
       review: { submitted: execution !== undefined, executable: execution ? (execution.execution?.blockers.length ?? 0) === 0 : null, blockers: execution?.execution?.blockers ?? [] },
+      ...(method ? { method: method.plan } : {}),
     },
   };
 }
@@ -487,4 +518,25 @@ export async function getAdaptationVersion(deps: ServiceDeps, actor: Actor, adap
   const verdict = (found.review as { verdict?: string } | null)?.verdict;
   const delivered = isDelivered(row) && row.current_version === found.version;
   return { ok: true, data: { version: found.version, document: found.document, review: found.review, source: found.source, createdAt: found.created_at, delivered, usable: delivered && (verdict === "approved" || verdict === "approved_with_warnings") } };
+}
+
+/**
+ * The V2.2 checks on the generated sheet, recomputed on demand (ADR-047: no persistence) from the raw plan with its declarations,
+ * the frozen context, the analysis and the current version's document. Only for adaptations planned with V2.2; any other answers
+ * an empty list. Advisory: it reads, never blocks or changes anything.
+ */
+export async function getAdaptationMethodNotes(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<MethodNote[]>> {
+  if (!(await owned(deps, actor, adaptationId))) return notFound;
+  const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.pipeline_versions?.planner.prompt_version !== 3) return { ok: true, data: [] };
+  const artifacts = await deps.reader.getArtifacts(adaptationId, ["plan", "plan_validation"]);
+  const plan = AdaptationPlanSchema.safeParse(artifacts.filter((a) => a.kind === "plan").at(-1)?.payload);
+  const validation = artifacts.filter((a) => a.kind === "plan_validation").at(-1)?.payload as { validation?: PlanValidation; declarations?: PlannerDeclarations } | undefined;
+  const context = AdaptationContextSchema.safeParse(snapshot.adaptation.context_snapshot);
+  const analysis = parseStoredAnalysis(snapshot.analysis.analysis).analysis;
+  const version = await deps.reader.getVersion(adaptationId, snapshot.adaptation.current_version || null);
+  const document = version ? MaterialDocumentSchema.safeParse(version.document) : null;
+  if (!plan.success || !context.success || !analysis || !validation?.validation || !document?.success) return { ok: true, data: [] };
+  const audit = auditAdaptation({ plan: plan.data, validation: validation.validation, context: context.data, analysis, declarations: validation.declarations ?? null, document: document.data });
+  return { ok: true, data: methodNotes(audit.findings) };
 }

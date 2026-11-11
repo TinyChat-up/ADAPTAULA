@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/layout";
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
 import type { ProfileSummary } from "@/lib/profiles/summary";
 import { CREATION_COPY, actionErrorCopy } from "@/lib/adaptation/presentation/copy";
+import { PlannerChoiceField, type PlannerChoiceValue } from "./planner-choice-field";
 
 export interface ProfileOption {
   id: string;
@@ -33,13 +34,16 @@ export function StartAdaptationCard({
   newProfileHref,
   create,
   visualSupportOffer,
+  plannerPilot = false,
 }: {
   profiles: ProfileOption[];
   initialProfileId?: string | undefined;
   canWrite: boolean;
   newProfileHref: string;
   visualSupportOffer?: { remaining: number; maxPerAdaptation: number } | null;
-  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; visualSupports?: boolean }) => Promise<PublicResult<{ adaptationId: string }>>;
+  /** The V3 pilot's planner choice (ADR-046): computed on the server for the authorised workspace only. */
+  plannerPilot?: boolean;
+  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
   const uid = useId();
@@ -50,6 +54,7 @@ export function StartAdaptationCard({
   const lock = useRef(false);
   const [visualSupports, setVisualSupports] = useState(false);
   const [requestKey] = useState(() => crypto.randomUUID());
+  const [planner, setPlanner] = useState<PlannerChoiceValue>("current");
 
   async function start(mode: CreationModeChoice) {
     if (lock.current) return;
@@ -63,7 +68,8 @@ export function StartAdaptationCard({
     setError(null);
     setFieldError(undefined);
     try {
-      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}`, mode, visualSupports: mode === "automatic" && visualSupports });
+      const choice = plannerPilot ? planner : "current";
+      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}:${choice}`, mode, visualSupports: mode === "automatic" && visualSupports, ...(choice === "v22" ? { planner: choice } : {}) });
       if (result.ok) {
         router.push(`/app/adaptaciones/${result.data.adaptationId}`);
         return;
@@ -109,6 +115,8 @@ export function StartAdaptationCard({
               {selected.summary.lines.length > 3 ? <details><summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">Ver todos los apoyos</summary><ul className="list-disc space-y-1 pl-5">{selected.summary.lines.slice(3).map((line) => <li key={line.text}>{line.text}{line.level ? ` (${line.level})` : ""}</li>)}</ul></details> : null}
             </div>
           ) : null}
+
+          {plannerPilot ? <PlannerChoiceField value={planner} onChange={setPlanner} disabled={pending !== null} /> : null}
 
           <section aria-labelledby={`${uid}-how`} className="space-y-3">
             <h3 id={`${uid}-how`} className="text-base font-semibold">

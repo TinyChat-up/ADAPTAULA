@@ -8,8 +8,9 @@ import type { AdaptationPlanDto, SubmitReviewDto } from "@/lib/adaptation/orches
 import type { PublicResult } from "@/lib/adaptation/orchestration/public";
 import type { AdaptationContextView } from "@/lib/adaptation/presentation/context";
 import { actionLabel, targetLabel } from "@/lib/adaptation/presentation/copy";
-import { buildReview, formReducer, initialFormState, interpretSubmit, isRecommended, problemsOf } from "@/lib/adaptation/presentation/review-form";
+import { buildReview, formReducer, initialFormState, interpretSubmit, isRecommended, methodNotice, problemsOf } from "@/lib/adaptation/presentation/review-form";
 import { DecisionCard } from "./decision-card";
+import { MethodSummary } from "./method-summary";
 
 export type SubmitReview = (review: ReturnType<typeof buildReview>) => Promise<PublicResult<SubmitReviewDto>>;
 
@@ -114,6 +115,8 @@ export function PlanReviewForm({
         </Alert>
       ) : null}
 
+      {plan.method ? <MethodSummary method={plan.method} targets={context.targets} /> : null}
+
       <ol className="space-y-4">
         {plan.decisions.map((decision, index) => (
           <DecisionCard
@@ -124,10 +127,11 @@ export function PlanReviewForm({
             draft={state[decision.id]!}
             problem={attempted ? problems[decision.id] : undefined}
             deferred={deferredIds.includes(decision.id)}
-            notice={affected.includes(decision.id) ? "Este cambio necesita ajustarse antes de crear el material." : undefined}
+            notice={affected.includes(decision.id) ? "Este cambio necesita ajustarse antes de crear el material." : methodNotice(decision)}
             disabled={pending}
             onChoose={(choice) => dispatch({ type: "choose", id: decision.id, choice })}
             onEdit={(patch) => dispatch({ type: "edit", id: decision.id, patch })}
+            onConfirm={(answer) => dispatch({ type: "confirm", id: decision.id, answer })}
           />
         ))}
       </ol>

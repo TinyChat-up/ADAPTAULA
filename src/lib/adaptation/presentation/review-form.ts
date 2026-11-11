@@ -22,9 +22,13 @@ export interface EditDraft {
   note?: string;
 }
 
+export type Confirmation = "yes" | "no" | "unknown";
+
 export interface DecisionDraft {
   choice: Choice | null;
   edit: EditDraft;
+  /** Planner V2.2: the answer to the question of a decision the method withheld. */
+  confirmation?: Confirmation;
 }
 
 export type FormState = Record<string, DecisionDraft>;
@@ -32,6 +36,7 @@ export type FormState = Record<string, DecisionDraft>;
 export type FormAction =
   | { type: "choose"; id: string; choice: Choice }
   | { type: "edit"; id: string; patch: EditDraft }
+  | { type: "confirm"; id: string; answer: Confirmation }
   | { type: "reset"; plan: AdaptationPlanDto };
 
 /**
@@ -40,7 +45,16 @@ export type FormAction =
  * without touching anything creates the same sheet. The teacher only changes what they want to change.
  */
 export function initialFormState(plan: AdaptationPlanDto): FormState {
-  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" ? ("reject" as const) : ("approve" as const), edit: {} }]));
+  // A decision the V2.2 method withholds (ADR-046) starts unchecked too: it is applied only if the teacher chooses it.
+  return Object.fromEntries(plan.decisions.map((d) => [d.id, { choice: d.status === "blocked" || d.method?.withheld === true ? ("reject" as const) : ("approve" as const), edit: {} }]));
+}
+
+/** The notice of a decision the V2.2 method withholds: why, and the question it depends on (teacher language, ADR-046). */
+export function methodNotice(decision: AdaptationPlanDto["decisions"][number]): string | undefined {
+  const m = decision.method;
+  if (!m?.withheld) return undefined;
+  const reasons = m.reasons.length > 0 ? ` ${m.reasons.join(" ")}` : "";
+  return `Espera tu decisión: no se aplicará si no la eliges.${reasons}${m.question ? ` Pregunta: ${m.question}` : ""}`;
 }
 
 /** True while every decision is still as recommended («Restaurar recomendación» has nothing to restore). */
@@ -60,6 +74,12 @@ export function formReducer(state: FormState, action: FormAction): FormState {
       const current = state[action.id];
       if (!current) return state;
       return { ...state, [action.id]: { choice: "edit", edit: { ...current.edit, ...action.patch } } };
+    }
+    case "confirm": {
+      const current = state[action.id];
+      if (!current) return state;
+      // Anything but a «yes» leaves a withheld decision out: the answer decides, the teacher does not have to remember to discard it.
+      return { ...state, [action.id]: { ...current, confirmation: action.answer, choice: action.answer === "yes" ? current.choice : "reject" } };
     }
     case "reset":
       return initialFormState(action.plan);
@@ -84,12 +104,13 @@ export function editsFor(decision: PlanDecisionDto, draft: EditDraft): Record<st
   return edits;
 }
 
-export type DecisionProblem = "missing_choice" | "blocked_approved" | "no_changes";
+export type DecisionProblem = "missing_choice" | "blocked_approved" | "no_changes" | "needs_confirmation";
 
 export const PROBLEM_COPY: Record<DecisionProblem, string> = {
   missing_choice: "Elige qué hacer con este cambio.",
   blocked_approved: "Este cambio no se puede aplicar tal cual. Descártalo o ajústalo.",
   no_changes: "Cambia algún ajuste o elige otra opción.",
+  needs_confirmation: "Responde a la pregunta para poder aplicar este cambio, o descártalo.",
 };
 
 export function problemsOf(plan: AdaptationPlanDto, state: FormState): Record<string, DecisionProblem> {
@@ -98,6 +119,7 @@ export function problemsOf(plan: AdaptationPlanDto, state: FormState): Record<st
     const draft = state[d.id];
     if (!draft || draft.choice === null) problems[d.id] = "missing_choice";
     else if (draft.choice === "approve" && d.status === "blocked") problems[d.id] = "blocked_approved";
+    else if ((draft.choice === "approve" || draft.choice === "edit") && d.method?.withheld === true && draft.confirmation !== "yes") problems[d.id] = "needs_confirmation";
     else if (draft.choice === "edit" && Object.keys(editsFor(d, draft.edit)).length === 0) problems[d.id] = "no_changes";
   }
   return problems;
@@ -105,11 +127,18 @@ export function problemsOf(plan: AdaptationPlanDto, state: FormState): Record<st
 
 const REASONS = { approve: "Aprobada por la docente", reject: "Descartada por la docente", edit: "Ajustada por la docente" } as const;
 
+/** The answers to the questions of withheld decisions, only where the teacher gave one. */
+function confirmationsOf(plan: AdaptationPlanDto, state: FormState) {
+  const confirmations = plan.decisions.flatMap((d) => (d.method?.withheld && state[d.id]?.confirmation ? [{ decision_id: d.id, answer: state[d.id]!.confirmation! }] : []));
+  return confirmations.length > 0 ? { confirmations } : {};
+}
+
 /** The body for `submitPlanReviewAction`: decisions and edits only; reviewer identity and time are set by the server. */
 export function buildReview(plan: AdaptationPlanDto, state: FormState) {
   return {
     schema_version: 1 as const,
     plan_fingerprint: plan.planFingerprint,
+    ...confirmationsOf(plan, state),
     entries: plan.decisions.map((d) => {
       const draft = state[d.id]!;
       if (draft.choice === "edit") return { decision_id: d.id, action: "edited" as const, reason: REASONS.edit, edits: editsFor(d, draft.edit) };

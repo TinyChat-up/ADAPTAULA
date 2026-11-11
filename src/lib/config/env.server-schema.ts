@@ -44,6 +44,13 @@ export const ServerEnvSchema = z.object({
   MAX_SINGLE_JOB_COST_USD: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().positive().default(1.5)),
 
   CRON_SECRET: optional(z.string().min(16)),
+
+  /**
+   * Private pedagogical rules of adaptation_planner@v3 (ADR-045). `storage`: the private `agent-rules` bucket (service role).
+   * `directory`: a local copy outside any checkout, in AGENT_RULES_DIR, for private evaluations. Absent: v3 cannot run (fails closed).
+   */
+  AGENT_RULES_SOURCE: optional(z.enum(["storage", "directory"])),
+  AGENT_RULES_DIR: optional(z.string().min(1)),
   /** Stages recovered per cron run: one stage can take most of the 300 s budget, and the normal path never waits for the cron. */
   ADAPTATION_JOBS_PER_RUN: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(10).default(1)),
 
@@ -52,6 +59,16 @@ export const ServerEnvSchema = z.object({
   AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),
   AI_IMAGES_PILOT_WORKSPACE_ID: optional(z.uuid()),
   AI_IMAGES_PILOT_SUPABASE_URL: optional(z.url()),
+  /**
+   * Pilot of `adaptation_planner@v3` from the interface (ADR-046): one workspace, one isolated backend, never production.
+   * The spend ledger (AI_PILOT_BUDGET_USD) meters EVERY paid AI request of the deployment; without it V3 cannot be chosen.
+   */
+  FLAG_PLANNER_V3_PILOT: flag(false),
+  AI_PLANNER_V3_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),
+  AI_PLANNER_V3_PILOT_WORKSPACE_ID: optional(z.uuid()),
+  AI_PLANNER_V3_PILOT_SUPABASE_URL: optional(z.url()),
+  AI_PILOT_BUDGET_USD: optional(z.coerce.number().positive().max(100)),
+  AI_PILOT_CAMPAIGN: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-z0-9][a-z0-9-]{2,40}$/, "minúsculas, cifras y guiones").default("piloto-v22-1")),
   FLAG_MULTI_PROFILE_GENERATION: flag(true),
   FLAG_SCHOOL_WORKSPACES: flag(false),
   FLAG_GOOGLE_AUTH: flag(false),

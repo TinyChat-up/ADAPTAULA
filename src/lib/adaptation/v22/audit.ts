@@ -2,6 +2,7 @@ import type { PlanValidation } from "@/lib/schemas/adaptation-plan";
 import type { DecisionLedger } from "@/lib/schemas/decision-ledger";
 import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { OmittedNeed } from "../context";
+import type { PlannerDeclarations } from "../plan-v3";
 import { buildDecisionLedger } from "../decision-ledger";
 import { runV22Checks, type V22Finding, type V22Input } from "./checks";
 
@@ -13,6 +14,8 @@ export interface V22AuditInput extends V22Input {
   validation: PlanValidation;
   omitted?: readonly OmittedNeed[];
   profile?: Pick<FunctionalProfile, "supports">;
+  /** Planner v3 only. Pass the RAW plan with them: a withheld decision is still part of what the teacher must see. */
+  declarations?: PlannerDeclarations | null;
 }
 
 export interface V22AuditResult {

@@ -1,6 +1,13 @@
 # Agente pedagógico V2.2 · integración en Adaptaula
 
-Estado: **integración parcial** (registro de decisiones y validadores deterministas). No es todavía la integración completa del agente V2.2: el planificador real no recibe la metodología V2.2 ni emite la prueba de pista. Decisión: [ADR-044](ARCHITECTURE.md).
+Estado (2026-11-04), en dos entregas:
+
+1. **PR #79**: registro de decisiones y validadores deterministas ([ADR-044](ARCHITECTURE.md)).
+2. **Rama `feature/agente-v22-planificador-v3`**:
+   - carga privada y verificada de las reglas y la biblioteca (fase A);
+   - `adaptation_planner@v3`, que **decide** con ellas (fase B, [ADR-045](ARCHITECTURE.md)).
+
+Todo está validado solo con modelos simulados. v3 **no está activo**: falta la evaluación con el modelo real, que no está autorizada, y conectar sus declaraciones al orquestador.
 
 ## Qué es privado y dónde está
 
@@ -105,67 +112,175 @@ Fichas sintéticas de `evals/adaptation/fixtures.ts`.
 
   Queda registrado y no se corrige en esta entrega.
 
-## Plan de conexión con el planificador real
+## Planificador v3: cómo usa la metodología (fases A y B)
 
-Objetivo: que `adaptation_planner` razone con la metodología V2.2 y que la plataforma compruebe y muestre lo que declara, sin publicar la documentación original. Cada etapa es una PR, con pruebas y sin merge automático.
+```
+reglas privadas (bucket agent-rules o copia local fuera del repo)
+  → loadAgentRules: tamaño y SHA-256 de cada archivo contra manifest-v22.ts (falla cerrado)
+  → buildRulesBlock: reglas estables + precedentes seleccionados, con versión y huella
+  → adaptation_planner@v3: primera parte de la petición; después, contexto y material (igual que v2)
+  → DraftAdaptationPlan v3 → AdaptationPlan v1 (sin cambios) + declaraciones cribadas
+  → revisión: sin docente, lo condicionado o con pista que descarta el recurso se rechaza
+  → generador, CLARO y apoyos visuales, igual que siempre
+  → registro de decisiones: lo declarado, aparte de lo que la plataforma comprueba
+```
 
-### Etapa 1 · Auditoría visible (sin IA ni gasto)
+Lo que el modelo declara nunca prueba nada:
+- un «sí» en la prueba de pista retiene la decisión para el docente, salvo en P7, que solo se registra;
+- un «no» no da por comprobada ninguna pregunta;
+- un precedente citado que no iba en la petición se marca;
+- una pregunta o una nota que revela una respuesta inferida no se muestra.
 
-- Ejecutar `auditAdaptation` en servidor al cargar la revisión del plan y la ficha entregada (`page-data`). Se recalcula bajo demanda, así que no hace falta migración.
-- Mostrar al docente un panel «Registro de decisiones», con el copy de `docs/UX.md` y sin nombres técnicos. Para cada actividad:
-  - qué se cambia y por qué necesidad;
-  - lo que queda pendiente de su revisión;
-  - los avisos P8, P2, P3, P4 y P7, con su cobertura («comprobado» o «indicio; revisar»).
-- Pruebas: unidad del modelo de vista, E2E de la pantalla de revisión (escritorio y móvil), accesibilidad.
+Una decisión cuya estrategia no sirve a ninguna de las necesidades que cita también se retiene para el docente (`strategy_not_for_need`).
 
-### Etapa 2 · Reglas privadas fuera del repositorio (requiere ADR y tu aprobación)
+## Selección de precedentes (optimizada antes de la primera prueba real)
 
-- Guardar las reglas V2.2 y la biblioteca en un almacén privado del servidor: un bucket privado de Supabase leído con el cliente admin (`server-only`) o una variable de entorno de Vercel.
-- En el repositorio solo quedan:
-  - el identificador y la huella SHA-256 de cada versión (`agent_rules@v2.2` → `fdda7e6d…`);
-  - el código que las carga, que verifica la huella y falla cerrado si no coincide.
-- `ai_runs` registra la huella de las reglas usadas, nunca su contenido.
-- Portar la selección de precedentes del laboratorio a TypeScript:
-  - siempre las reglas estables;
-  - todos los casos E/R del perfil;
-  - los casos A/P cuyos recursos coincidan con las operaciones posibles.
-- El índice de la biblioteca también es privado.
-- Alternativa, si prefieres no depender de un almacén: redactar en el prompt público solo las reglas comprobables, con redacción propia. La metodología queda entonces parcialmente pública. Recomiendo el almacén privado.
+El propio método pide leer los errores corregidos (E) y las alternativas rechazadas (R) **de los recursos que se van a usar**, y los casos de esos recursos. «Que se pueden usar» se decide con el catálogo de la plataforma: necesidades activas y aplicables → sus estrategias (`DIMENSION_STRATEGIES`) → los recursos de la biblioteca que esas estrategias pueden realizar (`RESOURCES_BY_STRATEGY`).
 
-### Etapa 3 · Contrato `adaptation_planner@v3` (sin gasto)
+| Tipo de caso | Se envía si… |
+|---|---|
+| E y R | tocan un recurso general (conservar, solución propia, finalidad, paginación…) o uno habilitado |
+| A y P | solo tocan recursos generales, o tocan un recurso específico habilitado |
+| Control (`perfil_C`) | el contexto no tiene ninguna necesidad activa |
 
-- Nuevo prompt `prompts/adaptation-planner/v3.ts`. El texto público es solo la estructura y las reglas de la plataforma; las reglas V2.2 se insertan en servidor, delimitadas y con su huella.
-- El borrador v3 añade, por decisión:
-  - la prueba de pista declarada (las preguntas P1–P8 que el modelo responde «sí»);
-  - el estado («activa» o «condicionada», con su pregunta al docente);
-  - las barreras residuales declaradas;
-  - los precedentes citados.
-- Se normaliza a `AdaptationPlan v1` (sin cambiar el plan) más una parte «declarada» del registro.
-- Lo que declara el modelo nunca da nada por comprobado:
-  - un «sí» genera revisión docente;
-  - un «no» en P1, P5 o P6 sigue pendiente;
-  - un precedente citado que no estaba en la petición se marca, como el VP3 del laboratorio.
-- El esquema debe caber en las salidas estructuradas. El laboratorio midió que plan/1.1 excedía el límite de parámetros opcionales, así que el contrato v3 será compacto. Una prueba unitaria contará los opcionales del esquema generado.
-- Pruebas: planificador simulado v3, regresión A/B/C, contrato y límites del esquema.
+Por qué no se pierde cobertura:
 
-### Etapa 4 · Evaluación con el modelo real (cuesta dinero: solo con autorización expresa)
+- **Recursos inalcanzables.** Un recurso que ninguna estrategia del contexto puede realizar no se puede usar: v3 retiene cualquier decisión cuya estrategia no sirva a sus necesidades. Los espacios de respuesta los dimensiona `answer_space@v1` para todos los perfiles, así que el planificador solo llega a ellos con estrategias de formato de respuesta o de escritura.
+- **Prueba por construcción** (`tests/unit/precedent-coverage.test.ts`, en CI). Se recorren las tres fichas, los 10 perfiles de prueba y cada necesidad por cada una de las 20 estrategias. Toda decisión aplicable solo realiza recursos de la selección, y toda estrategia ajena queda retenida.
+- **Prueba con el índice real** (solo con la copia privada local). Ningún caso excluido toca un recurso utilizable; todos los E y R con recurso utilizable van; todo recurso específico de la biblioteca es alcanzable por alguna estrategia.
 
-- Materiales MAT-007 y MAT-024 en `evals/adaptation/private/` (ignorado y bajo el control de privacidad), con los perfiles A, B y C.
-- Campaña mínima: 2 materiales × 3 perfiles = 6 llamadas al planificador. El laboratorio estimó un máximo de unos 0,55–0,58 € por llamada con 32 000 tokens de salida, así que el techo ronda los 3,5 €.
-  - Antes, medir el contexto con el recuento de tokens (también es una llamada que hay que autorizar).
-  - Fijar un límite de gasto en la consola del proveedor.
-- Se comparan las decisiones con las salidas revisadas del laboratorio. La revisión docente decide; ningún resultado se convierte en regla sin un segundo caso.
+**Medida con las reglas reales.** Las reglas estables (DEC, guía, cómo consultar e índice) son fijas, unos 31.000 tokens, y nunca se recortan. Tokens estimados con caracteres / 2,4 (pesimista); con caracteres / 3, unos 20 % menos.
 
-### Etapa 5 · Activación
+| Perfil | Casos antes → ahora | Bloque de reglas (tokens) | Entrada total por petición | Peor caso por llamada |
+|---|---|---|---|---|
+| A | 43 → **30** | 61.700 → **51.400** (−17 %) | ≈ 69.000 → **58.700** | 0,46 → **0,44 $** |
+| B | 42 → **37** | 61.200 → **57.600** (−6 %) | ≈ 68.500 → **64.900** | 0,46 → **0,45 $** |
+| C | 40 → **19** | 59.700 → **43.000** (−28 %) | ≈ 66.800 → **50.100** | 0,46 → **0,42 $** |
 
-- Activar v3 (`ACTIVE_ADAPTATION_PROMPT_VERSIONS`) solo después de revisar la etapa 4.
-- Promover cada comprobación de aviso a `review` cuando haya evidencia. Ninguna pasa a `block` sin una decisión docente.
-- Decidir la política de `answer_space@v1` ante P8: espacios homogéneos entre actividades comparables, o confirmación docente.
+- Las cifras son de fracciones; geografía y argumentación dan lo mismo ±1.000 tokens.
+- El ahorro en dinero por llamada es pequeño: la salida máxima (32.000 × 10 $/M = 0,32 $) domina el peor caso.
+- Un recuento exacto necesita el endpoint de recuento de tokens, que también es una llamada a la API y no se ha hecho.
 
-### Decisiones pendientes
+## Salidas estructuradas
 
-1. Almacén privado de las reglas (recomendado) o reglas comprobables en un prompt público.
-2. Si el registro se persiste (migración) o se recalcula bajo demanda (recomendado al principio).
-3. Presupuesto y materiales de la etapa 4.
-4. Política de `answer_space@v1` frente a P8.
-5. Derechos de uso de MAT-007 y MAT-024 antes de usarlos fuera del laboratorio.
+Límites documentados en platform.claude.com («Structured outputs», leído el 2026-11-04):
+
+- 24 parámetros opcionales y 16 con unión por petición;
+- `additionalProperties: false` en todo objeto;
+- `minItems` solo 0 o 1;
+- sin `minLength`, `maxLength`, `minimum` ni `maximum`;
+- sin recursión ni `$ref` externos;
+- regex sin referencias hacia atrás, *lookaround* ni `\b`.
+
+`src/lib/ai/structured-limits.ts` los comprueba sobre el esquema **exacto** que enviaría el SDK (`zodOutputFormat`):
+
+| Esquema | Opcionales | Uniones | Problemas |
+|---|---|---|---|
+| plan v1 | 3 | 1 | 0 |
+| plan v2 | 6 | 1 | 0 |
+| **plan v3** | **11** | **1** | **0** |
+
+- **Entrega.** v3 usa entrega `auto`: decodificación restringida, con vuelta automática al esquema en el prompt si la API respondiera «Schema is too complex».
+- **Lo que valida Zod en local.** La prueba de pista obligatoria en los recursos y la existencia de las preguntas no se pueden expresar en el esquema. El SDK instalado también pasa `enum` y `pattern` a la descripción.
+- **Pendiente.** La API tiene límites internos de gramática que no publica: la compatibilidad solo quedará demostrada en la primera llamada real.
+
+## Piloto: MAT-007 con el perfil A (pendiente de tu autorización)
+
+- **Material.** MAT-007 es una ficha de 2 páginas (CeDeC) bajo **CC BY-SA 4.0 España**, según su propio pie. Permite usarla y adaptarla con atribución; si una adaptación se distribuyera, tendría que llevar la misma licencia. Se usa solo en privado.
+- **Tres modos** (`pnpm eval:adaptation:pilot`):
+
+  | Modo | Red | Qué hace |
+  |---|---|---|
+  | sin opciones | no | Valida material y reglas y estima la cota por caracteres. Es solo una comprobación previa: nunca autoriza una llamada |
+  | `--count-tokens` | sí, **gratis** | Cuenta la entrada exacta del análisis y la parte fija del planificador (sistema, esquema y los 45 precedentes) con el endpoint oficial de recuento. **Envía el material y las reglas a la API**: necesita autorización |
+  | `--yes` | sí, **de pago** | Lo anterior y, como mucho, dos llamadas de pago: análisis y planificador v3 |
+
+- **Garantías de gasto con `--yes`** (`evals/adaptation/pilot-run.ts`, `pilot-lib.ts`, `metered-client.ts`):
+  1. **Sin reintentos.** El cliente del SDK se crea con `maxRetries: 0` (por defecto, el SDK reintenta 2 veces los errores 408/409/429/5xx y los de conexión). Un cliente medido registra **cada** petición HTTP, recuentos incluidos.
+  2. **Sin respaldo de salidas estructuradas.** El modo de cada salida está fijado: análisis en `prompted` (su esquema supera el límite de gramática) y planificador v3 en `native`. Si la API rechaza el esquema, no hay segunda petición: se detiene.
+  3. **Sin reparaciones ni regeneraciones.** El análisis va con `singleCall` y el planificador se llama una vez.
+  4. **Recuento antes de pagar.** Antes de cada llamada de pago se cuenta su entrada exacta. El planificador se vuelve a contar ya con el análisis real.
+  5. **Reserva antes de pagar.** Cada llamada reserva su máximo: (recuento × 1,10 + 1.000 tokens) cobrados como escritura de caché (1,25×), más la salida completa (`max_tokens`, que también acota el razonamiento). La API documenta el recuento como una estimación que puede diferir «en una pequeña cantidad»: el 10 % y los 1.000 tokens cubren esa diferencia.
+  6. **Límite seguro: 80 % de `--budget-usd`** (0,80 $ con 1 USD). Si una reserva no cabe, no se llama.
+  7. **Liquidación con el uso real.** Si la llamada falla, no hay uso, hay más de una petición o el coste supera la reserva, la reserva se conserva entera y la ejecución se detiene. También se detiene, antes de pagar, si falla un recuento o falta el precio de un modelo.
+  8. **Pruebas sin red** (`tests/unit/pilot-guarantees.test.ts`). Con un `fetch` falso, el SDK con `maxRetries: 0` hace 1 petición ante un 529; con los valores por defecto, 3. Sin respaldo, un esquema rechazado es una sola petición. El recuento usa los mismos parámetros que la llamada. El piloto completo hace 3 recuentos y 2 llamadas de pago, y se detiene sin pagar en cada caso de incertidumbre.
+- **Resultados.** Van a `evals/adaptation/private/pilot-v22/`, ignorada por git y con control de privacidad: análisis, contexto, plan v1, declaraciones, validación, registro, peticiones y movimientos de la reserva, con las huellas de las reglas, nunca su texto. El terminal muestra solo huellas y métricas.
+- **Estimación previa sin red** (`STANDARD` = `claude-sonnet-5-5`, esfuerzo `medium`; precios de `src/lib/ai/costs.ts`):
+
+| Llamada | Salida máxima | Estimación sin red |
+|---|---|---|
+| Análisis de MAT-007 (2 páginas) | 16.000 | ≤ 0,2035 $ |
+| Planificador v3 | 32.000 | ≤ 0,5612 $ |
+| **Total** | | **≤ 0,7647 $ ≈ 0,68 €**, dentro del límite seguro de 0,80 $ |
+
+  La cota que manda es la **contada**: si, con el recuento y el margen, el análisis más el planificador superan 0,80 $, la ejecución se detiene antes de la primera llamada de pago. Por precio, el máximo absoluto de la ejecución es 0,80 $.
+- **Antes de lanzarlo:** fijar un límite de gasto en la consola del proveedor (una segunda barrera independiente) y revisar el tipo de cambio.
+
+## Apoyos visuales con OpenAI: compatibilidad y conexiones pendientes (análisis, sin implementar)
+
+**Lo que ya existe y se reutiliza** (`docs/VISUAL_RESOURCES.md` § Ilustraciones). Hoy solo «Hacer magia» puede llegar a una ilustración, y pasa por:
+
+1. una decisión del plan con `visual`, que deja un hueco de imagen «solicitado» en la ficha;
+2. la escalera de la política visual: original, reconstrucción, figura propia sin IA, **ilustración**, reescritura, sustitución o parada;
+3. el servicio de ilustraciones:
+   - `image_brief@v1`, con validación determinista: marcadores exactos, sin etiquetas que den la respuesta, sin datos exactos;
+   - una unidad de cuota `image`;
+   - la imagen con OpenAI (`IMAGE_QUALITY`);
+   - la revisión por visión `image_review@v1`, con aceptación del servidor;
+   - hasta un segundo intento;
+4. las barreras de producto:
+   - consentimiento docente persistido en el contexto (ADR-042);
+   - `FLAG_AI_IMAGES_ENABLED`;
+   - plan con `image_generation` (hoy solo Max, 50 al mes);
+   - como mucho 3 ilustraciones por adaptación;
+   - techo de 0,50 $ por adaptación, comprobado contra `ai_runs` antes de cada llamada;
+   - devolución de la unidad si la imagen no se aprueba.
+
+No hace falta otro generador. Todas esas barreras están **dentro** del servicio de ilustraciones, así que se aplicarán igual a lo que pida v3.
+
+**Qué puede hacer v3 hoy, sin cambios:**
+- **Decidir una imagen.** Puede proponer una decisión con `visual` (`new_representation` u `optional_support`) y su `purpose`. Esa decisión pasa la prueba de pista declarada y la criba de v3, que retiene para el docente lo condicionado, la pista declarada y la estrategia ajena.
+- **Selección de casos.** Con la estrategia `visual_support`, la selección envía los casos de imágenes y esquemas.
+- **Fugas.** Si el `purpose` revela una respuesta, lo bloquea `validatePlan`, y la fuga aproximada se detecta.
+- **Consentimiento.** v3 lo ve: `visual_supports.requested` viaja en el contexto del planificador. Sin consentimiento, el servicio no ilustra nada.
+- **Retención.** Una decisión retenida nunca llega a la política visual en «Hacer magia».
+
+**Conexiones que faltan:**
+
+| # | Hueco | Efecto hoy | Conexión propuesta |
+|---|---|---|---|
+| V1 | El contrato no distingue «figura dibujada» de «ilustración». `visualTreatment` solo produce los estilos `diagram` e `icon`, y la política solo ilustra primero `illustration`/`photo_like` | Un apoyo del plan se dibuja con nuestro renderer. Si no se puede y es opcional, se omite. **v3 no puede pedir una ilustración de forma explícita** | Contrato del planificador v4 (o del borrador): `visual.form` = `drawn` / `illustration`, que se traduce al estilo `illustration` del hueco |
+| V2 | Solo un apoyo **esencial** sin figura posible acaba en ilustración, y si no se consigue la ficha se para | Choca con DEC-013: nada indispensable puede depender de generar una imagen | Que una ilustración pedida por el plan sea **siempre opcional**. Las imágenes imprescindibles siguen por la vía actual del visual que falta del original |
+| V3 | `image_brief@v1` no recibe la finalidad de la actividad, la prueba de pista declarada ni los elementos cuya identificación se evalúa | El brief puede proponer marcar o etiquetar lo que el alumno debe identificar (P1), añadir información (P2) o ser el producto que se pide (P5) | `image_brief@v2`, que recibe la finalidad, el `purpose` cribado, los elementos protegidos de la actividad y los «no mostrar» derivados. Validación determinista nueva: ninguna etiqueta coincide con un elemento cuya identificación se evalúa |
+| V4 | `image_review@v1` comprueba la respuesta, el texto y la edad, pero no las pistas visuales (color o posición destacada, P3; número u orden revelado, P4) | Una imagen correcta puede dar pista por su composición | `image_review@v2` con las preguntas comprobables por visión. P1, P5 y P6 siguen siendo juicio docente |
+| V5 | La escena de contexto opcional («Hacer magia» con consentimiento) la elige la política, no el planificador | Con v3 activo habría imágenes no decididas por la metodología | Con v3, la escena solo se crea si existe una decisión v3 que la pide (y pasa la criba) |
+| V6 | El registro no muestra qué fue de cada imagen pedida (generada, dibujada, omitida, sin consentimiento o sin cuota) | El docente no ve por qué falta una ilustración | Añadir al registro el resultado de la política visual por decisión |
+| V7 | Las declaraciones de v3 no se persisten ni el orquestador las usa | Común a toda la activación de v3 | Ver «Activación» |
+
+**Coste y presupuesto de una futura prueba con imágenes.** Cada ilustración cuesta un brief, hasta 2 imágenes y hasta 2 revisiones, dentro del techo existente de 0,50 $ por adaptación. Una prueba de imágenes será una evaluación aparte, con su propia autorización y su propio techo. **En esta entrega no se generan imágenes reales.**
+
+## Activación (después de la evaluación)
+
+Hecho para el piloto restringido ([ADR-046](ARCHITECTURE.md), [guía](qa/piloto-v22-interfaz/README.md)):
+- las declaraciones se guardan con la validación del plan, sin migración de tipos de artefacto;
+- `normalizePlanV3` y la retención de decisiones están conectados al orquestador;
+- las preguntas, los motivos y las barreras se muestran al docente;
+- v3 solo se puede elegir en el workspace y el backend autorizados.
+
+Pendiente:
+- subir las reglas al bucket de **staging** (🔒) con `AGENT_RULES_SOURCE=storage`;
+- valorar los resultados del piloto;
+- cambiar la versión activa (`ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner`) o el pipeline general a v3: una decisión aparte, con la E2E completa.
+
+## Riesgo residual de lo publicado en la PR #79
+
+Los commits `47711ce`…`db63904` de la rama `feature/integracion-agente-v22`, que es pública, contienen en `AGENTE_V22.md` un resumen de una línea, **redactado por nosotros**, del sentido de cada pregunta P1–P8. También hay una descripción breve de los perfiles A y B. Se retiraron en `12632b7`, pero siguen en el historial.
+
+- **Qué revelan:** la idea general de cada pregunta de pista. No revelan el texto de V2.2, sus decisiones DEC, su guía, los casos de la biblioteca, sus fuentes ni ningún material. La búsqueda de coincidencias de 5 palabras no encontró texto de los materiales.
+- **Valoración:** riesgo **bajo**. Son principios de diseño accesible conocidos en la literatura, y sin las reglas, los criterios de aplicación y la biblioteca no permiten reproducir el agente. El riesgo sube si se quiere proteger la metodología como secreto empresarial: lo publicado indica qué se evalúa, aunque no cómo.
+- **Opciones:**
+  - mantener el historial (recomendado si el riesgo se acepta);
+  - reescribir la rama de la #79 con squash y force-push. Necesita tu aprobación, y no borra copias, *forks* ni cachés ya hechas.
+
+  No se reescribe nada sin aprobación.
+

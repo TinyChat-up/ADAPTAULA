@@ -2,6 +2,70 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-047 — V2.2 en producción para un solo workspace, confirmaciones del docente y avisos (2026-11-10)
+
+Sustituye a la parte de ADR-046 que excluía la producción: el piloto se hace sobre la plataforma desplegada, sin otro entorno.
+
+- **Puerta** (`v22/pilot-gate.ts`). Nuevo modo `production-pilot`, válido **solo** con `VERCEL_ENV=production` (y `local`/`staging` nunca en producción). Exige el workspace autorizado, la URL de Supabase exacta, origen de reglas y presupuesto. Sin cualquiera de ellos, todos los workspaces siguen con el planificador actual.
+- **Gasto por workspace** (`ai/spend-ledger.ts`). El libro de gasto mide **solo** las llamadas del workspace autorizado (`providerFor`, `imageProviderFor` y el análisis reciben el workspace). Ningún otro workspace pasa por el libro, de modo que el presupuesto no puede frenar a otro usuario. Mientras las imágenes de pago no estén medidas, se bloquean para ese workspace (V1–V7); las de los demás no cambian.
+- **Una pausa no es un fallo.** «Hacer magia» con decisiones retenidas por el método muestra «Hay decisiones que necesitan tu respuesta» (`teacher_decision`), no «No hemos podido completar…».
+- **Confirmaciones.** `PlanReview.confirmations` guarda la respuesta del docente (Sí, No, No lo sé) a cada decisión retenida. **El servidor** rechaza (`invalid_review`, sin persistir nada) aprobar o editar una retenida sin «Sí». En la pantalla, «No» y «No lo sé» dejan la decisión fuera.
+- **Avisos tras generar.** Los controles de #79 se recalculan bajo demanda sobre la ficha generada (`getAdaptationMethodNotes`) y se muestran como avisos orientativos. No bloquean ni cambian la entrega.
+- **Contrato V3 tolerante.** Un `null` en un campo opcional se corrige sin llamada. Una prueba de pista ausente o una condicionada sin pregunta válida **retiene** la decisión (`declaration_missing`) en lugar de provocar una reparación de pago que reenvía todas las reglas.
+- **Caché.** La cabecera estable de las reglas (los archivos fijos, los mismos en cada petición) se marca cacheable; la selección de precedentes y el material van después. El texto enviado y su huella no cambian. El ahorro real depende de que dos peticiones caigan dentro de la vida de la caché del proveedor y no está medido.
+
+## ADR-046 — Piloto de V3 desde la interfaz: puerta, versiones fijadas y libro de gasto (2026-11-06)
+
+El docente prueba `adaptation_planner@v3` desde la interfaz habitual, en un entorno aislado, sin cambiar nada para el resto.
+
+- **Puerta** (`v22/pilot-gate.ts`). V3 solo se puede **elegir** si se cumple todo:
+  - el flag `FLAG_PLANNER_V3_PILOT` está activo;
+  - el modo es `local` o `staging` (no hay modo de producción);
+  - el despliegue no es de producción;
+  - el workspace es el autorizado;
+  - el backend es exactamente el Supabase nombrado para el piloto;
+  - las reglas tienen origen y hay presupuesto de gasto.
+
+  La comprobación del backend es común con el piloto de imágenes (`lib/pilots/backend.ts`), cuyo comportamiento no cambia.
+- **Selector.** «Planificador actual / experimental V2.2» aparece solo en ese workspace. Es una petición: el servidor vuelve a comprobar la puerta y, si no se cumple, la rechaza (`forbidden`) antes de crear adaptación, reserva o trabajo. Permite adaptar el mismo material y perfil con ambos planificadores y compararlos.
+- **Versiones fijadas.** La adaptación congela al crearse `planner.prompt_version = 3`, su tope de salida (12.000) y la huella del paquete de reglas (`pipeline_versions.rules`). La etapa de planificación se niega a usar unas reglas distintas de las fijadas. Todas las demás adaptaciones siguen con el planificador actual (v2): no hay activación global.
+- **Declaraciones.** Se guardan con la validación del plan (`plan_validation.declarations`) y el borrador guarda qué reglas y precedentes viajaron (huellas e identificadores). `ai_runs.rules_sha256` se registra (migración 035). No se añade ningún tipo de artefacto. El registro de decisiones se sigue recalculando bajo demanda.
+- **Revisión docente.** En la revisión del plan, una decisión retenida (condicionada, con una pista que descarta el recurso o con una estrategia ajena a sus necesidades) empieza **sin marcar**, con su motivo y su pregunta. Se muestran las preguntas abiertas y las barreras que permanecen. «Hacer magia» con v3 rechaza lo retenido y **se detiene** en la revisión del plan en lugar de generar. El docente puede aprobar lo que quiera.
+- **Libro de gasto** (migración 035, `ai/spend.ts`, `ai/spend-ledger.ts`). Con `AI_PILOT_BUDGET_USD` (y fuera de producción, donde se ignora), cada petición HTTP de pago a Anthropic:
+  - se cuenta con el endpoint gratuito y los mismos parámetros;
+  - reserva su cota (recuento × 1,10 + 1.000 tokens, cobrados como escritura de caché, más toda la salida);
+  - solo se envía si lo comprometido de la campaña más la cota cabe en el presupuesto.
+
+  Esto cubre análisis, planificación, generación, revisión, apoyos visuales, reparaciones, reintentos de los trabajos y el respaldo de salidas estructuradas (cada uno es otra petición admitida). El SDK no reintenta por su cuenta. Las admisiones se serializan con un bloqueo por campaña (trabajos simultáneos). Lo pendiente y lo retenido (error, uso desconocido, liquidación perdida) cuentan por su cota entera. Recuento, precio o libro que fallan: no se envía nada. Las imágenes de pago no se crean donde se mide el gasto (V1–V7, siguiente etapa).
+- **Informe** (`ai_cost_report`, `pnpm pilot:report`). Una fila por llamada, con fase, modelo, tokens y coste estimado; resumen por adaptación y fase, y el análisis aparte por material. Solo `service_role` y exportación a la carpeta privada ignorada. La interfaz de usuario sigue sin mostrar modelos, tokens ni costes.
+
+**Despliegue.** Nada se despliega con este cambio. En Vercel, Preview y Producción comparten hoy las variables de Supabase y de Anthropic, y solo existe un proyecto Supabase (en pausa). Antes del piloto hace falta un proyecto de staging independiente y variables de Preview limitadas a la rama. La rama del piloto tiene desactivado el despliegue automático (`vercel.json`). [Guía y estado de staging](qa/piloto-v22-interfaz/README.md).
+
+## ADR-045 — Reglas pedagógicas privadas y planificador v3 (2026-11-04)
+
+El planificador `adaptation_planner@v3` decide con la metodología V2.2 y no solo se comprueba después. Las reglas y la biblioteca de precedentes siguen siendo **privadas**:
+
+- **Origen.** Viven en el bucket privado `agent-rules` (migración 034, sin políticas para ningún rol de usuario), leído solo desde el servidor con service role. Para evaluaciones privadas también se acepta una copia local, siempre fuera de cualquier repositorio Git.
+- **Integridad.** El repositorio guarda solo su manifiesto: rutas, tamaños y SHA-256 (`src/lib/agent-rules/manifest-v22.ts`). Cada byte se verifica antes de usarlo, y la carga falla cerrada.
+- **Trazabilidad.** `ai_runs.rules_sha256` y el registro de decisiones guardan la huella del paquete, la del bloque enviado y los identificadores de los precedentes. Nunca el texto.
+
+**Contrato.** v3 escribe `DraftAdaptationPlan v3`, que se normaliza al mismo `AdaptationPlan v1` (CLARO, generador y apoyos visuales no cambian). Lo que el método obliga a declarar viaja aparte (`PlannerDeclarations`):
+- estado activa/condicionada;
+- prueba de pista;
+- precedentes;
+- preguntas al docente;
+- barreras residuales.
+
+**Cómo se usan las declaraciones.** Nunca prueban nada. Sin docente, una decisión condicionada o con una pista que descarta el recurso se rechaza y no se aplica.
+
+**Activación.** v3 no es la versión activa. *(Actualizado por ADR-046: el orquestador ya persiste sus declaraciones, y v3 solo se puede elegir en el piloto restringido; sigue sin activarse para nadie más.)*
+
+**Selección de precedentes.** Los recursos posibles se derivan del catálogo de la plataforma: necesidades activas → estrategias (`DIMENSION_STRATEGIES`) → recursos que esas estrategias pueden realizar. Ya no se usan los perfiles piloto del laboratorio. v3 retiene cualquier decisión cuya estrategia no sirva a sus necesidades, así que una decisión aplicable solo puede realizar recursos cuyos precedentes se enviaron.
+
+**Entrega.** v3 usa salidas estructuradas (`delivery: "auto"`), con respaldo al prompt. Su esquema cumple los límites documentados (`structured-limits.ts`).
+
+**Excepción a la convención de prompts.** `prompts/<key>/vN.ts` sigue siendo la fuente del texto público. La parte privada se identifica por versión y huella, no por su texto. [Detalle](AGENTE_V22.md).
+
 ## ADR-044 — Agente pedagógico V2.2: registro de decisiones, validadores y material privado (2026-11-04)
 
 El laboratorio del agente V2.2 (Python, privado) no se porta entero. Su extractor, su generador de PDF y su verificación ya tienen equivalente en Adaptaula (análisis, CLARO, `validatePdf`); duplicarlos crearía un segundo análisis y un segundo generador. Se integran tres piezas:

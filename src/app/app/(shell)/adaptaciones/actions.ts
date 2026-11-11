@@ -14,6 +14,7 @@ import {
   getAdaptationPlan,
   getAdaptationStatus,
   getAdaptationVersion,
+  PLANNER_CHOICES,
   reopenReview,
   retryAdaptationStage,
   startGeneration,
@@ -71,6 +72,8 @@ const StartInput = z.object({
   requestKey: z.string().min(8).max(120),
   mode: z.enum(CREATION_MODES),
   visualSupports: z.boolean().optional(),
+  /** A request, never an entitlement: the server's pilot gate decides (ADR-046). */
+  planner: z.enum(PLANNER_CHOICES).optional(),
 });
 
 /**
@@ -89,6 +92,7 @@ export async function createAdaptationFromMaterialAction(materialId: string, inp
       requestKey: parsed.data.requestKey,
       creationMode: parsed.data.mode,
       visualSupports: parsed.data.visualSupports === true,
+      ...(parsed.data.planner ? { planner: parsed.data.planner } : {}),
     }),
   );
 }
