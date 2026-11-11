@@ -1322,8 +1322,15 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
         // A malformed answer (the review is asked as free JSON against a strict contract) gets ONE new ask of the same review, then the
         // stage fails as before: bounded by construction (two calls at most, both kept in `ai_runs`), never a loop. Anything else
         // (a refusal, a cut-off answer, a provider error) is not asked again here.
+        // A resumed stage (lease lost, process restarted) continues from the rejections already on record for THIS review input, so the
+        // bound of two calls holds across resumptions too: it never starts again from the first ask.
+        const earlier = (await store.listArtifacts(adaptationId, "execution_report")).filter((a) => {
+          const payload = a.payload as { reviewer_rejected?: unknown; review_input_fingerprint?: string };
+          return payload.reviewer_rejected !== undefined && payload.review_input_fingerprint === reviewInputFp;
+        }).length;
+        if (earlier >= 2) throw new AdaptationError("reviewer_schema", "la revisión ya fue rechazada dos veces");
         let answered;
-        let ask = 1;
+        let ask = earlier + 1;
         for (; ; ask++) {
           try {
             answered = await services.reviewer.review({ context: loaded.context, document, plan: reviewed.effective, solvability: solvabilityInputs(loaded.analysis), reviewContext });
@@ -1335,9 +1342,16 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
             if (rejected) {
               // Why it was rejected, in paths and rules (no content): the diagnosis that was missing.
               deps.log?.warn("reviewer_output_rejected", { adaptationId, ask, kind: rejected.kind, outputTokens: rejected.outputTokens, issues: rejected.issues.map((i) => `${i.path}:${i.code}`).join(",").slice(0, 400) });
-              await store.putArtifact(adaptationId, run.lease, "execution_report", reviewFp, fingerprint({ input: reviewInputFp, reviewer_rejected: ask, issues: rejected.issues }), { review_fingerprint: reviewFp, reviewer_rejected: { ask, kind: rejected.kind, output_tokens: rejected.outputTokens, issues: rejected.issues.slice(0, 15) } });
+              await store.putArtifact(adaptationId, run.lease, "execution_report", reviewFp, fingerprint({ input: reviewInputFp, reviewer_rejected: ask, issues: rejected.issues }), { review_fingerprint: reviewFp, review_input_fingerprint: reviewInputFp, reviewer_rejected: { ask, kind: rejected.kind, output_tokens: rejected.outputTokens, issues: rejected.issues.slice(0, 15) } });
             }
             if (!rejected || ask >= 2) throw error;
+            // The same limit that admits a new job: a workspace whose paid calls keep failing gets no extra paid call.
+            try {
+              await store.assertFailureBudget(row.workspace_id);
+            } catch (budget) {
+              if (budget instanceof FailureBudgetError) throw error;
+              throw budget;
+            }
             await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
             if (!(await store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
           }

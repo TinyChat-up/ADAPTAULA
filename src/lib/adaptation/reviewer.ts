@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
 import { estimateCostUsd } from "@/lib/ai/costs";
 import { AIError, toAIError } from "@/lib/ai/errors";
@@ -11,7 +12,7 @@ import {
   type ReviewCheck,
 } from "@/lib/schemas/pedagogical-review";
 import { ReviewerFindingsSchema, type ReviewerFindings } from "@/lib/schemas/reviewer-findings";
-import { zodIssues } from "./planner-draft";
+import { zodIssues, type DraftIssue } from "./planner-draft";
 import { assembleReview, deterministicChecks } from "./review";
 import type { ReviewInput } from "./review-checks";
 import { reviewScope, type JudgedCheck, type PedagogicalReviewContext, type ReviewScope } from "./review-context";
@@ -92,7 +93,22 @@ export async function callReviewer(params: ReviewerCallParams): Promise<Reviewer
   return { response, run };
 }
 
-export type ReviewerParse = { outcome: "ok"; findings: ReviewerFindings } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; error?: import("zod").ZodError };
+/**
+ * What a rejected review may keep: the CODE, the PATH and the RULE of each invalid field, from a fixed vocabulary. Never a value of
+ * the answer, and never a key the model invented (an unrecognised key is reported only as a count): the answer may quote the sheet.
+ */
+const SAFE_CODES = new Set(["too_big", "too_small", "invalid_type", "invalid_value", "invalid_format", "unrecognized_keys", "custom", "missing"]);
+export function reviewerRejectionIssues(error: z.ZodError): DraftIssue[] {
+  return error.issues.slice(0, 20).map((issue) => {
+    const code = SAFE_CODES.has(issue.code) ? issue.code : "other";
+    // Paths are the schema's own (property names and array positions); any other segment is dropped.
+    const path = issue.path.map((seg) => (/^[A-Za-z0-9_]{1,40}$/.test(String(seg)) ? String(seg) : "?")).join(".") || "(raíz)";
+    if (issue.code === "unrecognized_keys") return { path, code, rule: `campos no permitidos: ${issue.keys.length}` };
+    return { path, code, rule: (zodIssues(new z.ZodError([issue]))[0]?.rule ?? "").slice(0, 120) };
+  });
+}
+
+export type ReviewerParse = { outcome: "ok"; findings: ReviewerFindings } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; error?: z.ZodError };
 
 /** Stop reason first (a cut-off answer is never parsed), then JSON, then the strict contract. */
 export function parseReviewerResponse(response: StructuredResponse): ReviewerParse {
@@ -211,7 +227,7 @@ export function createModelReviewer(deps: { selection: ModelSelection; provider:
         // Paths and rules of the invalid fields, never the answer itself: what an operator needs to know WHY it was rejected.
         throw new RejectedStageOutput(code, `reviewer output rejected: ${parsed.outcome}`, rejectedRun(run, code), {
           kind: parsed.outcome,
-          issues: parsed.error ? zodIssues(parsed.error) : [],
+          issues: parsed.error ? reviewerRejectionIssues(parsed.error) : [],
           outputTokens: response.usage.outputTokens,
           maxOutputTokens: deps.maxOutputTokens,
         });
