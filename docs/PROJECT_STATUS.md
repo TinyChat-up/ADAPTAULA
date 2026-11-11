@@ -1,5 +1,13 @@
 # Estado compartido de Adaptaula
 
+> **Agente pedagógico V2.2: registro de decisiones y validadores (2026-11-04):** base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22`; PR sin merge. Integración **parcial**: no es todavía la integración completa del agente V2.2. Componentes:
+> - registro de decisiones derivado del plan;
+> - validadores deterministas (P8 y la parte comprobable de P2, P3, P4 y P7, límite de palabras, medios condicionados, fugas aproximadas) como auditoría aparte, sin bloquear ni cambiar la entrega;
+> - regresión A/B/C;
+> - control de material privado en pre-commit, pruebas y CI.
+>
+> No se porta ni el extractor ni el generador del laboratorio (CLARO sigue siendo el único). Reglas V2.2, biblioteca, laboratorio y materiales reales fuera del repositorio. [Correspondencia, resultados y plan de conexión con el planificador](AGENTE_V22.md), ADR-044. Pruebas: E2E 138 correctas, 6 omitidas y 4 fallidas (anteriores, también en `main`: `materials.spec.ts:110` y `:179`, de #77); CI de privacidad verificada en GitHub. Hallazgos P8 de `answer_space@v1` pendientes de decisión. Sin IA de pago, despliegues ni migraciones.
+
 Entrega actual: [PR #76](https://github.com/TinyChat-up/ADAPTAULA/pull/76), perfiles docentes con fortalezas, barreras y apoyos combinables; [alcance, capturas y pruebas](qa/perfiles-dua/README.md). #75 confirmada integrada en `7d3dc15` al iniciar. Rama `codex/perfiles-fortalezas-barreras`, sin merge.
 
 > **Perfiles comprensibles y compatibles (2026-10-26):** once tarjetas combinables, observaciones declaradas de catálogo y resumen en tres bloques. Suma conservadora, sustitución confirmada, deshacer y conservación al cerrar áreas. Lectura V1/V2, guardado/duplicación, contexto sin alias y protección de conflictos. Migración **032 solo local**: impide que un cliente antiguo degrade V2 y borre sus observaciones; requiere autorización y aplicación antes de permitir escrituras V2 en un entorno compartido. Unidad/BD 2.049 correctas/13 omitidas, PDF 80/80, E2E completa 142 correctas/4 omitidas más 10/10 focalizadas con 032 cargada desde el arranque. Typecheck, lint sin errores (aviso previo), build, smoke raster/PDF y secretos correctos. Imágenes y motor curricular #63 no ampliados; calidad del modelo real y revisión con docentes/tecnologías de apoyo pendientes. Sin IA pagada ni servicios remotos.

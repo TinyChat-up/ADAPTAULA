@@ -83,3 +83,12 @@ next-env.d.ts
 /evals/visual-location/results-geometry-*/run-status.json
 /evals/pedagogical-quality/results-*/report.json
 /evals/pedagogical-quality/results-*/rules.sha256
+
+# Material privado del agente pedagógico (ADR-044). Además de esto, el control de privacidad corre en pre-commit, en
+# `pnpm test` y en CI: .gitignore no basta (git add -f, otros nombres, texto pegado).
+/materiales/
+*.bundle
+*.zip
+AGENTE_PEDAGOGICO_*
+adaptaula-lab*/
+registro_gasto/

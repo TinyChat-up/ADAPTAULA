@@ -1,0 +1,4 @@
+#!/bin/sh
+# Control de privacidad antes de cada commit (ADR-044): rutas reservadas, copias de archivos privados y frases de
+# documentos privados en lo que se va a confirmar. Instalado por `pnpm install` (scripts/privacy/install-hooks.mjs).
+exec node scripts/privacy/check-private-content.mjs --staged
