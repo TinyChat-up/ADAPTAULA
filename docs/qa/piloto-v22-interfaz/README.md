@@ -28,7 +28,7 @@ No se ha consultado el contenido de ninguna base de datos ni se ha descifrado ni
 1. 🔒 **Crear el proyecto Supabase de staging**, independiente y en la UE. Comprobar el límite de proyectos activos del plan; hoy hay dos en pausa.
 2. 🔒 **Aplicar las migraciones 001–035** con la CLI de Supabase (`supabase link` al proyecto de staging, después `supabase db push`). Nunca a mano en el panel.
 3. 🔒 **Verificarlo**: inspección de solo lectura del [procedimiento 5B](../adaptaula-2-etapa-5b/README.md) y `pnpm test:rls:real` contra staging ([SUPABASE_TESTING](../../SUPABASE_TESTING.md)).
-4. 🔒 **Subir las reglas privadas** al bucket `agent-rules` de staging. Verificar primero sin subir: `pnpm agent-rules:verify <copia privada>`. Después, con las variables de staging cargadas: `node --env-file=.env.pilot --import tsx scripts/agent-rules/upload.ts <copia privada> --upload`.
+4. 🔒 **Subir las reglas privadas** al bucket `agent-rules` de staging. Verificar primero sin subir: `pnpm agent-rules:verify <copia privada>`. Después, con las variables de staging cargadas: `node --env-file=.env.pilot --conditions=react-server --import tsx scripts/agent-rules/upload.ts <copia privada> --upload`.
 5. 🔒 **Clave de IA exclusiva**: una clave de Anthropic solo para el piloto, con **límite de gasto en la consola** (≤ 10 €). Así su uso en la consola es exactamente el coste del piloto. OpenAI no hace falta en la primera ronda.
 6. 🔒 **Variables de Vercel limitadas a la rama** `feature/agente-v22-piloto-interfaz`: en *Preview*, «Git branch» = esa rama. Se introducen en el panel de Vercel, nunca en el chat ni en Git.
 
