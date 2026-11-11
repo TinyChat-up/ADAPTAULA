@@ -11,6 +11,7 @@ import {
   type ReviewCheck,
 } from "@/lib/schemas/pedagogical-review";
 import { ReviewerFindingsSchema, type ReviewerFindings } from "@/lib/schemas/reviewer-findings";
+import { zodIssues } from "./planner-draft";
 import { assembleReview, deterministicChecks } from "./review";
 import type { ReviewInput } from "./review-checks";
 import { reviewScope, type JudgedCheck, type PedagogicalReviewContext, type ReviewScope } from "./review-context";
@@ -91,14 +92,14 @@ export async function callReviewer(params: ReviewerCallParams): Promise<Reviewer
   return { response, run };
 }
 
-export type ReviewerParse = { outcome: "ok"; findings: ReviewerFindings } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[] };
+export type ReviewerParse = { outcome: "ok"; findings: ReviewerFindings } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; error?: import("zod").ZodError };
 
 /** Stop reason first (a cut-off answer is never parsed), then JSON, then the strict contract. */
 export function parseReviewerResponse(response: StructuredResponse): ReviewerParse {
   if (response.stopReason === "refusal") return { outcome: "refused", issues: ["El modelo rechazó la petición."] };
   if (response.stopReason === "max_tokens") return { outcome: "truncated", issues: ["La salida alcanzó el límite de tokens."] };
   const parsed = parseStructured(response.text, ReviewerFindingsSchema);
-  return parsed.ok ? { outcome: "ok", findings: parsed.data } : { outcome: parsed.kind, issues: parsed.issues };
+  return parsed.ok ? { outcome: "ok", findings: parsed.data } : { outcome: parsed.kind, issues: parsed.issues, ...("error" in parsed && parsed.error ? { error: parsed.error } : {}) };
 }
 
 /** Findings → the draft the merge reads. A request for human review can only raise a PASS to a WARN, never lower anything. */
@@ -207,7 +208,13 @@ export function createModelReviewer(deps: { selection: ModelSelection; provider:
       const parsed = parseReviewerResponse(response);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
-        throw new RejectedStageOutput(code, `reviewer output rejected: ${parsed.outcome}`, rejectedRun(run, code));
+        // Paths and rules of the invalid fields, never the answer itself: what an operator needs to know WHY it was rejected.
+        throw new RejectedStageOutput(code, `reviewer output rejected: ${parsed.outcome}`, rejectedRun(run, code), {
+          kind: parsed.outcome,
+          issues: parsed.error ? zodIssues(parsed.error) : [],
+          outputTokens: response.usage.outputTokens,
+          maxOutputTokens: deps.maxOutputTokens,
+        });
       }
       return { draft: findingsToDraft(parsed.findings), runs: [run] };
     },

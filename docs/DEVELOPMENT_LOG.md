@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-11 — Diagnóstico del estanque tras la PR #84: `reviewer_schema` y una re-petición acotada
+
+- **Adaptación `8b7f5c69…` (producción, commit `bbcefa4`).** Planificador v2 (no V2.2; política de contexto 3 = código de la #84); plan sin avisos (el falso `needs_conflict` desapareció); **la política visual reconstruyó el esquema** (`attempts: locate, reconstruct, reconstruct_flow` → figura `flow` con las cuatro etiquetas: `corroborateFlow` se ejecutó y corroboró el PDF real en producción); revisión determinista `approved_with_warnings`; **falló la revisión IA**: respuesta de 842 tokens que no cumple el contrato JSON estricto (`reviewer_schema`, no reintentable). No es `visual_unavailable`. La versión 1 de la ficha quedó guardada sin revisión.
+- **Causa.** La revisión se pide como JSON libre contra un contrato estricto (`delivery: "prompted"`, `.strict()`, `reason` ≤ 160); el rechazo se descartaba sin registrar el motivo y no se reintentaba (2 de 15 revisiones históricas, 24-oct y 11-nov). El campo exacto que incumplió no es recuperable: no se guarda la respuesta.
+- **Cambio mínimo.** El rechazo guarda sus rutas y reglas (sin contenido); una respuesta malformada se vuelve a pedir **una** vez (llamada `repair`, registrada en `ai_runs`); la segunda falla como antes. Pruebas: `tests/db/reviewer-reask.test.ts`, `tests/unit/reviewer-rejection-detail.test.ts`.
+
 ## 2026-11-11 — «Hacer magia» autónomo: el estanque, conflictos, retenciones de V2.2 y perfil como centro
 
 - Rama `feature/hacer-magia-autonomo` sobre `feature/agente-v22-activacion-workspace` (PR #83). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago.
