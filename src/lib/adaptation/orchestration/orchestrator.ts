@@ -25,7 +25,7 @@ import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { checkPlanDraft, repairNotes, type PlanDraftDiagnosis } from "../planner-draft";
-import { withholdForTeacher, type PlannerDeclarations, type RulesUse } from "../plan-v3";
+import { withheldWithoutConfirmation, withholdForTeacher, type PlannerDeclarations, type RulesUse } from "../plan-v3";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
@@ -72,7 +72,7 @@ export interface PipelineServices {
 export interface OrchestratorDeps {
   store: AdaptationStore;
   /** Builds the AI services from the PERSISTED versions (alias, model, limits). It must not read the environment. */
-  services: (versions: PipelineVersions, analysis: MaterialAnalysis) => PipelineServices;
+  services: (versions: PipelineVersions, analysis: MaterialAnalysis, workspaceId?: string) => PipelineServices;
   entitlements?: AdaptationEntitlements;
   leaseSeconds?: number;
   retryBackoffSeconds?: number;
@@ -465,7 +465,7 @@ export async function runPlanningStage(deps: OrchestratorDeps, adaptationId: str
     const current = (await store.getPipeline(adaptationId))!.adaptation.status as AdaptationStatus;
     if (current === "queued") await advance(store, adaptationId, current, "planning");
 
-    const services = deps.services(loaded.versions, loaded.analysis);
+    const services = deps.services(loaded.versions, loaded.analysis, loaded.snapshot.adaptation.workspace_id);
     await store.setStep(job.id, job.attempts, "planning", 30);
 
     let first = await draftAttempt(deps, run, loaded, services, inputFp);
@@ -572,6 +572,19 @@ export async function submitPlanReview(deps: OrchestratorDeps, adaptationId: str
   if (!raw) return { ok: false, code: "plan_review_required", detail: ["no hay plan que revisar"] };
   const parsed = PlanReviewSchema.safeParse(reviewInput);
   if (!parsed.success) return { ok: false, code: "invalid_review", detail: parsed.error.issues.slice(0, 5).map((i) => i.message) };
+  // Planner V2.2 (ADR-047): a decision the method withheld is applied only with the teacher's explicit «yes». Checked here, never
+  // trusted to the screen: a review that approves or edits one without it is refused and not persisted.
+  if (parsed.data.reviewer.kind !== "auto") {
+    let declarations: PlannerDeclarations | null;
+    try {
+      declarations = await currentDeclarations(store, snapshot, loaded);
+    } catch (error) {
+      if (error instanceof AdaptationError) return { ok: false, code: "invalid_input", detail: [error.message] };
+      throw error;
+    }
+    const unconfirmed = withheldWithoutConfirmation(parsed.data, declarations);
+    if (unconfirmed.length > 0) return { ok: false, code: "invalid_review", detail: unconfirmed.map((id) => `${id}: decisión retenida sin confirmación del docente`) };
+  }
   const review: PlanReview = normalizeTeacherEdits(raw.plan, parsed.data);
 
   let reviewed: ReviewedPlan;
@@ -1159,7 +1172,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     let current = (await store.getPipeline(adaptationId))!.adaptation.status as AdaptationStatus;
     if (current === "generation_queued") current = await advance(store, adaptationId, current, "generating");
 
-    const services = deps.services(loaded.versions, loaded.analysis);
+    const services = deps.services(loaded.versions, loaded.analysis, loaded.snapshot.adaptation.workspace_id);
     const generatorVersion = loaded.versions.generator.prompt_version;
     await store.setStep(job.id, job.attempts, "generating", 30);
 

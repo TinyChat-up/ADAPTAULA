@@ -23,6 +23,7 @@ const REASON: Partial<Record<DeclarationIssueCode, string>> = {
   conditional: "Depende de tu respuesta a una pregunta.",
   blocking_hint: "Podría dar una pista sobre lo que se evalúa.",
   strategy_not_for_need: "Usa un apoyo que no corresponde a las necesidades que cita.",
+  declaration_missing: "No consta que se haya comprobado si da una pista.",
 };
 
 export function projectMethod(declarations: PlannerDeclarations | null | undefined): { decisions: Record<string, DecisionMethodDto>; plan: PlanMethodDto } | null {

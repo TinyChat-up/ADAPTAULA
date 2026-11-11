@@ -6,9 +6,10 @@ import { AdaptationView, type AdaptationActions } from "@/components/adaptation/
 import { OriginalDocument } from "@/components/workspace/original-document";
 import { getMaterialDetail } from "@/lib/materials/repository";
 import { PageHeader } from "@/components/ui/layout";
-import { loadAdaptationPage } from "@/lib/adaptation/orchestration/page-data";
+import { loadAdaptationPage, loadMethodNotes } from "@/lib/adaptation/orchestration/page-data";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { getSupabase } from "@/lib/auth/session";
+import { MethodNotes } from "@/components/adaptation/method-notes";
 import {
   cancelAdaptationAction,
   reopenReviewAction,
@@ -30,6 +31,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
   if (!data) notFound();
   const { data: snapshot } = await (await getSupabase()).from("adaptations").select("context_snapshot").eq("id", id).maybeSingle();
   const supportsRequested = (snapshot?.context_snapshot as { visual_supports?: { requested?: boolean } } | null)?.visual_supports?.requested === true;
+  const methodNotes = await loadMethodNotes(ctx, id);
   const original = await getMaterialDetail(ctx.workspace.id, data.context.materialId);
 
   const actions: AdaptationActions = {
@@ -49,6 +51,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
       </Link>
       <div className="space-y-3"><p className="eyebrow text-muted-foreground">Adaptación{data.profileName ? ` · Perfil ${data.profileName}` : ""}</p><PageHeader title={data.context.materialTitle} description="El material, los apoyos y el estado de tu ficha, en un mismo lugar." /></div>
       {supportsRequested ? <p role="status" className="rounded-xl border border-border p-4 text-sm">Apoyos visuales solicitados. Solo se incorporan si aportan ayuda y superan los controles. Las ilustraciones aprobadas consumen cupo; las representaciones exactas no. Revisa los recursos y el PDF antes de usar la ficha.</p> : null}
+      <MethodNotes notes={methodNotes} targets={data.context.targets} />
       <AdaptationView original={original?.file ? <OriginalDocument key={original.file.id} materialId={data.context.materialId} file={{
         mime_type: original.file.mime_type, size_bytes: original.file.size_bytes,
         page_count: original.file.page_count, original_name: original.file.original_name,

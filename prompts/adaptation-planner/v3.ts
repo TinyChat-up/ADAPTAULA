@@ -34,14 +34,14 @@ export const ADAPTATION_PLANNER_V3 = {
 
   system: `${ADAPTATION_PLANNER_V2.system}${METHOD}`,
 
-  buildUserParts(input: { rules: string; context: ReturnType<typeof plannerContextV2>; material: ModelFacingAnalysisV2; repairOf?: PlanIssue[] }): ContentPart[] {
+  buildUserParts(input: { rules: string | { head: string; tail: string }; context: ReturnType<typeof plannerContextV2>; material: ModelFacingAnalysisV2; repairOf?: PlanIssue[] }): ContentPart[] {
     const [base] = ADAPTATION_PLANNER_V2.buildUserParts({ context: input.context, material: input.material, ...(input.repairOf ? { repairOf: input.repairOf } : {}) });
     const text = base && base.type === "text" ? base.text : "";
     // The verified rules go first: they are the stable part of every request (and the one a provider can cache).
-    return [
-      { type: "text", text: input.rules },
-      { type: "text", text },
-    ];
+    // Split rules: the stable head is marked cacheable (the same ~31k tokens in every request, read at a tenth of the price on the
+    // next one within the provider's cache lifetime); the selection and the material come after it and never invalidate it.
+    const rules: ContentPart[] = typeof input.rules === "string" ? [{ type: "text", text: input.rules }] : [{ type: "text", text: input.rules.head, cache: true }, { type: "text", text: input.rules.tail }];
+    return [...rules, { type: "text", text }];
   },
 
   // Native constrained decoding first (the contract fits the documented limits: `structured-limits.ts`); the provider falls back to

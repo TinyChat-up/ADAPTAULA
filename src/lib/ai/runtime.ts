@@ -16,14 +16,14 @@ export interface AnalysisRuntime {
 }
 
 /** Builds the analysis setup from the environment. Throws a categorized AIError when it is not configured. */
-export function getAnalysisRuntime(): AnalysisRuntime {
+export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime {
   const env = serverEnv();
   const selection = resolveModel(env.AI_ANALYSIS_ALIAS, env as ModelEnv, env.AI_ANALYSIS_EFFORT);
   const provider = createProvider(selection, {
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     mockDelayMs: env.MOCK_AI_DELAY_MS,
     isProduction: process.env.VERCEL_ENV === "production",
-    spendMeter: pilotSpendMeter(),
+    spendMeter: pilotSpendMeter(workspaceId),
   });
   return {
     analyzer: getMaterialAnalyzer(env.AI_ANALYSIS_PROMPT_VERSION),
@@ -43,18 +43,18 @@ export function activeAnalyzer(): AnalyzerDefinition {
  * Provider for a selection that was FROZEN elsewhere (the adaptation pipeline persists alias, provider and model at creation):
  * only the credentials come from the environment, never the model.
  */
-export function providerFor(selection: ModelSelection): AIProvider {
+export function providerFor(selection: ModelSelection, workspaceId?: string | null): AIProvider {
   const env = serverEnv();
   return createProvider(selection, {
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     mockDelayMs: env.MOCK_AI_DELAY_MS,
     isProduction: process.env.VERCEL_ENV === "production",
-    spendMeter: pilotSpendMeter(),
+    spendMeter: pilotSpendMeter(workspaceId),
   });
 }
 
 /** Image provider for a selection resolved from an IMAGE_* alias: credentials from the environment, never the model. */
-export function imageProviderFor(selection: ModelSelection): ImageProvider {
+export function imageProviderFor(selection: ModelSelection, workspaceId?: string | null): ImageProvider {
   const env = serverEnv();
-  return createImageProvider(selection, { openaiApiKey: env.OPENAI_API_KEY, isProduction: process.env.VERCEL_ENV === "production", spendMeter: pilotSpendMeter() });
+  return createImageProvider(selection, { openaiApiKey: env.OPENAI_API_KEY, isProduction: process.env.VERCEL_ENV === "production", spendMeter: pilotSpendMeter(workspaceId) });
 }

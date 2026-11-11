@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-10 — V2.2 sobre la plataforma desplegada, solo para un workspace (sin desplegar)
+
+- Rama `feature/agente-v22-activacion-workspace` sobre #81. Sin migraciones aplicadas, sin merge, sin despliegues, sin llamadas de pago, sin E2E, sin tocar datos.
+- **Fase A (Vercel).** Se desactivó la creación de Preview del proyecto (`previewDeploymentsDisabled`). Producción sin cambios (200 en portada, login y precios); variables de Production intactas. Los ocho Preview existentes siguen tras Vercel Authentication (302 al acceso de Vercel). **Sus variables no se pueden cambiar**: llevan las de producción. Pendiente de decisión: retirarlos o rotar las claves.
+- **Código.** ADR-047: puerta `production-pilot`, gasto por workspace, mensaje de pausa, confirmaciones verificadas en servidor, avisos de #79 tras generar, contrato V3 tolerante y caché de las reglas estables.
+- **Esquema.** `migration_history` vacío con tablas existentes: 001–033 presentes por sus objetos; 034 y 035 sin aplicar. No se ha reparado el historial (ver guía).
+
 ## 2026-11-06 — Piloto de V3 desde la interfaz: puerta, selector, versiones fijadas, libro de gasto e informe
 
 - Rama `feature/agente-v22-piloto-interfaz` sobre `feature/agente-v22-planificador-v3` (PR #80), PR sin merge. Sin llamadas de pago, sin despliegues, sin migraciones remotas, sin reglas subidas, sin imágenes. **E2E no ejecutadas por indicación.**

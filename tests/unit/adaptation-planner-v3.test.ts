@@ -41,15 +41,31 @@ describe("contrato DraftAdaptationPlan v3", () => {
     expect(DraftAdaptationPlanV3Schema.safeParse({ decisions: [decision()], summary: [] }).success).toBe(true);
   });
 
-  it.each([
-    ["un recurso sin prueba de pista", { hint_yes: undefined }, "hint_yes"],
-    ["una condicionada sin pregunta", { status: "conditional" }, "question"],
-    ["una pregunta que no existe", { status: "conditional", question: "q_4" }, "question"],
-    ["un precedente con formato inválido", { precedents: ["D9-X"] }, "precedents"],
-  ])("rechaza %s", (_, over, path) => {
-    const result = DraftAdaptationPlanV3Schema.safeParse({ decisions: [decision(over)], summary: [] });
+  it("una declaración ausente o incoherente NO es un fallo del contrato: retiene la decisión (sin reparación de pago)", () => {
+    const analysis = fractionsAnalysis();
+    const context = contextOf(V22_PROFILES.A, analysis);
+    const USE: RulesUse = { version: "v9.9", package_sha256: "a".repeat(64), block_sha256: "b".repeat(64), included: ["D900-E01"] };
+    for (const over of [{ hint_yes: undefined }, { status: "conditional" }, { status: "conditional", question: "q_4" }]) {
+      expect(DraftAdaptationPlanV3Schema.safeParse({ decisions: [decision(over)], summary: [] }).success).toBe(true);
+    }
+    const missing = normalizePlanV3({ decisions: [decision({ hint_yes: undefined }), decision({ target: "act_3", status: "conditional" })], summary: [] }, analysis, context, USE).declarations;
+    expect(Object.values(missing.decisions).map((d) => d.withheld)).toEqual([true, true]);
+    expect(missing.issues.filter((i) => i.code === "declaration_missing")).toHaveLength(2);
+    // A decision that is not a resource needs no hint test.
+    expect(normalizePlanV3({ decisions: [decision({ action: "rephrase", hint_yes: undefined, strategies: ["instruction_clarification"] })], summary: [] }, analysis, context, USE).declarations.issues.some((i) => i.code === "declaration_missing")).toBe(false);
+  });
+
+  it("un campo declarado como null se trata como ausente (corrección sin llamada)", async () => {
+    const { fixDraftV2 } = await import("@/lib/adaptation/planner-draft");
+    const { draft, fixes } = fixDraftV2({ decisions: [{ ...decision(), question: null, hint_yes: null, precedents: null }], summary: [], teacher_questions: null, residual_barriers: null });
+    expect(fixes).toHaveLength(5);
+    expect(DraftAdaptationPlanV3Schema.safeParse(draft).success).toBe(true);
+  });
+
+  it("un precedente con formato inválido sí se rechaza", () => {
+    const result = DraftAdaptationPlanV3Schema.safeParse({ decisions: [decision({ precedents: ["D9-X"] })], summary: [] });
     expect(result.success).toBe(false);
-    expect(result.error?.issues.some((i) => i.path.includes(path))).toBe(true);
+    expect(result.error?.issues.some((i) => i.path.includes("precedents"))).toBe(true);
   });
 });
 
@@ -190,7 +206,7 @@ describe("planificador de modelo v3 con un proveedor de prueba (sin red)", () =>
   });
 
   it("una respuesta que no cumple el contrato v3 se rechaza como salida inválida", async () => {
-    const { provider: p } = provider(JSON.stringify({ decisions: [decision({ hint_yes: undefined })], summary: [] }));
+    const { provider: p } = provider(JSON.stringify({ decisions: [decision({ precedents: ["D9-X"] })], summary: [] }));
     const planner = createModelPlanner({ analysis, selection, provider: p, maxOutputTokens: 4000, version: 3, rulesFor: async () => RULES });
     await expect(planner.plan({ context, material: {} as never })).rejects.toMatchObject({ code: "invalid_output" });
   });

@@ -28,7 +28,14 @@ describe("puerta del piloto V3", () => {
     };
     expect(refused({ ...open, FLAG_PLANNER_V3_PILOT: false })).toBe("flag_off");
     expect(refused({ ...open, AI_PLANNER_V3_PILOT_MODE: undefined })).toBe("no_mode");
-    expect(refused(open, WS, STAGING, "production")).toBe("production");
+    expect(refused(open, WS, STAGING, "production")).toBe("environment");
+    // Production has its own explicit mode, valid only there, with the exact workspace and backend.
+    const prod = { ...open, AI_PLANNER_V3_PILOT_MODE: "production-pilot" as const };
+    expect(refused(prod, WS, STAGING, "production")).toBeNull();
+    expect(refused(prod, WS, STAGING, "preview")).toBe("environment");
+    expect(refused(prod, "22222222-2222-4222-8222-222222222222", STAGING, "production")).toBe("workspace");
+    expect(refused(prod, WS, "https://otroproyecto.supabase.co/", "production")).toBe("backend");
+    expect(refused({ ...prod, AI_PILOT_BUDGET_USD: undefined }, WS, STAGING, "production")).toBe("no_budget");
     expect(refused(open, "22222222-2222-4222-8222-222222222222")).toBe("workspace");
     expect(refused({ ...open, AI_PLANNER_V3_PILOT_WORKSPACE_ID: undefined })).toBe("workspace");
     expect(refused(open, WS, "https://otroproyecto.supabase.co/")).toBe("backend");
@@ -228,5 +235,68 @@ describe("informe de costes por adaptación", () => {
     expect(report.usd).toBeCloseTo(0.34, 6);
     const csv = costRowsCsv([row({ material_title: "=HYPERLINK(\"x\")" })]);
     expect(csv.split("\n")[1]).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});
+
+describe("confirmaciones del docente (ADR-047)", () => {
+  it("una decisión retenida solo se aplica con «Sí»; «No» y «No lo sé» la dejan fuera y el formulario lo refleja", async () => {
+    const { formReducer, initialFormState, problemsOf, buildReview } = await import("@/lib/adaptation/presentation/review-form");
+    const { withheldWithoutConfirmation } = await import("@/lib/adaptation/plan-v3");
+    const decision = { id: "dec_1", target: "act_1", action: "add_support", intensity: "light", strategies: [], needs: [], supports: [], note: null, preserves: [], restrictions: [], status: "valid" as const, issues: [], method: { withheld: true, conditional: true, question: "¿Se evalúa?", reasons: [] } };
+    const plan = { planFingerprint: "f".repeat(64), decisions: [decision], summary: [], counts: { valid: 1, review: 0, blocked: 0 }, review: { submitted: false, executable: null, blockers: [] } } satisfies AdaptationPlanDto;
+    let state = initialFormState(plan);
+    expect(state.dec_1!.choice).toBe("reject");
+    // Choosing «apply» without an answer is a problem; the answer «no» turns it back into «left out».
+    state = formReducer(state, { type: "choose", id: "dec_1", choice: "approve" });
+    expect(problemsOf(plan, state).dec_1).toBe("needs_confirmation");
+    expect(formReducer(state, { type: "confirm", id: "dec_1", answer: "unknown" }).dec_1!.choice).toBe("reject");
+    state = formReducer(state, { type: "confirm", id: "dec_1", answer: "yes" });
+    state = formReducer(state, { type: "choose", id: "dec_1", choice: "approve" });
+    expect(problemsOf(plan, state)).toEqual({});
+    const body = buildReview(plan, state);
+    expect(body.confirmations).toEqual([{ decision_id: "dec_1", answer: "yes" }]);
+    const declarations = { rules: null, decisions: { dec_1: { status: "conditional" as const, question: "q_1", hint_yes: [], precedents: [], withheld: true } }, teacher_questions: [], residual_barriers: [], issues: [] };
+    expect(withheldWithoutConfirmation({ entries: body.entries, confirmations: [] }, declarations)).toEqual(["dec_1"]);
+    expect(withheldWithoutConfirmation(body as never, declarations)).toEqual([]);
+    expect(withheldWithoutConfirmation({ entries: body.entries }, null)).toEqual([]);
+  });
+});
+
+describe("caché de la parte estable de las reglas", () => {
+  it("la cabecera estable se marca cacheable, la selección y el material no, y el texto enviado no cambia", async () => {
+    const { buildRulesBlock } = await import("@/lib/agent-rules/prompt-block");
+    const { buildAdaptationContext } = await import("@/lib/adaptation/context");
+    const { plannerRequestParts } = await import("@/lib/adaptation/planner");
+    const { fractionsAnalysis } = await import("../../evals/adaptation/fixtures");
+    const { V22_PROFILES } = await import("../../evals/adaptation/v22-profiles");
+    const rules = { version: "v9.9", package_sha256: "a".repeat(64), stable: [{ path: "reglas.md", text: "Reglas sintéticas." }], precedents: [], readCase: () => Promise.reject(new Error("sin casos")) };
+    const analysis = fractionsAnalysis();
+    const { context } = buildAdaptationContext({ profile: V22_PROFILES.A, education: { stage: "primaria", grade: null, subject: null }, analysis, adaptationType: "accessibility" });
+    const block = await buildRulesBlock(rules, analysis, context);
+    expect(block.parts!.head + block.parts!.tail).toBe(block.text);
+    expect(block.text).toBe('<agent_rules version="v9.9" sha256="' + "a".repeat(64) + '">\n# ===== reglas.md =====\nReglas sintéticas.\n</agent_rules>');
+    const { parts } = plannerRequestParts({ analysis, context, version: 3, rules: block });
+    expect(parts.map((p) => (p.type === "text" ? Boolean(p.cache) : null))).toEqual([true, false, false]);
+    // Without the split form (older callers) there is one plain block and no cache marker.
+    const plain = ADAPTATION_PLANNER_V3.buildUserParts({ rules: block.text, context: {} as never, material: {} as never });
+    expect(plain.some((p) => p.type === "text" && p.cache)).toBe(false);
+    // The Anthropic request carries exactly one cache marker, on the head.
+    let sent: { messages: Array<{ content: Array<{ cache_control?: unknown; text: string }> }> } | undefined;
+    const client: AnthropicClientLike = { messages: { stream: (params) => ((sent = params as never), { finalMessage: async () => ({ model: "claude-sonnet-5-5", content: [{ type: "text", text: "{}", citations: null }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } }) as never }) } };
+    const sonnet: ModelSelection = { alias: "STANDARD", provider: "anthropic", model: "claude-sonnet-5-5", effort: "medium" };
+    await new AnthropicProvider(client).generateStructured({ selection: sonnet, system: "s", messages: [{ role: "user", content: parts }], output: ADAPTATION_PLANNER_V3.output, maxOutputTokens: 100, timeoutMs: 1000 });
+    expect(sent!.messages[0]!.content.map((b) => Boolean(b.cache_control))).toEqual([true, false, false]);
+  });
+});
+
+describe("avisos de los controles V2.2 sobre la ficha generada", () => {
+  it("solo se muestran los indicadores encontrados, con palabras llanas y sin bloquear nada", async () => {
+    const { methodNotes } = await import("@/lib/adaptation/v22/notes");
+    const finding = (over: object) => ({ check: "answer_space_homogeneity", question: "P8", coverage: "deterministic", result: "flagged", targets: ["act_1", "act_3"], decision_ids: [], detail: "x", ...over }) as never;
+    const notes = methodNotes([finding({}), finding({ result: "clear", check: "added_terms" }), finding({ check: "word_limit", question: null, targets: ["act_2"] })]);
+    expect(notes.map((n) => n.check)).toEqual(["answer_space_homogeneity", "word_limit"]);
+    expect(notes[0]!.label).toMatch(/Espacios de respuesta distintos/);
+    expect(notes[0]!.targets).toEqual(["act_1", "act_3"]);
+    expect(methodNotes([])).toEqual([]);
   });
 });

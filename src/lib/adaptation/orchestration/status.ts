@@ -19,7 +19,7 @@ export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | 
  * covers; `quality`: the quality review found a problem with no safe automatic correction (or the generations ran out);
  * `generation_refused`: the cost guards refused another generation.
  */
-export type AutomaticStopReason = "needs_decision" | "quality" | "generation_refused" | VisualStopCode;
+export type AutomaticStopReason = "needs_decision" | "teacher_decision" | "quality" | "generation_refused" | VisualStopCode;
 
 export interface StatusArtifacts {
   visualSupportResult?: { generated: number; original: number; structured: number } | null;
@@ -36,6 +36,8 @@ export interface StatusArtifacts {
   automaticStop?: string | null;
   /** Needs (dimension keys) the automatic resolution could not cover. */
   unresolvedNeeds?: string[];
+  /** Planner V2.2: the method withheld decisions for the teacher (conditional, possible hint…): a pause, not a failure (ADR-047). */
+  methodHold?: boolean;
 }
 
 export interface AdaptationStatusDto {
@@ -175,7 +177,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       if (automatic) {
         // Before any generation: the server's own resolution could not be executed (a need nothing covers). After one: no safe
         // automatic correction. Editing is offered, never imposed.
-        const reason = cycles === 0 || (artifacts.unresolvedNeeds ?? []).length > 0 ? "needs_decision" : "quality";
+        const reason = artifacts.methodHold === true && cycles === 0 ? "teacher_decision" : cycles === 0 || (artifacts.unresolvedNeeds ?? []).length > 0 ? "needs_decision" : "quality";
         ({ phase, progress, nextAction, automaticStop } = stopped(reason, cycles < MAX_GENERATION_CYCLES ? "review_plan" : "none"));
         break;
       }

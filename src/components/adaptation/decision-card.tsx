@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/feedback";
 import type { PlanDecisionDto } from "@/lib/adaptation/orchestration/service";
 import { DEFERRED_NOTE, actionLabel, actionSentence, flagCopy, intensityLabel, limitLines, needLabels, preservedLines, strategyLabel, supportLabel, targetLabel } from "@/lib/adaptation/presentation/copy";
 import type { AdaptationContextView } from "@/lib/adaptation/presentation/context";
-import { PROBLEM_COPY, type Choice, type DecisionDraft, type DecisionProblem } from "@/lib/adaptation/presentation/review-form";
+import { PROBLEM_COPY, type Choice, type Confirmation, type DecisionDraft, type DecisionProblem } from "@/lib/adaptation/presentation/review-form";
 import { cn } from "@/lib/utils/cn";
+import { MethodConfirmation } from "./method-confirmation";
 import { DecisionEditor } from "./decision-editor";
 
 const MAX_NEEDS = 3;
@@ -42,6 +43,7 @@ export function DecisionCard({
   disabled,
   onChoose,
   onEdit,
+  onConfirm,
 }: {
   decision: PlanDecisionDto;
   index: number;
@@ -54,6 +56,7 @@ export function DecisionCard({
   disabled: boolean;
   onChoose: (choice: Choice) => void;
   onEdit: (patch: DecisionDraft["edit"]) => void;
+  onConfirm?: (answer: Confirmation) => void;
 }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
@@ -149,6 +152,7 @@ export function DecisionCard({
             {notice}
           </p>
         ) : null}
+        {decision.method?.withheld ? <MethodConfirmation method={decision.method} value={draft.confirmation} onChange={(answer) => onConfirm?.(answer)} disabled={disabled} describedBy={errorId} /> : null}
         {deferred ? <p className="text-sm text-muted-foreground">{DEFERRED_NOTE}</p> : null}
 
         {expanded ? (

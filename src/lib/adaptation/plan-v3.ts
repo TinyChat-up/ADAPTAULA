@@ -1,6 +1,6 @@
 import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { AdaptationPlan, DraftAdaptationPlan } from "@/lib/schemas/adaptation-plan";
-import { DraftAdaptationPlanV3Schema } from "@/lib/schemas/adaptation-plan-draft-v3";
+import { DraftAdaptationPlanV3Schema, RESOURCE_ACTIONS_V3 } from "@/lib/schemas/adaptation-plan-draft-v3";
 import type { HintQuestion } from "@/lib/schemas/decision-ledger";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
@@ -34,7 +34,7 @@ export interface RulesUse {
   included: string[];
 }
 
-export type DeclarationIssueCode = "precedent_not_sent" | "question_withheld" | "barrier_note_withheld" | "blocking_hint" | "conditional" | "strategy_not_for_need";
+export type DeclarationIssueCode = "precedent_not_sent" | "question_withheld" | "barrier_note_withheld" | "blocking_hint" | "conditional" | "strategy_not_for_need" | "declaration_missing";
 
 export interface PlannerDeclarations {
   rules: RulesUse | null;
@@ -77,10 +77,14 @@ export function resolvePlanDraftV3(draftInput: unknown, analysis: MaterialAnalys
     const served = new Set(d.need_refs.flatMap((r) => (refs.has(r) ? DIMENSION_STRATEGIES[refs.get(r)!] : [])));
     const foreign = d.strategies.filter((st) => !served.has(st));
     if (foreign.length > 0) issues.push({ decision_id: id, code: "strategy_not_for_need", message: `${id}: ${foreign.join(", ")} no corresponde a las necesidades que cita; queda para el docente` });
+    const resource = (RESOURCE_ACTIONS_V3 as readonly string[]).includes(d.action) || d.visual !== undefined;
+    const noHintTest = resource && d.hint_yes === undefined;
+    const noQuestion = d.status === "conditional" && !(d.question && parsed.teacher_questions?.some((q) => q.id === d.question));
+    if (noHintTest || noQuestion) issues.push({ decision_id: id, code: "declaration_missing", message: `${id}: ${noHintTest ? "sin prueba de pista" : "condicionada sin su pregunta"}; queda para el docente` });
     for (const p of d.precedents ?? []) if (!sent.has(p)) issues.push({ decision_id: id, code: "precedent_not_sent", message: `${id} cita ${p}, que no iba en la petición` });
     if (blocking.length > 0) issues.push({ decision_id: id, code: "blocking_hint", message: `${id}: el planificador responde «sí» a ${blocking.join(", ")}; queda para el docente` });
     if (d.status === "conditional") issues.push({ decision_id: id, code: "conditional", message: `${id} depende de la respuesta del docente (${d.question})` });
-    decisions[id] = { status: d.status, question: d.question ?? null, hint_yes: d.hint_yes ?? null, precedents: d.precedents ?? [], withheld: d.status === "conditional" || blocking.length > 0 || foreign.length > 0 };
+    decisions[id] = { status: d.status, question: noQuestion ? null : (d.question ?? null), hint_yes: d.hint_yes ?? null, precedents: d.precedents ?? [], withheld: d.status === "conditional" || blocking.length > 0 || foreign.length > 0 || noHintTest };
   });
 
   const teacher_questions = (parsed.teacher_questions ?? []).map((q) => {
@@ -119,4 +123,11 @@ export function withholdForTeacher(review: PlanReview, declarations: PlannerDecl
   const entries = review.entries.map((e) => (withheld.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: WITHHELD_REASON } : e));
   for (const id of withheld) if (!entries.some((e) => e.decision_id === id)) entries.push({ decision_id: id, action: "rejected", reason: WITHHELD_REASON });
   return { ...review, entries };
+}
+
+/** Decisions the method withheld that a review approves or edits without the teacher's «yes» (ADR-047). Pure. */
+export function withheldWithoutConfirmation(review: Pick<PlanReview, "entries" | "confirmations">, declarations: PlannerDeclarations | null): string[] {
+  if (!declarations) return [];
+  const yes = new Set((review.confirmations ?? []).filter((c) => c.answer === "yes").map((c) => c.decision_id));
+  return review.entries.filter((e) => (e.action === "approved" || e.action === "edited") && declarations.decisions[e.decision_id]?.withheld === true && !yes.has(e.decision_id)).map((e) => e.decision_id);
 }

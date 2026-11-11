@@ -183,6 +183,12 @@ export const AUTOMATIC_STOP_COPY = {
     body: "El perfil pide algo que todavía no sabemos aplicar automáticamente a este material sin dejar de atenderlo.",
     hint: "Si quieres, revisa la propuesta y decide tú cómo atenderlo. No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan.",
   },
+  /** Planner V2.2 paused on purpose: the method left decisions to the teacher (a pause, not a failure). */
+  teacher_decision: {
+    body: "La propuesta incluye decisiones que dependen de ti: el método prefiere no aplicarlas sin tu respuesta, para no dar pistas ni cambiar lo que se evalúa.",
+    hint: "Revisa la propuesta, responde a las preguntas y decide qué aplicar. No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan.",
+  },
+  teacherDecisionTitle: "Hay decisiones que necesitan tu respuesta",
   quality: {
     body: "Al comprobar el resultado hemos encontrado algo que no podemos corregir automáticamente sin perder lo que el perfil necesita.",
     hint: "No se ha entregado ninguna ficha ni se ha gastado ninguna adaptación de tu plan. Si quieres, revisa la propuesta y cambia lo que necesites.",

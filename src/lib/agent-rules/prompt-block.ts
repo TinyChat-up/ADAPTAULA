@@ -11,6 +11,8 @@ import type { AgentRules } from "./types";
  */
 export interface RulesBlock {
   text: string;
+  /** `text` split where the stable files end: the head is identical in every request (cacheable), the tail is the selection. */
+  parts?: { head: string; tail: string };
   version: string;
   package_sha256: string;
   /** sha256 of exactly what was sent (rules + selection), for reproducibility in records. */
@@ -21,16 +23,23 @@ export interface RulesBlock {
 /** Rule files are trusted, but a closing tag inside them must never end the block early. */
 const guard = (text: string) => text.replace(/<\/?agent_rules/gi, (m) => m.replace("<", "‹"));
 
+async function renderParts(rules: AgentRules, ids: readonly string[]): Promise<{ head: string; tail: string }> {
+  const stable = rules.stable.map((f) => `# ===== ${f.path} =====\n${guard(f.text)}`);
+  const selected: string[] = [];
+  for (const id of ids) selected.push(`# ===== precedente ${id} =====\n${guard(await rules.readCase(id))}`);
+  return { head: `<agent_rules version="${rules.version}" sha256="${rules.package_sha256}">\n${stable.join("\n\n")}`, tail: `${selected.map((p) => `\n\n${p}`).join("")}\n</agent_rules>` };
+}
+
 async function render(rules: AgentRules, ids: readonly string[]): Promise<string> {
-  const parts = rules.stable.map((f) => `# ===== ${f.path} =====\n${guard(f.text)}`);
-  for (const id of ids) parts.push(`# ===== precedente ${id} =====\n${guard(await rules.readCase(id))}`);
-  return `<agent_rules version="${rules.version}" sha256="${rules.package_sha256}">\n${parts.join("\n\n")}\n</agent_rules>`;
+  const { head, tail } = await renderParts(rules, ids);
+  return head + tail;
 }
 
 export async function buildRulesBlock(rules: AgentRules, analysis: MaterialAnalysis, context: Pick<AdaptationContext, "needs">): Promise<RulesBlock> {
   const selection = selectPrecedents(rules.precedents, analysis, context);
-  const text = await render(rules, selection.included.map((c) => c.id));
-  return { text, version: rules.version, package_sha256: rules.package_sha256, block_sha256: createHash("sha256").update(text, "utf8").digest("hex"), selection };
+  const parts = await renderParts(rules, selection.included.map((c) => c.id));
+  const text = parts.head + parts.tail;
+  return { text, parts, version: rules.version, package_sha256: rules.package_sha256, block_sha256: createHash("sha256").update(text, "utf8").digest("hex"), selection };
 }
 
 /** The block with EVERY precedent: the ceiling of any selection, used to bound a cost before the material is analysed. */

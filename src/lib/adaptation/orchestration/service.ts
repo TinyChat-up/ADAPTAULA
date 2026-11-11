@@ -15,6 +15,11 @@ import { isDelivered } from "./state-machine";
 import type { PipelineVersions, RulesFreeze } from "./versions";
 import type { PlannerDeclarations } from "../plan-v3";
 import { projectMethod, type DecisionMethodDto, type PlanMethodDto } from "../v22/method-projection";
+import { auditAdaptation } from "../v22/audit";
+import { methodNotes, type MethodNote } from "../v22/notes";
+import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
+import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
+import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,
@@ -365,7 +370,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const artifacts = await deps.reader.getArtifacts(adaptationId, STATUS_KINDS);
   const latest = (kind: ArtifactKind) => artifacts.filter((a) => a.kind === kind).at(-1)?.payload as Record<string, unknown> | undefined;
   const validation = latest("plan_validation") as { classification?: { counts: { valid: number; review: number; blocked: number } } } | undefined;
-  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }> }; diagnosis?: RecordedDiagnosis };
+  type Report = { review_fingerprint?: string; execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] }; automatic_stop?: string; automatic?: { outcomes?: Array<{ kind: string; uncovered: string[] }>; withheld_v22?: string[] }; diagnosis?: RecordedDiagnosis };
   const reports = artifacts.filter((a) => a.kind === "execution_report").map((a) => a.payload as Report);
   // The real preflight report (a recorded stop carries no execution), and what was recorded for the latest review.
   const execution = reports.filter((r) => r.execution).at(-1);
@@ -387,6 +392,7 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
     latestReviewKind: ((lastReview?.payload as { reviewer?: { kind?: "auto" | "teacher" | "eval" } } | undefined)?.reviewer?.kind ?? null),
     automaticStop: forLastReview.find((r) => r.automatic_stop)?.automatic_stop ?? null,
     unresolvedNeeds,
+    methodHold: forLastReview.some((r) => (r.automatic?.withheld_v22?.length ?? 0) > 0),
   };
   const dto = buildStatusDto(snapshot, extra);
   // Only once nothing is running and nothing was delivered: the latest recorded diagnosis, for the latest review if there is one.
@@ -512,4 +518,25 @@ export async function getAdaptationVersion(deps: ServiceDeps, actor: Actor, adap
   const verdict = (found.review as { verdict?: string } | null)?.verdict;
   const delivered = isDelivered(row) && row.current_version === found.version;
   return { ok: true, data: { version: found.version, document: found.document, review: found.review, source: found.source, createdAt: found.created_at, delivered, usable: delivered && (verdict === "approved" || verdict === "approved_with_warnings") } };
+}
+
+/**
+ * The V2.2 checks on the generated sheet, recomputed on demand (ADR-047: no persistence) from the raw plan with its declarations,
+ * the frozen context, the analysis and the current version's document. Only for adaptations planned with V2.2; any other answers
+ * an empty list. Advisory: it reads, never blocks or changes anything.
+ */
+export async function getAdaptationMethodNotes(deps: ServiceDeps, actor: Actor, adaptationId: string): Promise<ServiceResult<MethodNote[]>> {
+  if (!(await owned(deps, actor, adaptationId))) return notFound;
+  const snapshot = await deps.orchestrator.store.getPipeline(adaptationId);
+  if (!snapshot || snapshot.adaptation.pipeline_versions?.planner.prompt_version !== 3) return { ok: true, data: [] };
+  const artifacts = await deps.reader.getArtifacts(adaptationId, ["plan", "plan_validation"]);
+  const plan = AdaptationPlanSchema.safeParse(artifacts.filter((a) => a.kind === "plan").at(-1)?.payload);
+  const validation = artifacts.filter((a) => a.kind === "plan_validation").at(-1)?.payload as { validation?: PlanValidation; declarations?: PlannerDeclarations } | undefined;
+  const context = AdaptationContextSchema.safeParse(snapshot.adaptation.context_snapshot);
+  const analysis = parseStoredAnalysis(snapshot.analysis.analysis).analysis;
+  const version = await deps.reader.getVersion(adaptationId, snapshot.adaptation.current_version || null);
+  const document = version ? MaterialDocumentSchema.safeParse(version.document) : null;
+  if (!plan.success || !context.success || !analysis || !validation?.validation || !document?.success) return { ok: true, data: [] };
+  const audit = auditAdaptation({ plan: plan.data, validation: validation.validation, context: context.data, analysis, declarations: validation.declarations ?? null, document: document.data });
+  return { ok: true, data: methodNotes(audit.findings) };
 }

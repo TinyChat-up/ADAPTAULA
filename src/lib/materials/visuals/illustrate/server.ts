@@ -90,12 +90,12 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
     imageSelection = resolveModel("IMAGE_QUALITY", env);
     textSelection = resolveModel("STANDARD", env);
     if (textSelection.provider === "mock" || imageSelection.provider === "mock") return null;
-    imageProvider = imageProviderFor(imageSelection);
+    imageProvider = imageProviderFor(imageSelection, ids.workspaceId);
   } catch {
     return null;
   }
   const admin = createAdminClient();
-  const textProvider = providerFor(textSelection);
+  const textProvider = providerFor(textSelection, ids.workspaceId);
 
   return {
     brief: (input) => callStructured(textProvider, textSelection, "image_brief", IMAGE_BRIEF_V1, IMAGE_BRIEF_V1.buildUserText(input), 1500, AbortSignal.timeout(input.timeoutMs)),

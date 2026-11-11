@@ -32,7 +32,7 @@ import { modelSelectionOf, resolvePipelineVersions, type PipelineVersions, type 
 export const adaptationStore = () => new AdaptationStore(createAdminClient() as unknown as RpcClient);
 
 /** The AI services of a stage, built from the PERSISTED versions: the alias and model frozen at creation, never today's env. */
-export function productionServices(versions: PipelineVersions, analysis: Parameters<typeof createModelPlanner>[0]["analysis"]): PipelineServices {
+export function productionServices(versions: PipelineVersions, analysis: Parameters<typeof createModelPlanner>[0]["analysis"], workspaceId?: string): PipelineServices {
   // An adaptation created with the mock provider (development, E2E) runs the deterministic stand-ins: the mock provider only
   // answers the analysis. Refused in production exactly like the mock provider itself.
   if (isMockPipeline(versions)) {
@@ -44,14 +44,14 @@ export function productionServices(versions: PipelineVersions, analysis: Paramet
     planner: createModelPlanner({
       analysis,
       selection: selection(versions.planner),
-      provider: providerFor(selection(versions.planner)),
+      provider: providerFor(selection(versions.planner), workspaceId),
       maxOutputTokens: versions.planner.max_output_tokens,
       version: versions.planner.prompt_version,
       // v3 decides with the verified private rules (ADR-045); a load that fails stops the stage, it never runs without them.
       ...(versions.planner.prompt_version === 3 ? { rulesFor: async (context: Parameters<typeof buildRulesBlock>[2]) => buildRulesBlock(frozenRules(await getAgentRules(), versions.rules), analysis, context) } : {}),
     }),
-    generator: createModelGenerator({ selection: selection(versions.generator), provider: providerFor(selection(versions.generator)), maxOutputTokens: versions.generator.max_output_tokens, version: versions.generator.prompt_version }),
-    reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer)), maxOutputTokens: versions.reviewer.max_output_tokens }),
+    generator: createModelGenerator({ selection: selection(versions.generator), provider: providerFor(selection(versions.generator), workspaceId), maxOutputTokens: versions.generator.max_output_tokens, version: versions.generator.prompt_version }),
+    reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer), workspaceId), maxOutputTokens: versions.reviewer.max_output_tokens }),
   };
 }
 
