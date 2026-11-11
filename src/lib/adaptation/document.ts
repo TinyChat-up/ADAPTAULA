@@ -339,8 +339,9 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
 
   const duplicated = duplicatedContexts(analysis, plan);
   const ordered: Array<{ page: number; block: Block }> = [];
-  // A worked example is a model to follow: it goes first, then the resources the activity works with (its components, its table),
-  // then the activity itself, so that nothing sits between a resource and the instruction that uses it.
+  // A worked example is a model to follow: it goes before the DATA the activity works with (the components to classify, the
+  // statement to assess), so that nothing sits between that data and the instruction that uses it. An explanation (a definition, a
+  // formula, a note, an earlier example) still comes first: the example illustrates it.
   const modelsPlaced = new Set<string>();
   const placeModels = (activityRef: string, page: number) => {
     if (modelsPlaced.has(activityRef)) return;
@@ -350,7 +351,7 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   for (const unit of units) {
     const decisions = decisionsFor(unit.ref);
     if (decisions.some((d) => d.action === "remove")) continue;
-    if (unit.anchoredTo && !decisionsFor(unit.anchoredTo).some((d) => d.action === "remove")) placeModels(unit.anchoredTo, unit.page);
+    if (unit.anchoredTo && isDataText(analysis, unit.ref) && !decisionsFor(unit.anchoredTo).some((d) => d.action === "remove")) placeModels(unit.anchoredTo, unit.page);
     for (const block of placeholders.get(unit.ref) ?? []) ordered.push({ page: unit.page, block });
     placeModels(unit.ref, unit.page);
     // Segmenting a source text is deterministic: the paragraphs stay word for word, only labelled. No model rewrites them.
@@ -463,6 +464,9 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     answer_key: answerKey,
   });
 }
+
+const DATA_TEXT_KINDS = new Set<AnalysisText["kind"]>(["other", "instruction"]);
+const isDataText = (analysis: MaterialAnalysis, ref: string) => DATA_TEXT_KINDS.has(analysis.texts.find((t) => t.id === ref)?.kind as AnalysisText["kind"]);
 
 /** The prompt without a paragraph that is exactly `copy`: a rewritten activity may bring the context along again. Never empties it. */
 function withoutCopy(prompt: string, copy: string): string {
