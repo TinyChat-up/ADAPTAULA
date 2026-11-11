@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-11 — Integración final de V2.2 en `main` (PR única) y activación preparada
+
+- **Migraciones y reglas ya aplicadas en Supabase `jidhormdauthfbpxxydt` (implementado y comprobado).** Historial de 35 migraciones (034 `agent_rules` y 035 `pilot_spend_ledger` incluidas); esquema remoto = migraciones 001–035 objeto a objeto; reversión de la 035 en `docs/qa/migraciones-034-035/reversion-035.sql`. Las 56 reglas están en `agent-rules/v2.2/` (bucket privado, sin política de lectura): rutas, tamaños y ETag iguales a los de la copia verificada por SHA-256. La verificación SHA-256 desde el servidor (`upload.ts --verify-remote`) la ejecuta el propietario.
+- **Hallazgo.** Las PR #79–#82 estaban apiladas y se fusionaron en cascada: `main` solo recibió la #79. Esta PR incorpora `feature/agente-v22-activacion-workspace` (que contiene #80–#82) tras fusionar `main` en ella.
+- **Workspace del piloto.** El UUID antiguo era el id de usuario de otra cuenta, no un workspace. El workspace verificado por usuario → membresía es `344d6bfc-7c4e-41ea-a9f6-84088edb4502` (propietario con último acceso el 2026-11-11, plan Max).
+- **Imágenes.** `FLAG_AI_IMAGES_ENABLED` no se toca: el medidor de gasto solo existe para el workspace del piloto y solo allí se rechazan las imágenes de pago.
+- Pendiente de validar en producción: despliegue en ACME con `FLAG_PLANNER_V3_PILOT=false`, comprobación del planificador actual, variables del piloto y primeras adaptaciones V2.2 desde la interfaz. Sin E2E ni llamadas de pago.
+
 ## 2026-11-10 — V2.2 sobre la plataforma desplegada, solo para un workspace (sin desplegar)
 
 - Rama `feature/agente-v22-activacion-workspace` sobre #81. Sin migraciones aplicadas, sin merge, sin despliegues, sin llamadas de pago, sin E2E, sin tocar datos.
