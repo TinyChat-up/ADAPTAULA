@@ -7,7 +7,7 @@ import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
-import { resolveAutomatically } from "../automatic-resolution";
+import { reaches, resolveAutomatically } from "../automatic-resolution";
 import { VISUAL_STOP_CODES, applyVisualResolution, unresolvedEssential, visualStopCode, type VisualResolutionPlan, type VisualStopCode } from "../visual-policy";
 import { buildAdaptationContext, isResolvedByPresentation } from "../context";
 import { addVisualSupports } from "../visual-supports";
@@ -753,9 +753,12 @@ const budgetRestriction = (words: number) => `Los apoyos de esta decisión deben
  * that stays nor the presentation. A sheet that passes every check but silently lost one of the profile's adaptations is not
  * finished, so this is the condition for ever leaving a decision out automatically.
  */
-function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][], drop: ReadonlySet<string>, context: AdaptationContext): boolean {
+function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][], drop: ReadonlySet<string>, context: AdaptationContext, analysis: MaterialAnalysis): boolean {
   const kept = effective.filter((d) => !drop.has(d.id));
-  return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim))));
+  // For an ESSENTIAL (high) need, «covered» means by a decision that REACHES the dropped one's target: the same dimension on another
+  // activity does not help this one. Medium and low needs keep their earlier reading (any remaining decision of that dimension).
+  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
+  return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim) && (!high.has(dim) || reaches(k, d, analysis)))));
 }
 
 /**
@@ -783,7 +786,7 @@ function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, a
     restricted.push(e.decision_id);
     return { ...e, restrictions: [...current, ...missing] };
   });
-  if (drop.size > 0 && losesCoverage(effective, drop, loaded.context)) return null;
+  if (drop.size > 0 && losesCoverage(effective, drop, loaded.context, loaded.analysis)) return null;
   const review: PlanReview = { ...previous, entries: entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: dropReason.slice(0, 160) } : e)) };
   const check = reviewPlan(raw, review, loaded.analysis, loaded.context);
   if (planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid) return null;

@@ -80,6 +80,21 @@ export function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edi
   return out;
 }
 
+/**
+ * Whether the effect of decision `by` actually REACHES what decision `of` targets. A need is not covered because some decision
+ * somewhere uses the same dimension: it is covered for THAT activity when the other decision acts on the same target, on the
+ * resource the activity works with (or on the activity that uses it), or is a support for the whole document. A decision on another
+ * activity does not help this one.
+ */
+export function reaches(by: Pick<Decision, "target">, of: Pick<Decision, "target">, analysis: MaterialAnalysis): boolean {
+  if (by.target === of.target || by.target === "document") return true;
+  const activityOf = (id: string) => analysis.activities.find((a) => a.id === id);
+  const a = activityOf(of.target);
+  if (a && a.resource_ids.includes(by.target)) return true;
+  const b = activityOf(by.target);
+  return b !== undefined && b.resource_ids.includes(of.target);
+}
+
 /** The candidate edit is applied only if the invariants accept it and something can execute it. */
 export function viable(raw: AdaptationPlan, d: Decision, edits: DecisionEdits, analysis: MaterialAnalysis, context: AdaptationContext): boolean {
   const edited: Decision = { ...d, ...edits };
@@ -122,7 +137,7 @@ export function resolveAutomatically(raw: AdaptationPlan, analysis: MaterialAnal
 
   // 2. What each left-out decision would leave uncovered, against what WILL be executed.
   const executing = raw.decisions.filter((d) => plan.get(d.id)?.kind !== "open");
-  const covered = (d: Decision, dim: DimensionKey) => isResolvedByPresentation(dim, context.presentation) || executing.some((o) => o.id !== d.id && o.dimensions.includes(dim));
+  const covered = (d: Decision, dim: DimensionKey) => isResolvedByPresentation(dim, context.presentation) || executing.some((o) => o.id !== d.id && o.dimensions.includes(dim) && reaches(o, d, analysis));
   const level = (dim: DimensionKey) => context.needs.find((n) => n.dimension === dim)?.level ?? null;
 
   const outcomes: AutomaticDecisionOutcome[] = [];

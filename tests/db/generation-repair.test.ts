@@ -8,7 +8,7 @@ import type { AdaptationPlanner, MaterialGenerator } from "@/lib/adaptation/serv
 import type { DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
-import { mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
+import { coverDecision, coverSegment, mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
 import { cellGlossary, shortCellGlossary } from "../support/glossary-budget-case";
 import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
@@ -192,9 +192,20 @@ describe("«Hacer magia»: bounded automatic repair of a generation that fails i
     expect(await entitlement(id)).toBe("reserved");
   });
 
-  it("only after its repair failed again, and only with every need still covered, is a decision left out (its part keeps the original)", async () => {
-    // dec_4 (working memory) also covered by dec_2: the model never fixes dec_4.
+  it("an essential need covered only on ANOTHER activity is not covered: the decision is not left out and the sheet is not delivered", async () => {
+    // dec_4 (working memory, act_2) fails again and the only other working-memory decision (dec_2) is on act_3: act_2 would be left without it.
     const t = await teacher(generator(unauthorizedOn("dec_4")));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ delivered: false, phase: "automatic_incomplete" });
+    const reviews = await planReviews(id);
+    expect(reviews.flatMap((r) => r.payload.entries).some((e) => e.decision_id === "dec_4" && e.action === "rejected")).toBe(false);
+  });
+
+  it("only after its repair failed again, and only with every need still covered, is a decision left out (its part keeps the original)", async () => {
+    // dec_4 (working memory, act_2) is also covered ON THE SAME ACTIVITY by dec_7: the model never fixes dec_4. (A decision on another
+    // activity would not cover act_2: see the test below.)
+    const t = await teacher(generator((d) => ({ ...unauthorizedOn("dec_4")(d), segments: [...unauthorizedOn("dec_4")(d).segments, ...(d.segments.some((x) => x.decision_id === "dec_4") ? [coverSegment("act_2")] : [])] })), plannerWith([...realDecisions(), coverDecision(mathAnalysis(), "act_2")]));
     const id = await t.start("automatic");
     await t.runAll(id);
     expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 3 });

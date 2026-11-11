@@ -327,7 +327,7 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
         done("reconstructable_structured_visual", { action: "figure", spec, provenance: "reconstruction" });
         continue;
       }
-      // 2b · A scheme of boxes and arrows: redrawn only with the ORIGINAL's own evidence (its text layer and connectors), and only
+      // 2b · A scheme of boxes and arrows: redrawn only with the ORIGINAL's own evidence (arrow glyphs with their direction, labels, boxes), and only
       // exactly what the analysis claimed. Without that evidence nothing is drawn (the stop below stays honest).
       if (visual && flowClaim(visual) && deps.corroborateFlow) {
         attempts.push("reconstruct_flow");

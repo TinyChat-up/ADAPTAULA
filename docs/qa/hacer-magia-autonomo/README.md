@@ -21,19 +21,21 @@ Por tanto: análisis correcto, planificador correcto (el anterior), **política 
 ### 2.1 Imágenes: una figura solo se redibuja con evidencia del original
 
 - El `text` y la `description` del análisis salen de **la misma lectura del mismo modelo**: son una sola afirmación (`flowClaim`), no dos testigos. Por sí solas **no dibujan nada**.
-- La figura nueva `flow` (recuadros y flechas) se dibuja solo si **el original lo corrobora** (`auto/flow.ts › corroboratesFlow`), con evidencia que no depende del modelo:
-  1. la **capa de texto del PDF** imprime cada etiqueta como su propio cuadro de texto, **una sola vez**;
-  2. están en **una fila o una columna**, en el orden de la cadena;
-  3. entre cada dos etiquetas consecutivas **una línea continua de tinta cruza el centro del hueco** (el conector). Los bordes de las cajas no cuentan.
-- Además, las etiquetas del PDF deben coincidir, una a una y en el mismo orden, con las del análisis. Si no, nada.
-- **Sin evidencia → parada segura**, como antes (`visual_unavailable`). Una imagen subida (sin capa de texto), un texto del PDF fundido en una sola línea, flechas dibujadas como imagen sin trazo continuo o un orden distinto **no se reconstruyen**.
-- Limitación asumida: solo PDFs con capa de texto. El estanque original debe pasar esta comprobación sobre su PDF real; **no se ha podido comprobar con el PDF del docente** (no se ha accedido a su archivo). Si no la pasa, la ficha sigue parándose, con la misma explicación honesta.
+- La figura `flow` (recuadros y flechas) se dibuja solo si **el PDF original lo corrobora** (`auto/flow.ts › corroboratesFlow`), con lo que el propio PDF imprime y sin modelo:
+  1. **Flechas = glifos de la capa de texto** («→», «->»…) en **una sola fila**, exactamente una entre cada dos cajas. El glifo es también la evidencia del **sentido**: una flecha hacia la derecha entre una caja a su izquierda y otra a su derecha significa flujo de izquierda a derecha, el orden de la afirmación. Flechas hacia la izquierda, dobles o verticales, o cualquier otro número → nada.
+  2. **Etiquetas = el texto entre las flechas**, agrupado por cajas. Una etiqueta partida en varias líneas de la misma caja («LARVAS DE» / «INSECTOS») se une en orden de lectura antes de compararla.
+  3. **Cajas realmente dibujadas**: cada etiqueta dentro de un rectángulo cerrado de tinta (cuatro lados) que no contiene ningún otro texto.
+  4. Cada caja, en orden, coincide con la etiqueta de la afirmación; nada impreso en la banda del esquema que no pertenezca a una caja.
+- **Probado con el PDF real del estanque** (`Ficha_prueba_Adaptaula_Estanque_5Primaria`, página 2, sin modelos de pago): la primera versión del algoritmo (etiquetas individuales y línea continua de tinta) **no lo reconocía** (etiqueta partida, flechas como caracteres). Con la versión actual **lo corrobora**. El PDF no se guarda en el repositorio: las pruebas reproducen su geometría (coordenadas medidas) y comprueban además las variantes que **no** deben pasar: flecha invertida o doble, orden distinto, sin cajas, texto extra, etiqueta repetida o distinta, y un PDF generado con raster real.
+- **No se ha relajado nada para llegar ahí**: se sustituyó la evidencia por otra más fuerte (el glifo da el sentido; la línea de tinta no lo daba y se retiró).
+- Límites asumidos (parada segura en todos): imagen sin capa de texto; conectores dibujados como línea o imagen sin glifo de sentido; esquemas en columna o con ramas; cajas sin borde.
 
-### 2.2 Conservar el original no es resolver una barrera
+### 2.2 Conservar el original no es resolver una barrera, y cubrir es cubrir PARA ESA ACTIVIDAD
 
-- Cuando una decisión retenida por el método V2.2 se resuelve conservando el original, se comprueba cada necesidad **alta** que atendía: ¿la cubre otra decisión aplicada (aprobada o editada) o la presentación? Si no, la necesidad queda **sin cubrir**: la adaptación **no se finaliza** automáticamente, se detiene antes de generar y la pantalla nombra esa necesidad (`unresolvedNeeds`). El docente puede elegir *Editar*, pero nadie se lo exige.
-- Necesidades de intensidad baja o media no detienen la ficha por sí solas (criterio ya existente en `resolveAutomatically`).
-- Esta comprobación se hace **antes de generar**. La revisión pedagógica posterior mantiene sus comprobaciones (`functional_supports_applied` sigue siendo advertencia, no bloqueo): ver riesgos.
+- Cuando una decisión retenida por V2.2 se resuelve conservando el original, se comprueba cada necesidad **alta** que atendía: ¿la cubre otra decisión aplicada **que alcance esa actividad**, o la presentación? Si no, la adaptación **no se finaliza**: se detiene antes de generar y la pantalla nombra la necesidad (`unresolvedNeeds`).
+- **«Alcanzar» (`reaches`)**: la otra decisión actúa sobre la **misma actividad**, sobre el **recurso** con el que trabaja (texto o figura) o sobre la actividad que usa ese recurso, o es un apoyo de **todo el documento**. Una decisión sobre **otra actividad** con la misma dimensión **no cubre**. (Antes, `resolveWithheldAutonomously` y `resolveAutomatically` daban por cubierta una necesidad si cualquier decisión usaba la misma dimensión, en cualquier actividad: era un fallo. La corrección automática tras generar (`losesCoverage`) tenía el mismo defecto y también se ha corregido.)
+- Necesidades de intensidad baja o media no detienen la ficha por sí solas (criterio ya existente).
+- Pruebas: la misma dimensión en otra actividad **no** cubre; en la misma actividad o en el documento, sí.
 
 ### 2.3 Resto
 
@@ -67,8 +69,13 @@ Cualquier ampliación debe mantener perfiles funcionales, observables e individu
 
 ## 4. Riesgos pedagógicos pendientes antes de recomendar el merge
 
-1. **Cobertura posterior a la generación (principio 1).** La comprobación de «necesidad esencial sin cubrir» solo se aplica al resolver decisiones retenidas por V2.2. La revisión pedagógica posterior conserva `functional_supports_applied` como **advertencia**: una ficha puede salir con advertencia si una barrera importante queda con un apoyo débil. No se ha endurecido para no cambiar lo que ya funciona.
-2. **Evidencia visual (principio 2).** Solo PDFs con capa de texto; no probado con el PDF real del estanque. La reconstrucción es de **etiquetas y orden**, no de la semántica de las flechas (se deja a la actividad). Un esquema con conectores distintos de una línea continua (curvas, flechas como imagen) no se reconstruye: parada segura.
+1. **`functional_supports_applied` sigue siendo solo una advertencia (después de generar).** La comprobación actual es por **dimensión**, no por actividad (basta una decisión con esa dimensión usada en cualquier sitio) y su resultado máximo es `WARN` («Alguna necesidad no queda del todo cubierta»). Una ficha puede salir con advertencia aunque una barrera importante siga sin resolver en una actividad concreta. No se ha endurecido en esta PR para no introducir bloqueos sin datos.
+
+   **Propuesta para distinguir una insuficiencia crítica y comprobable de una observación menor** (no implementada):
+   - *Crítica* solo si se cumplen **todas**: (a) la necesidad es de intensidad **alta**; (b) existe una actividad donde la demanda es **medible** con un predicado determinista que ya tenemos (consigna por encima de `max_instruction_words`; texto por encima del límite de lectura; más tareas visibles que `max_visible_tasks`; menos líneas de respuesta que las que pide la tarea); (c) **ninguna decisión aplicada alcanza esa actividad** para esa dimensión (`reaches`) ni la presentación la cubre; (d) el elemento final de la ficha **sigue superando el límite** medido. Entonces: una corrección automática acotada y, si persiste, parada honesta (no se entrega como válida).
+   - *Observación menor* en cualquier otro caso: intensidad media o baja, necesidad sin predicado medible (p. ej. memoria de trabajo, ansiedad), cobertura parcial o apoyo equivalente. Se mantiene `WARN`, visible en «Conviene que compruebes estos puntos», sin bloqueo.
+   - *Despliegue por fases*: primero **en modo sombra** (calcular y registrar en el informe de ejecución sin bloquear) durante un periodo de fichas reales, medir falsos positivos con el criterio de la docente, y activar el bloqueo solo para las dimensiones medibles con tasa de falsos positivos nula. Hasta entonces, no hay bloqueos injustificados.
+2. **Evidencia visual (principio 2).** Solo PDFs con capa de texto y flechas como glifos (el estanque real sí pasa; ver §2.1). La reconstrucción es de **etiquetas, orden y sentido de izquierda a derecha**, no de lo que significa cada flecha (se deja a la actividad). Otros esquemas (flechas como dibujo, columnas, ramas) no se reconstruyen: parada segura. Solo se ha comprobado un PDF real; cada esquema nuevo puede requerir una variante.
 3. **El perfil como fundamento (principio 3).** Con el planificador anterior las fortalezas apenas influyen; la afirmación «el perfil decide» es cierta para las necesidades y parcial para fortalezas, autonomía, formas de acceso y apoyos eficaces (ver tabla). No debe comunicarse al docente como completa.
 4. **Primera ejecución real.** Ninguna de estas rutas se ha ejecutado con el modelo real ni con la ficha del estanque en producción.
 

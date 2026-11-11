@@ -3,7 +3,7 @@ import type { AdaptationPlan, Decision } from "@/lib/schemas/adaptation-plan";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { DecisionEdits, PlanReview, PlanReviewEntry } from "@/lib/schemas/plan-review";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
-import { candidates, viable } from "./automatic-resolution";
+import { candidates, reaches, viable } from "./automatic-resolution";
 import { isResolvedByPresentation } from "./context";
 import type { PlannerDeclarations } from "./plan-v3";
 
@@ -19,8 +19,9 @@ import type { PlannerDeclarations } from "./plan-v3";
  * Every resolution keeps its cause and reason: the teacher can read them afterwards (trace), nobody has to answer anything.
  *
  * Keeping the original is NOT the same as resolving a barrier. When a decision is left out, every HIGH need it served is checked
- * against what is still applied (another approved or edited decision, or the presentation layer); a high need left with nothing is
- * reported in `uncovered`, and the caller must not finish the sheet automatically: it stops honestly with that need named.
+ * against what is still applied AND REACHES ITS TARGET (`reaches`: another approved or edited decision on the same activity, on its
+ * resource, or a support for the whole document; or the presentation layer). A decision on a DIFFERENT activity does not cover it.
+ * A high need left with nothing is reported in `uncovered`, and the caller must not finish the sheet automatically: it stops honestly with that need named.
  */
 
 export type WithheldCause = "conditional" | "answer_hint" | "strategy_not_for_need" | "undeclared";
@@ -99,7 +100,7 @@ export function resolveWithheldAutonomously(
   for (const r of resolutions) {
     if (r.kind !== "kept_original") continue;
     const d = plan.decisions.find((x) => x.id === r.decision_id)!;
-    const lost = d.dimensions.filter((dim) => high.has(dim) && !isResolvedByPresentation(dim, context.presentation) && !applied.some((o) => o.dimensions.includes(dim)));
+    const lost = d.dimensions.filter((dim) => high.has(dim) && !isResolvedByPresentation(dim, context.presentation) && !applied.some((o) => o.dimensions.includes(dim) && reaches(o, d, analysis)));
     if (lost.length > 0) uncovered.push({ decision_id: d.id, dimensions: lost });
   }
   return { review: { ...review, entries: [...entries.values()] }, resolutions, uncovered };

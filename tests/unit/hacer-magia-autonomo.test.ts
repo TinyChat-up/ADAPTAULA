@@ -20,6 +20,7 @@ import { emptyFunctionalProfile, type FunctionalProfile } from "@/lib/schemas/fu
 import { allBlocks } from "@/lib/schemas/material-document";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { corroboratesFlow } from "@/lib/materials/visuals/auto/flow";
+import type { PageModel, TextBox } from "@/lib/materials/visuals/auto/page-model";
 import { readPage } from "@/lib/materials/visuals/auto/read";
 import { flowClaim, flowFigure } from "@/lib/visuals/from-analysis";
 import { describeSpec, VisualSpecSchema } from "@/lib/visuals/spec";
@@ -108,8 +109,9 @@ describe("Fase 4 · el estanque: la figura solo se redibuja con evidencia del OR
   });
 });
 
-// A one-page PDF of the pond scheme: each label is its own text item (the text layer) and arrows are drawn between the boxes.
-async function pondPdf(options: { arrows?: boolean; labels?: string[]; merged?: boolean } = {}) {
+// A one-page PDF of the pond scheme drawn the way the real sheet is: each box is a rectangle, its label a text item (the text layer),
+// and the arrows are glyphs of the text layer between the boxes (here «->», which the standard fonts can print).
+async function pondPdf(options: { arrow?: string | null; labels?: string[]; merged?: boolean; boxes?: boolean } = {}) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const page = pdf.addPage([595.28, 841.89]);
@@ -117,31 +119,70 @@ async function pondPdf(options: { arrows?: boolean; labels?: string[]; merged?: 
   if (options.merged) {
     page.drawText(labels.join("  ->  "), { x: 50, y: 600, size: 11, font });
   } else {
-    const xs = [50, 150, 330, 430];
+    const xs = [40, 150, 330, 440];
+    const arrow = options.arrow === undefined ? "->" : options.arrow;
     labels.forEach((l, i) => {
       page.drawText(l, { x: xs[i]!, y: 600, size: 11, font });
-      page.drawRectangle({ x: xs[i]! - 6, y: 592, width: font.widthOfTextAtSize(l, 11) + 12, height: 22, borderWidth: 1, borderColor: rgb(0, 0, 0) });
-      if (options.arrows !== false && i < labels.length - 1) page.drawLine({ start: { x: xs[i]! + font.widthOfTextAtSize(l, 11) + 8, y: 603 }, end: { x: xs[i + 1]! - 8, y: 603 }, thickness: 2, color: rgb(0, 0, 0) });
+      if (options.boxes !== false) page.drawRectangle({ x: xs[i]! - 8, y: 590, width: font.widthOfTextAtSize(l, 11) + 16, height: 26, borderWidth: 1, borderColor: rgb(0, 0, 0) });
+      if (arrow && i < labels.length - 1) page.drawText(arrow, { x: xs[i]! + font.widthOfTextAtSize(l, 11) + 14, y: 600, size: 11, font });
     });
   }
   return pdf.save();
 }
 
-describe("la evidencia del original: texto del PDF y tinta entre los recuadros", () => {
-  it("un esquema impreso como el del estanque corrobora sus etiquetas", async () => {
-    const { model } = await readPage(await pondPdf(), "application/pdf", 1, 100);
-    expect(corroboratesFlow(model, PRINTED)).toBe(true);
+// The REAL sheet's page 2 (probed on the teacher's file, not stored here): the label «LARVAS DE INSECTOS» split over two lines of
+// one box, the arrows «→» as glyphs of the text layer, and light-grey box borders. Rebuilt as a page model with those coordinates.
+function realPondModel(over: { arrow?: string; order?: string[]; split?: boolean; boxes?: boolean; extra?: boolean } = {}): PageModel {
+  const width = 827, height = 1169;
+  const gray = new Uint8Array(width * height).fill(255);
+  const box = (x0: number, y0: number, x1: number, y1: number) => {
+    for (let x = x0; x <= x1; x++) for (const y of [y0, y1]) gray[y * width + x] = 200;
+    for (let y = y0; y <= y1; y++) for (const x of [x0, x1]) gray[y * width + x] = 200;
+  };
+  const t = (text: string, x0: number, y0: number, x1: number, y1: number): TextBox => ({ text, x0, y0, x1, y1 });
+  const names = over.order ?? ["ALGAS", "LARVAS DE INSECTOS", "RANAS", "GARZAS"];
+  const frames = [[100, 190, 216, 254], [240, 190, 396, 254], [430, 190, 568, 254], [620, 190, 760, 254]] as const;
+  const texts: TextBox[] = [t("3. Observa esta relación alimentaria del estanque.", 69, 159, 475, 176), t("a) Explica qué indican las flechas del esquema.", 69, 274, 383, 290)];
+  const lines = (name: string, f: readonly [number, number, number, number]) => {
+    const cx = (f[0] + f[2]) / 2;
+    if (name === "LARVAS DE INSECTOS" && over.split !== false) return [t("LARVAS DE", cx - 41, 205, cx + 41, 221), t("INSECTOS", cx - 36, 224, cx + 36, 239)];
+    return [t(name, cx - 24, 214, cx + 24, 230)];
+  };
+  names.forEach((n, i) => texts.push(...lines(n, frames[i]!)));
+  for (const x of [225, 408, 591]) texts.push(t(over.arrow ?? "→", x, 214, x + 11, 230));
+  if (over.extra) texts.push(t("ALGAS", 300, 244, 350, 252));
+  if (over.boxes !== false) frames.forEach((f) => box(f[0], f[1], f[2], f[3]));
+  return { width, height, gray, texts, mmPerPx: 0.254 };
+}
+
+describe("la evidencia del original: capa de texto del PDF (etiquetas, flechas con su sentido) y cajas dibujadas", () => {
+  it("el PDF REAL del estanque (etiqueta partida en dos líneas, flechas «→» como caracteres) corrobora la cadena", () => {
+    expect(corroboratesFlow(realPondModel(), PRINTED)).toBe(true);
+    // The same sheet with the label on one line is also recognised.
+    expect(corroboratesFlow(realPondModel({ split: false }), PRINTED)).toBe(true);
   });
-  it("no corrobora si falta una flecha, si las etiquetas van en otro orden, si falta una o si el texto del PDF está fundido en una sola línea", async () => {
-    const noArrows = (await readPage(await pondPdf({ arrows: false }), "application/pdf", 1, 100)).model;
-    // The boxes' own borders are not connectors: without a line across the gap the chain is not corroborated.
-    expect(corroboratesFlow(noArrows, PRINTED)).toBe(false);
-    const { model } = await readPage(await pondPdf(), "application/pdf", 1, 100);
-    expect(corroboratesFlow(model, ["ALGAS", "RANAS", "LARVAS DE INSECTOS", "GARZAS"])).toBe(false);
-    expect(corroboratesFlow(model, [...PRINTED, "PECES"])).toBe(false);
-    expect(corroboratesFlow(model, ["ALGAS", "ALGAS"])).toBe(false);
-    const merged = (await readPage(await pondPdf({ merged: true }), "application/pdf", 1, 100)).model;
-    expect(corroboratesFlow(merged, PRINTED)).toBe(false);
+  it("el SENTIDO de las flechas importa: flechas hacia la izquierda o dobles no corroboran un orden de izquierda a derecha", () => {
+    expect(corroboratesFlow(realPondModel({ arrow: "←" }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(realPondModel({ arrow: "↔" }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(realPondModel({ arrow: "<-" }), PRINTED)).toBe(false);
+    // A sheet whose boxes read in another order is not the claimed chain, even with right-pointing arrows.
+    expect(corroboratesFlow(realPondModel({ order: ["GARZAS", "RANAS", "LARVAS DE INSECTOS", "ALGAS"] }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(realPondModel({ order: ["ALGAS", "RANAS", "LARVAS DE INSECTOS", "GARZAS"] }), PRINTED)).toBe(false);
+  });
+  it("no se inventa: sin cajas dibujadas, con un texto extra en el esquema, con otras etiquetas o con una repetida, nada", () => {
+    expect(corroboratesFlow(realPondModel({ boxes: false }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(realPondModel({ extra: true }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(realPondModel(), ["ALGAS", "LARVAS", "RANAS", "GARZAS"])).toBe(false);
+    expect(corroboratesFlow(realPondModel(), [...PRINTED, "PECES"])).toBe(false);
+    expect(corroboratesFlow(realPondModel(), ["ALGAS", "ALGAS"])).toBe(false);
+  });
+  it("con un PDF generado (raster real): flechas «->», cajas y etiquetas corroboran; sin flechas, sin cajas, con flecha invertida o fundido en una línea, no", async () => {
+    const read = async (o: Parameters<typeof pondPdf>[0] = {}) => (await readPage(await pondPdf(o), "application/pdf", 1, 100)).model;
+    expect(corroboratesFlow(await read(), PRINTED)).toBe(true);
+    expect(corroboratesFlow(await read({ arrow: null }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(await read({ boxes: false }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(await read({ arrow: "<-" }), PRINTED)).toBe(false);
+    expect(corroboratesFlow(await read({ merged: true }), PRINTED)).toBe(false);
   });
 });
 
@@ -256,7 +297,7 @@ describe("Fase 3 · lo retenido se resuelve internamente", () => {
     expect(reviewed.effective.decisions).toEqual([]);
   });
 
-  it("conservar el original NO resuelve una barrera: una necesidad esencial sin ninguna otra decisión queda señalada (parada, no ficha válida)", () => {
+  it("conservar el original NO resuelve una barrera: una necesidad esencial que ninguna decisión alcanza para ESA actividad queda señalada (parada, no ficha válida)", () => {
     const high = { ...contextB, needs: contextB.needs.map((n) => ({ ...n, level: "high" as const })) };
     const dimension = high.needs[0]!.dimension;
     const go = (decisions: unknown[]) => {
@@ -267,9 +308,12 @@ describe("Fase 3 · lo retenido se resuelve internamente", () => {
     const alone = go([draft({ status: "conditional", question: "q_1" })]);
     expect(alone.resolutions[0]!.kind).toBe("kept_original");
     expect(alone.uncovered).toEqual([{ decision_id: "dec_1", dimensions: [dimension] }]);
-    // Another applied decision serves the same need: it is covered and the sheet can go on.
-    const covered = go([draft({ status: "conditional", question: "q_1" }), draft({ target: "act_3" })]);
-    expect(covered.uncovered).toEqual([]);
+    // The same dimension used on ANOTHER activity does not cover it: the barrier remains where it was left out.
+    const elsewhere = go([draft({ status: "conditional", question: "q_1" }), draft({ target: "act_3" })]);
+    expect(elsewhere.uncovered).toEqual([{ decision_id: "dec_1", dimensions: [dimension] }]);
+    // The same activity, or a support for the whole document, does reach it.
+    expect(go([draft({ status: "conditional", question: "q_1" }), draft({ target: "act_2" })]).uncovered).toEqual([]);
+    expect(go([draft({ status: "conditional", question: "q_1" }), draft({ target: "document" })]).uncovered).toEqual([]);
     // A need that is not essential (low or medium) does not stop the sheet by itself.
     const low = { ...contextB, needs: contextB.needs.map((n) => ({ ...n, level: "low" as const })) };
     const { plan, declarations } = normalizePlanV3({ decisions: [draft({ status: "conditional", question: "q_1" })], summary: [], teacher_questions: [{ id: "q_1", text: "¿Puede usar teclado?" }] }, analysis, low, RULES);
