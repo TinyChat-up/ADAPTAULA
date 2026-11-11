@@ -3,6 +3,7 @@ import { MockProvider } from "./providers/mock";
 import { MockImageProvider } from "./providers/mock-images";
 import { OpenAIImageProvider } from "./providers/openai-images";
 import { AIError } from "./errors";
+import type { SpendMeter } from "./spend";
 import type { AIProvider, ImageProvider, ModelSelection } from "./types";
 
 export interface ProviderDeps {
@@ -11,6 +12,8 @@ export interface ProviderDeps {
   mockDelayMs?: number | undefined;
   /** True on the production deployment, where a mock provider must never be reachable. */
   isProduction?: boolean | undefined;
+  /** Pilot deployments (ADR-046): every paid text request is counted and admitted first; paid images are refused. */
+  spendMeter?: SpendMeter | undefined;
 }
 
 /**
@@ -21,7 +24,7 @@ export function createProvider(selection: ModelSelection, deps: ProviderDeps): A
   switch (selection.provider) {
     case "anthropic":
       if (!deps.anthropicApiKey) throw new AIError("not_configured", "ANTHROPIC_API_KEY is not set");
-      return AnthropicProvider.fromApiKey(deps.anthropicApiKey);
+      return AnthropicProvider.fromApiKey(deps.anthropicApiKey, deps.spendMeter);
     case "mock":
       if (deps.isProduction) throw new AIError("not_configured", "the mock provider is disabled in production");
       return new MockProvider({ delayMs: deps.mockDelayMs ?? 0 });
@@ -35,6 +38,8 @@ export function createImageProvider(selection: ModelSelection, deps: ProviderDep
   if (selection.alias !== "IMAGE_FAST" && selection.alias !== "IMAGE_QUALITY") throw new AIError("not_configured", "not an image alias");
   switch (selection.provider) {
     case "openai":
+      // Image calls are not metered yet (V1–V7, next stage): where spend is metered, a paid image is never made.
+      if (deps.spendMeter) throw new AIError("not_configured", "paid images are disabled where spend is metered");
       if (!deps.openaiApiKey) throw new AIError("not_configured", "OPENAI_API_KEY is not set");
       return OpenAIImageProvider.fromApiKey(deps.openaiApiKey);
     case "mock":

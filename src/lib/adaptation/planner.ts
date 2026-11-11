@@ -149,6 +149,7 @@ export function createModelPlanner(deps: {
           ...(parsed.outcome === "schema" ? { json: parsed.json } : {}),
           outputTokens: response.usage.outputTokens,
           maxOutputTokens: budget,
+          ...(rules ? { rules: rulesUse(rules) } : {}),
         });
       }
       return { draft: parsed.draft, runs: [run], ...(rules ? { rules: rulesUse(rules) } : {}) };
