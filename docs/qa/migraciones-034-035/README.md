@@ -1,6 +1,6 @@
 # Plan de ejecución: historial de migraciones y migraciones 034 y 035
 
-Estado: **revisado, no ejecutado**. Decisión del propietario (2026-11-11): se prescinde de la copia de seguridad en esta fase y se acepta el riesgo; por eso el plan se limita a operaciones que solo **añaden** objetos, y ninguna borra, reinicia ni sobrescribe datos.
+Estado: **EJECUTADO el 2026-11-11 con la Opción B (SQL)**; ver el apartado 6. Decisión del propietario (2026-11-11): se prescinde de la copia de seguridad en esta fase y se acepta el riesgo; por eso el plan se limita a operaciones que solo **añaden** objetos, y ninguna borra, reinicia ni sobrescribe datos.
 
 ## 1. Lo comprobado (solo lectura, 2026-11-11)
 
@@ -96,3 +96,26 @@ Después, `record_ai_run` hay que restaurarla con el cuerpo de la migración 033
 ## 5. Después de las migraciones
 
 Subir las reglas privadas (`scripts/agent-rules/upload.ts`, verificación previa de las 56 huellas), fusionar las PR #79–#82 y fijar las variables de V2.2 en el proyecto de ACME. Cada paso con su confirmación.
+
+## 6. Registro de la ejecución (2026-11-11, proyecto `jidhormdauthfbpxxydt`)
+
+Ejecutado con la Opción B, sin copia de seguridad (decisión expresa del propietario), sin `db reset` y sin tocar filas de la aplicación.
+
+1. **Guarda de entrada:** las huellas del esquema remoto coincidían con las de las migraciones 001–033.
+2. **Historial:** creado `supabase_migrations.schema_migrations` (`version text pk`, `statements text[]`, `name text`: la forma que usa la CLI) con las 33 filas de `paso1-historial.sql`.
+3. **034** (transacción única + fila de historial): bucket `agent-rules` privado y `ai_runs.rules_sha256`.
+4. **Antes de la 035:** definición anterior de `record_ai_run` conservada y procedimiento de reversión (`reversion-035.sql`) probado en local sobre 001–035: restaura la función original, borra la tabla de gasto y su fila de historial.
+5. **035** (transacción única + fila de historial): `record_ai_run` con `rules_sha256`, `ai_spend_reservations` (RLS, sin políticas ni permisos de usuario), `ai_spend_committed/admit/settle/summary(text)` y `ai_cost_report`, solo `service_role`.
+
+**Comprobaciones posteriores (todas correctas):**
+
+- Historial: 35 filas, de `20261001000100` a `20261001003500`; el MD5 de la lista `version_nombre` coincide con el de los 35 archivos de `supabase/migrations/` (`6d6889ff…`). Sin filas mal formadas; el esquema `supabase_migrations` no es accesible para `anon` ni `authenticated`.
+- Esquema remoto = migraciones 001–035 en columnas, restricciones, índices, políticas, RLS, disparadores y las 82 funciones (huellas por objeto, una a una). Las políticas (`a0f0918c…`) y los disparadores (`5d6ab9d7…`) no han cambiado respecto a antes.
+- `record_ai_run`: cuerpo idéntico al de la migración 035; `security definer`, `search_path` vacío, ejecutable solo por `service_role`.
+- Las seis funciones de gasto/informe: `anon` y `authenticated` sin `execute`; `service_role` con `execute`.
+- `ai_spend_reservations`: existe, vacía, RLS activada, sin políticas, permisos solo para `postgres` y `service_role`.
+- Bucket `agent-rules`: privado; ninguna política de `storage.objects` lo menciona.
+- Datos intactos: 4 usuarios, 4 workspaces, 13 materiales, 29 adaptaciones, 30 versiones, 4 perfiles, 136 llamadas de IA, 68 eventos de uso, 19 archivos.
+- Asesor de seguridad de Supabase: sin avisos nuevos (solo el informativo «RLS sin políticas» de la tabla nueva, intencionado como en `ai_runs` y las demás tablas de servidor).
+
+**Pendiente:** `supabase migration list` con la CLI enlazada (no se ejecutó desde esta sesión); V2.2 sigue **sin activar**.
