@@ -1319,17 +1319,48 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       else {
         const reviewContext = buildPedagogicalReviewContext(input, reviewed);
         if (!(await store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
+        // A malformed answer (the review is asked as free JSON against a strict contract) gets ONE new ask of the same review, then the
+        // stage fails as before: bounded by construction (two calls at most, both kept in `ai_runs`), never a loop. Anything else
+        // (a refusal, a cut-off answer, a provider error) is not asked again here.
+        // A resumed stage (lease lost, process restarted) continues from the rejections already on record for THIS review input, so the
+        // bound of two calls holds across resumptions too: it never starts again from the first ask.
+        const earlier = (await store.listArtifacts(adaptationId, "execution_report")).filter((a) => {
+          const payload = a.payload as { reviewer_rejected?: unknown; review_input_fingerprint?: string };
+          return payload.reviewer_rejected !== undefined && payload.review_input_fingerprint === reviewInputFp;
+        }).length;
+        if (earlier >= 2) throw new AdaptationError("reviewer_schema", "la revisión ya fue rechazada dos veces");
         let answered;
-        try {
-          answered = await services.reviewer.review({ context: loaded.context, document, plan: reviewed.effective, solvability: solvabilityInputs(loaded.analysis), reviewContext });
-        } catch (error) {
-          const { code } = classifyAIFailure(error, "review");
-          await store.recordAiRun(failedRow(error, loaded.versions.reviewer, "review", "pedagogical_reviewer", code, run.ids, reviewInputFp));
-          throw error;
+        let ask = earlier + 1;
+        for (; ; ask++) {
+          try {
+            answered = await services.reviewer.review({ context: loaded.context, document, plan: reviewed.effective, solvability: solvabilityInputs(loaded.analysis), reviewContext });
+            break;
+          } catch (error) {
+            const { code } = classifyAIFailure(error, "review");
+            await store.recordAiRun(failedRow(error, loaded.versions.reviewer, "review", "pedagogical_reviewer", code, run.ids, reviewInputFp, ask > 1 ? "repair" : "initial"));
+            const rejected = error instanceof RejectedStageOutput && (error.detail?.kind === "schema" || error.detail?.kind === "not_json") ? error.detail : null;
+            if (rejected) {
+              // Why it was rejected, in paths and rules (no content): the diagnosis that was missing.
+              deps.log?.warn("reviewer_output_rejected", { adaptationId, ask, kind: rejected.kind, outputTokens: rejected.outputTokens, issues: rejected.issues.map((i) => `${i.path}:${i.code}`).join(",").slice(0, 400) });
+              await store.putArtifact(adaptationId, run.lease, "execution_report", reviewFp, fingerprint({ input: reviewInputFp, reviewer_rejected: ask, issues: rejected.issues }), { review_fingerprint: reviewFp, review_input_fingerprint: reviewInputFp, reviewer_rejected: { ask, kind: rejected.kind, output_tokens: rejected.outputTokens, issues: rejected.issues.slice(0, 15) } });
+            }
+            if (!rejected || ask >= 2) throw error;
+            // The same limit that admits a new job: a workspace whose paid calls keep failing gets no extra paid call.
+            try {
+              await store.assertFailureBudget(row.workspace_id);
+            } catch (budget) {
+              if (budget instanceof FailureBudgetError) throw error;
+              throw budget;
+            }
+            await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
+            if (!(await store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
+          }
         }
         draft = answered.draft as AiReviewDraft;
         const outputFp = fingerprint(draft);
-        for (const r of answered.runs) await store.recordAiRun(runRow(r, run.ids, reviewInputFp, outputFp));
+        // The second ask is a «repair» call: the index of `ai_runs` keys a call by (job, attempt, purpose, kind, attempt, input), so a repeat
+        // recorded as «initial» would be dropped silently and its cost lost.
+        for (const r of answered.runs) await store.recordAiRun(runRow({ ...r, callKind: ask > 1 ? "repair" : r.callKind }, run.ids, reviewInputFp, outputFp));
         await store.putArtifact(adaptationId, run.lease, "reviewer_findings", reviewInputFp, fingerprint({ input: reviewInputFp, output: outputFp }), { draft });
         await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
       }

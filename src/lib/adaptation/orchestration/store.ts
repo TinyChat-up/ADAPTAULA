@@ -249,6 +249,10 @@ export class AdaptationStore {
   async markProviderCall(jobId: string, attempt: number): Promise<boolean> {
     return (await this.call("mark_provider_call", { p_job: jobId, p_attempt: attempt })) === true;
   }
+  /** Throws `FailureBudgetError` when too many paid calls failed in this workspace recently (the same rule that admits a new job). */
+  async assertFailureBudget(workspaceId: string): Promise<void> {
+    await this.call("assert_ai_failure_budget", { p_workspace: workspaceId });
+  }
   async clearProviderCall(jobId: string, attempt: number): Promise<boolean> {
     return (await this.call("clear_provider_call", { p_job: jobId, p_attempt: attempt })) === true;
   }
