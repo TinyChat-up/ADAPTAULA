@@ -2,7 +2,9 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { AdaptationPlan, Decision } from "@/lib/schemas/adaptation-plan";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { DecisionEdits, PlanReview, PlanReviewEntry } from "@/lib/schemas/plan-review";
+import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import { candidates, viable } from "./automatic-resolution";
+import { isResolvedByPresentation } from "./context";
 import type { PlannerDeclarations } from "./plan-v3";
 
 /**
@@ -15,6 +17,10 @@ import type { PlannerDeclarations } from "./plan-v3";
  *   3. original       the conservative default: the decision is left out and the ORIGINAL stays as it is. Never an invented
  *                     adaptation, never a guess about the learner.
  * Every resolution keeps its cause and reason: the teacher can read them afterwards (trace), nobody has to answer anything.
+ *
+ * Keeping the original is NOT the same as resolving a barrier. When a decision is left out, every HIGH need it served is checked
+ * against what is still applied (another approved or edited decision, or the presentation layer); a high need left with nothing is
+ * reported in `uncovered`, and the caller must not finish the sheet automatically: it stops honestly with that need named.
  */
 
 export type WithheldCause = "conditional" | "answer_hint" | "strategy_not_for_need" | "undeclared";
@@ -48,16 +54,21 @@ function withoutRevealingSupports(d: Decision): DecisionEdits | null {
   return { supports: safe };
 }
 
+export interface UncoveredNeed {
+  decision_id: string;
+  dimensions: DimensionKey[];
+}
+
 export function resolveWithheldAutonomously(
   review: PlanReview,
   plan: AdaptationPlan,
   declarations: PlannerDeclarations,
   analysis: MaterialAnalysis,
   context: AdaptationContext,
-): { review: PlanReview; resolutions: WithheldResolution[] } {
-  if (review.reviewer.kind === "teacher") return { review, resolutions: [] };
+): { review: PlanReview; resolutions: WithheldResolution[]; uncovered: UncoveredNeed[] } {
+  if (review.reviewer.kind === "teacher") return { review, resolutions: [], uncovered: [] };
   const withheld = Object.entries(declarations.decisions).filter(([, v]) => v.withheld).map(([id]) => id);
-  if (withheld.length === 0) return { review, resolutions: [] };
+  if (withheld.length === 0) return { review, resolutions: [], uncovered: [] };
   const entries = new Map<string, PlanReviewEntry>(review.entries.map((e) => [e.decision_id, e]));
   const resolutions: WithheldResolution[] = [];
   for (const id of withheld) {
@@ -78,5 +89,18 @@ export function resolveWithheldAutonomously(
       resolutions.push({ decision_id: id, cause, kind: "kept_original", reason: REASONS.kept_original });
     }
   }
-  return { review: { ...review, entries: [...entries.values()] }, resolutions };
+  // What is still applied after the resolution, and the high needs a left-out decision no longer serves.
+  const applied = plan.decisions.filter((d) => {
+    const entry = entries.get(d.id);
+    return entry !== undefined && entry.action !== "rejected";
+  });
+  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
+  const uncovered: UncoveredNeed[] = [];
+  for (const r of resolutions) {
+    if (r.kind !== "kept_original") continue;
+    const d = plan.decisions.find((x) => x.id === r.decision_id)!;
+    const lost = d.dimensions.filter((dim) => high.has(dim) && !isResolvedByPresentation(dim, context.presentation) && !applied.some((o) => o.dimensions.includes(dim)));
+    if (lost.length > 0) uncovered.push({ decision_id: d.id, dimensions: lost });
+  }
+  return { review: { ...review, entries: [...entries.values()] }, resolutions, uncovered };
 }

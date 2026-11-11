@@ -18,7 +18,10 @@ import type { ConflictResolution } from "@/lib/schemas/adaptation-context";
 import type { Decision } from "@/lib/schemas/adaptation-plan";
 import { emptyFunctionalProfile, type FunctionalProfile } from "@/lib/schemas/functional-profile";
 import { allBlocks } from "@/lib/schemas/material-document";
-import { flowFromAnalysis } from "@/lib/visuals/from-analysis";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { corroboratesFlow } from "@/lib/materials/visuals/auto/flow";
+import { readPage } from "@/lib/materials/visuals/auto/read";
+import { flowClaim, flowFigure } from "@/lib/visuals/from-analysis";
 import { describeSpec, VisualSpecSchema } from "@/lib/visuals/spec";
 import { argumentationAnalysis, fractionsAnalysis } from "../../evals/adaptation/fixtures";
 import { fractionsCaseDocument } from "../support/fractions-case";
@@ -47,41 +50,52 @@ function pondSheet(visual: Partial<typeof POND> = {}) {
   return base;
 }
 // Nothing could be located, nothing is corroborated from pixels, no model, and the workspace has no illustrations: the real conditions.
-const noHelp = (): MagicVisualDeps => ({ readyOriginals: async () => new Set<string>(), assistants: null, illustrationsWithheld: "disabled" });
-const resolve = (s: ReturnType<typeof pondSheet>) => resolveMagicVisuals(noHelp(), { analysis: s.analysis, document: s.document, requiredVisuals: ["vis_1", "vis_2"], stage: "primaria" });
+const noHelp = (over: Partial<MagicVisualDeps> = {}): MagicVisualDeps => ({ readyOriginals: async () => new Set<string>(), assistants: null, illustrationsWithheld: "disabled", ...over });
+const resolve = (s: ReturnType<typeof pondSheet>, deps: MagicVisualDeps = noHelp()) => resolveMagicVisuals(deps, { analysis: s.analysis, document: s.document, requiredVisuals: ["vis_1", "vis_2"], stage: "primaria" });
+const PRINTED = ["ALGAS", "LARVAS DE INSECTOS", "RANAS", "GARZAS"];
 
-describe("Fase 4 · el estanque: una figura esencial ya no cancela la ficha cuando el análisis la describe completa", () => {
-  it("el esquema de recuadros y flechas se reconstruye con sus etiquetas y su orden, sin inventar nada", async () => {
-    const s = pondSheet();
-    const plan = await resolve(s);
+describe("Fase 4 · el estanque: la figura solo se redibuja con evidencia del ORIGINAL, y sin ella la parada sigue siendo segura", () => {
+  it("el texto y la descripción del análisis NO bastan: son la misma lectura. Sin evidencia del original, parada segura (lo que pasó en producción)", async () => {
+    const plan = await resolve(pondSheet());
     const need = plan.needs.find((n) => n.key === "vis_2")!;
-    expect(need.resolution.action).toBe("figure");
-    expect(need.category).toBe("generatable_support_visual");
-    expect(need.attempts).toEqual(["locate", "reconstruct", "generate"]);
-    expect(need.contract).toMatchObject({ class: "structured_reconstructable", provenance: "generated_spec", validation: "spec_verified" });
+    expect(need.resolution).toEqual({ action: "unresolved", reason: "illustration_unavailable" });
+    expect(visualStopCode(unresolvedEssential(plan))).toBe("visual_unavailable");
+    // And with a corroborator that finds nothing in the PDF the result is the same.
+    const none = await resolve(pondSheet(), noHelp({ corroborateFlow: async () => null }));
+    expect(none.needs.find((n) => n.key === "vis_2")!.resolution.action).toBe("unresolved");
+  });
+
+  it("con las etiquetas corroboradas por el original, el esquema se redibuja con ellas y su orden; contrato de reconstrucción", async () => {
+    const s = pondSheet();
+    const plan = await resolve(s, noHelp({ corroborateFlow: async () => PRINTED }));
+    const need = plan.needs.find((n) => n.key === "vis_2")!;
+    expect(need.category).toBe("reconstructable_structured_visual");
+    expect(need.attempts).toEqual(["locate", "reconstruct", "reconstruct_flow"]);
+    expect(need.contract).toMatchObject({ class: "structured_reconstructable", provenance: "pixel_reconstruction", validation: "pixels_verified" });
     expect(unresolvedEssential(plan)).toEqual([]);
     if (need.resolution.action !== "figure") throw new Error("not a figure");
     expect(need.resolution.spec).toMatchObject({ kind: "flow", items: ["Algas", "Larvas de insectos", "Ranas", "Garzas"] });
     // The description for assistive technology says what is drawn, never what an arrow MEANS (the activity asks that).
     expect(describeSpec(need.resolution.spec)).toBe("Relación alimentaria del estanque. Esquema de 4 recuadros unidos por flechas, en este orden: Algas → Larvas de insectos → Ranas → Garzas.");
     expect(describeSpec(need.resolution.spec)).not.toMatch(/come|alimenta a|energ/i);
-  });
-
-  it("la ficha lleva el esquema en el sitio de la imagen, enlazado a su actividad; nada de la representación se elimina", async () => {
-    const s = pondSheet();
-    const plan = await resolve(s);
     const applied = applyVisualResolution(s.document, plan);
     const image = allBlocks(applied).find((b) => b.type === "image" && b.source.kind === "figure" && b.source.visual_ref === "vis_2");
     expect(image).toBeDefined();
     const activity = allBlocks(applied).find((b) => b.type === "activity" && b.trace.source_refs.includes("act_4"));
     expect(activity?.type === "activity" && activity.resource_block_ids).toContain(image!.id);
-    // The activity is the original one: the competence (interpreting the representation) is not replaced by an easier one.
     expect(activity?.type === "activity" && activity.trace.origin).not.toBe("adapted");
   });
 
-  it("sin los datos completos NO se inventa: una imagen esencial imposible sigue siendo una parada honesta, con su causa", async () => {
+  it("si el original corrobora OTRAS etiquetas u otro orden que el análisis, no se dibuja nada", async () => {
+    for (const printed of [["ALGAS", "RANAS", "LARVAS DE INSECTOS", "GARZAS"], ["ALGAS", "LARVAS", "RANAS", "GARZAS"], ["ALGAS", "LARVAS DE INSECTOS", "RANAS"]]) {
+      const plan = await resolve(pondSheet(), noHelp({ corroborateFlow: async () => printed }));
+      expect(plan.needs.find((n) => n.key === "vis_2")!.resolution.action, printed.join(",")).toBe("unresolved");
+    }
+  });
+
+  it("sin datos completos en el análisis ni siquiera se consulta al original: parada segura con su causa", async () => {
     for (const visual of [{ text: null as unknown as string }, { text: "ALGAS → RANAS" }, { description: "Un esquema del estanque." }, { text: "ALGAS → LARVAS DE INSECTOS / RANAS → GARZAS" }]) {
-      const plan = await resolve(pondSheet(visual));
+      const plan = await resolve(pondSheet(visual), noHelp({ corroborateFlow: async () => PRINTED }));
       const need = plan.needs.find((n) => n.key === "vis_2")!;
       expect(need.resolution.action, JSON.stringify(visual)).toBe("unresolved");
       expect(visualStopCode(unresolvedEssential(plan))).toBe("visual_unavailable");
@@ -89,39 +103,75 @@ describe("Fase 4 · el estanque: una figura esencial ya no cancela la ficha cuan
   });
 
   it("una imagen que SÍ se localiza en el original se conserva tal cual: no se redibuja", async () => {
-    const s = pondSheet();
-    const plan = await resolveMagicVisuals({ ...noHelp(), readyOriginals: async () => new Set(["vis_1", "vis_2"]) }, { analysis: s.analysis, document: s.document, requiredVisuals: ["vis_1", "vis_2"], stage: "primaria" });
-    const need = plan.needs.find((n) => n.key === "vis_2")!;
-    expect(need).toMatchObject({ category: "exact_original_visual", resolution: { action: "located" }, attempts: ["locate"] });
+    const plan = await resolve(pondSheet(), noHelp({ readyOriginals: async () => new Set(["vis_1", "vis_2"]), corroborateFlow: async () => PRINTED }));
+    expect(plan.needs.find((n) => n.key === "vis_2")).toMatchObject({ category: "exact_original_visual", resolution: { action: "located" }, attempts: ["locate"] });
+  });
+});
+
+// A one-page PDF of the pond scheme: each label is its own text item (the text layer) and arrows are drawn between the boxes.
+async function pondPdf(options: { arrows?: boolean; labels?: string[]; merged?: boolean } = {}) {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const page = pdf.addPage([595.28, 841.89]);
+  const labels = options.labels ?? ["ALGAS", "LARVAS DE INSECTOS", "RANAS", "GARZAS"];
+  if (options.merged) {
+    page.drawText(labels.join("  ->  "), { x: 50, y: 600, size: 11, font });
+  } else {
+    const xs = [50, 150, 330, 430];
+    labels.forEach((l, i) => {
+      page.drawText(l, { x: xs[i]!, y: 600, size: 11, font });
+      page.drawRectangle({ x: xs[i]! - 6, y: 592, width: font.widthOfTextAtSize(l, 11) + 12, height: 22, borderWidth: 1, borderColor: rgb(0, 0, 0) });
+      if (options.arrows !== false && i < labels.length - 1) page.drawLine({ start: { x: xs[i]! + font.widthOfTextAtSize(l, 11) + 8, y: 603 }, end: { x: xs[i + 1]! - 8, y: 603 }, thickness: 2, color: rgb(0, 0, 0) });
+    });
+  }
+  return pdf.save();
+}
+
+describe("la evidencia del original: texto del PDF y tinta entre los recuadros", () => {
+  it("un esquema impreso como el del estanque corrobora sus etiquetas", async () => {
+    const { model } = await readPage(await pondPdf(), "application/pdf", 1, 100);
+    expect(corroboratesFlow(model, PRINTED)).toBe(true);
+  });
+  it("no corrobora si falta una flecha, si las etiquetas van en otro orden, si falta una o si el texto del PDF está fundido en una sola línea", async () => {
+    const noArrows = (await readPage(await pondPdf({ arrows: false }), "application/pdf", 1, 100)).model;
+    // The boxes' own borders are not connectors: without a line across the gap the chain is not corroborated.
+    expect(corroboratesFlow(noArrows, PRINTED)).toBe(false);
+    const { model } = await readPage(await pondPdf(), "application/pdf", 1, 100);
+    expect(corroboratesFlow(model, ["ALGAS", "RANAS", "LARVAS DE INSECTOS", "GARZAS"])).toBe(false);
+    expect(corroboratesFlow(model, [...PRINTED, "PECES"])).toBe(false);
+    expect(corroboratesFlow(model, ["ALGAS", "ALGAS"])).toBe(false);
+    const merged = (await readPage(await pondPdf({ merged: true }), "application/pdf", 1, 100)).model;
+    expect(corroboratesFlow(merged, PRINTED)).toBe(false);
+  });
+});
+
+describe("flowClaim: una afirmación del análisis, nunca una figura por sí sola", () => {
+  const ok = { ...POND };
+  it("extrae la cadena completa y coherente de 2 a 6 recuadros", () => {
+    expect(flowClaim(ok)).toEqual(["ALGAS", "LARVAS DE INSECTOS", "RANAS", "GARZAS"]);
+    expect(flowFigure(flowClaim(ok)!, ok.title)).toMatchObject({ kind: "flow", items: ["Algas", "Larvas de insectos", "Ranas", "Garzas"] });
+    expect(VisualSpecSchema.safeParse(flowFigure(flowClaim(ok)!)).success).toBe(true);
+  });
+  it("rechaza lo que no sería el esquema del original", () => {
+    expect(flowClaim({ ...ok, kind: "image" })).toBeNull();
+    expect(flowClaim({ ...ok, text: "ALGAS" })).toBeNull();
+    expect(flowClaim({ ...ok, text: "A → B → C → D → E → F → G" })).toBeNull();
+    expect(flowClaim({ ...ok, text: "ALGAS → ALGAS → RANAS" })).toBeNull();
+    expect(flowClaim({ ...ok, text: "ALGAS → RANAS Y GARZAS" })).toBeNull();
+    expect(flowClaim({ ...ok, text: "ALGAS → RANAS" })).toBeNull();
+    expect(flowClaim({ ...ok, description: "Esquema con flechas: Algas, Larvas de insectos y Ranas." })).toBeNull();
+    expect(flowClaim({ ...ok, description: "Esquema: Garzas, Ranas, Larvas de insectos y Algas." })).toBeNull();
   });
 });
 
 describe("el esquema se dibuja igual en pantalla y en el PDF", () => {
   it("recuadros y flechas, con su etiqueta accesible; las flechas son decorativas para el lector de pantalla", () => {
-    const html = renderToStaticMarkup(createElement(VisualSpecView, { spec: flowFromAnalysis(POND)!, label: "Relación alimentaria del estanque" }));
+    const html = renderToStaticMarkup(createElement(VisualSpecView, { spec: flowFigure(flowClaim(POND)!)!, label: "Relación alimentaria del estanque" }));
     expect(html).toContain('data-spec="flow"');
     expect(html).toContain('aria-label="Relación alimentaria del estanque"');
     expect([...html.matchAll(/ms-vflow-box/g)]).toHaveLength(4);
     expect([...html.matchAll(/ms-vflow-arrow/g)]).toHaveLength(3);
     expect(html).toContain('aria-hidden="true"');
-  });
-});
-
-describe("flowFromAnalysis: solo lo que el análisis imprime, completo y en orden", () => {
-  const ok = { ...POND };
-  it("redibuja cadenas de 2 a 6 recuadros", () => {
-    expect(flowFromAnalysis(ok)).toMatchObject({ kind: "flow", items: ["Algas", "Larvas de insectos", "Ranas", "Garzas"] });
-    expect(VisualSpecSchema.safeParse(flowFromAnalysis(ok)).success).toBe(true);
-  });
-  it("rechaza lo que no sería el esquema del original", () => {
-    expect(flowFromAnalysis({ ...ok, kind: "image" })).toBeNull();
-    expect(flowFromAnalysis({ ...ok, text: "ALGAS" })).toBeNull();
-    expect(flowFromAnalysis({ ...ok, text: "A → B → C → D → E → F → G" })).toBeNull();
-    expect(flowFromAnalysis({ ...ok, text: "ALGAS → ALGAS → RANAS" })).toBeNull();
-    expect(flowFromAnalysis({ ...ok, text: "ALGAS → RANAS Y GARZAS" })).toBeNull();
-    expect(flowFromAnalysis({ ...ok, description: "Esquema con flechas: Algas, Larvas de insectos y Ranas." })).toBeNull();
-    // Described in another order than printed: the figure would not be the original's.
-    expect(flowFromAnalysis({ ...ok, description: "Esquema: Garzas, Ranas, Larvas de insectos y Algas." })).toBeNull();
   });
 });
 
@@ -206,10 +256,30 @@ describe("Fase 3 · lo retenido se resuelve internamente", () => {
     expect(reviewed.effective.decisions).toEqual([]);
   });
 
+  it("conservar el original NO resuelve una barrera: una necesidad esencial sin ninguna otra decisión queda señalada (parada, no ficha válida)", () => {
+    const high = { ...contextB, needs: contextB.needs.map((n) => ({ ...n, level: "high" as const })) };
+    const dimension = high.needs[0]!.dimension;
+    const go = (decisions: unknown[]) => {
+      const { plan, declarations } = normalizePlanV3({ decisions, summary: [], teacher_questions: [{ id: "q_1", text: "¿Puede usar teclado?" }] }, analysis, high, RULES);
+      return resolveWithheldAutonomously(autoReview(plan, analysis, high), plan, declarations, analysis, high);
+    };
+    // The only decision for that need is withheld and nothing safe is executable: the original stays, the need is NOT attended.
+    const alone = go([draft({ status: "conditional", question: "q_1" })]);
+    expect(alone.resolutions[0]!.kind).toBe("kept_original");
+    expect(alone.uncovered).toEqual([{ decision_id: "dec_1", dimensions: [dimension] }]);
+    // Another applied decision serves the same need: it is covered and the sheet can go on.
+    const covered = go([draft({ status: "conditional", question: "q_1" }), draft({ target: "act_3" })]);
+    expect(covered.uncovered).toEqual([]);
+    // A need that is not essential (low or medium) does not stop the sheet by itself.
+    const low = { ...contextB, needs: contextB.needs.map((n) => ({ ...n, level: "low" as const })) };
+    const { plan, declarations } = normalizePlanV3({ decisions: [draft({ status: "conditional", question: "q_1" })], summary: [], teacher_questions: [{ id: "q_1", text: "¿Puede usar teclado?" }] }, analysis, low, RULES);
+    expect(resolveWithheldAutonomously(autoReview(plan, analysis, low), plan, declarations, analysis, low).uncovered).toEqual([]);
+  });
+
   it("la revisión del docente no se toca", () => {
     const { plan, declarations } = normalizePlanV3({ decisions: [draft({ status: "conditional", question: "q_1" })], summary: [], teacher_questions: [{ id: "q_1", text: "¿Puede usar teclado?" }] }, analysis, contextB, RULES);
     const teacher = { ...autoReview(plan, analysis, contextB), reviewer: { kind: "teacher" as const } };
-    expect(resolveWithheldAutonomously(teacher, plan, declarations, analysis, contextB)).toEqual({ review: teacher, resolutions: [] });
+    expect(resolveWithheldAutonomously(teacher, plan, declarations, analysis, contextB)).toEqual({ review: teacher, resolutions: [], uncovered: [] });
   });
 });
 

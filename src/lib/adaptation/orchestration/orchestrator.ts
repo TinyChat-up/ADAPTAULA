@@ -670,14 +670,19 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
     if (error instanceof AdaptationError) return null;
     throw error;
   }
-  const autonomous = declarations ? resolveWithheldAutonomously(resolution.review, raw.plan, declarations, loaded.analysis, loaded.context) : { review: resolution.review, resolutions: [] };
+  const autonomous = declarations ? resolveWithheldAutonomously(resolution.review, raw.plan, declarations, loaded.analysis, loaded.context) : { review: resolution.review, resolutions: [], uncovered: [] };
+  // Keeping the original is not solving a barrier: a HIGH need that no other applied decision (or the presentation) covers is an
+  // honest stop, named, never a sheet declared valid with an essential need left open.
+  const lost = new Map(autonomous.uncovered.map((u) => [u.decision_id, u.dimensions]));
+  const outcomes = resolution.outcomes.map((o) => (lost.has(o.decision_id) ? { ...o, kind: "unresolved" as const, reason: "Conservar el original deja sin atender una necesidad importante del perfil que ninguna otra decisión cubre", uncovered: lost.get(o.decision_id)! } : o));
+  const unresolved = outcomes.filter((o) => o.kind === "unresolved").map((o) => o.decision_id);
   const review = autonomous.review;
   // Why each applied decision exists: the need, the declared barrier it reduces, the declared strength it takes advantage of and what
   // it keeps. From the profile's own declarations (no model, no student data), kept for the teacher to consult afterwards.
   const applied = new Set(review.entries.filter((e) => e.action !== "rejected").map((e) => e.decision_id));
   const justifications = justifyDecisions(raw.plan.decisions.filter((d) => applied.has(d.id)), loaded.context.learning_observations);
   // Saved in every case (audit, and what the status reads); held only when a high need has no executable decision at all.
-  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id), ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), justifications } }, { hold: resolution.unresolved.length > 0 });
+  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes, unresolved, ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), justifications } }, { hold: unresolved.length > 0 });
   if (!submitted.ok || !submitted.executable) {
     deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;

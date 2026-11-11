@@ -132,28 +132,29 @@ export function consistentWithActivities(spec: VisualSpec, activityTexts: readon
 }
 
 /**
- * A scheme of labelled boxes joined by arrows, redrawn from what the analysis itself PRINTS (never from a guess): the visual is a
- * diagram, its text is the chain «A → B → C» (two to six labels) and its description names every label. A label the description
- * does not mention, a branch («/», «+», «y»), a repeated label or an unreadable text give nothing: the figure would not be the
- * original's. Pure and deterministic.
+ * What the analysis CLAIMS a scheme of labelled boxes joined by arrows is: the labels of the chain «A → B → C» (two to six), when the
+ * visual is a diagram, its text prints the chain, its description names every label in that order with as many arrows, and no
+ * label is a branch («/», «+», «y»), repeated or too long. A CLAIM, never a figure: the text and the description come from the same
+ * reading of the same model, so they are not two independent witnesses. It is drawn only after the ORIGINAL corroborates it
+ * (`auto/flow.ts › corroboratesFlow`: the PDF's own text layer and the ink between the boxes). Pure and deterministic.
  */
 const ARROW = /\s*(?:→|->|⟶|=>)\s*/;
-export function flowFromAnalysis(visual: Pick<AnalysisVisual, "kind" | "title" | "description" | "text">): VisualSpec | null {
+export function flowClaim(visual: Pick<AnalysisVisual, "kind" | "title" | "description" | "text">): string[] | null {
   if (visual.kind !== "diagram" || !visual.text) return null;
   const labels = visual.text.split(ARROW).map((l) => l.trim().replace(/\.$/, "")).filter((l) => l.length > 0);
   if (labels.length < 2 || labels.length > 6 || new Set(labels.map(normalize)).size !== labels.length) return null;
   if (labels.some((l) => l.length > 40 || /[\/+,;]|\sy\s/i.test(l))) return null;
   const described = normalize(`${visual.title ?? ""}. ${visual.description}`);
-  // The description must not draw more of the chain than the text prints: a text that stops short of it is incomplete, not a figure.
   const arrows = (visual.description.match(/→|->|⟶|=>/g) ?? []).length;
   if (arrows > 0 && arrows !== labels.length - 1) return null;
   if (!labels.every((l) => described.includes(normalize(l)))) return null;
-  // The description must also give the order the text gives (its first mention of each label, in sequence).
   const at = labels.map((l) => described.indexOf(normalize(l)));
   if (at.some((x, i) => i > 0 && x < at[i - 1]!)) return null;
-  const titled = visual.title ? { title: visual.title.slice(0, 60) } : {};
-  return verified({ spec_version: VISUAL_SPEC_VERSION, kind: "flow", ...titled, items: labels.map(toSentenceCase) });
+  return labels;
 }
 
-/** The printed text is usually in capitals («ALGAS»): a label is drawn as a sentence, never changing a letter's meaning. */
-const toSentenceCase = (label: string) => (label === label.toUpperCase() && label.length > 1 ? label.charAt(0) + label.slice(1).toLowerCase() : label);
+/** The figure for labels the original has corroborated: printed as a sentence (the text is usually in capitals). */
+export function flowFigure(labels: readonly string[], title?: string | null): VisualSpec | null {
+  const sentence = (label: string) => (label === label.toUpperCase() && label.length > 1 ? label.charAt(0) + label.slice(1).toLowerCase() : label);
+  return verified({ spec_version: VISUAL_SPEC_VERSION, kind: "flow", ...(title ? { title: title.slice(0, 60) } : {}), items: labels.map(sentence) });
+}

@@ -1,5 +1,5 @@
 import type { AnalysisActivity, AnalysisVisual } from "@/lib/schemas/material-analysis";
-import { consistentWithActivities, flowFromAnalysis, specFromAnalysis } from "./from-analysis";
+import { consistentWithActivities, specFromAnalysis } from "./from-analysis";
 import { VISUAL_SPEC_VERSION, VisualSpecSchema, reduce, sameValue, specIssues, type Fraction, type VisualSpec } from "./spec";
 
 /**
@@ -31,11 +31,10 @@ function answerFraction(activity: AnalysisActivity): Fraction | null {
   return found.length === 1 && found[0]!.n <= found[0]!.d ? found[0]! : null;
 }
 
-export type DrawableFamily = "number_line" | "part_whole" | "flow" | null;
+export type DrawableFamily = "number_line" | "part_whole" | null;
 
 export function drawableFamily(visual: Pick<AnalysisVisual, "kind" | "title" | "description" | "text">, activities: readonly AnalysisActivity[]): DrawableFamily {
   const words = normalize(`${visual.title ?? ""} ${visual.description} ${visual.text ?? ""} ${activities.map((a) => a.instruction).join(" ")}`);
-  if (flowFromAnalysis(visual)) return "flow";
   if (visual.kind === "number_line" || /\brecta (numerica|numerada)\b/.test(words)) return "number_line";
   if (/\b(barra|tira|rectangulo|circulo|pizza|tarta|cuadricula|fraccion (?:coloreada|sombreada|pintada))\b/.test(words)) return "part_whole";
   return null;
@@ -75,11 +74,6 @@ export function generateEquivalentFigure(visual: Pick<AnalysisVisual, "kind" | "
   if (activities.length === 0) return null;
   const family = drawableFamily(visual, activities);
   if (!family) return null;
-  // A scheme of boxes and arrows whose printed labels the analysis gives completely: redrawn as it is, nothing added.
-  if (family === "flow") {
-    const flow = flowFromAnalysis(visual);
-    return flow ? { spec: flow, basis: "description" } : null;
-  }
   const claim = specFromAnalysis(visual);
   const texts = activities.map((a) => (a.context ? `${a.instruction} ${a.context}` : a.instruction));
 
