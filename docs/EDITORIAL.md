@@ -168,6 +168,10 @@ Una frase con comas, letras repetidas o números que no siguen no lo son. Cuando
 - validación con docentes.
 
 
+## 11. Orden y proximidad (bloque 2, 2026-11-11)
+
+[Diagnóstico y pruebas](qa/bloque2-estanque/README.md). Cada consigna, recurso y apoyo va donde corresponde: la instrucción de una sección antes de su lectura; los componentes, afirmaciones y tablas de una actividad junto a su consigna, tras su ejemplo resuelto; el contenido repetido entre texto y contexto se imprime una vez (solo si es idéntico); las autocomprobaciones de una actividad tras ella; la revisión final de la ficha, la última. Las partes de un ejercicio (3a/3b) comparten página mientras caben. No se reduce tipografía ni espacio de respuesta.
+
 ## 10. Ajuste de maquetación #64 (2026-10-23)
 
 [Pruebas y PDF comparados](qa/maquetacion-pedagogica-64/README.md). El ensamblador utiliza el mismo `taskGroups` que el renderer: el límite de cuatro actividades ya no produce antes un reparto 4 + 1 que CLARO no podía equilibrar. Las páginas de origen y el máximo del perfil siguen siendo límites.

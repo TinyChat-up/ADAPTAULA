@@ -6,7 +6,7 @@ import type { AnalysisActivity, AnalysisText, AnalysisVisual, MaterialAnalysis }
 import { statedAnswer } from "@/lib/analysis/answers";
 import { comparisonFromText } from "@/lib/visuals/comparison";
 import { pruneRedundantSupports } from "./support-policy";
-import { taskGroups } from "@/lib/render/task-groups";
+import { activityQuotas } from "@/lib/render/task-groups";
 import { answerSpace, spaceContextOf } from "./answer-space";
 import { activityStructure, readingParagraphs } from "./structure";
 import { VISUAL_ACTIONS, visualTreatment, type VisualTreatment } from "./visual-needs";
@@ -24,6 +24,8 @@ interface Unit {
   blocks: Block[];
   /** Source order: (page, section, kind, id number). See `sourceOrder`. */
   order: readonly [number, number, number, number];
+  /** The activity this resource travels with (`anchorResources`). */
+  anchoredTo?: string;
 }
 
 const REPLACING = new Set(["rephrase", "segment", "reorganize", "change_response_format", "reduce"]);
@@ -144,12 +146,54 @@ function sourceOrder(analysis: MaterialAnalysis, item: { id: string; page: numbe
   return [item.page, section, kindRank, Number(item.id.split("_")[1] ?? 0)];
 }
 
-function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, newId: () => string): Unit[] {
+/** Comparison of two printed texts that is NOT a similarity: same words, whatever the whitespace, the quotation marks or the final stop. */
+const plain = (value: string) => value.replace(/\s+/g, " ").trim().replace(/^[«»"“”'‘’\s]+|[«»"“”'‘’.\s]+$/g, "").toLowerCase();
+export const sameText = (a: string, b: string) => plain(a).length > 0 && plain(a) === plain(b);
+
+/**
+ * A heading or an instruction that is the printed title of its section («Lee el texto con atención» over the reading) leads the
+ * section, whatever number its id has: the analysis lists a section's texts by kind and the model often names the reading first.
+ * The evidence is the analysis's own section title, never the wording of the text.
+ */
+const SECTION_LEAD_KINDS = new Set<AnalysisText["kind"]>(["instruction", "heading"]);
+function leadsItsSection(analysis: MaterialAnalysis, text: AnalysisText): boolean {
+  if (!SECTION_LEAD_KINDS.has(text.kind) || text.activity_ids.length > 0) return false;
+  const section = analysis.sections.find((s) => s.id === text.section_id);
+  return section?.title != null && sameText(section.title, text.text);
+}
+
+/**
+ * Texts the analysis ALSO copied into the context of the activity that uses them («Algas · Agua · …» under the instruction, the
+ * statement to assess): the same words printed twice, once as a text of its own and once inside the activity. It is a verified
+ * duplicate only when the words are identical, the text is not a reading, it is linked to that activity and sits on its page, and no
+ * decision works on the text. The text stays (it is the resource, other checks and decisions point to it) and travels right before
+ * the activity; its copy inside the activity is not printed again.
+ */
+const NOT_A_RESOURCE_COPY = new Set<AnalysisText["kind"]>(["reading_text", "heading"]);
+export function duplicatedContexts(analysis: MaterialAnalysis, plan: Pick<AdaptationPlan, "decisions">): Map<string, string> {
+  const found = new Map<string, string>();
+  for (const activity of analysis.activities) {
+    if (activity.context === null || activity.context.trim() === "") continue;
+    const structure = activityStructure(activity);
+    if (structure.fields || structure.sequence || comparisonFromText(activity.instruction, activity.context)) continue;
+    const twin = analysis.texts.find(
+      (t) =>
+        !NOT_A_RESOURCE_COPY.has(t.kind) && t.page === activity.page && sameText(t.text, activity.context!) && (activity.resource_ids.includes(t.id) || t.activity_ids.includes(activity.id)) && !plan.decisions.some((d) => d.target === t.id && d.action === "remove"),
+    );
+    if (twin) found.set(activity.id, twin.id);
+  }
+  return found;
+}
+
+function literalUnits(analysis: MaterialAnalysis, plan: Pick<AdaptationPlan, "decisions">, context: AdaptationContext, newId: () => string): Unit[] {
   const units: Unit[] = [];
   const visualIds = new Map<string, string>();
   const pages = [...new Set([...analysis.texts, ...analysis.visuals, ...analysis.activities].map((x) => x.page))].sort((a, b) => a - b);
   for (const page of pages) {
-    for (const t of analysis.texts.filter((x) => x.page === page)) units.push({ ref: t.id, page, blocks: [textBlock(t, newId())], order: sourceOrder(analysis, t, 0) });
+    for (const t of analysis.texts.filter((x) => x.page === page)) {
+      const order = sourceOrder(analysis, t, 0);
+      units.push({ ref: t.id, page, blocks: [textBlock(t, newId())], order: leadsItsSection(analysis, t) ? [order[0], order[1], -1, order[3]] : order });
+    }
     for (const v of analysis.visuals.filter((x) => x.page === page)) {
       if (v.role === "decorative" && context.presentation.decoration === "none") continue;
       const block = visualBlock(v, newId());
@@ -160,10 +204,12 @@ function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, ne
     }
   }
   const textIds = new Map(units.filter((u) => u.ref.startsWith("ctt_")).map((u) => [u.ref, u.blocks[0]!.id]));
+  const duplicated = duplicatedContexts(analysis, plan);
   for (const a of analysis.activities) {
-    const resource_block_ids = a.resource_ids.map((r) => visualIds.get(r) ?? textIds.get(r)).filter((x): x is string => x !== undefined);
+    const twin = duplicated.get(a.id);
+    const resource_block_ids = [...new Set([...a.resource_ids, ...(twin ? [twin] : [])])].map((r) => visualIds.get(r) ?? textIds.get(r)).filter((x): x is string => x !== undefined);
     // The printed pairs of a comparison are drawn by its answer area: the prompt keeps the instruction, never the pairs twice.
-    const drawnContext = a.context !== null && comparisonFromText(a.instruction, a.context)?.pairsOnly === true;
+    const drawnContext = twin !== undefined || (a.context !== null && comparisonFromText(a.instruction, a.context)?.pairsOnly === true);
     const prompt = activityPrompt(a, drawnContext);
     units.push({
       ref: a.id,
@@ -173,11 +219,11 @@ function literalUnits(analysis: MaterialAnalysis, context: AdaptationContext, ne
     });
   }
   const sorted = units.sort((x, y) => x.order[0] - y.order[0] || x.order[1] - y.order[1] || x.order[2] - y.order[2] || x.order[3] - y.order[3]);
-  return anchorResources(analysis, sorted);
+  return anchorResources(analysis, sorted, duplicated);
 }
 
 /** Texts that only make sense next to the activity that uses them (an example, a formula…), unlike a reading or a heading. */
-const ANCHORED_TEXT_KINDS = new Set<AnalysisText["kind"]>(["example", "formula", "definition", "note"]);
+const ANCHORED_TEXT_KINDS = new Set<AnalysisText["kind"]>(["example", "formula", "definition", "note", "other", "instruction"]);
 
 /**
  * Each figure and each example travels with the FIRST activity that uses it on its page: right before it, in its own order. The
@@ -185,12 +231,12 @@ const ANCHORED_TEXT_KINDS = new Set<AnalysisText["kind"]>(["example", "formula",
  * from the instruction that asks about it, and an example far from its problem. A resource used by no activity, or only by
  * activities of another page, keeps its source order.
  */
-function anchorResources(analysis: MaterialAnalysis, units: Unit[]): Unit[] {
+function anchorResources(analysis: MaterialAnalysis, units: Unit[], duplicated: ReadonlyMap<string, string>): Unit[] {
   const anchorOf = new Map<string, string>();
   for (const unit of units) {
     const activity = analysis.activities.find((a) => a.id === unit.ref);
     if (!activity) continue;
-    for (const ref of activity.resource_ids) {
+    for (const ref of [...activity.resource_ids, ...(duplicated.has(activity.id) ? [duplicated.get(activity.id)!] : [])]) {
       if (anchorOf.has(ref)) continue;
       const visual = analysis.visuals.find((v) => v.id === ref);
       const text = analysis.texts.find((t) => t.id === ref);
@@ -201,7 +247,7 @@ function anchorResources(analysis: MaterialAnalysis, units: Unit[]): Unit[] {
   const out: Unit[] = [];
   for (const unit of units) {
     if (anchorOf.has(unit.ref)) continue;
-    out.push(...units.filter((u) => anchorOf.get(u.ref) === unit.ref), unit);
+    out.push(...units.filter((u) => anchorOf.get(u.ref) === unit.ref).map((u) => ({ ...u, anchoredTo: unit.ref })), unit);
   }
   return out;
 }
@@ -231,12 +277,13 @@ export interface BuildDocumentInput {
 }
 
 export function buildDocument({ analysis, plan, context, generated, newBlockId = createBlockId }: BuildDocumentInput): MaterialDocument {
-  const units = literalUnits(analysis, context, newBlockId);
+  const units = literalUnits(analysis, plan, context, newBlockId);
   const answerKey: MaterialDocument["answer_key"] = [];
   const decisionsFor = (ref: string) => plan.decisions.filter((d) => d.target === ref);
 
   const head: Block[] = [];
   const tail: Block[] = [];
+  const closing: Block[] = [];
   const after = new Map<string, Block[]>();
   const before = new Map<string, Block[]>();
   const replaced = new Map<string, Block[]>();
@@ -250,7 +297,7 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
       if (blockId) answerKey.push({ block_id: blockId, basis: "new_item", correct_option_ids: entry.correct_option_ids, blanks: entry.blanks });
     }
     if (segment.target === "document") {
-      (decisions.every((d) => d.action === "extend") ? tail : head).push(...blocks);
+      for (const block of blocks) (decisions.every((d) => d.action === "extend") ? tail : closesTheSheet(block, plan) ? closing : head).push(block);
     } else if (decisions.some((d) => REPLACING.has(d.action)) && blocks.some((b) => b.type === "activity" || b.type === "paragraph" || b.type === "reading_text")) {
       // Only a segment that carries the rewritten target itself replaces it; a segment of supports for a decision that "segments"
       // goes after the untouched original (generator v2 supports-only segments would otherwise erase the activity).
@@ -266,8 +313,10 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   }
 
   // One functional need, printed once: a support that only restates another one is folded into it (its decisions stay traced).
-  const pruning = pruneRedundantSupports(head, after);
-  head.splice(0, head.length, ...pruning.head);
+  const pruning = pruneRedundantSupports([...head, ...closing], after);
+  const closingIds = new Set(closing.map((b) => b.id));
+  head.splice(0, head.length, ...pruning.head.filter((b) => !closingIds.has(b.id)));
+  closing.splice(0, closing.length, ...pruning.head.filter((b) => closingIds.has(b.id)));
   after.clear();
   for (const [ref, blocks] of pruning.after) after.set(ref, blocks);
 
@@ -288,11 +337,22 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     link(decision.target, block.id);
   }
 
+  const duplicated = duplicatedContexts(analysis, plan);
   const ordered: Array<{ page: number; block: Block }> = [];
+  // A worked example is a model to follow: it goes first, then the resources the activity works with (its components, its table),
+  // then the activity itself, so that nothing sits between a resource and the instruction that uses it.
+  const modelsPlaced = new Set<string>();
+  const placeModels = (activityRef: string, page: number) => {
+    if (modelsPlaced.has(activityRef)) return;
+    modelsPlaced.add(activityRef);
+    for (const block of before.get(activityRef) ?? []) ordered.push({ page, block });
+  };
   for (const unit of units) {
     const decisions = decisionsFor(unit.ref);
     if (decisions.some((d) => d.action === "remove")) continue;
-    for (const block of [...(placeholders.get(unit.ref) ?? []), ...(before.get(unit.ref) ?? [])]) ordered.push({ page: unit.page, block });
+    if (unit.anchoredTo && !decisionsFor(unit.anchoredTo).some((d) => d.action === "remove")) placeModels(unit.anchoredTo, unit.page);
+    for (const block of placeholders.get(unit.ref) ?? []) ordered.push({ page: unit.page, block });
+    placeModels(unit.ref, unit.page);
     // Segmenting a source text is deterministic: the paragraphs stay word for word, only labelled. No model rewrites them.
     const segmenting = decisions.filter((d) => d.action === "segment");
     // An open answer format is set by the assembler too (a shorter area, the keyboard, an oral answer): the prompt is untouched.
@@ -305,7 +365,9 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
           ? { ...b, response: responseForDecision(activity, responding.response_target), trace: { origin: "adapted" as const, source_refs: b.trace.source_refs, decision_ids: [responding.id] } }
           : { ...b, trace: { ...b.trace, decision_ids: decisions.filter((d) => d.action === "keep").map((d) => d.id) } },
     );
-    const blocks = replaced.get(unit.ref) ?? literal;
+    const twin = duplicated.get(unit.ref);
+    const twinText = twin ? analysis.texts.find((t) => t.id === twin)?.text : undefined;
+    const blocks = (replaced.get(unit.ref) ?? literal).map((b) => (twinText && b.type === "activity" ? { ...b, prompt: withoutCopy(b.prompt, twinText) } : b));
     for (const block of [...blocks, ...(after.get(unit.ref) ?? [])]) ordered.push({ page: unit.page, block });
   }
 
@@ -358,9 +420,10 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
   let currentPage = ordered[0]?.page ?? 1;
   let tasks = 0;
   let group = 0;
-  const tasksByPage = new Map<number, number>();
-  for (const { page, block } of ordered) if (block.type === "activity") tasksByPage.set(page, (tasksByPage.get(page) ?? 0) + 1);
-  const groupsFor = (page: number) => maxTasks === null ? [] : taskGroups(tasksByPage.get(page) ?? 0, maxTasks);
+  // The parts of one exercise («3a», «3b») stay on the same page while they fit: quotas are laid out by exercise, never by count alone.
+  const labelsByPage = new Map<number, Array<string | undefined>>();
+  for (const { page, block } of ordered) if (block.type === "activity") labelsByPage.set(page, [...(labelsByPage.get(page) ?? []), block.label]);
+  const groupsFor = (page: number) => maxTasks === null ? [] : activityQuotas(labelsByPage.get(page) ?? [], maxTasks);
   let quotas = groupsFor(currentPage);
   for (const { page, block } of ordered) {
     const isTask = block.type === "activity";
@@ -376,7 +439,8 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     pages[pages.length - 1]!.blocks.push(block);
     if (isTask) tasks += 1;
   }
-  if (tail.length > 0) pages[pages.length - 1]!.blocks.push(...tail);
+  // What closes the whole sheet (the self-check of the work) comes last, after the activities and whatever extends them.
+  if (tail.length + closing.length > 0) pages[pages.length - 1]!.blocks.push(...tail, ...closing);
 
   const adminSeen = new Set<string>();
   const admin_fields = analysis.administrative_fields
@@ -398,6 +462,24 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     pages: pages.filter((p) => p.blocks.length > 0),
     answer_key: answerKey,
   });
+}
+
+/** The prompt without a paragraph that is exactly `copy`: a rewritten activity may bring the context along again. Never empties it. */
+function withoutCopy(prompt: string, copy: string): string {
+  const paragraphs = prompt.split(/\n\s*\n/);
+  const kept = paragraphs.filter((p) => !sameText(p, copy));
+  return kept.length === 0 ? prompt : kept.join("\n\n");
+}
+
+/**
+ * A document-level checklist whose decision is a SELF-CHECK of the finished work (and not a list of steps to follow) is read last:
+ * it belongs after the activities. A reminder, a strategy or a list of steps stays where the student starts.
+ */
+function closesTheSheet(block: Block, plan: Pick<AdaptationPlan, "decisions">): boolean {
+  if (block.type !== "checklist") return false;
+  const decisions = plan.decisions.filter((d) => block.trace.decision_ids.includes(d.id));
+  const kinds = decisions.flatMap((d) => d.supports.map((s) => s.kind));
+  return kinds.includes("self_check") && !kinds.includes("checklist");
 }
 
 /** The trailing blocks of a page that belong to `activity` (its anchored resources, the supports placed before it), removed from it. */
