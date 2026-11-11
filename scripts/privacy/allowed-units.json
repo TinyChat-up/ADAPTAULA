@@ -1,0 +1,7 @@
+{
+  "note": "Coincidencias revisadas una a una y aceptadas porque son identificadores, no texto privado (ADR-044/045). Solo huellas; añadir una entrada es un cambio revisado en la PR.",
+  "allowed": [
+    { "unit_sha256_64": "b9391b7fd48d7cd6", "reason": "Nombre de archivo del paquete V2.2 en el manifiesto de huellas (src/lib/agent-rules/manifest-v22.ts)" },
+    { "unit_sha256_64": "b436cc7cc09e0222", "reason": "Lista de claves públicas de dimensiones del catálogo (functional-profile.ts) en la selección de precedentes" }
+  ]
+}

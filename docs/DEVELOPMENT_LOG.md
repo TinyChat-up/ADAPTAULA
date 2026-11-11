@@ -1,5 +1,114 @@
 # Registro de desarrollo
 
+## 2026-11-04 — Agente V2.2: garantías de gasto del piloto y compatibilidad con las ilustraciones
+
+- Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 inactiva. Sin llamadas a la API (ni siquiera al recuento), sin migraciones remotas, sin imágenes. **E2E no ejecutadas por indicación.**
+- **Presupuesto.** Las estimaciones por caracteres y por página quedan como comprobación previa sin red; ya no autorizan una llamada.
+  - `AnthropicProvider.countInputTokens` usa el endpoint oficial de recuento (gratuito; documentado como estimación «que puede diferir en una pequeña cantidad») con exactamente los parámetros de la llamada.
+  - Antes de cada llamada de pago se reserva (recuento × 1,10 + 1.000 tokens) cobrado como escritura de caché, más `max_tokens`, contra el 80 % del presupuesto. El uso real liquida; error, uso desconocido o coste mayor conservan la reserva y detienen.
+- **Llamadas no contabilizadas** (las tres se cierran en el piloto; el comportamiento por defecto de la aplicación no cambia):
+  - los reintentos del SDK (por defecto 2: `maxRetries: 0` en el piloto);
+  - el respaldo nativo → prompted de las salidas estructuradas (`promptedFallback: false` y modo fijo por salida);
+  - las reparaciones y regeneraciones (`singleCall`).
+
+  Un cliente medido registra cada petición.
+- **Comando.** `--count-tokens` (solo recuento) y `--yes` (pago). La parte de red está en `pilot-run.ts`, probada con transporte falso.
+- **Ilustraciones (solo análisis).** v3 puede pedir un apoyo visual por el flujo existente, y el consentimiento, el plan Max, la cuota, el límite por adaptación, el techo de 0,50 $ y la revisión se aplican dentro del servicio. Conexiones pendientes, documentadas en AGENTE_V22 (V1–V7):
+  - el contrato no permite pedir una ilustración de forma explícita;
+  - un apoyo esencial dependería de una imagen generada (DEC-013);
+  - el brief y la revisión de la imagen no reciben la finalidad ni las preguntas de pista;
+  - la escena de contexto la decide la política y no el planificador;
+  - el registro no muestra el resultado visual.
+- Pruebas:
+  - focalizadas: 11 archivos, 242 correctas y 3 omitidas (necesitan la copia privada);
+  - nueva `pilot-guarantees` (11);
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build y `check:privacy` correctos;
+  - E2E y la suite completa no ejecutadas por indicación (solo pruebas focalizadas).
+- Siguiente acción: autorizar o no la ejecución única del piloto con `--yes` (MAT-007, perfil A, 1 USD; límite seguro de 0,80 $).
+
+## 2026-11-04 — Agente V2.2: selección de precedentes, salidas estructuradas y piloto acotado
+
+- Rama `feature/agente-v22-planificador-v3` (PR #80, sin merge). v3 sigue inactiva. Sin llamadas a la API, sin subir las reglas a Supabase, sin migraciones remotas. **E2E no ejecutadas por indicación.**
+- **Selección de precedentes.**
+  - Los recursos posibles se derivan de necesidades activas → estrategias → recursos (`RESOURCES_BY_STRATEGY`).
+  - E y R se envían con recurso general o habilitado; A y P, si son generales o tocan un recurso habilitado; los casos de control, solo sin necesidades.
+  - Con las reglas reales:
+
+    | Perfil | Casos | Bloque de reglas (tokens) |
+    |---|---|---|
+    | A | 43 → 30 | 61.700 → 51.400 (−17 %) |
+    | B | 42 → 37 | −6 % |
+    | C | 40 → 19 | −28 % |
+
+  - El peor caso por llamada baja poco (0,46 → 0,42–0,45 $) porque lo domina la salida máxima.
+- **Hueco cerrado.** El validador no exige que la estrategia sirva a la dimensión citada. En v3, una decisión así queda retenida (`strategy_not_for_need`), y el prompt v3 lo indica (huella actualizada; no se había usado en ninguna llamada).
+- **Cobertura demostrada.**
+  - `precedent-coverage.test.ts`: por construcción, en CI.
+  - Con el índice real, en local: ningún excluido toca un recurso utilizable y ningún E/R utilizable falta.
+- **Salidas estructuradas.**
+  - Límites leídos en la documentación oficial.
+  - `structured-limits.ts`: el esquema exacto de v3 tiene 11 opcionales (límite 24), 1 unión (límite 16) y ningún problema.
+  - v3 pasa a entrega `auto`, con respaldo al prompt.
+  - La compilación de la gramática solo se demuestra con una llamada real.
+- **Piloto.**
+  - `pnpm eval:adaptation:pilot`: análisis más planificador v3, una llamada cada uno, con cota previa y recalculada.
+  - Sin `--yes` no llama; el material debe estar fuera del repositorio o en una carpeta ignorada.
+  - MAT-007 (2 páginas, CC BY-SA 4.0 España) con el perfil A: **≤ 0,7647 $ ≈ 0,68 €**. Calculado con el comando sin `--yes` y sin clave.
+- Pruebas:
+  - `pnpm test`: 164 archivos, 2.179 correctas y 18 omitidas (las que necesitan la copia privada);
+  - con la copia privada, 44/44 de reglas, v3 y cobertura;
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build, `check:privacy` y `check:secrets` correctos;
+  - E2E y smoke no ejecutados por indicación.
+- Siguiente acción: autorizar o no el piloto con `--yes` (MAT-007, perfil A, presupuesto ≤ 1 $), después de fijar el límite de gasto en la consola.
+
+## 2026-11-04 — Agente V2.2: carga privada de la metodología y `adaptation_planner@v3`
+
+- Base: rama `feature/integracion-agente-v22` (PR #79, sin merge), porque se necesitan su registro y sus validadores. Rama nueva `feature/agente-v22-planificador-v3`.
+- Decisiones del responsable:
+  - reglas y biblioteca en almacenamiento privado de Supabase, solo servidor, verificadas y sin registrar su contenido;
+  - registro de decisiones recalculado bajo demanda;
+  - presupuesto previsto de 10 €, sin llamadas reales autorizadas;
+  - P8 se valora por el producto de cada actividad, sin igualar espacios;
+  - MAT-007 y MAT-024 solo en pruebas privadas.
+- **Fase A** (`src/lib/agent-rules/`):
+  - `manifest-v22.ts`: 56 archivos, rutas, tamaños y SHA-256, comprobados contra el manifiesto del paquete. `package_sha256` `6eaf1113…`.
+  - `loader.ts`: verifica cada byte y falla cerrado.
+  - `sources.ts`: bucket privado con service role. `local-source.ts`: carpeta fuera de cualquier checkout.
+  - `server.ts`: caché por proceso sin reintentar con reglas no verificadas.
+  - `precedents.ts`: selección del laboratorio sin el filtro por perfil piloto.
+  - `prompt-block.ts`: bloque delimitado, solo huellas en los registros.
+  - Migración 034, solo local: bucket privado sin políticas de usuario y `ai_runs.rules_sha256`.
+  - `scripts/agent-rules/upload.ts`: solo verifica, salvo con `--upload`.
+  - Variables `AGENT_RULES_SOURCE` y `AGENT_RULES_DIR`.
+- **Privacidad en la práctica.** El pre-commit bloqueó el commit de la fase A por dos identificadores (un nombre de archivo del paquete y una lista de claves públicas del catálogo). Se añadieron `--explain` (línea y huella, sin texto) y `allowed-units.json` (excepciones revisadas con motivo). No se usó `--no-verify`.
+- **Fase B.**
+  - `DraftAdaptationPlan v3` y `prompts/adaptation-planner/v3.ts`: el sistema de v2 sin cambios más el método; las reglas son la primera parte de la petición; el texto queda fijado por huella.
+  - `plan-v3.ts`: normalización al plan v1, declaraciones cribadas y `withholdForTeacher`.
+  - `planner.ts`: v3 falla cerrado sin reglas y guarda `rulesSha256`.
+  - `pipeline.ts`: devuelve `declarations`; v1 y v2 sin cambios.
+  - El registro muestra lo declarado aparte (`declared`, `declarations`).
+  - Simulado v3 (`mock-v3.ts`).
+  - Orquestación: origen de reglas conectado para v3, pero `checkPlanDraft` la rechaza hasta su activación. La versión activa sigue siendo la 1.
+  - Arnés `eval:adaptation:planner` con `--planner-version 3 --rules-dir --profile A|B|C`.
+  - El pre-vuelo con las reglas reales estima unos 69.000 tokens de entrada y un peor caso de unos 0,46 $ por llamada. Medido sin llamadas.
+- Pruebas:
+  - nuevas: `agent-rules` (12 en total; 1 necesita la copia privada), BD `agent-rules` (3), `adaptation-planner-v3` (23 en total; 1 necesita la copia privada) y excepciones de privacidad (1);
+  - modificada: `adaptation-planner.test.ts` (v3 ya existe: se comprueba que no existe v4);
+  - con la copia privada local, las 2 pruebas de reglas reales pasan; en CI se omiten;
+  - `pnpm test`: 161 archivos, 2.163 correctas y 17 omitidas;
+  - typecheck correcto; lint sin errores (el aviso previo);
+  - build, `smoke:raster`, `smoke:pdf`, `check:secrets` y `check:privacy` (árbol y 79 cambios en 9 commits) correctos;
+  - **E2E no ejecutadas por indicación: pendientes de validación posterior.**
+- Documentado: los dos fallos E2E previos (`materials.spec.ts:110` y `:179`) en `docs/qa/e2e-fallos-preexistentes/`, y el riesgo residual de los resúmenes de P1–P8 que siguen en el historial de la #79 (valorado bajo; no se reescribe sin aprobación).
+- Riesgos y límites:
+  - la selección envía 40–43 de 45 precedentes;
+  - las declaraciones de v3 no se persisten;
+  - la calidad pedagógica de v3 con un modelo real no está evaluada;
+  - el script de subida usa la clave de servicio fuera de `admin.ts` (herramienta de operador, no código de la app).
+- Siguiente acción: autorizar o no la evaluación real (análisis de MAT-007 y MAT-024, más 6 llamadas al planificador; peor caso de unos 2,8 $ más los análisis) siguiendo [AGENTE_V22](AGENTE_V22.md).
+
 ## 2026-11-04 — Agente pedagógico V2.2: registro de decisiones, validadores y control de privacidad
 
 - Base `11ab50e` (#78 integrada), sin PR abiertas al iniciar. Rama `feature/integracion-agente-v22` (idéntica a `main` al empezar). Encargo: integrar componentes del laboratorio V2.2 sin sustituir el pipeline ni crear un segundo generador.

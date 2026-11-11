@@ -27,6 +27,8 @@ export interface StageRunRecord extends AIRunRecord {
   callKind: "initial" | "repair" | "regeneration";
   /** Reported separately only by providers that do; otherwise already inside `outputTokens`. */
   reasoningTokens: number | null;
+  /** Package hash of the private rules a planner v3 call used (ADR-045). Absent for every other call. */
+  rulesSha256?: string;
 }
 
 export interface PlannerInput {
@@ -65,6 +67,8 @@ export interface ReviewerInput {
 export interface StageResult {
   draft: unknown;
   runs: StageRunRecord[];
+  /** Planner v3 only: which verified rules and precedents travelled with the request (hashes and ids, never text). */
+  rules?: import("./plan-v3").RulesUse;
 }
 
 export interface AdaptationPlanner {

@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ModelEnv } from "@/lib/ai/registry";
 import { createModelGenerator } from "../generator";
 import { createModelPlanner } from "../planner";
+import { buildRulesBlock } from "@/lib/agent-rules/prompt-block";
+import { getAgentRules } from "@/lib/agent-rules/server";
 import { createModelReviewer } from "../reviewer";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
@@ -36,7 +38,15 @@ export function productionServices(versions: PipelineVersions, analysis: Paramet
   }
   const selection = (c: PipelineVersions["planner"]) => modelSelectionOf(c);
   return {
-    planner: createModelPlanner({ analysis, selection: selection(versions.planner), provider: providerFor(selection(versions.planner)), maxOutputTokens: versions.planner.max_output_tokens, version: versions.planner.prompt_version }),
+    planner: createModelPlanner({
+      analysis,
+      selection: selection(versions.planner),
+      provider: providerFor(selection(versions.planner)),
+      maxOutputTokens: versions.planner.max_output_tokens,
+      version: versions.planner.prompt_version,
+      // v3 decides with the verified private rules (ADR-045); a load that fails stops the stage, it never runs without them.
+      ...(versions.planner.prompt_version === 3 ? { rulesFor: async (context: Parameters<typeof buildRulesBlock>[2]) => buildRulesBlock(await getAgentRules(), analysis, context) } : {}),
+    }),
     generator: createModelGenerator({ selection: selection(versions.generator), provider: providerFor(selection(versions.generator)), maxOutputTokens: versions.generator.max_output_tokens, version: versions.generator.prompt_version }),
     reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer)), maxOutputTokens: versions.reviewer.max_output_tokens }),
   };

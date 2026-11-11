@@ -15,6 +15,7 @@ import { ExecutionBlockedError, planExecutability, type ExecutabilityReport } fr
 import { autoReview, reviewPlan, type ReviewedPlan } from "./plan-review";
 import { applicablePlan } from "./plan";
 import { normalizePlanFor } from "./plan-v2";
+import { normalizePlanV3, withholdForTeacher, type PlannerDeclarations } from "./plan-v3";
 import { buildReview } from "./review";
 import { buildPedagogicalReviewContext } from "./review-context";
 import { buildReviewScoped } from "./reviewer";
@@ -53,6 +54,8 @@ export interface PipelineResult {
   validation: PlanValidation;
   /** Raw plan → validator → review → effective plan, each decision with its history. */
   reviewed: ReviewedPlan;
+  /** Planner v3 only: what the planner declared under the V2.2 method, screened (ADR-045). Null for v1 and v2. */
+  declarations: PlannerDeclarations | null;
   /** Who executes each effective decision (generator v2 capabilities). Metadata: the plan itself is unchanged. */
   execution: ExecutabilityReport;
   /** What the generator produced, after the effective plan's rules were enforced on it. */
@@ -71,16 +74,28 @@ export async function runAdaptation(input: ContextInput, deps: PipelineDeps): Pr
   const first = await deps.planner.plan({ context, material });
   runs.push(...first.runs);
   const plannerVersion = deps.plannerVersion ?? ACTIVE_ADAPTATION_PROMPT_VERSIONS.adaptation_planner;
-  let raw = normalizePlanFor(plannerVersion, first.draft, analysis, context);
+  // v3 keeps what the planner declared beside the canonical plan; v1 and v2 have nothing to declare.
+  const normalize = (stage: { draft: unknown; rules?: import("./plan-v3").RulesUse }) =>
+    plannerVersion === 3 ? normalizePlanV3(stage.draft, analysis, context, stage.rules ?? null) : { plan: normalizePlanFor(plannerVersion, stage.draft, analysis, context), declarations: null };
+  let normalized = normalize(first);
+  let raw = normalized.plan;
   let checked = applicablePlan(raw, analysis, context);
   if (!checked.validation.valid) {
     // One repair with the blocking issues; whatever still blocks is never applied.
     const repaired = await deps.planner.plan({ context, material, repairOf: checked.validation.issues.filter((i) => i.severity === "block") });
     runs.push(...repaired.runs);
-    raw = normalizePlanFor(plannerVersion, repaired.draft, analysis, context);
+    normalized = normalize(repaired);
+    raw = normalized.plan;
     checked = applicablePlan(raw, analysis, context);
   }
-  const reviewed = reviewPlan(raw, deps.humanReview ? deps.humanReview(raw) : autoReview(raw, analysis, context), analysis, context);
+  const { declarations } = normalized;
+  // Without a teacher, what the v3 planner declared conditional (or a hint) is withheld, never applied automatically.
+  const automatic = () => {
+    const review = autoReview(raw, analysis, context);
+    return declarations ? withholdForTeacher(review, declarations) : review;
+  };
+  const review = deps.humanReview ? deps.humanReview(raw) : automatic();
+  const reviewed = reviewPlan(raw, review, analysis, context);
   const plan = reviewed.effective;
   const execution = planExecutability(reviewed, analysis, context);
   if (deps.requireExecutable && execution.blockers.length > 0) throw new ExecutionBlockedError(execution.blockers);
@@ -99,8 +114,8 @@ export async function runAdaptation(input: ContextInput, deps: PipelineDeps): Pr
     aiReview = AiReviewDraftSchema.parse(answered.draft);
   }
   const reviewInput = { analysis, plan, context, document, validation: reviewed.effectiveValidation };
-  const review = deps.reviewer ? buildReviewScoped(reviewInput, aiReview, reviewed.raw.decisions.map((d) => d.id)).review : buildReview(reviewInput, aiReview);
-  return { context, plan, validation: reviewed.validation, reviewed, execution, generation, document, review, runs };
+  const pedagogicalReview = deps.reviewer ? buildReviewScoped(reviewInput, aiReview, reviewed.raw.decisions.map((d) => d.id)).review : buildReview(reviewInput, aiReview);
+  return { context, plan, validation: reviewed.validation, reviewed, declarations, execution, generation, document, review: pedagogicalReview, runs };
 }
 
 /** The only place inferred answers leave the analysis: towards the reviewer, to check solvability. */
