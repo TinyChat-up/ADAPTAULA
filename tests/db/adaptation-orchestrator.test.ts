@@ -381,7 +381,7 @@ describe("versiones fijadas, ai_runs y coste", () => {
     const persisted = (await db.query<{ pipeline_versions: unknown }>("select pipeline_versions from public.adaptations where id = $1", [w.id])).rows[0]!.pipeline_versions;
     expect(w.spy.seenVersions.length).toBeGreaterThanOrEqual(2);
     for (const seen of w.spy.seenVersions) expect(seen).toEqual(persisted);
-    expect(w.spy.seenVersions[0]).toMatchObject({ planner: { prompt_version: 2 }, generator: { prompt_version: 2 }, reviewer: { prompt_version: 1 }, context_policy: 2 });
+    expect(w.spy.seenVersions[0]).toMatchObject({ planner: { prompt_version: 2 }, generator: { prompt_version: 2 }, reviewer: { prompt_version: 1 }, context_policy: 3 });
   });
 
   it("cada llamada queda en ai_runs con su etapa, versiones, huellas e intento; el coste se agrega por etapa y el análisis va aparte", async () => {

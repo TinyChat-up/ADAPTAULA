@@ -59,7 +59,7 @@ const LENGTH_STRATEGIES = new Set<StrategyKey>(["language_simplification", "text
 const isClosed = (d: Pick<Decision, "response_target">) => d.response_target !== undefined && (CLOSED_RESPONSES as readonly string[]).includes(d.response_target);
 
 /** Alternatives to try, in order: each one is a reviewer edit (target, needs and protected elements cannot change). */
-function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: DecisionEdits; reason: string }> {
+export function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: DecisionEdits; reason: string }> {
   const out: Array<{ edits: DecisionEdits; reason: string }> = [];
   const activity = analysis.activities.some((a) => a.id === d.target);
   const text = analysis.texts.find((t) => t.id === d.target);
@@ -81,7 +81,7 @@ function candidates(d: Decision, analysis: MaterialAnalysis): Array<{ edits: Dec
 }
 
 /** The candidate edit is applied only if the invariants accept it and something can execute it. */
-function viable(raw: AdaptationPlan, d: Decision, edits: DecisionEdits, analysis: MaterialAnalysis, context: AdaptationContext): boolean {
+export function viable(raw: AdaptationPlan, d: Decision, edits: DecisionEdits, analysis: MaterialAnalysis, context: AdaptationContext): boolean {
   const edited: Decision = { ...d, ...edits };
   const check = validatePlan({ ...raw, decisions: raw.decisions.map((x) => (x.id === d.id ? edited : x)) }, analysis, context);
   if (check.issues.some((i) => i.severity === "block" && i.decision_id === d.id)) return false;

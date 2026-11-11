@@ -223,6 +223,10 @@ ul.ms-list { list-style: disc; }
 /* New supports «Hacer magia» adds (8.2B.1+): a row of numbered steps or term cards, sober, with the sheet's accent. */
 .ms-vsupport { break-inside: avoid; }
 .ms-vsupport-title { margin: 0 0 .35em; font-size: .78em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ms-accent); }
+.ms-vflow { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .35em; }
+.ms-vflow > li { display: flex; align-items: center; gap: .35em; break-inside: avoid; }
+.ms-vflow-box { border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .4em .7em; text-align: center; }
+.ms-vflow-arrow { font-weight: 600; }
 .ms-vsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5em; }
 .ms-vsteps > li { flex: 1 1 9em; display: flex; gap: .45em; align-items: flex-start; border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .45em .6em; }
 .ms-vstep-n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; border-radius: 50%; border: 1.5px solid var(--ms-accent); color: var(--ms-accent); font-weight: 700; font-size: .85em; }

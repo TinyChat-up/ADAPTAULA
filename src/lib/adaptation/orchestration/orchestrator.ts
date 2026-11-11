@@ -25,7 +25,9 @@ import type { NormalizedGeneration } from "../generated";
 import { applicablePlan } from "../plan";
 import { normalizeTeacherEdits, reviewPlan, type ReviewedPlan } from "../plan-review";
 import { checkPlanDraft, repairNotes, type PlanDraftDiagnosis } from "../planner-draft";
-import { withheldWithoutConfirmation, withholdForTeacher, type PlannerDeclarations, type RulesUse } from "../plan-v3";
+import { resolveWithheldAutonomously } from "../autonomous-resolution";
+import { justifyDecisions } from "@/lib/profiles/strength-leverage";
+import { withheldWithoutConfirmation, type PlannerDeclarations, type RulesUse } from "../plan-v3";
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
@@ -658,8 +660,9 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
   if (!raw) return null;
   if ((await store.listArtifacts(adaptationId, "plan_review")).some((a) => a.input_fingerprint === raw.fingerprint)) return null;
   const resolution = resolveAutomatically(raw.plan, loaded.analysis, loaded.context);
-  // v3 (ADR-046): a decision the method withheld (conditional, a blocking hint, a strategy foreign to its needs) is never applied
-  // without the teacher. The server's review rejects it with its reason and HOLDS: the adaptation waits for the teacher's review.
+  // v3 (ADR-046/047): a decision the method withheld (conditional, a hint that could give the answer, a strategy foreign to its
+  // needs) is resolved here without asking anyone: a safe variant, an alternative, or the original kept (`autonomous-resolution`).
+  // «Hacer magia» never waits for a teacher's «yes»; every resolution and its cause stay in the report for the teacher to read later.
   let declarations: PlannerDeclarations | null;
   try {
     declarations = await currentDeclarations(store, snapshot, loaded);
@@ -667,10 +670,14 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
     if (error instanceof AdaptationError) return null;
     throw error;
   }
-  const withheld = declarations ? Object.entries(declarations.decisions).filter(([, d]) => d.withheld).map(([id]) => id) : [];
-  const review = declarations ? withholdForTeacher(resolution.review, declarations) : resolution.review;
-  // Saved in every case (audit, and what the status reads); held when a high need is left without any executable decision.
-  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id), ...(withheld.length > 0 ? { withheld_v22: withheld } : {}) } }, { hold: resolution.unresolved.length > 0 || withheld.length > 0 });
+  const autonomous = declarations ? resolveWithheldAutonomously(resolution.review, raw.plan, declarations, loaded.analysis, loaded.context) : { review: resolution.review, resolutions: [] };
+  const review = autonomous.review;
+  // Why each applied decision exists: the need, the declared barrier it reduces, the declared strength it takes advantage of and what
+  // it keeps. From the profile's own declarations (no model, no student data), kept for the teacher to consult afterwards.
+  const applied = new Set(review.entries.filter((e) => e.action !== "rejected").map((e) => e.decision_id));
+  const justifications = justifyDecisions(raw.plan.decisions.filter((d) => applied.has(d.id)), loaded.context.learning_observations);
+  // Saved in every case (audit, and what the status reads); held only when a high need has no executable decision at all.
+  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes: resolution.outcomes, unresolved: resolution.unresolved.map((u) => u.decision_id), ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), justifications } }, { hold: resolution.unresolved.length > 0 });
   if (!submitted.ok || !submitted.executable) {
     deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;

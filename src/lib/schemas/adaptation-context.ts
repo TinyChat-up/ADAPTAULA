@@ -17,9 +17,10 @@ export const ADAPTATION_CONTEXT_VERSION = 1;
  * Policy of the BUILDER (not of the schema): the same schema can be filled by different, versioned rules. Policy 1 is the
  * historical one and the default: it keeps every applicable need, and a context built under it carries no `policy_version`, so
  * its bytes and fingerprint are exactly what they were before policies existed (the frozen evidence depends on that). Policy 2
- * additionally drops the needs that the deterministic presentation layer already resolves completely (docs/ADAPTATION.md).
+ * additionally drops the needs that the deterministic presentation layer already resolves completely (docs/ADAPTATION.md). Policy 3
+ * is policy 2 plus the learner's declared strengths: among the strategies that serve a need, those a strength makes easier come first.
  */
-export const CONTEXT_POLICIES = [1, 2] as const;
+export const CONTEXT_POLICIES = [1, 2, 3] as const;
 export type ContextPolicy = (typeof CONTEXT_POLICIES)[number];
 export const DEFAULT_CONTEXT_POLICY: ContextPolicy = 1;
 
@@ -80,7 +81,7 @@ const Ref = (prefix: string) => z.string().regex(new RegExp(`^${prefix}_[0-9]{1,
 export const AdaptationContextSchema = z.object({
   context_version: z.literal(ADAPTATION_CONTEXT_VERSION),
   /** Absent = policy 1 (historical). Present only for later policies, so old contexts never change. */
-  policy_version: z.literal(2).optional(),
+  policy_version: z.union([z.literal(2), z.literal(3)]).optional(),
   adaptation_type: AdaptationTypeSchema,
   education: z.object({
     stage: z.enum(["primaria", "eso", "bachillerato", "unknown"]),

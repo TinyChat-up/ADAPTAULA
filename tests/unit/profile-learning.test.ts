@@ -83,7 +83,7 @@ describe("combinación explícita y no destructiva", () => {
   it("las sugerencias pertenecen a dimensiones reales, no activan apoyos al declarar una observación", () => {
     expect(STARTING_POINTS).toHaveLength(11);
     for (const id of BARRIER_IDS) expect(suggestedSupports([id]).length).toBeGreaterThan(0);
-    expect(STRENGTH_IDS).toHaveLength(8);
+    expect(STRENGTH_IDS).toHaveLength(12);
     expect(contextOf({ ...emptyFunctionalProfile(), observations }).needs).toEqual([]);
     expect(summarizeProfile(applyPreset(presetForPoint("math"))).strengths).toEqual([]);
   });

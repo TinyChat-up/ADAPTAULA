@@ -130,3 +130,30 @@ export function consistentWithActivities(spec: VisualSpec, activityTexts: readon
   }
   return true;
 }
+
+/**
+ * A scheme of labelled boxes joined by arrows, redrawn from what the analysis itself PRINTS (never from a guess): the visual is a
+ * diagram, its text is the chain «A → B → C» (two to six labels) and its description names every label. A label the description
+ * does not mention, a branch («/», «+», «y»), a repeated label or an unreadable text give nothing: the figure would not be the
+ * original's. Pure and deterministic.
+ */
+const ARROW = /\s*(?:→|->|⟶|=>)\s*/;
+export function flowFromAnalysis(visual: Pick<AnalysisVisual, "kind" | "title" | "description" | "text">): VisualSpec | null {
+  if (visual.kind !== "diagram" || !visual.text) return null;
+  const labels = visual.text.split(ARROW).map((l) => l.trim().replace(/\.$/, "")).filter((l) => l.length > 0);
+  if (labels.length < 2 || labels.length > 6 || new Set(labels.map(normalize)).size !== labels.length) return null;
+  if (labels.some((l) => l.length > 40 || /[\/+,;]|\sy\s/i.test(l))) return null;
+  const described = normalize(`${visual.title ?? ""}. ${visual.description}`);
+  // The description must not draw more of the chain than the text prints: a text that stops short of it is incomplete, not a figure.
+  const arrows = (visual.description.match(/→|->|⟶|=>/g) ?? []).length;
+  if (arrows > 0 && arrows !== labels.length - 1) return null;
+  if (!labels.every((l) => described.includes(normalize(l)))) return null;
+  // The description must also give the order the text gives (its first mention of each label, in sequence).
+  const at = labels.map((l) => described.indexOf(normalize(l)));
+  if (at.some((x, i) => i > 0 && x < at[i - 1]!)) return null;
+  const titled = visual.title ? { title: visual.title.slice(0, 60) } : {};
+  return verified({ spec_version: VISUAL_SPEC_VERSION, kind: "flow", ...titled, items: labels.map(toSentenceCase) });
+}
+
+/** The printed text is usually in capitals («ALGAS»): a label is drawn as a sentence, never changing a letter's meaning. */
+const toSentenceCase = (label: string) => (label === label.toUpperCase() && label.length > 1 ? label.charAt(0) + label.slice(1).toLowerCase() : label);

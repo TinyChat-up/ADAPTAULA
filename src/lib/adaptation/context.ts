@@ -15,6 +15,7 @@ import { detectConflicts } from "./conflicts";
 import { ambiguousTargets, evaluatesWriting, isLiteralSourceText, isMathMaterial } from "./facts";
 import { fingerprint } from "./fingerprint";
 import { STAGE_RULES, ageBand } from "./stage-rules";
+import { rankByStrengths } from "@/lib/profiles/strength-leverage";
 import { AUDIO_DIMENSIONS, DIMENSION_STRATEGIES, PRESENTATION_DIMENSIONS } from "./strategies";
 import { wordCount } from "./text";
 
@@ -157,7 +158,7 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
     if ((PRESENTATION_DIMENSIONS as readonly DimensionKey[]).includes(dimension)) omitted.push({ dimension, reason: "presentation_only" });
     else if (!applicable(dimension, analysis, math)) omitted.push({ dimension, reason: "not_applicable" });
     else if (policy >= 2 && RESOLVED_BY_PRESENTATION[dimension]?.(presentation)) omitted.push({ dimension, reason: "resolved_by_presentation" });
-    else needs.push({ dimension, level, intensity: INTENSITY_FOR_LEVEL[level], strategies: DIMENSION_STRATEGIES[dimension].slice(0, 3) });
+    else needs.push({ dimension, level, intensity: INTENSITY_FOR_LEVEL[level], strategies: (policy >= 3 ? rankByStrengths(DIMENSION_STRATEGIES[dimension], profile.observations) : [...DIMENSION_STRATEGIES[dimension]]).slice(0, 3) });
   }
   const order = (d: DimensionKey) => DIMENSION_KEYS.indexOf(d);
   needs.sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || order(a.dimension) - order(b.dimension));
@@ -168,7 +169,7 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
 
   const context: AdaptationContext = {
     context_version: ADAPTATION_CONTEXT_VERSION,
-    ...(policy >= 2 ? { policy_version: 2 as const } : {}),
+    ...(policy >= 2 ? { policy_version: (policy >= 3 ? 3 : 2) as 2 | 3 } : {}),
     adaptation_type: input.adaptationType,
     education: {
       stage,
