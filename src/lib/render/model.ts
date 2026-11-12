@@ -5,7 +5,7 @@ import { planDeferred, type DeferredInput, type DeferredOutcome } from "./deferr
 import { parseBlanks, parseInline, parseParagraphs, type BlankPart, type Run } from "./inline";
 import { composeMath, type MathPart } from "./math";
 import { GRID_ZONE_ROWS, renderTokens, type RenderTokens } from "./tokens";
-import { taskGroups } from "./task-groups";
+import { activityQuotas } from "./task-groups";
 export { taskGroups } from "./task-groups";
 import { withAdjacentFigures } from "./figure-order";
 import { MATERIAL_RENDERER_VERSION } from "./version";
@@ -575,7 +575,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
   for (const logical of doc.pages) {
     let current: RenderNode[] = [];
     let tasks = 0;
-    const quotas = max === null ? [] : taskGroups(logical.blocks.filter((bl) => bl.type === "activity").length, max);
+    const quotas = max === null ? [] : activityQuotas(logical.blocks.flatMap((bl) => (bl.type === "activity" ? [bl.label] : [])), max);
     let group = 0;
     const flush = () => {
       if (current.length > 0) {

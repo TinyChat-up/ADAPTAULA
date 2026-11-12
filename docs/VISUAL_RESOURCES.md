@@ -322,7 +322,7 @@ presentado como apoyo, y nunca una tabla o un gráfico, que se reconstruyen con 
 
 ### Cada figura con su actividad (sin posición vertical)
 
-- **Documento** (`anchorResources`): una figura o un texto de tipo `example`/`formula`/`definition`/`note` se coloca justo antes de
+- **Documento** (`anchorResources`): una figura o un texto de tipo `example`/`formula`/`definition`/`note`/`other`/`instruction` enlazado se coloca justo antes de
   la primera actividad que lo usa (`resource_ids`) en su página. Al partir por `max_tasks_per_page` viaja con ella (`takeLeads`).
 - **Modelo de render:** la actividad lleva `leads` (su ejemplo, antes del enunciado) y `figures` (sus figuras, justo después). En
   CSS, enunciado, figura y ejemplo nunca se separan (`break-after: avoid`, `break-inside: avoid`).

@@ -86,3 +86,34 @@ export async function analyzePdf(pdf: Uint8Array): Promise<PageAnalysis[]> {
 }
 
 export const bodyText = (page: PageAnalysis) => page.body;
+
+export interface PlacedText {
+  str: string;
+  /** pt from the left edge and from the TOP edge of the page (reading direction: smaller `top` is higher up). */
+  x: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Every text run of every page with where it is printed, in the order a reader sees it (top to bottom, then left to right). */
+export async function placedText(pdf: Uint8Array): Promise<PlacedText[][]> {
+  const lib = await pdfjs();
+  const task = lib.getDocument({ data: new Uint8Array(pdf), standardFontDataUrl: fontsDir(), disableFontFace: true, useSystemFonts: false, verbosity: 0 });
+  const doc = await task.promise;
+  const pages: PlacedText[][] = [];
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const height = page.getViewport({ scale: 1 }).height;
+      const content = await page.getTextContent();
+      const runs = content.items
+        .filter((i): i is typeof i & { str: string; transform: number[]; width: number; height: number } => "str" in i && i.str.trim() !== "")
+        .map((i) => ({ str: i.str.trim(), x: i.transform[4]!, top: height - i.transform[5]! - i.height, width: i.width, height: i.height }));
+      pages.push(runs.sort((a, b) => Math.round(a.top / 3) - Math.round(b.top / 3) || a.x - b.x));
+    }
+  } finally {
+    await task.destroy();
+  }
+  return pages;
+}

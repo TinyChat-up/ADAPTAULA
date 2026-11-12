@@ -354,6 +354,11 @@ describe("source order of the assembled document", () => {
   it("items without a section come first on their page; the limit inside one section (kind order) is explicit", () => {
     const loose = structuredClone(bach);
     loose.texts[2]!.section_id = null;
+    // A loose text that an activity uses travels with that activity (bloque 2): never before the activity of another exercise.
+    expect(order(loose)[1]).toEqual(["act_4", "ctt_3", "ctt_4", "act_5"]);
+    // One that no activity uses has no place but its source order: first on its page.
+    loose.texts[2]!.activity_ids = [];
+    loose.activities.find((a) => a.id === "act_5")!.resource_ids = ["ctt_4"];
     expect(order(loose)[1]).toEqual(["ctt_3", "act_4", "ctt_4", "act_5"]);
     const text = readFileSync(path.resolve(import.meta.dirname, "../../src/lib/adaptation/document.ts"), "utf8");
     expect(text).toMatch(/analysis does[\s*]+not record the order BETWEEN kinds inside one section/);

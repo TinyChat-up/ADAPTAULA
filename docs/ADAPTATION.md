@@ -214,6 +214,8 @@ Hipótesis contrastadas con ambos materiales: **reproducidas** H4 (una decisión
 
 El análisis registra para cada elemento su página y su sección, y las secciones están en orden de lectura. El ensamblador ordena ahora por (página, sección, tipo, número de id), sin heurísticas de texto, lo que corrige el caso de Bachillerato (el enunciado de la actividad 5 salía antes de la actividad 4). **Límite documentado:** el análisis no registra el orden entre tipos dentro de una misma sección.
 
+**Bloque 2 (2026-11-11, [QA](qa/bloque2-estanque/README.md)).** Cuatro correcciones del ensamblado sobre la ficha del estanque: (1) un `heading`/`instruction` sin actividades enlazadas cuyo texto es el **título de su sección** encabeza la sección (el id numérico ya no lo pone tras la lectura); (2) `anchorResources` mueve también `other` e `instruction` enlazados, y el ejemplo resuelto va antes que los recursos; (3) una **duplicación verificada** (el texto es idéntico al `context` de la actividad que lo usa, no es lectura, misma página, ninguna decisión lo quita) se imprime una vez: el texto viaja con su actividad y su copia en el contexto no se vuelve a imprimir; (4) la lista de comprobación de documento cuya decisión es `self_check` cierra la ficha. La paginación es por ejercicios (`groupedTaskQuotas`, más abajo).
+
 **Desde 8.2B.1** (`anchorResources`), una figura, o un ejemplo, fórmula, definición o nota, que una actividad usa (`resource_ids`)
 se coloca justo antes de la primera actividad que lo usa en su página, y viaja con ella al partir por tareas. En el modelo de render
 la actividad lleva `leads` (su ejemplo, antes del enunciado) y `figures` (sus figuras, después del enunciado). Dos respuestas son
@@ -734,7 +736,9 @@ apoyos de escritura dentro de su actividad, actividad con tabla unida a su tabla
 lectura incluida) viaja con ella al cerrar página por número de tareas, fracciones sencillas apiladas. `max_tasks_per_page`
 reparte las tareas de una página lógica en el mínimo de páginas que permite el límite y de forma equilibrada (`taskGroups`: 7
 tareas con máximo 3 → 2 · 3 · 2, nunca 3 · 3 · 1; la primera página lleva la parte menor porque también lleva cabecera, título y
-orientación): cuenta tareas, no mide alturas. Solo en CLARO (ESO y Bachillerato), los apartados cortos de un organizador (hasta dos
+orientación): cuenta tareas, no mide alturas. Desde el bloque 2 las partes de un ejercicio («3a»/«3b», `groupActivities`) no se separan mientras
+caben en una página (`groupedTaskQuotas`; una pareja de partes con máximo 3 cuesta una página más antes que partirse; un grupo mayor
+que el máximo se corta en trozos del máximo). Sin partes es exactamente `taskGroups`. Solo en CLARO (ESO y Bachillerato), los apartados cortos de un organizador (hasta dos
 líneas) se reparten en dos columnas. Fichas, evaluación y cómo activarlo: `docs/qa/phase8/claro/`.
 
 ## Exportación PDF — Fase 5.2A: motor, HTML autocontenido y validación (local)
