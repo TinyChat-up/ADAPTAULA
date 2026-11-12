@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { auditSupports, contentStems, SUPPORT_AUDIT_VERSION } from "@/lib/adaptation/support-audit";
+import { auditSupports, SUPPORT_AUDIT_VERSION } from "@/lib/adaptation/support-audit";
+import { contentStems } from "@/lib/adaptation/support-evidence";
 import { allBlocks, type Block } from "@/lib/schemas/material-document";
 import { pondCase } from "../support/pond-plan";
 
@@ -21,10 +22,10 @@ const blockFor = (doc: typeof base.document, ref: string, type: Block["type"]) =
 describe("support_audit@v1 · estanque", () => {
   it("avisa del glosario que define el concepto que 3a evalúa, y de nada más en esta ficha", () => {
     const result = audit();
-    expect(result).toMatchObject({ version: SUPPORT_AUDIT_VERSION, mode: "shadow" });
+    expect(result).toMatchObject({ version: SUPPORT_AUDIT_VERSION, mode: "shadow", cleared: [] });
     expect(result.supports_checked).toBe(6); // 3 listas, 2 ejemplos y el glosario: los apoyos de documento no tienen una actividad
     expect(result.warnings).toEqual([
-      { code: "defines_evaluated_concept", block_id: blockFor(base.document, "act_3", "vocabulary").id, activity_id: "act_3", decision_ids: ["dec_6"], low_need_only: true },
+      { code: "defines_evaluated_concept", evidence: "lexical", action: "warn", block_id: blockFor(base.document, "act_3", "vocabulary").id, activity_id: "act_3", decision_ids: ["dec_6"], low_need_only: true },
     ]);
   });
 
@@ -56,13 +57,13 @@ describe("support_audit@v1 · estanque", () => {
   });
 
   it("una idea clave que repite el concepto evaluado avisa; un recordatorio de método no", () => {
-    const withHelp = (variant: "key_idea" | "reminder") =>
+    const withHelp = (variant: "key_idea" | "reminder", text: string) =>
       audit((doc) => {
         const page = doc.pages[1]!;
-        page.blocks.push({ id: "blk_help", type: "help_box", variant, text: "Las flechas de una cadena alimentaria indican quién sirve de alimento a quién.", trace: { origin: "support", source_refs: ["act_3"], decision_ids: ["dec_6"] } });
+        page.blocks.push({ id: "blk_help", type: "help_box", variant, text, trace: { origin: "support", source_refs: ["act_3"], decision_ids: ["dec_6"] } });
       }).warnings.filter((w) => w.block_id === "blk_help");
-    expect(withHelp("key_idea").map((w) => w.code)).toEqual(["defines_evaluated_concept"]);
-    expect(withHelp("reminder")).toEqual([]);
+    expect(withHelp("key_idea", "Las flechas de una cadena alimentaria indican quién sirve de alimento a quién.").map((w) => w.code)).toEqual(["defines_evaluated_concept"]);
+    expect(withHelp("reminder", "Lee despacio y mira cada recuadro del esquema.")).toEqual([]);
   });
 
   it("un ejemplo resuelto con los datos de la propia tarea avisa; uno con otros datos (el real) no", () => {
@@ -70,7 +71,7 @@ describe("support_audit@v1 · estanque", () => {
       audit((doc) => {
         const example = blockFor(doc, "act_5", "worked_example");
         if (example.type === "worked_example") example.problem = problem;
-      }).warnings.filter((w) => w.code === "reuses_task_data");
+      }).warnings.filter((w) => w.code === "example_reuses_data");
     expect(withExample("El agua tenía 30 cm en mayo y 18 cm en junio. ¿Cuánto bajó?")).toHaveLength(1);
     expect(withExample("Un charco tenía 20 cm y bajó a 12 cm. ¿Cuánto bajó?")).toEqual([]);
   });
@@ -81,7 +82,7 @@ describe("support_audit@v1 · estanque", () => {
       const example = blockFor(doc, "act_5", "worked_example");
       if (example.type === "worked_example") example.result = "Bajó 12 centímetros.";
     });
-    expect(result.warnings.map((w) => w.code)).toContain("contains_answer");
+    expect(result.warnings.map((w) => w.code)).toContain("example_solves_item");
   });
 
   it("un apoyo de una necesidad importante se distingue de uno de una necesidad menor", () => {

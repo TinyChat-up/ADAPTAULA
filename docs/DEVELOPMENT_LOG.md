@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-12 — Etapa 2.1: la auditoría de apoyos y la seguridad de evaluación, en un solo sitio (`support_audit@v2`)
+
+- Rama `claude/zealous-shannon-k7w4v4` desde `main` (`18fa6d4`, con #86–#88). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [Medición y detalle](qa/bloque1-apoyos/README.md).
+- **Medición (etapa 1).** 22 adaptaciones reales, solo lectura: el detector v1 acertaba en 2 de 5 casos relevantes; no veía que el ejemplo «→ Núcleo» daba la respuesta de un apartado; los dígitos sueltos daban falsos avisos; ya existía una protección bloqueante estrecha (`supportsDefiningEvaluatedConcepts`).
+- **Cambio.** `assessment-safety.ts` es ahora el único sitio: conserva la protección bloqueante intacta y añade hallazgos que **solo avisan** (respuesta por apartados, ejemplo que resuelve un ítem, relación equivalente, datos completos de la tarea, componente asignado a su categoría, concepto evaluado), más lo legítimo registrado como `cleared` (tarjeta de criterio, coincidencia). Evidencias en `support-evidence.ts`; números y fracciones completos y reducidos. Decisión 1 aplicada: criterio para aplicar = válido; entregar concepto, clasificación o resultado = no.
+- **Pruebas.** `support-safety-real-cases.test.ts` (20) y `support-audit.test.ts` (10) con los casos reales; la prueba de base de datos comprueba el registro v2. Solo `defines_listed_categories` bloquea.
+- **Pendiente.** 2.2 (sustitución funcional: vocabulario secundario, preguntas guía, recordatorios del procedimiento, elegidos por actividad, aprendizaje y perfil) y 2.3 (revisor semántico sin llamada extra); la analogía de la membrana no es léxica.
+
 ## 2026-11-12 — Bloque 1: auditoría de apoyos que realizan el razonamiento del alumno (modo sombra)
 
 - Rama `claude/zealous-shannon-k7w4v4` reiniciada desde `main` (`7912530`, con #86 y #87 integradas). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA](qa/bloque1-apoyos/README.md).

@@ -385,9 +385,9 @@ describe("bloque 1 · auditoría de apoyos en modo sombra", () => {
       "select payload->'support_audit' audit from public.adaptation_artifacts where adaptation_id = $1 and kind = 'deterministic_review' order by created_at desc limit 1",
       [id],
     );
-    expect(row!.audit).toMatchObject({ version: "support_audit@v1", mode: "shadow" });
+    expect(row!.audit).toMatchObject({ version: "support_audit@v2", mode: "shadow" });
     expect(row!.audit!.supports_checked).toBeGreaterThan(0);
-    for (const warning of row!.audit!.warnings) expect(Object.keys(warning).sort()).toEqual(["activity_id", "block_id", "code", "decision_ids", "low_need_only"]);
+    for (const warning of row!.audit!.warnings) expect(Object.keys(warning).sort()).toEqual(["action", "activity_id", "block_id", "code", "decision_ids", "evidence", "low_need_only"]);
     expect(JSON.stringify(row!.audit)).not.toMatch(/fracci|denominador|calcul/i);
   });
 });
