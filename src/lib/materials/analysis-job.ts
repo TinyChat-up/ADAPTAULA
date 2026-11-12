@@ -11,6 +11,7 @@ import { serverEnv } from "@/lib/config/env.server";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ANALYSIS_LIMITS } from "./config";
+import { computeReadiness, READINESS_BUDGET_MS } from "./readiness";
 import { downloadSource } from "./storage";
 
 const ClaimedJobSchema = z.object({
@@ -112,6 +113,7 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
       if (run.issues?.length) logger.warn("analysis_output_invalid", { ...ids, attempt: run.attempt, kind: run.errorCode, issues: run.issues.slice(0, 6).join(" | ") });
     };
 
+    const deadlineAt = Date.now() + ANALYSIS_DEFAULTS.jobDeadlineMs;
     const outcome = await analyzeMaterialFile({
       analyzer: runtime.analyzer,
       file: analyzeFile,
@@ -123,11 +125,23 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
       maxRepairAttempts: runtime.maxRepairAttempts,
       maxOutputTokens: runtime.maxOutputTokens,
       forcedReanalysis: job.input.force === true,
-      deadlineAt: Date.now() + ANALYSIS_DEFAULTS.jobDeadlineMs,
+      deadlineAt,
       onRun: record,
       onStep: async (step) => setStep(step, step === "analyzing" ? 30 : 75),
     });
 
+    // Shadow mode: the readiness report is recorded next to the analysis and read by nothing. It never fails or delays the save beyond
+    // its own small budget, and a failure to compute it leaves the meta exactly as it was.
+    const readiness = await computeReadiness(outcome.canonical, { bytes, mime: file.mime_type, pages: file.page_count ?? 1 }, Math.min(READINESS_BUDGET_MS, deadlineAt - Date.now() - 10_000));
+    if (readiness) {
+      logger.info("analysis_readiness", {
+        ...ids,
+        status: readiness.status,
+        textLayer: readiness.source.text_layer,
+        fidelity: readiness.fidelity.status,
+        findings: [...new Set(readiness.findings.map((f) => f.code))].join(","),
+      });
+    }
     await setStep("saving", 90);
     const catalog = {
       stages: new Set((stagesRes.data ?? []).map((s) => s.slug)),
@@ -139,7 +153,7 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
       p_attempt: job.attempts,
       p_analysis: outcome.analysis as Record<string, unknown>,
       p_prompt_version: `${runtime.analyzer.key}@v${runtime.analyzer.version}`,
-      p_meta: outcome.meta,
+      p_meta: readiness ? { ...outcome.meta, readiness } : outcome.meta,
       p_context: detectedContextUpdate(outcome.canonical, confirmed, catalog),
     });
     if (saveError) return await fail("unexpected", true);

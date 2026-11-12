@@ -123,6 +123,25 @@ describe("runAnalysisJob", () => {
     expect(Object.keys(run)).not.toEqual(expect.arrayContaining(["content", "prompt", "text"]));
   });
 
+  it("shadow readiness: the report is saved inside the meta; with an unreadable PDF it says so and the analysis is saved exactly as before", async () => {
+    expect(await runAnalysisJob(JOB.id)).toBe("completed");
+    const complete = rpcNamed("complete_analysis_job")[0]!.args;
+    // The stored bytes are not a readable PDF: «unavailable», with the reason, and everything else untouched.
+    expect(complete.p_meta).toMatchObject({ source: "model", cost_usd: 0, readiness: { version: 1, status: "unavailable" } });
+    expect(complete.p_analysis).toBeDefined();
+    expect(rpcNamed("fail_analysis_job")).toEqual([]);
+    // No model call, no extra record: the readiness costs nothing and writes no ai_runs row.
+    expect(calls.inserts.filter((i) => i.table === "ai_runs")).toHaveLength(1);
+  });
+
+  it("shadow readiness never changes the result: an image source gets a report without text layer and the job still completes", async () => {
+    fileRows = [{ storage_path: "w/u/m/f.png", mime_type: "image/png", page_count: 1 }];
+    sourceBytes = new Uint8Array([137, 80, 78, 71]);
+    provider = new MockProvider();
+    expect(await runAnalysisJob(JOB.id)).toBe("completed");
+    expect(rpcNamed("complete_analysis_job")[0]!.args.p_meta).toMatchObject({ readiness: { status: "computed", source: { kind: "image", text_layer: "not_applicable" } } });
+  });
+
   it("with prompt v2 it stores a v3 analysis, labels it with its prompt and still derives the confirmed-aware context", async () => {
     analyzerVersion = 2;
     expect(await runAnalysisJob(JOB.id)).toBe("completed");

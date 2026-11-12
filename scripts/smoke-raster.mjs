@@ -24,6 +24,8 @@ const ROUTES = [
   "server/app/api/adaptations/[id]/visuals/auto/route.js.nft.json",
   "server/app/api/cron/adaptations/route.js.nft.json",
   "server/app/api/adaptations/[id]/pdf/route.js.nft.json",
+  "server/app/api/materials/[id]/analysis/run/route.js.nft.json",
+  "server/app/api/cron/materials/route.js.nft.json",
 ];
 const fail = (message) => {
   console.error(`smoke:raster · FALLO · ${message}`);

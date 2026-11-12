@@ -202,6 +202,35 @@ export async function pageText(bytes: Uint8Array, mime: string, pageNumber: numb
   }
 }
 
+/**
+ * The printed strings of a PDF, page by page, WITHOUT geometry and opening the document once (the analysis report only needs to know
+ * what the original says, not where). At most `maxPages` pages are read; an uploaded image has no text layer: none.
+ */
+export interface DocumentStrings {
+  pages: number;
+  /** One entry per page actually read (strings in reading order). */
+  items: string[][];
+}
+export async function documentStrings(bytes: Uint8Array, mime: string, maxPages: number): Promise<DocumentStrings> {
+  if (IMAGE_MIME.includes(mime)) return { pages: 1, items: [] };
+  if (mime !== "application/pdf") throw new RasterError("unsupported_source");
+  const doc = await openPdf(bytes);
+  try {
+    const items: string[][] = [];
+    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+      const page = await doc.getPage(n);
+      const content = await page.getTextContent();
+      items.push(content.items.flatMap((item) => ("str" in item && item.str.trim() !== "" ? [item.str] : [])));
+    }
+    return { pages: doc.numPages, items };
+  } catch (error) {
+    if (error instanceof RasterError) throw error;
+    throw new RasterError("extraction_failed");
+  } finally {
+    await doc.close();
+  }
+}
+
 /** Luma of a rendered page (RGBA read back from the canvas). */
 export function pageRgba(page: RasterPage): Uint8ClampedArray {
   return page.canvas.getContext("2d").getImageData(0, 0, page.width, page.height).data;

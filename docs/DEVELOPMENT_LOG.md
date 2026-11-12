@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-11 — Informe de preparación del análisis (paso 1, modo sombra)
+
+- Rama `feature/informe-preparacion-analisis`, independiente de la PR #85 (revisor). Sin migraciones, sin llamadas a modelos, sin despliegue, sin E2E.
+- Informe determinista en `materials.analysis_meta.readiness` (códigos, ids, estados y recuentos; esquema estricto, sin texto libre): capa de texto del PDF, fidelidad del análisis frente a lo que el original imprime, referencias, pistas de recuperación visual. **Solo registra: no bloquea ni cambia nada.** Un PDF escaneado es un hecho, no un veredicto.
+- Compatibilidad de `analysis_meta` verificada (campo opcional y tolerante; caché y huellas intactas). Detalle, consultas de medición y pendientes: `docs/qa/informe-preparacion-analisis/README.md`.
+- Pendiente: paso 2 (localización y verificación visual al terminar el análisis) y comprobación de viabilidad según el perfil.
+
 ## 2026-11-11 — Bloque 2 de calidad pedagógica: orden, proximidad, duplicación y paginación por ejercicios (estanque)
 
 - Rama `claude/zealous-shannon-k7w4v4` sobre `main` (`d4bf153`). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA y diagnóstico](qa/bloque2-estanque/README.md).

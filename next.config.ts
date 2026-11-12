@@ -41,6 +41,10 @@ const nextConfig: NextConfig = {
     "/api/adaptations/*/visuals/*": RASTER_FILES,
     "/api/cron/adaptations": RASTER_FILES,
     "/api/adaptations/*/pdf": [...PDF_FILES, ...RASTER_FILES],
+    // The analysis records its readiness report from the original's text layer (shadow mode): without these files it degrades to
+    // «could not be computed», but it is checked like the rest so that a missing trace is seen at build time.
+    "/api/materials/*/analysis/run": RASTER_FILES,
+    "/api/cron/materials": RASTER_FILES,
   },
 };
 

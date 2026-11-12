@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AnalysisReadinessSchema } from "./analysis-readiness";
 
 /**
  * MaterialAnalysis v3: structured understanding of an uploaded material. NOT an adaptation: it only describes what the
@@ -441,5 +442,11 @@ export const AnalysisMetaSchema = z.object({
   cost_usd: z.number().nonnegative().nullable(),
   warnings: z.array(z.string().max(120)).max(40),
   reused_from_material_id: z.uuid().nullable(),
+  /**
+   * Readiness report (shadow mode, `analysis-readiness.ts`): codes, ids, states and counts only. Optional and LENIENT: an analysis
+   * stored before it existed, or a report this version does not understand, reads as «none» and never invalidates the meta (which
+   * the cache and the material page need).
+   */
+  readiness: AnalysisReadinessSchema.optional().catch(undefined),
 });
 export type AnalysisMeta = z.infer<typeof AnalysisMetaSchema>;
