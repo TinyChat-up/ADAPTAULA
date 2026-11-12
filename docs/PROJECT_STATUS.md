@@ -107,6 +107,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Etapa 2.1 (2026-11-12).** Auditoría de apoyos unificada con la seguridad de evaluación (`support_audit@v2`, [QA](qa/bloque1-apoyos/README.md)): hallazgos nuevos solo en aviso; la protección bloqueante de siempre intacta. Pendiente: medir su precisión y decidir 2.2 (sustitución funcional) y 2.3 (revisor semántico).
+
 **Bloque 1 (2026-11-12).** Auditoría interna en modo sombra de apoyos que realizan el razonamiento evaluado (`support_audit@v1`, [QA](qa/bloque1-apoyos/README.md)): implementada y probada localmente, **sin efecto** sobre la entrega ni sobre el docente; pendiente de medir su precisión con adaptaciones reales. Después: prevención en el plan y ámbito semántico del revisor. Pendiente aparte: distribución de espacios (sin actividades aisladas en páginas casi vacías, sin reducir letra ni espacio de respuesta).
 
 **Bloque 2 de calidad pedagógica (2026-11-11).** Orden, proximidad, duplicación verificada y paginación por ejercicios en el ensamblado, comprobados en el PDF real de la ficha del estanque con el planificador actual y V2.2 ([QA](qa/bloque2-estanque/README.md)). Implementado y probado localmente; **pendiente de validar en producción**. Siguiente: bloque 1 (detección de apoyos que resuelven la operación evaluada, en modo aviso interno que no obligue al docente).

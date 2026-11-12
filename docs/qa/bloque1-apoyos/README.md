@@ -1,5 +1,7 @@
 # Bloque 1 · apoyos que realizan el razonamiento del alumno (auditoría en modo sombra)
 
+> Estado: `support_audit@v1` (#88) quedó **superado por la etapa 2.1** (`support_audit@v2`, más abajo): la regla vive ahora en un solo sitio, `assessment-safety.ts`.
+
 Rama `claude/zealous-shannon-k7w4v4` sobre `main` (`7912530`, con las PR #86 y #87). Sin migraciones, sin despliegue, sin E2E, sin
 llamadas de pago. **Primer paso: aviso interno.** No bloquea, no cambia la ficha, no pregunta nada al docente y no se muestra.
 
@@ -48,3 +50,40 @@ ni de las respuestas. El registro de operación lleva únicamente códigos y ids
 2. Prevención en el plan: no añadir un glosario o idea clave por necesidades bajas sobre una actividad cuyo concepto evaluado es ese
    término (cobertura por otra decisión, o no ejecutar), sin devolver nada al docente.
 3. Ámbito semántico para el revisor de IA (`answers_not_leaked` sin respuesta deducida), con `pedagogical_reviewer@v2`.
+
+## Etapa 1 · medición con adaptaciones reales (2026-11-12, solo lectura)
+
+22 adaptaciones del piloto (última versión de cada una), unos 110 apoyos en 5 fichas; unos 70 distintos revisados a mano y 16 pasados por el detector real.
+Límites: pocas fichas y perfiles; las adaptaciones no guardan las dimensiones de cada decisión; el análisis pudo cambiar después.
+
+| Resultado sobre 16 casos | n |
+| --- | --- |
+| Avisa y acierta (glosario de 3a) | 2 |
+| Avisa por una razón equivocada (fracciones: dígitos sueltos) | 1 |
+| No ve un error real (célula «Núcleo», analogía de la membrana) | 2 |
+| Sin aviso y correcto (ejemplos de otro dominio o con otros datos, ideas clave de requisito) | 8 |
+| Gris: tarjetas de criterio (primos, ser vivo, numerador/denominador) | 3 |
+
+Hallazgos clave: (1) el ejemplo «Pista: *Contiene la información que dirige la actividad de la célula* → Núcleo» entregó la respuesta del ítem a) en una adaptación «ready»; no saltaba porque `contains_answer` buscaba la respuesta completa de varios apartados; (2) los dígitos sueltos dan falsos avisos y aciertos casuales; (3) la analogía «protege y separa el interior del exterior → la pared» comparte con la pista real («Regula el paso de sustancias entre la célula y el exterior») una sola raíz léxica: es un caso semántico; (4) ya existía `supportsDefiningEvaluatedConcepts` (bloqueante y muy estrecha: categorías de la propia consigna), lo que duplicaba el mecanismo.
+
+## Etapa 2.1 · unificación (`support_audit@v2`)
+
+Decisiones aprobadas: una tarjeta de criterio es válida cuando la actividad evalúa **aplicar** ese conocimiento y el alumno sigue haciendo la operación; no lo es si entrega el concepto, el razonamiento, la clasificación o el resultado evaluados (la necesidad alta justifica apoyos más intensivos, nunca sustituir el aprendizaje evaluado).
+
+Un solo sitio (`assessSupports`, `assessment-safety.ts`; evidencias en `support-evidence.ts`) con la clase de cada hallazgo:
+
+| Código | Evidencia | Acción |
+| --- | --- | --- |
+| `defines_listed_categories` (la protección de siempre) | verificable | **bloquea** (sin cambios) |
+| `direct_answer_part` | verificable: una **parte** de la respuesta (apartados «a) … b) …»), completa, que la hoja no muestra ya | aviso |
+| `example_solves_item` | verificable: un ejemplo cuyo resultado/pasos llevan esa parte | aviso |
+| `example_near_item` | estructural: demuestra la misma relación («2/4 = 1/2» junto a «4/8 = 1/2»), forma reducida, con otros números | aviso |
+| `example_reuses_data` | estructural: ≥ 2 números o fracciones **completos** de la tarea y la mitad o más de los suyos | aviso |
+| `assigns_item_to_category` | estructural: un componente de la tarea asignado a una categoría de su tabla | aviso |
+| `defines_evaluated_concept` | léxica: el término es el concepto evaluado y la actividad pide explicar o interpretar | aviso |
+
+`cleared` (lo que parece un hallazgo y no lo es): `criterion_card` (tarjeta de criterio para aplicar: primos, ser vivo) y `lexical_coincidence` (una sola raíz o un solo número comunes). Ninguna coincidencia de dos números, palabras o categorías basta por sí sola; un hallazgo nuevo nunca bloquea (probado: solo `defines_listed_categories` tiene acción `block`). Registro: `deterministic_review.support_audit`, solo códigos, ids y recuentos.
+
+Pruebas: `tests/unit/support-safety-real-cases.test.ts` (20, casos reales: 3a, «Núcleo», membrana, fracciones, primos, seres vivos, ejemplos legítimos, regresión de la protección actual) y `tests/unit/support-audit.test.ts` (10); la de base de datos comprueba el registro v2 en la canalización real.
+
+Límite declarado: la analogía de la membrana (y «material genético» frente a «Contiene el ADN») no es detectable por palabras; queda para el revisor semántico (etapa 2.3). La sustitución funcional (2.2) y el revisor (2.3) siguen pendientes.
