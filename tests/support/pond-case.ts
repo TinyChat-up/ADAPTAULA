@@ -61,7 +61,10 @@ export function pondAnalysis(): MaterialAnalysis {
       { id: "a7", label: "5", page: 2, type: "open_question", instruction: "Valora esta afirmación y justifica tu respuesta. ¿Estás de acuerdo? Usa información del texto para defender tu respuesta.", context: STATEMENT, resources: ["t1", "t5"], objectives: ["o5"], section: "s3", ...base, difficulty: "high", confidence: 0.92 },
       { id: "a8", label: "6", page: 2, type: "open_question", instruction: "Propón una medida para proteger el estanque. Explica cómo podría ayudar a algún ser vivo y a un elemento no vivo del ecosistema.", resources: [], objectives: ["o5"], section: "s3", ...base, difficulty: "high", confidence: 0.92 },
     ],
-    protected: [],
+    protected: [
+      { type: "concept", importance: "essential", value: "Significado de las flechas en una cadena alimentaria", activities: ["a3"], resources: ["v2"] },
+      { type: "target_operation", importance: "essential", value: "Restar los niveles del agua de mayo y junio", activities: ["a5"], resources: ["v3"] },
+    ],
     uncertainties: [],
     quality: { confidence: 0.94, readability: "good" },
   });
