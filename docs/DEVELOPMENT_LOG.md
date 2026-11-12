@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-11 — Informe de preparación del análisis (paso 1, modo sombra)
+
+- Rama `feature/informe-preparacion-analisis`, independiente de la PR #85 (revisor). Sin migraciones, sin llamadas a modelos, sin despliegue, sin E2E.
+- Informe determinista en `materials.analysis_meta.readiness` (códigos, ids, estados y recuentos; esquema estricto, sin texto libre): capa de texto del PDF, fidelidad del análisis frente a lo que el original imprime, referencias, pistas de recuperación visual. **Solo registra: no bloquea ni cambia nada.** Un PDF escaneado es un hecho, no un veredicto.
+- Compatibilidad de `analysis_meta` verificada (campo opcional y tolerante; caché y huellas intactas). Detalle, consultas de medición y pendientes: `docs/qa/informe-preparacion-analisis/README.md`.
+- Pendiente: paso 2 (localización y verificación visual al terminar el análisis) y comprobación de viabilidad según el perfil.
+
 ## 2026-11-11 — Diagnóstico del estanque tras la PR #84: `reviewer_schema` y una re-petición acotada
 
 - **Adaptación `8b7f5c69…` (producción, commit `bbcefa4`).** Planificador v2 (no V2.2; política de contexto 3 = código de la #84); plan sin avisos (el falso `needs_conflict` desapareció); **la política visual reconstruyó el esquema** (`attempts: locate, reconstruct, reconstruct_flow` → figura `flow` con las cuatro etiquetas: `corroborateFlow` se ejecutó y corroboró el PDF real en producción); revisión determinista `approved_with_warnings`; **falló la revisión IA**: respuesta de 842 tokens que no cumple el contrato JSON estricto (`reviewer_schema`, no reintentable). No es `visual_unavailable`. La versión 1 de la ficha quedó guardada sin revisión.
