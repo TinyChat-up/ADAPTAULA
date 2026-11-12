@@ -1,3 +1,4 @@
+import { auditSupports } from "../support-audit";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { AdaptationContextSchema, type AdaptationContext } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type AdaptationPlan } from "@/lib/schemas/adaptation-plan";
@@ -1282,7 +1283,17 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       throw new AdaptationError("generator_validation", `La generación no supera la auditoría: ${diagnosis.map((d) => `${d.category}[${d.decisions.join("+") || d.refs.join("+") || "documento"}]`).join("; ").slice(0, 200)}`);
     }
     current = await advance(store, adaptationId, current, "reviewing_deterministic");
-    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}) });
+    // Shadow mode (bloque 1): supports that perform what the activity evaluates. Codes and ids only; it never blocks, never reaches the
+    // teacher and can never stop the generation. Outside the artifact's fingerprint: it is a measurement, not an input.
+    const supportAudit = (() => {
+      try {
+        return auditSupports({ analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document });
+      } catch {
+        return undefined;
+      }
+    })();
+    if (supportAudit && supportAudit.warnings.length > 0) deps.log?.warn("support_audit_warnings", { adaptationId, codes: [...new Set(supportAudit.warnings.map((w) => w.code))].join(","), activities: [...new Set(supportAudit.warnings.map((w) => w.activity_id))].join(",") });
+    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}), ...(supportAudit ? { support_audit: supportAudit } : {}) });
 
     // 8. The version exists from here on (history), whatever the review says.
     const version = await store.persistVersion(adaptationId, run.lease, document, { plan: raw.fingerprint, review: reviewFp, generation: inputFp });

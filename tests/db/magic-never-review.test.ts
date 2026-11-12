@@ -373,3 +373,21 @@ describe("«Revisar antes de crear» keeps the human gate", () => {
     expect(await stops(id)).toEqual([]);
   });
 });
+
+describe("bloque 1 · auditoría de apoyos en modo sombra", () => {
+  it("la ficha se entrega igual y la auditoría queda registrada junto a la revisión determinista: solo códigos e ids, sin texto del material", async () => {
+    const t = await teacher({ generator: generator() });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", phase: "ready", delivered: true });
+    neverMandatory(t.seen);
+    const [row] = await q<{ audit: { version: string; mode: string; supports_checked: number; warnings: Array<Record<string, unknown>> } | null }>(
+      "select payload->'support_audit' audit from public.adaptation_artifacts where adaptation_id = $1 and kind = 'deterministic_review' order by created_at desc limit 1",
+      [id],
+    );
+    expect(row!.audit).toMatchObject({ version: "support_audit@v1", mode: "shadow" });
+    expect(row!.audit!.supports_checked).toBeGreaterThan(0);
+    for (const warning of row!.audit!.warnings) expect(Object.keys(warning).sort()).toEqual(["activity_id", "block_id", "code", "decision_ids", "low_need_only"]);
+    expect(JSON.stringify(row!.audit)).not.toMatch(/fracci|denominador|calcul/i);
+  });
+});

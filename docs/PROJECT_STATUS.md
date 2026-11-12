@@ -107,6 +107,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Bloque 1 (2026-11-12).** Auditoría interna en modo sombra de apoyos que realizan el razonamiento evaluado (`support_audit@v1`, [QA](qa/bloque1-apoyos/README.md)): implementada y probada localmente, **sin efecto** sobre la entrega ni sobre el docente; pendiente de medir su precisión con adaptaciones reales. Después: prevención en el plan y ámbito semántico del revisor. Pendiente aparte: distribución de espacios (sin actividades aisladas en páginas casi vacías, sin reducir letra ni espacio de respuesta).
+
 **Bloque 2 de calidad pedagógica (2026-11-11).** Orden, proximidad, duplicación verificada y paginación por ejercicios en el ensamblado, comprobados en el PDF real de la ficha del estanque con el planificador actual y V2.2 ([QA](qa/bloque2-estanque/README.md)). Implementado y probado localmente; **pendiente de validar en producción**. Siguiente: bloque 1 (detección de apoyos que resuelven la operación evaluada, en modo aviso interno que no obligue al docente).
 
 **Fase B (2026-10-22).** Identidad única con CLARO por defecto y espacios de resolución deterministas (`answer_space@v1`, ADR-040): cuadrícula para el cálculo escrito, problemas por partes, campos en línea y paginación medida en el PDF. Cierre de calidad: nunca menos superficie que el original (medida en mm), cuadrículas por demanda en zonas que continúan de hoja y `material_renderer@v6`. Detalle en [EDITORIAL](EDITORIAL.md) y [QA](qa/fase-b-editorial/README.md). En la [PR #56](https://github.com/TinyChat-up/ADAPTAULA/pull/56), sin fusionar. Pendiente: validación docente.

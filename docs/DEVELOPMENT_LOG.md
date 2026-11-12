@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-12 — Bloque 1: auditoría de apoyos que realizan el razonamiento del alumno (modo sombra)
+
+- Rama `claude/zealous-shannon-k7w4v4` reiniciada desde `main` (`7912530`, con #86 y #87 integradas). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA](qa/bloque1-apoyos/README.md).
+- **Qué.** `support_audit@v1` (`support-audit.ts`): determinista, sobre campos estructurados; avisa de glosarios o ideas clave que definen el concepto que evalúa una actividad que pide explicar, de ejemplos con los datos de la propia tarea y de apoyos con la respuesta. Se guarda en `deterministic_review.support_audit` (códigos e ids, `low_need_only`), fuera de la huella y con `try/catch`: **no bloquea, no cambia la ficha, no se muestra ni obliga al docente a nada**.
+- **Pruebas.** `tests/unit/support-audit.test.ts` (10) con el glosario de 3a del estanque; caso en la canalización real en `tests/db/magic-never-review.test.ts`.
+- **Límites.** Léxica (raíces de 5 letras): puede dar falsos avisos y no ve paráfrasis ni resolución indirecta. Siguiente: medir precisión, prevención en el plan para necesidades bajas y ámbito semántico del revisor (`pedagogical_reviewer@v2`).
+
 ## 2026-11-11 — Informe de preparación del análisis (paso 1, modo sombra)
 
 - Rama `feature/informe-preparacion-analisis`, independiente de la PR #85 (revisor). Sin migraciones, sin llamadas a modelos, sin despliegue, sin E2E.
