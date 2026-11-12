@@ -1,5 +1,14 @@
 # Registro de desarrollo
 
+## 2026-11-12 — Etapa 2.2: sustitución funcional de apoyos que revelan la respuesta
+
+- Rama `claude/zealous-shannon-k7w4v4` desde `main` (`ba7c116`, #86–#89). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA](qa/etapa-2-2-sustitucion/README.md).
+- **Qué.** Solo evidencia A (parte de la respuesta literal y fiable) o un rechazo `would_reveal_answer` provocan acción: reparación y **una** sustitución por un apoyo que sirva las mismas necesidades (vocabulario secundario, pregunta guía, recordatorio del procedimiento, ejemplo de otro ámbito; elegido por actividad y perfil, sin secuencia fija). B (estructural) viaja solo si ya se repara; C (léxica) es una restricción previa; ninguna añade llamadas.
+- **Cobertura.** Nunca se editan `target`, `dimensions` ni `preserves`; un apoyo omitido o no generado no figura como aplicado (`elsewhere`/`none`); una necesidad esencial sin cobertura es la parada honesta de siempre.
+- **Ciclos.** Dentro de las 3 generaciones: peor caso 1.ª → restricción → sustitución en la 3.ª; probado que no hay cuarta. Interruptor `SUPPORT_SUBSTITUTION_MODE` (`on`/`dry_run`/`off`).
+- **Trazabilidad.** `support_resolution` (códigos e ids; `semantic_review: pending_2_3`) y su resultado verificado.
+- **Pendiente.** Etapa 2.3 (revisor semántico); la analogía de la membrana no es literal.
+
 ## 2026-11-12 — Etapa 2.1: la auditoría de apoyos y la seguridad de evaluación, en un solo sitio (`support_audit@v2`)
 
 - Rama `claude/zealous-shannon-k7w4v4` desde `main` (`18fa6d4`, con #86–#88). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [Medición y detalle](qa/bloque1-apoyos/README.md).

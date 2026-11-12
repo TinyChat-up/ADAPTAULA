@@ -9,7 +9,8 @@ import { activityExpansion, type ActivityExpansion } from "./redundancy";
 import type { ReviewedPlan } from "./plan-review";
 import { checkOf } from "./review";
 import { visualTreatment } from "./visual-needs";
-import { supportsDefiningEvaluatedConcepts } from "./assessment-safety";
+import { assessSupports, supportsDefiningEvaluatedConcepts } from "./assessment-safety";
+import { isActionable, revealDeclines, type SubstitutionMode } from "./support-substitution";
 
 /**
  * Deterministic audit of one generation against the reviewed plan (docs/ADAPTATION.md § Generador). It does not trust the
@@ -39,6 +40,8 @@ export interface AuditCheck {
 /** Audit checks added by «Hacer magia» 2.0 (named so the repair can ask exactly what to fix). */
 export const INVALID_BLOCK_CHECK = "ningún bloque generado incumple el contrato del documento";
 export const CONCEPT_LEAK_CHECK = "ningún apoyo define las categorías que la actividad pide clasificar";
+export const SUPPORT_SOLVES_CHECK = "ningún apoyo entrega una parte verificable de la respuesta";
+export const SUPPORT_DECLINED_CHECK = "ningún apoyo aprobado se declinó por revelar la respuesta sin probar una alternativa";
 export const MISSING_ACTIVITY_CHECK = "todas las actividades originales siguen presentes";
 export const RESPONSE_AREA_CHECK = "las zonas de respuesta coinciden con las del original (salvo decisión que las cambie)";
 export const LITERAL_COPY_CHECK = "lo que no tiene decisión efectiva se copia idéntico del análisis";
@@ -76,6 +79,8 @@ export function auditGeneration(input: {
   generation: NormalizedGeneration;
   document: MaterialDocument;
   review: PedagogicalReview;
+  /** Etapa 2.2: `on` (default) lets a literal, reliable answer in a support start a repair; `dry_run` and `off` never do. */
+  substitution?: SubstitutionMode;
 }): GenerationAudit {
   const { analysis, context, reviewed, generation, document, review } = input;
   const effectiveIds = new Set(reviewed.effective.decisions.map((d) => d.id));
@@ -142,6 +147,15 @@ export function auditGeneration(input: {
   // What the activity evaluates is never given away by a support (a glossary defining the categories to classify).
   const leaks = supportsDefiningEvaluatedConcepts(document, analysis.activities);
   add(CONCEPT_LEAK_CHECK, leaks.length === 0, leaks.length === 0 ? "ningún apoyo define lo evaluado" : leaks.map((l) => `${l.activityId}: ${l.categories.join(", ")}`).join("; "), leaks.flatMap((l) => l.decisionIds), leaks.map((l) => l.blockId));
+
+  // Etapa 2.2: only LITERAL evidence (an answer part the sheet does not show, stated or grounded in the material) may start a repair, and
+  // a support the generator itself declined for revealing the answer: the one substitution is attempted for it. Anything less only warns.
+  if ((input.substitution ?? "on") === "on") {
+    const solving = assessSupports(analysis, document).findings.filter(isActionable);
+    add(SUPPORT_SOLVES_CHECK, solving.length === 0, solving.length === 0 ? "ningún apoyo entrega la respuesta" : solving.map((f) => `${f.activity_id}: ${f.code}`).join("; "), solving.flatMap((f) => f.decision_ids.filter((id) => effectiveIds.has(id))), solving.map((f) => f.block_id));
+    const declined = revealDeclines(generation);
+    add(SUPPORT_DECLINED_CHECK, declined.length === 0, declined.length === 0 ? "ninguno declinado por revelar la respuesta" : `declinadas: ${declined.join(", ")}`, declined);
+  }
 
   const expansion = activityExpansion(analysis, document);
   const exact = expansion.filter((e) => e.exactRepeats > 0);

@@ -14,6 +14,8 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { createTestDb, createUser } from "./harness";
 import { deps as makeDeps, newSpy, readerFor, scriptedServices, seedLearner, seedMaterial, versions } from "./orchestration-harness";
+import { protectedFor } from "@/lib/adaptation/facts";
+import { cellDecisions, cellLeaking, cellPilotAnalysis, cellSafe } from "../support/cell-pilot";
 import { coverDecision, coverSegment, dec3Rewrite, mathAnalysis, realDecisions, realDraft } from "../support/math-generation-case";
 
 /** The real plan plus a working-memory decision on act_3 itself: leaving dec_2 out keeps that need covered ON THAT ACTIVITY. */
@@ -389,5 +391,218 @@ describe("bloque 1 · auditoría de apoyos en modo sombra", () => {
     expect(row!.audit!.supports_checked).toBeGreaterThan(0);
     for (const warning of row!.audit!.warnings) expect(Object.keys(warning).sort()).toEqual(["action", "activity_id", "block_id", "code", "decision_ids", "evidence", "low_need_only"]);
     expect(JSON.stringify(row!.audit)).not.toMatch(/fracci|denominador|calcul/i);
+  });
+});
+
+describe("etapa 2.2 · sustitución funcional de un apoyo que revela la respuesta (generador simulado: 0 llamadas reales)", () => {
+  /** La hoja de fracciones con una respuesta dada para act_2 («mitad; tercio»): un apoyo que nombre una de ellas la entrega. */
+  const withStatedAnswer = (basis: "source" | "inferred" = "source"): MaterialAnalysis => {
+    const a = mathAnalysis();
+    a.activities.find((x) => x.id === "act_2")!.expected_answer = { basis, value: "mitad; tercio" };
+    return a;
+  };
+  const LEAK = "Recuerda: la mitad se escribe 1/2.";
+  const leak = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: d.segments.map((s) => (s.decision_id === "dec_4" ? { ...s, supports: [{ kind: "reminder" as const, text: LEAK }] } : s)) });
+  const declineDec4 = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: d.segments.filter((s) => s.decision_id !== "dec_4"), skipped: [...d.skipped, { decision_id: "dec_4", support: "reminder" as const, reason: "would_reveal_answer" as const }] });
+  /** The planner of dec_5 (planning, a high need) declined as revealing the answer: no kind of support has an alternative for it. */
+  const declinePlanner = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: d.segments.filter((s) => s.decision_id !== "dec_5"), skipped: [...d.skipped, { decision_id: "dec_5", support: "planner" as const, reason: "would_reveal_answer" as const }] });
+  /** A second planning decision ON THE SAME activity (act_5): its need stays served when dec_5 is left out. */
+  const planningCover = { ...coverDecision(mathAnalysis(), "act_3"), target: "act_5", strategies: ["planning_support" as const], dimensions: ["planning_support" as const], preserves: protectedFor(mathAnalysis(), "act_5").map((p) => p.id), supports: [{ kind: "checklist" as const, uses_task_data: false }] };
+  const withPlanningCover = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: [...d.segments.filter((s) => s.decision_id !== "dec_7"), { decision_id: "dec_7", target: "act_5", supports: [{ kind: "checklist" as const, items: ["Leo el problema", "Compruebo mi resultado"] }] }] });
+
+  type Trace = { decision_id: string; action: string; trigger: string; coverage: string; to: string[] | null; option: string | null; dimensions: string[]; semantic_review: string; mode: string };
+  const trace = async (id: string): Promise<Trace[]> =>
+    (await q<{ payload: { support_resolution?: Trace[]; automatic?: { support_resolution?: Trace[] } } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'execution_report' order by created_at", [id])).flatMap((r) => [...(r.payload.support_resolution ?? []), ...(r.payload.automatic?.support_resolution ?? [])]);
+  const deterministic = async (id: string) => (await q<{ payload: { support_audit?: { warnings: Array<{ code: string; literal?: boolean }> }; support_resolution_outcome?: Array<{ decision_id: string; result: string }>; support_resolution_dry_run?: Trace[] } }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind = 'deterministic_review' order by created_at desc limit 1", [id]))[0]!.payload;
+  const textOfSheet = async (t: Awaited<ReturnType<typeof teacher>>, id: string) => textOf(await documentOf(t, id));
+
+  it("cuando el generador acierta tras la restricción: una sola regeneración, sin sustitución, ficha limpia y registro «restringido»", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d, call) => (call === 1 ? leak(d) : d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
+    neverMandatory(t.seen);
+    expect(await textOfSheet(t, id)).not.toContain(LEAK);
+    expect(await trace(id)).toEqual([expect.objectContaining({ decision_id: "dec_4", action: "restricted", trigger: "literal_answer", coverage: "same_activity", semantic_review: "pending_2_3" })]);
+    expect((await deterministic(id)).support_resolution_outcome).toEqual([expect.objectContaining({ decision_id: "dec_4", result: "clean" })]);
+    expect(t.spy.generator).toBe(2);
+  });
+
+  it("si repite la entrega tras la restricción: UNA sustitución por un recordatorio del procedimiento (misma necesidad), en la tercera y última generación", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d, call) => (call <= 2 ? leak(d) : d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: MAX_GENERATION_CYCLES });
+    neverMandatory(t.seen);
+    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+    expect(await textOfSheet(t, id)).not.toContain(LEAK);
+    const records = await trace(id);
+    expect(records.map((r) => r.action)).toEqual(["restricted", "substituted"]);
+    expect(records[1]).toMatchObject({ decision_id: "dec_4", option: "method_reminder", to: ["reminder"], coverage: "same_activity", dimensions: ["working_memory_support"] });
+    // La decisión sigue siendo la misma y su necesidad no cambió: solo el apoyo (revisión editada con el motivo de la sustitución).
+    const last = (await planReviews(id)).at(-1)!.payload.entries.find((e) => e.decision_id === "dec_4")!;
+    expect(last.action).toBe("edited");
+    expect(Object.keys((last as unknown as { edits: object }).edits)).toEqual(["supports"]);
+    expect((await deterministic(id)).support_resolution_outcome?.map((r) => r.result)).toEqual(["clean", "clean"]);
+  });
+
+  it("nunca pasa de tres generaciones: si todo vuelve a entregar la respuesta, parada honesta y sin cuarta llamada al generador", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d) => leak(d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ delivered: false, generationsUsed: MAX_GENERATION_CYCLES });
+    expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+    const calls = t.spy.generator;
+    await t.visit(id);
+    await t.visit(id);
+    expect(t.spy.generator).toBe(calls);
+    expect(await entitlement(id)).toMatchObject({ state: "reserved", consumed_at: null });
+  });
+
+  it("el generador declina el recordatorio por revelar la respuesta: se prueba UNA alternativa (otro apoyo de la misma necesidad) y se entrega", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d, call) => (call === 1 ? declineDec4(d) : d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
+    expect(await trace(id)).toEqual([expect.objectContaining({ decision_id: "dec_4", action: "substituted", trigger: "declined_reveal", option: "method_reminder", coverage: "same_activity" })]);
+    // El apoyo está en la ficha (no se da por aplicada una necesidad sin apoyo).
+    expect(allBlocks(await documentOf(t, id)).some((b) => b.trace.decision_ids.includes("dec_4"))).toBe(true);
+  });
+
+  it("necesidad ESENCIAL sin alternativa que la cubra: parada honesta, registrada como «stopped / none», jamás como aplicada", async () => {
+    // dec_5 (planificador) atiende la planificación de act_5; ningún tipo de apoyo lo sustituye y ninguna otra decisión la atiende allí.
+    const t = await teacher({ generator: generator((d, call) => (call === 1 ? declinePlanner(d) : d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    const end = await t.status(id);
+    expect(end).toMatchObject({ delivered: false });
+    expect(await trace(id)).toEqual([expect.objectContaining({ decision_id: "dec_5", action: "stopped", coverage: "none", trigger: "declined_reveal" })]);
+    expect(await entitlement(id)).toMatchObject({ state: "reserved", consumed_at: null });
+    expect(t.spy.generator).toBeLessThanOrEqual(MAX_GENERATION_CYCLES);
+  });
+
+  it("…y si otra decisión cubre esa necesidad EN LA MISMA actividad, el apoyo se omite, se registra «omitted / elsewhere» y se entrega", async () => {
+    const t = await teacher({ decisions: [...realDecisions(), planningCover], generator: generator((d, call) => (call === 1 ? declinePlanner(withPlanningCover(d)) : withPlanningCover(d))) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true });
+    expect(await trace(id)).toEqual([expect.objectContaining({ decision_id: "dec_5", action: "omitted", coverage: "elsewhere" })]);
+    const doc = await documentOf(t, id);
+    // El planificador omitido NO está en la ficha ni figura como aplicado; la necesidad la sirve la otra decisión.
+    expect(allBlocks(doc).some((b) => b.trace.decision_ids.includes("dec_5"))).toBe(false);
+    expect(allBlocks(doc).some((b) => b.trace.decision_ids.includes("dec_7") && b.type === "checklist")).toBe(true);
+  });
+
+  it("los apoyos legítimos no se tocan: una sola generación, sin registro de sustitución, y el aviso interno sigue siendo solo un aviso", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator() });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+    expect(t.spy.generator).toBe(1);
+    expect(await trace(id)).toEqual([]);
+    expect((await deterministic(id)).support_resolution_outcome).toBeUndefined();
+  });
+
+  it("ante la duda se conserva: una respuesta solo DEDUCIDA y sin apoyo en el material no provoca ninguna reparación (queda el aviso)", async () => {
+    const t = await teacher({ analysis: withStatedAnswer("inferred"), generator: generator((d) => leak(d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+    expect(await textOfSheet(t, id)).toContain(LEAK);
+    expect(await trace(id)).toEqual([]);
+    expect((await deterministic(id)).support_audit!.warnings).toContainEqual(expect.objectContaining({ code: "direct_answer_part" }));
+    expect((await deterministic(id)).support_audit!.warnings.every((w) => w.literal !== true)).toBe(true);
+  });
+
+  it("modo de ensayo: no cambia nada (una generación, el apoyo sigue en la ficha) y registra qué haría", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d) => leak(d)) });
+    t.orchestrator.supportSubstitution = "dry_run";
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+    expect(await textOfSheet(t, id)).toContain(LEAK);
+    expect(await trace(id)).toEqual([]);
+    expect((await deterministic(id)).support_resolution_dry_run).toEqual([expect.objectContaining({ decision_id: "dec_4", mode: "dry_run", action: "would_substitute", option: "method_reminder" })]);
+  });
+
+  it("interruptor apagado: nada cambia y no se registra nada", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d) => leak(d)) });
+    t.orchestrator.supportSubstitution = "off";
+    const id = await t.start("automatic");
+    await t.visit(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+    expect(await trace(id)).toEqual([]);
+    expect((await deterministic(id)).support_resolution_dry_run).toBeUndefined();
+  });
+
+  it("la trazabilidad guarda solo códigos e identificadores: ni el texto del apoyo ni la respuesta", async () => {
+    const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d, call) => (call === 1 ? leak(d) : d)) });
+    const id = await t.start("automatic");
+    await t.visit(id);
+    const stored = JSON.stringify(await q<{ payload: unknown }>("select payload from public.adaptation_artifacts where adaptation_id = $1 and kind in ('execution_report','deterministic_review') order by created_at", [id])).toLowerCase();
+    const support = JSON.stringify(await trace(id)).toLowerCase();
+    expect(support).not.toMatch(/mitad|tercio|recuerda/);
+    expect(stored).not.toContain("la mitad se escribe");
+  });
+
+  describe("la célula: el ejemplo «… → Núcleo» entrega la respuesta del apartado a)", () => {
+    const cellGenerator = (script: (call: number) => ReturnType<typeof cellLeaking>) => async (_inner: MaterialGenerator, call: number) => ({ draft: script(call), runs: [] }) as never;
+
+    it("tras la restricción el ejemplo es de otro ámbito: una regeneración, ficha limpia, registro «restringido» y la competencia evaluada intacta", async () => {
+      const t = await teacher({ analysis: cellPilotAnalysis(), decisions: cellDecisions() as never, generator: cellGenerator((call) => (call === 1 ? cellLeaking() : cellSafe())) as never });
+      const id = await t.start("automatic");
+      await t.visit(id);
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
+      const text = await textOfSheet(t, id);
+      expect(text).not.toContain("Núcleo.");
+      expect(text).toContain("Escribe la estructura celular que corresponde a cada pista.");
+      expect(await trace(id)).toEqual([expect.objectContaining({ decision_id: "dec_1", action: "restricted", trigger: "literal_answer", codes: ["example_solves_item"] })]);
+    });
+
+    it("si repite el ejemplo: UNA sustitución (un ejemplo de otro ámbito más un recordatorio del procedimiento: la memoria de trabajo no la sirve un ejemplo solo); si aun así lo entrega, parada honesta en la tercera generación, sin cuarta", async () => {
+      const t = await teacher({ analysis: cellPilotAnalysis(), decisions: cellDecisions() as never, generator: cellGenerator(() => cellLeaking()) as never });
+      const id = await t.start("automatic");
+      await t.visit(id);
+      expect(await t.status(id)).toMatchObject({ delivered: false, generationsUsed: MAX_GENERATION_CYCLES });
+      const records = await trace(id);
+      expect(records.map((r) => r.action)).toEqual(["restricted", "substituted"]);
+      expect(records[1]).toMatchObject({ option: "other_domain_example", to: ["worked_example", "reminder"], dimensions: ["working_memory_support"], coverage: "same_activity" });
+      expect(t.spy.generator).toBe(MAX_GENERATION_CYCLES);
+      expect(await entitlement(id)).toMatchObject({ state: "reserved", consumed_at: null });
+    });
+
+    it("si la sustitución sí lo resuelve (el tercer ejemplo es de otro ámbito): se entrega y el resultado verificado es «limpio»", async () => {
+      const t = await teacher({ analysis: cellPilotAnalysis(), decisions: cellDecisions() as never, generator: cellGenerator((call) => (call <= 2 ? cellLeaking() : cellSafe())) as never });
+      const id = await t.start("automatic");
+      await t.visit(id);
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: MAX_GENERATION_CYCLES });
+      expect((await deterministic(id)).support_resolution_outcome?.map((r) => r.result)).toEqual(["clean", "clean"]);
+      expect(await textOfSheet(t, id)).not.toContain("Núcleo.");
+    });
+  });
+
+  describe("evidencia estructural (B): nunca una llamada por sí sola", () => {
+    /** El ejemplo de dec_2 trabaja con los números de la propia tarea (2/5 y 1/5), sin dar su resultado. */
+    const reusesData = (d: DraftGeneratedSegmentsV2): DraftGeneratedSegmentsV2 => ({ ...d, segments: d.segments.map((s) => (s.decision_id === "dec_2" ? { ...s, supports: s.supports.map((x) => (x.kind === "worked_example" ? { ...x, problem: "Suma 2/5 y 1/5 con el mismo denominador.", result: "Se suman los numeradores y se deja el denominador." } : x)) } : s)) });
+
+    it("sola: la ficha se entrega con UNA generación, sin reparación, y el aviso queda registrado", async () => {
+      const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d) => reusesData(d)) });
+      const id = await t.start("automatic");
+      await t.visit(id);
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+      expect(t.spy.generator).toBe(1);
+      expect(await trace(id)).toEqual([]);
+      expect((await deterministic(id)).support_audit!.warnings).toContainEqual(expect.objectContaining({ code: "example_reuses_data" }));
+    });
+
+    it("si ya se repara otra decisión por evidencia literal, la restricción estructural viaja en esa misma regeneración (sin ciclo extra)", async () => {
+      const t = await teacher({ analysis: withStatedAnswer(), generator: generator((d, call) => (call === 1 ? reusesData(leak(d)) : d)) });
+      const id = await t.start("automatic");
+      await t.visit(id);
+      expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 2 });
+      expect(t.spy.generator).toBe(2);
+      const records = await trace(id);
+      expect(records.map((r) => [r.decision_id, r.trigger, r.action]).sort()).toEqual([["dec_2", "structural_signal", "restricted"], ["dec_4", "literal_answer", "restricted"]]);
+    });
   });
 });

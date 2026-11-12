@@ -1,8 +1,10 @@
 import { auditSupports } from "../support-audit";
+import { assessSupports } from "../assessment-safety";
+import { STRUCTURAL_RESTRICTIONS, SUBSTITUTION_REASON, isActionable, kindsOfBlock, planSubstitution, recordOf, revealDeclines, type SubstitutionMode, type SupportFlag, type SupportResolutionRecord } from "../support-substitution";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { AdaptationContextSchema, type AdaptationContext } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type AdaptationPlan } from "@/lib/schemas/adaptation-plan";
-import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
+import type { DimensionKey, FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
@@ -15,7 +17,7 @@ import { addVisualSupports } from "../visual-supports";
 import { buildDocument, sequentialIds } from "../document";
 import { planExecutability, type ExecutabilityReport } from "../execution";
 import { fingerprint } from "../fingerprint";
-import { auditGeneration } from "../generation-checks";
+import { SUPPORT_SOLVES_CHECK, auditGeneration } from "../generation-checks";
 import { decisionSupportBudget, designatedRewriter } from "../generated-v2";
 import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK } from "../generation-checks";
 import { diagnoseGeneration, diagnoseReview, failureSignature, missingRepairedGlossaries, repairLocally, screenGeneration, type GenerationFailure } from "../generation-recovery";
@@ -88,6 +90,11 @@ export interface OrchestratorDeps {
    * resolved by the server (located, rebuilt, generated, rewritten around or left out when optional) before it is reviewed; what
    * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
+  /**
+   * Etapa 2.2: what a LITERAL, reliable answer in a support (or a support the generator declined for revealing it) does. `on` (default):
+   * the decision is repaired, then its support substituted once; `dry_run`: only recorded, nothing changes; `off`: nothing.
+   */
+  supportSubstitution?: SubstitutionMode;
   visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 
@@ -721,7 +728,9 @@ const REPAIR_REASON = "Lo generado para esta decisión volvió a fallar tras cor
 const SCOPE = "Escribe solo los apoyos que autoriza esta decisión y no reescribas la consigna si no se te pide.";
 const NO_REPEAT = "No repitas frases de la consigna ni de otros apoyos de esta actividad: cada elemento debe aportar algo nuevo.";
 const EXECUTE = "Genera los apoyos de esta decisión o, si no aportan nada, decláralo como omitido con su motivo.";
+const ANSWER_NOT_GIVEN = "Ningún apoyo puede contener, calcular ni insinuar la respuesta de la actividad: un ejemplo usa otro ámbito y otros datos; guía el proceso sin dar el resultado.";
 const AUDIT_RESTRICTIONS: Readonly<Record<string, string>> = {
+  [SUPPORT_SOLVES_CHECK]: ANSWER_NOT_GIVEN,
   "el generador no propuso nada fuera de lo autorizado": SCOPE,
   "cada bloque generado es de un tipo que su decisión autoriza": SCOPE,
   "ninguna frase se repite literalmente dentro de una actividad": NO_REPEAT,
@@ -763,15 +772,39 @@ function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][]
 }
 
 /**
+ * Needs a dropped decision would leave without anything that serves them, and whether one is ESSENTIAL (a high need, covered only by a
+ * decision that REACHES the dropped one's target). Same reading as `losesCoverage`, but split so a support dropped for revealing the
+ * answer is told apart: a lost medium or low need is delivered AND recorded (never presented as applied); a lost essential one stops.
+ */
+function uncoveredNeeds(effective: readonly AdaptationPlan["decisions"][number][], decision: AdaptationPlan["decisions"][number], context: AdaptationContext, analysis: MaterialAnalysis, dropped: ReadonlySet<string>): { dims: DimensionKey[]; essential: boolean } {
+  const kept = effective.filter((d) => !dropped.has(d.id));
+  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
+  const dims = decision.dimensions.filter((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim) && (!high.has(dim) || reaches(k, decision, analysis))));
+  return { dims, essential: dims.some((d) => high.has(d)) };
+}
+
+/** What the repair knows about supports that hand over the answer (etapa 2.2). */
+export interface SupportRepair {
+  mode: SubstitutionMode;
+  flags: ReadonlyMap<string, SupportFlag>;
+  /** Evidence B: decisions with a structural signal. They are asked their restriction only when a repair is happening anyway; never dropped, never a call of their own. */
+  structural: ReadonlyMap<string, SupportFlag>;
+  /** Filled by `planRepair`, also when it ends in a stop: the trace of every decision it touched (codes and ids only). */
+  trace: SupportResolutionRecord[];
+}
+
+/**
  * The repair of a failed generation or review, decision by decision, CONTENT FIRST:
  *   1. a decision that has not been asked this yet keeps its place and gets the restriction that names what to fix: it is generated
  *      again with it (the useful adaptation is repaired, not removed);
  *   2. one that already carried that restriction and failed again (or for which no restriction can say what to fix) is left out,
  *      its part keeping the original, ONLY if every need it attends stays covered (`losesCoverage`);
  *   3. otherwise null: no safe repair, the honest stop.
- * The result must still be executable.
+ * Etapa 2.2: between 1 and 2, a support that hands over the answer is SUBSTITUTED once by one that serves the same needs
+ * (`planSubstitution`). If none exists the decision is left out and its needs are recorded as covered elsewhere or uncovered, never
+ * as applied; an ESSENTIAL need left uncovered is the honest stop. The result must still be executable.
  */
-function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, asks: ReadonlyMap<string, ReadonlyArray<string | null>>, dropReason: string): { review: PlanReview; restricted: string[]; dropped: string[] } | null {
+function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, asks: ReadonlyMap<string, ReadonlyArray<string | null>>, dropReason: string, support?: SupportRepair): { review: PlanReview; restricted: string[]; dropped: string[] } | null {
   const effective = reviewPlan(raw, previous, loaded.analysis, loaded.context).effective.decisions;
   const restricted: string[] = [];
   const drop = new Set<string>();
@@ -780,18 +813,105 @@ function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, a
     if (!wanted) return e;
     const current = e.restrictions ?? [];
     const missing = [...new Set(wanted)].filter((r): r is string => r !== null && !current.includes(r));
+    const flag = support?.flags.get(e.decision_id);
+    const soft = flag ? undefined : support?.structural.get(e.decision_id);
+    const decision = effective.find((d) => d.id === e.decision_id);
+    // A decision asked only for a structural signal that already carries that restriction is left as it is: it is never left out for it.
+    if (soft && (missing.length === 0 || current.length + missing.length > 6)) return e;
     if (wanted.includes(null) || missing.length === 0 || current.length + missing.length > 6) {
+      if (flag && decision && support!.mode === "on" && e.action !== "rejected" && e.reason !== SUBSTITUTION_REASON) {
+        const activity = loaded.analysis.activities.find((a) => a.id === flag.activityId);
+        const plan = activity ? planSubstitution({ raw, decision, flagged: flag.kinds, analysis: loaded.analysis, context: loaded.context, activity }) : null;
+        if (plan) {
+          support!.trace.push(recordOf(flag, decision, support!.mode, "substituted", { to: plan.to, option: plan.option, coverage: "same_activity" }));
+          // The substitute is WRITTEN by the generator, like any restricted decision: without this the saved draft would be reused as it is.
+          restricted.push(e.decision_id);
+          return { decision_id: e.decision_id, action: "edited" as const, reason: SUBSTITUTION_REASON, restrictions: plan.restrictions, edits: plan.edits };
+        }
+      }
       drop.add(e.decision_id);
       return e;
     }
     restricted.push(e.decision_id);
+    const traced = flag ?? soft;
+    if (traced && decision && support) support.trace.push(recordOf(traced, decision, support.mode, "restricted", { coverage: "same_activity" }));
     return { ...e, restrictions: [...current, ...missing] };
   });
-  if (drop.size > 0 && losesCoverage(effective, drop, loaded.context, loaded.analysis)) return null;
+  if (drop.size > 0) {
+    // Only a decision dropped for a support that reveals the answer follows the honest-coverage reading below; any other keeps the strict one.
+    const flagged = [...drop].filter((id) => support?.flags.has(id));
+    const strictDrop = new Set([...drop].filter((id) => !flagged.includes(id)));
+    if (strictDrop.size > 0 && losesCoverage(effective, strictDrop, loaded.context, loaded.analysis)) return null;
+    let stop = false;
+    for (const id of flagged) {
+      const decision = effective.find((d) => d.id === id)!;
+      const lost = uncoveredNeeds(effective, decision, loaded.context, loaded.analysis, drop);
+      support!.trace.push(recordOf(support!.flags.get(id)!, decision, support!.mode, lost.essential ? "stopped" : "omitted", { coverage: lost.dims.length === 0 ? "elsewhere" : "none" }));
+      if (lost.essential) stop = true;
+    }
+    if (stop) return null;
+  }
   const review: PlanReview = { ...previous, entries: entries.map((e) => (drop.has(e.decision_id) ? { decision_id: e.decision_id, action: "rejected" as const, reason: dropReason.slice(0, 160) } : e)) };
   const check = reviewPlan(raw, review, loaded.analysis, loaded.context);
   if (planExecutability(check, loaded.analysis, loaded.context).blockers.length > 0 || !check.effectiveValidation.valid) return null;
   return { review, restricted, dropped: [...drop] };
+}
+
+/**
+ * The decisions whose support hands over the answer, from the audit's own evidence: a LITERAL finding (an answer part the sheet does
+ * not show, stated or grounded in the material), or a support the generator declined for revealing it. Nothing less.
+ */
+function supportFlagsOf(loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, generation: NormalizedGeneration): Map<string, SupportFlag> {
+  const flags = new Map<string, SupportFlag>();
+  const blocks = allBlocks(document);
+  for (const finding of assessSupports(loaded.analysis, document).findings.filter(isActionable)) {
+    const block = blocks.find((b) => b.id === finding.block_id);
+    for (const id of finding.decision_ids) {
+      const decision = effective.find((d) => d.id === id);
+      if (!decision || !block) continue;
+      const before = flags.get(id);
+      flags.set(id, {
+        decisionId: id,
+        activityId: finding.activity_id,
+        blockIds: [...new Set([...(before?.blockIds ?? []), finding.block_id])],
+        kinds: [...new Set([...(before?.kinds ?? []), ...kindsOfBlock(block, decision)])],
+        trigger: "literal_answer",
+        codes: [...new Set([...(before?.codes ?? []), finding.code])],
+      });
+    }
+  }
+  for (const id of revealDeclines(generation)) {
+    const decision = effective.find((d) => d.id === id);
+    if (!decision || flags.has(id) || !loaded.analysis.activities.some((a) => a.id === decision.target)) continue;
+    flags.set(id, { decisionId: id, activityId: decision.target, blockIds: [], kinds: decision.supports.map((s) => s.kind), trigger: "declined_reveal", codes: [] });
+  }
+  return flags;
+}
+
+function supportRepairOf(loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, generation: NormalizedGeneration, mode: SubstitutionMode): SupportRepair {
+  const flags = supportFlagsOf(loaded, effective, document, generation);
+  return { mode, flags, structural: mode === "on" ? structuralSignalsOf(loaded, effective, document, flags) : new Map(), trace: [] };
+}
+
+/** Decisions whose support shows a STRUCTURAL signal (the task's own data, the same relation, an item assigned to its category) and no literal one. */
+function structuralSignalsOf(loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, literal: ReadonlyMap<string, SupportFlag>): Map<string, SupportFlag> {
+  const signals = new Map<string, SupportFlag>();
+  const blocks = allBlocks(document);
+  for (const finding of assessSupports(loaded.analysis, document).findings.filter((f) => f.evidence === "structural" && f.action === "warn")) {
+    const block = blocks.find((b) => b.id === finding.block_id);
+    for (const id of finding.decision_ids) {
+      const decision = effective.find((d) => d.id === id);
+      if (!decision || !block || literal.has(id)) continue;
+      const before = signals.get(id);
+      signals.set(id, { decisionId: id, activityId: finding.activity_id, blockIds: [...new Set([...(before?.blockIds ?? []), finding.block_id])], kinds: [...new Set([...(before?.kinds ?? []), ...kindsOfBlock(block, decision)])], trigger: "structural_signal", codes: [...new Set([...(before?.codes ?? []), finding.code])] });
+    }
+  }
+  return signals;
+}
+
+/** The trace of a support substitution, next to the review it concerns (an `execution_report` with no other content). */
+async function recordSupportResolution(store: AdaptationStore, adaptationId: string, reviewFp: string, support: SupportRepair) {
+  await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, support_resolution: support.trace }), { review_fingerprint: reviewFp, support_resolution: support.trace });
 }
 
 const addAsk = (asks: Map<string, Array<string | null>>, id: string, restriction: string | null) => asks.set(id, [...(asks.get(id) ?? []), restriction]);
@@ -995,7 +1115,7 @@ const serverDriven = (row: PipelineSnapshot["adaptation"], review: Record<string
  * `visualPlan` («Hacer magia»): the visual policy's decisions applied to the assembled sheet. The generation audit judges what the
  * generator produced (the sheet before them); the deterministic review judges the sheet that will be delivered (after them).
  */
-function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, rawGeneration: NormalizedGeneration, restore: boolean, visualPlan: VisualResolutionPlan | null = null) {
+function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, rawGeneration: NormalizedGeneration, restore: boolean, visualPlan: VisualResolutionPlan | null = null, substitution: SubstitutionMode = "on") {
   // A generated block that breaks the document contract is dropped and recorded against its decision, never a sheet that cannot be built.
   const generation = screenGeneration(rawGeneration);
   const check = (g: NormalizedGeneration) => {
@@ -1004,7 +1124,7 @@ function assembleAndCheck(loaded: Loaded, reviewed: ReviewedPlan, rawGeneration:
     const document = addVisualSupports(resolved, loaded.analysis, loaded.context);
     const input = { analysis: loaded.analysis, plan: reviewed.effective, context: loaded.context, document, validation: reviewed.effectiveValidation };
     const deterministic = assembleReview(input, deterministicChecks(input));
-    const audit = auditGeneration({ analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document: assembled, review: visualPlan ? assembleReview({ ...input, document: assembled }, deterministicChecks({ ...input, document: assembled })) : deterministic });
+    const audit = auditGeneration({ substitution, analysis: loaded.analysis, context: loaded.context, reviewed, generation: g, document: assembled, review: visualPlan ? assembleReview({ ...input, document: assembled }, deterministicChecks({ ...input, document: assembled })) : deterministic });
     return { generation: g, document, input, deterministic, audit, restored: [] as string[], repaired: [] as string[] };
   };
   let first;
@@ -1253,7 +1373,8 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     // replaced by the original before anything else). A document that fails the generation audit without a deterministic FAIL is an
     // invalid generation.
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    let assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload));
+    const substitutionMode = deps.supportSubstitution ?? "on";
+    let assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), null, substitutionMode);
     // «Hacer magia»: the visual policy decides, once per generation input (a resumed job reuses its decisions and their cost).
     let visualPlan: VisualResolutionPlan | null = null;
     if (row.creation_mode === "automatic" && deps.visuals) {
@@ -1263,7 +1384,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
         visualPlan = await deps.visuals.resolve({ workspaceId: row.workspace_id, materialId: row.material_id, adaptationId, analysis: loaded.analysis, analysisFingerprint: row.analysis_fingerprint!, document: assembled.document, requiredVisuals: loaded.context.material.required_visuals, stage: loaded.context.education.stage, grade: loaded.context.education.grade, subject: loaded.context.education.subject, functionalNeeds: loaded.context.needs.map((n) => n.dimension), visualSupports: loaded.context.visual_supports?.requested === true, deadline: visualsDeadline });
         await store.putArtifact(adaptationId, run.lease, "visual_resolution", inputFp, fingerprint({ input: inputFp, plan: visualPlan }), { plan: visualPlan });
       }
-      if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan);
+      if (visualPlan.needs.length > 0) assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), visualPlan, substitutionMode);
     }
     const { document, input, deterministic, audit, restored } = assembled;
     generation = assembled.generation;
@@ -1274,7 +1395,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const failing = audit.checks.filter((c) => !c.ok);
       // Names and decision ids only: what an operator needs to know why, never content.
       deps.log?.warn("generation_audit_failed", { adaptationId, checks: failing.map((c) => c.name).join("; "), decisions: [...new Set(failing.flatMap((c) => c.decisions ?? []))].join(",") });
-      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing });
+      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing, support: supportRepairOf(loaded, reviewed.effective.decisions, assembled.document, assembled.generation, substitutionMode) });
       if (repaired) return repaired;
       // No safe repair left: the precise diagnosis (rule, decision, unit) is kept next to the review, never only a generic code.
       const diagnosis = diagnoseGeneration({ audit });
@@ -1292,8 +1413,22 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
         return undefined;
       }
     })();
+    // Etapa 2.2: the trace of what happened to each support that handed over the answer, and in dry-run what WOULD happen. Codes and ids only.
+    const flagsNow = supportFlagsOf(loaded, reviewed.effective.decisions, document, generation);
+    const earlier = (await store.listArtifacts(adaptationId, "execution_report")).flatMap((a) => {
+      const p = a.payload as { support_resolution?: SupportResolutionRecord[]; automatic?: { support_resolution?: SupportResolutionRecord[] } };
+      return [...(p.support_resolution ?? []), ...(p.automatic?.support_resolution ?? [])];
+    });
+    const outcome = earlier.map((r) => ({ decision_id: r.decision_id, action: r.action, coverage: r.coverage, result: r.action === "omitted" || r.action === "stopped" ? (r.coverage === "none" ? "uncovered" : "omitted") : flagsNow.has(r.decision_id) ? "flagged" : "clean", semantic_review: r.semantic_review }));
+    const dryRun = substitutionMode === "dry_run" ? [...flagsNow.values()].flatMap((flag) => {
+      const decision = reviewed.effective.decisions.find((d) => d.id === flag.decisionId);
+      const activity = loaded.analysis.activities.find((a) => a.id === flag.activityId);
+      if (!decision || !activity) return [];
+      const plan = planSubstitution({ raw: raw.plan, decision, flagged: flag.kinds, analysis: loaded.analysis, context: loaded.context, activity });
+      return [recordOf(flag, decision, "dry_run", plan ? "would_substitute" : "would_restrict", { to: plan?.to ?? null, option: plan?.option ?? null, coverage: plan ? "same_activity" : "none" })];
+    }) : [];
     if (supportAudit && supportAudit.warnings.length > 0) deps.log?.warn("support_audit_warnings", { adaptationId, codes: [...new Set(supportAudit.warnings.map((w) => w.code))].join(","), activities: [...new Set(supportAudit.warnings.map((w) => w.activity_id))].join(",") });
-    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}), ...(supportAudit ? { support_audit: supportAudit } : {}) });
+    await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}), ...(supportAudit ? { support_audit: supportAudit } : {}), ...(outcome.length > 0 ? { support_resolution_outcome: outcome } : {}), ...(dryRun.length > 0 ? { support_resolution_dry_run: dryRun } : {}) });
 
     // 8. The version exists from here on (history), whatever the review says.
     const version = await store.persistVersion(adaptationId, run.lease, document, { plan: raw.fingerprint, review: reviewFp, generation: inputFp });
@@ -1406,9 +1541,9 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 async function repairGenerationAutomatically(
   deps: OrchestratorDeps,
   run: StageRun,
-  at: { snapshot: PipelineSnapshot; loaded: Loaded; raw: { plan: AdaptationPlan; fingerprint: string }; reviewArtifact: { fingerprint: string; payload: Record<string, unknown> }; failing: ReadonlyArray<{ name: string; decisions?: string[] }> },
+  at: { snapshot: PipelineSnapshot; loaded: Loaded; raw: { plan: AdaptationPlan; fingerprint: string }; reviewArtifact: { fingerprint: string; payload: Record<string, unknown> }; failing: ReadonlyArray<{ name: string; decisions?: string[] }>; support?: SupportRepair },
 ): Promise<GenerationResult | null> {
-  const { snapshot, loaded, raw, reviewArtifact, failing } = at;
+  const { snapshot, loaded, raw, reviewArtifact, failing, support } = at;
   const adaptationId = snapshot.adaptation.id;
   if (snapshot.adaptation.creation_mode !== "automatic") return null;
   const previous = PlanReviewSchema.parse(reviewArtifact.payload);
@@ -1430,13 +1565,27 @@ async function repairGenerationAutomatically(
       addAsk(asks, id, repeated ? null : (budget ?? AUDIT_RESTRICTIONS[c.name] ?? null));
     }
   }
-  const repair = planRepair(raw.plan, previous, loaded, asks, REPAIR_REASON);
-  if (!repair) return null;
+  // Evidence B rides along: a decision with a structural signal gets its restriction only because this repair already happens.
+  if (support && support.mode === "on" && !repeated) {
+    for (const [id, signal] of support.structural) {
+      if (asks.has(id) || !effective.some((d) => d.id === id)) continue;
+      for (const code of signal.codes) {
+        const restriction = STRUCTURAL_RESTRICTIONS[code];
+        if (restriction) addAsk(asks, id, restriction);
+      }
+    }
+  }
+  const repair = planRepair(raw.plan, previous, loaded, asks, REPAIR_REASON, support);
+  // Without a safe repair there is no submitted review to carry the trace: what the substitution did (or why it stopped) is kept here.
+  if (!repair) {
+    if (support && support.trace.length > 0) await recordSupportResolution(deps.store, adaptationId, reviewArtifact.fingerprint, support);
+    return null;
+  }
 
   // This generation ends here (its output stays as an artifact, no version); the adaptation goes back through the gate it came from.
   if (!(await deps.store.completeStage(run.job.id, run.job.attempts))) throw new LeaseLostError();
   await deps.store.transition(adaptationId, "generating", "awaiting_plan_review");
-  const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { repair_of: reviewArtifact.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.name), signature } });
+  const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { repair_of: reviewArtifact.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.name), signature, ...(support && support.trace.length > 0 ? { support_resolution: support.trace } : {}) } });
   if (!submitted.ok || !submitted.executable) {
     // Already back at the gate: the honest stop, recorded (never a plan waiting for a teacher's approval).
     await recordQualityStop(deps, adaptationId);

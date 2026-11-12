@@ -60,7 +60,7 @@ export const orchestratorDeps = (): OrchestratorDeps => {
   // The orchestrator's warnings (automatic stops, corrections, a failed generation audit) reach the server log: scalar fields
   // only (ids, codes, check names), never content.
   const log = { warn: (event: string, data: Record<string, unknown>) => logger.warn(event, Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === null || ["string", "number", "boolean"].includes(typeof v) ? (v as string | number | boolean | null) : JSON.stringify(v)]))) };
-  return { store, services: productionServices, entitlements: dbEntitlements(store), log, visuals: { resolve: resolveAdaptationVisuals } };
+  return { store, services: productionServices, entitlements: dbEntitlements(store), log, supportSubstitution: serverEnv().SUPPORT_SUBSTITUTION_MODE, visuals: { resolve: resolveAdaptationVisuals } };
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */

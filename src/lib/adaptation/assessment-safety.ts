@@ -111,6 +111,11 @@ export interface SupportFinding {
   block_id: string;
   activity_id: string;
   decision_ids: string[];
+  /**
+   * Etapa 2.2: the answer part found in the support is RELIABLE (stated by the sheet, or deduced AND present in the material itself).
+   * Only a literal finding may start a repair; a part that is only the analyzer's inference stays a warning (uncertainty keeps the support).
+   */
+  literal?: true;
 }
 
 export interface SupportAssessment {
@@ -136,14 +141,35 @@ const linesOf = (block: Block): string[] => {
 /** The part of a worked example that states its outcome: its result and its steps, not the problem it poses. */
 const outcomeOf = (block: Extract<Block, { type: "worked_example" }>) => [...block.steps, block.result].join("\n");
 
-function assessBlock(block: Block, activity: AnalysisActivity, analysis: MaterialAnalysis): { codes: SupportFindingCode[]; cleared?: SupportCleared } {
+/**
+ * The answer parts that can be trusted as the answer: all of them when the sheet states the answer; when the analyzer only deduced
+ * it, only a part that the material itself also contains (a linked text, a protected element, an objective). A deduced number or a
+ * guessed word is not evidence.
+ */
+export function reliableAnswerParts(analysis: MaterialAnalysis, activity: AnalysisActivity): string[] {
+  const parts = answerParts(activity);
+  if (activity.expected_answer.basis === "source") return parts;
+  const ground = [
+    ...analysis.texts.filter((t) => activity.resource_ids.includes(t.id)).map((t) => t.text),
+    ...protectedValues(analysis, activity),
+    ...analysis.pedagogical_intent.objectives.filter((o) => activity.objective_ids.includes(o.id)).map((o) => o.text),
+  ].join("\n");
+  return parts.filter((part) => containsTerm(ground, part));
+}
+
+function assessBlock(block: Block, activity: AnalysisActivity, analysis: MaterialAnalysis): { codes: SupportFindingCode[]; cleared?: SupportCleared; literal?: true } {
   const codes: SupportFindingCode[] = [];
   const text = studentText(block);
   const visible = visibleTaskText(analysis, activity);
 
   // Verifiable: an answer part (whole, never a digit) that the sheet does not already show.
   const given = answerParts(activity).filter((part) => !containsTerm(visible, part) && containsTerm(text, part));
-  if (given.length > 0) codes.push(block.type === "worked_example" ? "example_solves_item" : "direct_answer_part");
+  let literal: true | undefined;
+  if (given.length > 0) {
+    codes.push(block.type === "worked_example" ? "example_solves_item" : "direct_answer_part");
+    const reliable = new Set(reliableAnswerParts(analysis, activity));
+    if (given.some((part) => reliable.has(part))) literal = true;
+  }
 
   if (block.type === "worked_example") {
     const mine = canonicalSet(numericTokens(block.problem));
@@ -187,7 +213,7 @@ function assessBlock(block: Block, activity: AnalysisActivity, analysis: Materia
       return { codes, cleared: "lexical_coincidence" };
     }
   }
-  return { codes };
+  return { codes, ...(literal ? { literal } : {}) };
 }
 
 export function assessSupports(analysis: MaterialAnalysis, document: MaterialDocument): SupportAssessment {
@@ -209,7 +235,10 @@ export function assessSupports(analysis: MaterialAnalysis, document: MaterialDoc
     if (!activity) continue;
     checked += 1;
     const result = assessBlock(block, activity, analysis);
-    for (const code of result.codes) add(code, block, activity.id);
+    for (const code of result.codes) {
+      add(code, block, activity.id);
+      if (result.literal && (code === "direct_answer_part" || code === "example_solves_item")) findings[findings.length - 1]!.literal = true;
+    }
     // A block the blocking protection already stopped is not also «cleared».
     if (result.cleared && !findings.some((f) => f.block_id === block.id)) cleared.push({ block_id: block.id, activity_id: activity.id, class: result.cleared });
   }

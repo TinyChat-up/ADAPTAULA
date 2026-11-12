@@ -9,7 +9,7 @@ import { answerSpace, spaceContextOf } from "@/lib/adaptation/answer-space";
 import { buildDocument, responseFor, sequentialIds } from "@/lib/adaptation/document";
 import { studentText, textOf } from "@/lib/adaptation/document-text";
 import { fingerprint, stableStringify } from "@/lib/adaptation/fingerprint";
-import { auditGeneration } from "@/lib/adaptation/generation-checks";
+import { SUPPORT_DECLINED_CHECK, auditGeneration } from "@/lib/adaptation/generation-checks";
 import { SUPPORT_BLOCKS, normalizeGenerated } from "@/lib/adaptation/generated";
 import { buildGeneratorInput, callGenerator, createModelGenerator, generatorRequestParts, parseGeneratorResponse } from "@/lib/adaptation/generator";
 import { mockGenerateDraft } from "@/lib/adaptation/mock";
@@ -218,12 +218,23 @@ describe("rules enforced on whatever a model writes", () => {
   });
 
   it("a structured refusal blocks that transformation without improvising: the original stays and nothing is 'ignored'", () => {
-    const draft: DraftGeneratedSegments = { ...mockDraft(), segments: mockDraft().segments.filter((s) => s.decision_id !== "dec_4"), blocked: [{ decision_id: "dec_4", reason: "would_reveal_answer", note: "Las preguntas guía sugerirían la interpretación." }] };
+    const draft: DraftGeneratedSegments = { ...mockDraft(), segments: mockDraft().segments.filter((s) => s.decision_id !== "dec_4"), blocked: [{ decision_id: "dec_4", reason: "outside_target", note: "Las preguntas guía son de otra actividad." }] };
     const out = assemble(draft);
     expect(out.generation.declined).toEqual(["dec_4"]);
     expect(out.generation.ignored).toEqual([]);
     expect(out.audit.ok).toBe(true);
     expect(allBlocks(out.document).filter((b) => b.trace.source_refs.includes("act_2")).map((b) => b.trace.origin)).toEqual(["original"]);
+  });
+
+  it("a refusal because the support would reveal the answer is no longer accepted silently (etapa 2.2): the audit asks for ONE substitution; with the switch off the original stays as before", () => {
+    const draft: DraftGeneratedSegments = { ...mockDraft(), segments: mockDraft().segments.filter((s) => s.decision_id !== "dec_4"), blocked: [{ decision_id: "dec_4", reason: "would_reveal_answer", note: "Las preguntas guía serían la respuesta." }] };
+    const out = assemble(draft);
+    expect(out.generation.declined).toEqual(["dec_4"]);
+    expect(out.audit.ok).toBe(false);
+    expect(out.audit.checks.filter((c) => !c.ok).map((c) => c.name)).toEqual([SUPPORT_DECLINED_CHECK]);
+    const off = auditGeneration({ analysis, context, reviewed, generation: out.generation, document: out.document, review: out.review, substitution: "off" });
+    expect(off.ok).toBe(true);
+    expect(auditGeneration({ analysis, context, reviewed, generation: out.generation, document: out.document, review: out.review, substitution: "dry_run" }).ok).toBe(true);
   });
 
   it("an approved decision with neither blocks nor refusal is reported as ignored", () => {
