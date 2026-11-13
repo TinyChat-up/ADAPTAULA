@@ -23,8 +23,10 @@ import { kindsOfBlock, type SupportFlag } from "./support-substitution";
 export const SEMANTIC_POLICY_VERSION = "support_semantic@v1";
 
 /**
- * `REVIEWER_V2_MODE`: `off` (default) the v1 reviewer exactly as it is; `shadow` the v2 reviewer judges and the judgments are RECORDED, the
- * verdict and every repair stay as v1 would have them; `on` the judgments have consequences (only after validation and authorization).
+ * `REVIEWER_V2_MODE`: `off` (default) the v1 reviewer exactly as it is; `shadow` the v2 reviewer judges and the SEMANTIC judgments are RECORDED with
+ * no consequence (no check, no restriction, no flag, no substitution). It is one call, the v2 one, so the review's GENERAL findings come from the v2
+ * prompt and may differ from what a v1 call would have said: the verdict and the delivery can differ from `off` for that reason alone.
+ * `on` the judgments have consequences (only after validation and authorization).
  */
 export type ReviewerV2Mode = "off" | "shadow" | "on";
 export const REVIEWER_V2_MODES: readonly ReviewerV2Mode[] = ["off", "shadow", "on"];
@@ -329,6 +331,12 @@ export function needStates(records: readonly SemanticRecord[], decisions: readon
 export interface SemanticRecordSet {
   policy: typeof SEMANTIC_POLICY_VERSION;
   mode: ReviewerV2Mode;
+  /**
+   * Where the GENERAL findings of this review (age, tone, functional supports, the leak check of v1) came from: the same v2 call that produced
+   * the judgments, merged as always. In `shadow` the judgments have no consequences, but these findings DO count, and they may differ from the
+   * ones a v1 call would have given: `shadow` is not transparent with respect to them (docs/qa/etapa-2-3-semantica).
+   */
+  general_findings: "v2_call";
   records: SemanticRecord[];
   counts: Record<SemanticStatus, number>;
   discarded: SemanticOutcome["discarded"];
@@ -338,5 +346,5 @@ export interface SemanticRecordSet {
 export function summarize(mode: ReviewerV2Mode, outcome: SemanticOutcome, decisions: readonly Pick<Decision, "id" | "dimensions">[]): SemanticRecordSet {
   const counts: Record<SemanticStatus, number> = { confirmed: 0, suspected: 0, legitimate: 0, unjudged: 0 };
   for (const r of outcome.records) counts[r.status] += 1;
-  return { policy: SEMANTIC_POLICY_VERSION, mode, records: outcome.records, counts, discarded: outcome.discarded, needs: needStates(outcome.records, decisions) };
+  return { policy: SEMANTIC_POLICY_VERSION, mode, general_findings: "v2_call", records: outcome.records, counts, discarded: outcome.discarded, needs: needStates(outcome.records, decisions) };
 }

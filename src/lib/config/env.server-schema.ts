@@ -62,7 +62,8 @@ export const ServerEnvSchema = z.object({
 
   /**
    * Etapa 2.3: the semantic review of the supports (pedagogical_reviewer@v2). `off` (default): the v1 reviewer, nothing changes; `shadow`: the
-   * v2 reviewer judges and the judgments are only RECORDED (verdict and repairs as v1); `on`: its confirmed findings fail the review and are
+   * v2 reviewer judges and the SEMANTIC judgments are only recorded (no consequence), but the call is the v2 one, so its general findings (age, tone,
+   * functional supports) count as always and may differ from v1's: shadow is NOT a transparent copy of `off`; `on`: its confirmed findings fail the review and are
    * repaired. It decides the reviewer an adaptation is CREATED with; `on` only after validation and authorization. Independent of
    * SUPPORT_SUBSTITUTION_MODE, which alone decides whether a confirmed finding may substitute a support.
    */
