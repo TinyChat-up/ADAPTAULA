@@ -4,7 +4,7 @@ import { CLOSED_RESPONSES, type Decision } from "@/lib/schemas/adaptation-plan";
 import type { DraftGeneratedSegmentsV2, SupportV2 } from "@/lib/schemas/generated-segments-v2";
 import type { AnalysisActivity, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { DraftBlock } from "@/lib/schemas/material-document";
-import { responseForDecision } from "./document";
+import { isDeterministicResponse, responseForDecision } from "./document";
 import { quotedReferences } from "./facts";
 import type { GenerationIssue, NormalizedGeneration } from "./generated";
 import type { ReviewedPlan } from "./plan-review";
@@ -94,7 +94,11 @@ export function decisionsToGenerateV2(effective: readonly Decision[], analysis: 
   return effective.filter((d) => {
     if (d.action === "keep" || d.action === "remove") return false;
     const activity = analysis.activities.find((a) => a.id === d.target);
-    return authorizedKinds(d).size > 0 || (activity !== undefined && REWRITING.has(d.action) && instructionNeedsRewrite(activity, context.limits.max_instruction_words));
+    if (authorizedKinds(d).size > 0) return true;
+    // A change of the answer space the assembler carries out by itself (shorter, oral, keyboard) is about HOW the student answers: it is
+    // no reason to rewrite the instruction, however long it is. Nothing to write, no model call for it.
+    if (isDeterministicResponse(d)) return false;
+    return activity !== undefined && REWRITING.has(d.action) && instructionNeedsRewrite(activity, context.limits.max_instruction_words);
   });
 }
 

@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { StrategyKeySchema, IntensitySchema } from "./adaptation-plan";
+import { StrategyKeySchema, IntensitySchema, ResponseTargetSchema } from "./adaptation-plan";
 import { AdaptationTypeSchema } from "./adaptation-type";
 import { DimensionKeySchema } from "./functional-profile";
 import { LearningObservationsSchema } from "./learning-observations";
+import { RESPONSE_PREFERENCES } from "./pedagogical-profile";
 
 /**
  * AdaptationContext v1: the compact, deterministic input of the planner, derived in TypeScript from the functional
@@ -37,6 +38,10 @@ export const CONFLICT_KEYS = [
   "segmentation_vs_integrated_product",
   "selection_vs_open_reasoning",
   "inference_support_vs_evaluated_inference",
+  /** Per-sheet scope (profile V3): what an access adaptation leaves alone, which response formats a methodological one may use, and where declared learnings point. */
+  "access_scope_keeps_response",
+  "methodological_response_formats",
+  "declared_learning_focus",
 ] as const;
 
 export const ConflictResolutionSchema = z.object({
@@ -122,6 +127,22 @@ export const AdaptationContextSchema = z.object({
   teacher_request: z.string().max(500).nullable(),
   /** Absent on historical adaptations: never authorises premium image generation. */
   visual_supports: z.object({ requested: z.literal(true) }).optional(),
+  /**
+   * The teacher's per-sheet choice and what the pedagogical profile (V3) contributes to THIS sheet, all computed by the server. Absent on
+   * every adaptation created without it (the earlier behaviour, byte for byte). It never carries the declared free text, a level or a
+   * name: only the scope, the response formats that can really be executed and the activities the declared learnings point at.
+   */
+  pedagogy: z
+    .object({
+      scope: z.enum(["accessibility", "methodological"]),
+      /** The profile declares learnings for the subject of this sheet (exact catalog match, verified on the server). */
+      area_matched: z.boolean(),
+      /** Methodological only. `available`: what an executor can do, best first for this profile; `unavailable`: declared options no executor can build yet. */
+      response: z.object({ available: z.array(ResponseTargetSchema).min(1).max(6), unavailable: z.array(z.enum(RESPONSE_PREFERENCES)).max(RESPONSE_PREFERENCES.length) }).optional(),
+      /** Activities that work on something the teacher declared «needs to learn or reinforce» (matched on the server; the text is never sent). */
+      focus_targets: z.array(Ref("act")).max(40),
+    })
+    .optional(),
   /** Declared observations only; supports remain authoritative and no competence or diagnosis is inferred. */
   learning_observations: LearningObservationsSchema.optional(),
 });

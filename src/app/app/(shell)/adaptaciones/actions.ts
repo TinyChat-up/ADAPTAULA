@@ -71,6 +71,8 @@ const StartInput = z.object({
   learnerProfileId: Id,
   requestKey: z.string().min(8).max(120),
   mode: z.enum(CREATION_MODES),
+  /** The teacher's choice for this sheet. Curricular is not offered: it needs a per-sheet authorisation that does not exist yet. */
+  adaptationType: z.enum(["accessibility", "methodological"]).optional(),
   visualSupports: z.boolean().optional(),
   /** A request, never an entitlement: the server's pilot gate decides (ADR-046). */
   planner: z.enum(PLANNER_CHOICES).optional(),
@@ -78,7 +80,7 @@ const StartInput = z.object({
 
 /**
  * Entry from an analyzed material: «Hacer magia» or «Revisar antes de crear». Creates the adaptation with its mode and starts it
- * (the click is the decision). The type is fixed to the accessibility adaptation (the one the pipeline supports today).
+ * (the click is the decision). The type is the teacher's choice for this sheet: access (the default) or methodological.
  */
 export async function createAdaptationFromMaterialAction(materialId: string, input: unknown): Promise<PublicResult<{ adaptationId: string }>> {
   const parsed = StartInput.safeParse(input);
@@ -88,7 +90,7 @@ export async function createAdaptationFromMaterialAction(materialId: string, inp
     await createAndStartAdaptation(deps, actor, {
       materialId,
       learnerProfileId: parsed.data.learnerProfileId,
-      adaptationType: "accessibility",
+      adaptationType: parsed.data.adaptationType ?? "accessibility",
       requestKey: parsed.data.requestKey,
       creationMode: parsed.data.mode,
       visualSupports: parsed.data.visualSupports === true,

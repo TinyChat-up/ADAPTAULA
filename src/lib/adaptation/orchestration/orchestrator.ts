@@ -225,6 +225,8 @@ export interface CreateAdaptationInput {
   adaptationType: AdaptationContext["adaptation_type"];
   teacherRequest?: string | null;
   visualSupports?: boolean;
+  /** The per-sheet scope (profile V3), resolved by the server. Absent: the context built before it existed. */
+  sheet?: { scope: "accessibility" | "methodological"; subjectSlug: string | null };
   title: string;
   /** Same key, same adaptation: a double submit never creates two. */
   requestKey: string;
@@ -243,6 +245,7 @@ export async function createAdaptation(deps: OrchestratorDeps, input: CreateAdap
     adaptationType: input.adaptationType,
     ...(input.teacherRequest !== undefined ? { teacherRequest: input.teacherRequest } : {}),
     visualSupports: input.visualSupports === true,
+    ...(input.sheet ? { sheet: input.sheet } : {}),
     policy: input.versions.context_policy,
   });
   const contextFingerprint = fingerprint(context);

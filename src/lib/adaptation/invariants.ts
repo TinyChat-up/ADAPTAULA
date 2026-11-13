@@ -1,3 +1,4 @@
+import { exceedsAccessScope } from "./pedagogical-scope";
 import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import {
   CLOSED_RESPONSES,
@@ -104,6 +105,11 @@ export function validatePlan(plan: AdaptationPlan, analysis: MaterialAnalysis, c
     // Literal source text: segmentable and glossable, never rewritten or summarised.
     if (text && isLiteralSourceText(analysis, text) && (d.action === "rephrase" || d.action === "reduce" || d.action === "remove")) {
       add("source_text_altered", "block", d, "El texto fuente es objeto de análisis: no se reescribe ni se resume");
+    }
+
+    // Per-sheet scope (profile V3): an access adaptation never changes how the student answers nor how much of the task there is.
+    if (context.pedagogy?.scope === "accessibility" && exceedsAccessScope(d, activity !== undefined)) {
+      add("unjustified_change", "block", d, "Adaptación de acceso: en esta ficha no se cambia el formato de respuesta ni se reduce la tarea");
     }
 
     if (activity) {
