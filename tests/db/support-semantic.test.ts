@@ -140,7 +140,7 @@ describe("off (por defecto): el revisor v1 exactamente como antes", () => {
   });
 });
 
-describe("shadow: el v2 juzga y se REGISTRA; el veredicto y las reparaciones son los del v1", () => {
+describe("shadow: los juicios semánticos se REGISTRAN y no tienen consecuencias; los hallazgos generales los da la llamada v2", () => {
   it("el ejemplo «… → Núcleo» se juzga como confirmado y queda registrado, pero la ficha se entrega igual, con UNA generación y una revisión", async () => {
     const t = await teacher({ reviewerMode: "shadow", substitution: "on", generator: () => cellLeaking() });
     expect(await t.status()).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
@@ -157,12 +157,64 @@ describe("shadow: el v2 juzga y se REGISTRA; el veredicto y las reparaciones son
     expect(await t.sheet()).toContain("Núcleo.");
   });
 
-  it("la revisión de shadow es idéntica a la de off para el mismo documento y las mismas respuestas del revisor", async () => {
+  it("con los MISMOS hallazgos generales, la revisión de shadow es idéntica a la de off (los juicios semánticos no añaden nada)", async () => {
     const off = await teacher({ pinned: 1, generator: () => cellLeaking() });
     const shadow = await teacher({ reviewerMode: "shadow", generator: () => cellLeaking() });
     const checks = async (id: string) => (await semanticOf(id)).at(-1)!.review.checks;
     expect(await checks(shadow.id)).toEqual(await checks(off.id));
     expect((await semanticOf(shadow.id)).at(-1)!.review.verdict).toBe((await semanticOf(off.id)).at(-1)!.review.verdict);
+  });
+});
+
+describe("shadow NO es transparente respecto a los hallazgos generales (una sola llamada: la v2 decide también los de siempre)", () => {
+  /** Lo que un revisor v2 podría opinar distinto del v1 sobre las comprobaciones generales: aquí, que el tono es pueril (un FAIL no bloqueante por sí solo). */
+  const v2Disagrees = (general: { check: "no_infantilization" | "functional_supports_applied" | "age_appropriate"; status: "FAIL" | "WARN" }) => async (inner: PedagogicalReviewer, _call: number, input: ReviewInput) => {
+    const out = await inner.review(input);
+    if (input.reviewContext?.context_version !== 2) return out;
+    const draft = out.draft as { checks: Array<{ check: string; status: string; targets: string[]; detail: string }> };
+    const checks = [...draft.checks.filter((c) => c.check !== general.check), { check: general.check, status: general.status, targets: [], detail: "Opinión distinta del v2 sobre una comprobación general." }];
+    return { ...out, draft: { checks }, judgments: judgesByText()(input.reviewContext) };
+  };
+  const checksOf = async (id: string) => (await semanticOf(id)).at(-1)!.review;
+
+  it("un FAIL general del v2 que el v1 no emitió CAMBIA la entrega en shadow: sin juicios semánticos de por medio, off entrega y shadow no", async () => {
+    const off = await teacher({ pinned: 1, generator: () => cellSafe(), reviewer: v2Disagrees({ check: "no_infantilization", status: "FAIL" }) });
+    const shadow = await teacher({ reviewerMode: "shadow", generator: () => cellSafe(), reviewer: v2Disagrees({ check: "no_infantilization", status: "FAIL" }) });
+    expect(await off.status()).toMatchObject({ status: "ready", delivered: true });
+    expect((await checksOf(off.id)).verdict).not.toBe("needs_revision");
+    // El v2 dijo otra cosa en una comprobación GENERAL: ese hallazgo se fusiona como siempre y la ficha ya no es entregable.
+    expect((await checksOf(shadow.id)).checks.find((c) => c.check === "no_infantilization" && c.method === "ai")).toMatchObject({ status: "FAIL", method: "ai" });
+    expect((await checksOf(shadow.id)).verdict).toBe("needs_revision");
+    expect(await shadow.status()).toMatchObject({ delivered: false });
+    // …y la causa NO es el juicio semántico: no hay ninguna comprobación semántica en la revisión y el apoyo se juzgó legítimo.
+    expect((await semanticOf(shadow.id)).at(-1)!.semantic!.counts).toMatchObject({ confirmed: 0, suspected: 0, unjudged: 0, legitimate: 1 });
+    expect((await checksOf(shadow.id)).checks.filter((c) => c.check === "answers_not_leaked" && c.status === "FAIL")).toEqual([]);
+  });
+
+  it("un WARN general distinto cambia el veredicto de approved a approved_with_warnings, pero no la entrega", async () => {
+    const off = await teacher({ pinned: 1, generator: () => cellSafe(), reviewer: v2Disagrees({ check: "functional_supports_applied", status: "WARN" }) });
+    const shadow = await teacher({ reviewerMode: "shadow", generator: () => cellSafe(), reviewer: v2Disagrees({ check: "functional_supports_applied", status: "WARN" }) });
+    expect(await off.status()).toMatchObject({ delivered: true });
+    expect(await shadow.status()).toMatchObject({ delivered: true });
+    expect((await checksOf(shadow.id)).checks.some((c) => c.check === "functional_supports_applied" && c.method === "ai" && c.status === "WARN")).toBe(true);
+    expect((await checksOf(off.id)).checks.some((c) => c.check === "functional_supports_applied" && c.method === "ai" && c.status === "WARN")).toBe(false);
+  });
+
+  it("lo que SÍ garantiza shadow: si los hallazgos generales coinciden, los juicios semánticos (confirmados incluidos) no cambian el veredicto, ni la entrega, ni nada", async () => {
+    const off = await teacher({ pinned: 1, generator: () => cellLeaking() });
+    const shadow = await teacher({ reviewerMode: "shadow", substitution: "on", generator: () => cellLeaking() });
+    expect((await semanticOf(shadow.id)).at(-1)!.semantic!.counts.confirmed).toBe(1);
+    expect((await checksOf(shadow.id)).checks).toEqual((await checksOf(off.id)).checks);
+    expect(await shadow.status()).toMatchObject({ status: "ready", delivered: true, generationsUsed: 1 });
+    expect(await trace(shadow.id)).toEqual([]);
+    expect(shadow.restrictions.flat()).toEqual([]);
+  });
+
+  it("el registro dice de dónde salieron los hallazgos generales, para poder separar la medición de la entrega", async () => {
+    const shadow = await teacher({ reviewerMode: "shadow", generator: () => cellSafe() });
+    expect((await semanticOf(shadow.id)).at(-1)!.semantic).toMatchObject({ mode: "shadow", general_findings: "v2_call" });
+    const off = await teacher({ pinned: 1, generator: () => cellSafe() });
+    expect((await semanticOf(off.id)).at(-1)!.semantic).toBeUndefined();
   });
 });
 

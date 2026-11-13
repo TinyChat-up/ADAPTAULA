@@ -410,7 +410,7 @@ describe("fusión con la revisión: shadow no cambia nada, on añade sus comprob
     expect(withIt.checks.slice(0, base.checks.length)).toEqual(base.checks);
   });
 
-  it("sin comprobaciones semánticas (shadow, o todo legítimo) la revisión es EXACTAMENTE la del v1", () => {
+  it("sin comprobaciones semánticas (shadow, o todo legítimo) la fusión no añade nada a los hallazgos generales ya fusionados", () => {
     const base = buildReviewScoped(scenario.input, draft, scenario.ids).review;
     expect(withSemanticChecks(scenario.input, base, [])).toBe(base);
   });

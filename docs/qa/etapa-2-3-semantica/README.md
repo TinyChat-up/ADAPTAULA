@@ -26,7 +26,7 @@ un apoyo.
 | `REVIEWER_V2_MODE` | `SUPPORT_SUBSTITUTION_MODE` | Qué pasa |
 | --- | --- | --- |
 | `off` | cualquiera | Revisor v1 exacto: mismo prompt, mismo contexto, mismas claves de artefacto, sin juicios ni registro. |
-| `shadow` | cualquiera | Revisor v2: **una** llamada, juicios guardados junto a la revisión (`semantic`). Veredicto, comprobaciones y reparaciones como los de v1. Ni FAIL, ni WARN, ni restricción, ni bandera. |
+| `shadow` | cualquiera | Revisor v2: **una** llamada, juicios guardados junto a la revisión (`semantic`). **Los juicios semánticos no tienen consecuencias** (ni FAIL, ni WARN, ni restricción, ni bandera, ni sustitución). **Pero no es transparente**: esa misma llamada da también los hallazgos generales (edad, tono, apoyos funcionales) y pueden diferir de los de v1, con lo que el veredicto y la entrega pueden cambiar respecto a `off` (ver «Qué garantiza `shadow`»). |
 | `on` | `off` | Un hallazgo confirmado hace fallar `answers_not_leaked`; la corrección automática lo repara con una restricción; si se repite, el apoyo se omite solo si sus necesidades siguen cubiertas, o parada honesta. Nunca sustitución. |
 | `on` | `dry_run` | Igual que la fila anterior; además queda anotado en `semantic.dry_run` qué sustitución **habría** hecho. Nunca se sustituye en silencio. |
 | `on` | `on` | Como `on` + `off`, y si el hallazgo se repite tras la restricción, **una** sustitución por un apoyo de la misma necesidad (2.2), en la 3.ª generación como muy tarde. |
@@ -35,6 +35,28 @@ Una adaptación fijada con v1 ejecuta v1 sea cual sea el interruptor; una fijada
 contexto semántico, sin juicios, sin registro). `shadow` y `on` comparten la misma clave de pregunta al modelo y solo `on` tiene su propia revisión fusionada, de modo que pasar de
 `shadow` a `on` sobre un documento ya preguntado debería fusionar lo guardado sin una segunda llamada (diseñado así; **sin prueba de extremo a
 extremo**: las pruebas cubren cada modo por separado y la reanudación).
+
+## Qué garantiza `shadow` (y qué no)
+
+Comprobado con una prueba en la que el v2 da hallazgos generales distintos de los del v1 (`tests/db/support-semantic.test.ts`): **un FAIL
+general que el v1 no habría emitido hace que `shadow` no entregue donde `off` entrega**, y un WARN distinto cambia el veredicto. La causa no es
+el juicio semántico (no hay ninguna comprobación semántica en la revisión), sino que en `shadow` la **única** llamada es la del prompt v2 y sus
+hallazgos generales se fusionan como siempre. No existe forma de saber, con una sola llamada, qué habría dicho el v1.
+
+| Garantía | Con una llamada (como está) | Con dos llamadas (v1 decide, v2 mide) |
+| --- | --- | --- |
+| Los juicios semánticos no tienen consecuencias | **Sí** (probado) | Sí |
+| Los hallazgos generales, el veredicto y la entrega son los de `off` | **No**: pueden diferir | **Sí**: la llamada que decide es la v1, con el mismo prompt, contexto y claves que `off` (queda solo la variación de muestreo que ya existe entre dos ejecuciones de `off`) |
+| La medición es la del prompt que usará `on` | Sí | Sí (la llamada v2 es la de `on`) |
+| Coste en `shadow` | el de v2 (≈ +35 % sobre v1) | v1 + v2 ≈ **+0,026 $ por revisión** sobre `off` (≈ 2,3× el coste de la revisión); peor caso por adaptación ≈ +0,25 $; se puede acotar a una medición por adaptación (la del primer documento) ≈ +0,026 $ por adaptación |
+| ¿Hace falta autorización? | ya implementado | **sí: es otra llamada de pago; no se ha añadido** |
+
+Alternativa descartada: una segunda llamada «ligera» solo con los juicios. Sería más barata (≈ +0,008 $), pero mediría un prompt distinto del
+que usará `on` y sus resultados no valdrían como evidencia para activarlo.
+
+**Recomendación.** Usar `shadow` de una llamada solo donde una diferencia de veredicto sea aceptable y medible (staging o el workspace del
+piloto, con revisión humana de los casos que cambian), y, si se quiere la garantía fuerte en un entorno real, autorizar el `shadow` de dos
+llamadas durante la fase de medición (y solo entonces). Nada de esto es necesario para `off`, que sigue siendo el v1 exacto.
 
 ## Contrato de salida (`ReviewerFindings` v2)
 
@@ -161,7 +183,7 @@ Precios del repositorio (`costs.ts`, sonnet-5-5: 2 $/M entrada, 10 $/M salida) y
 - `tests/unit/support-semantic.test.ts` (49): modos, versiones fijadas, prompt v2 (v1 intacto por huella), contexto (v1 idéntico), contrato y
   saneado, casos reales con el revisor simulado (estanque, célula, fracciones, primos, seres vivos), revisor ideal y revisor excesivo,
   juicios ausentes o inventados, más de 12 apoyos, fusión, conexión con la 2.2 y medición.
-- `tests/db/support-semantic.test.ts` (19, PGlite con las migraciones reales): `off`, `shadow`, `on` con la sustitución en `off`/`dry_run`/`on`,
+- `tests/db/support-semantic.test.ts` (23, PGlite con las migraciones reales): `off`, `shadow`, `on` con la sustitución en `off`/`dry_run`/`on`,
   restricción → repetición → sustitución, parada honesta sin cuarta llamada, lo legítimo intacto, analogía como sospecha, juicio ausente o
   inventado, reintento acotado, reanudación sin llamadas y trazabilidad sin contenido.
 

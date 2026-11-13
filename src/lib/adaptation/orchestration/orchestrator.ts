@@ -100,7 +100,7 @@ export interface OrchestratorDeps {
   supportSubstitution?: SubstitutionMode;
   /**
    * Etapa 2.3: what the semantic review of the supports does (`REVIEWER_V2_MODE`). `off` (the default, also when this is missing): the v1
-   * reviewer exactly as before. `shadow`: pedagogical_reviewer@v2 judges and the judgments are only recorded. `on`: its CONFIRMED findings fail
+   * reviewer exactly as before. `shadow`: pedagogical_reviewer@v2 judges and the semantic judgments are only recorded (its general findings still count: not transparent). `on`: its CONFIRMED findings fail
    * the review and are repaired (a substitution only if `supportSubstitution` is `on` too). It only applies to an adaptation created with the v2
    * reviewer; one created with v1 always runs v1.
    */
