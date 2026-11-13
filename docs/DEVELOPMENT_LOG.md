@@ -1,5 +1,9 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Perfil V3 y Hacer magia: contrato preparatorio
+
+Base `651d130` (#94). Se añade selección exacta de área y verificación local de una autorización propuesta por objetivos y huella, sin habilitarla en el producto. La elección por ficha, la persistencia, la privacidad del texto libre, la transformación curricular y las pruebas A/B/C siguen pendientes. 43 pruebas unitarias focalizadas, typecheck y lint focalizado correctos. [Detalle](qa/perfil-v3-hacer-magia/README.md).
+
 ## 2026-11-13 — Perfil pedagógico: primera entrega
 
 - Perfil V3 opcional por área, nivel orientativo sin inferencia, dos apartados de aprendizajes y preferencias de respuesta y adaptación; información nueva excluida del planificador y no equivale a autorización curricular.
