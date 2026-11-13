@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Reparación de presupuesto tras progreso parcial (2026-11-13):** rama `codex/reparar-presupuesto-estanque`, desde `main` `8ec2c23`. Si una reparación automática reduce un apoyo pero sigue fuera del mismo presupuesto, se permite una última reparación localizada, dentro del máximo existente de tres generaciones. Sin progreso verificable, presupuesto distinto, datos incompletos u otros fallos simultáneos, se conserva la parada anterior. La adaptación real del estanque no se ha ejecutado ni verificado; la reproducción es sintética. Sin llamadas de pago, E2E, migraciones ni despliegue. GitHub API rechazó la consulta de PR; revisar el estado de publicación. Ver [registro](DEVELOPMENT_LOG.md).
+
 > **Piloto de V3 desde la interfaz (2026-11-06):** rama `feature/agente-v22-piloto-interfaz`, sobre la PR #80 (sin merge). Implementado y probado sin red:
 > - puerta del piloto: un workspace y un backend aislado, nunca producción;
 > - selector «actual / experimental V2.2» solo en ese workspace;

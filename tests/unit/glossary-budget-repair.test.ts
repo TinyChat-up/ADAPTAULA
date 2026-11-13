@@ -6,7 +6,17 @@ import { buildGeneratorInputV2, generatorRequestParts } from '@/lib/adaptation/g
 import { normalizeGeneratedV2, supportVisibleWords } from '@/lib/adaptation/generated-v2';
 import { decision, planOf, allPreserved } from './adaptation-helpers';
 import { cellGlossary, shortCellGlossary } from '../support/glossary-budget-case';
-import { missingRepairedGlossaries } from '@/lib/adaptation/generation-recovery';
+import { budgetRepairProgress, missingRepairedGlossaries } from '@/lib/adaptation/generation-recovery';
+
+it('solo reconoce progreso con recuentos verificables, menor longitud y el mismo presupuesto', () => {
+  const issue = (words: number, budget = 24, tolerance = 6) => ({ code: 'support_out_of_budget' as const, decision_id: 'dec_1', detail: `Los apoyos suman ${words} palabras: superan su presupuesto (${budget}) más allá de la tolerancia (${tolerance})` });
+  expect(budgetRepairProgress([issue(36)], [issue(32)], ['dec_1'])).toBe(true);
+  expect(budgetRepairProgress([issue(32)], [issue(32)], ['dec_1'])).toBe(false);
+  expect(budgetRepairProgress([issue(32)], [issue(35)], ['dec_1'])).toBe(false);
+  expect(budgetRepairProgress([issue(36)], [issue(32, 25)], ['dec_1'])).toBe(false);
+  expect(budgetRepairProgress([issue(36)], [{ ...issue(32), detail: 'sin recuento' }], ['dec_1'])).toBe(false);
+  expect(budgetRepairProgress([issue(36)], [issue(32)], ['dec_1', 'dec_2'])).toBe(false);
+});
 
 export function glossaryCase(){
   const analysis=fractionsAnalysis();

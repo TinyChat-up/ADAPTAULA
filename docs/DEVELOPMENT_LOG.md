@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Presupuesto: distinguir progreso parcial de ausencia de progreso
+
+- La copia recuperada estaba limpia en `11ab50e`, sin procesos de pruebas/Claude ni cambios locales. `main` remoto estaba en `8ec2c23`; la corrección antigua de presupuesto ya estaba integrada. No se ha recuperado trabajo sin confirmar de la sesión interrumpida ni el artefacto real del estanque.
+- Regresión PGlite primero: el primer apoyo excede el presupuesto, la reparación lo reduce pero sigue fuera de tolerancia; la firma anterior considera idéntico el fallo y se detiene en dos generaciones. Con la corrección se permite la tercera únicamente si el artefacto de reparación enlaza al anterior y **todas** las decisiones afectadas se han acortado, con el mismo presupuesto y tolerancia. Si falta evidencia o se mantiene/empeora el recuento, se conserva la parada. No se cambian presupuestos ni el máximo de tres generaciones; no se omiten auditorías, cobertura, protección de glosarios ni revisión posterior.
+- Pruebas locales: PGlite reparación/revisor semántico **39/39**; unidad de glosario, auditoría y revisor **66/66**; otras pruebas focalizadas de recuperación **21/21** (con solapamiento); typecheck y lint focalizado correctos. Generadores simulados; sin E2E ni IA de pago. No se prueba la ficha real ni se garantiza que el modelo real acorte adecuadamente o preserve todo significado; si los controles fallan, se mantiene la parada honesta.
+- Rama independiente sin migraciones, merge ni despliegue. La API de GitHub respondió `Forbidden` al consultar PR; comprobar publicación antes de darla por creada. Próximo paso: revisar esta corrección y, cuando se autorice, ensayar con la ficha real sin exceder los límites de coste.
+
 ## 2026-11-13 — Etapa 2.3: revisión semántica de los apoyos (`pedagogical_reviewer@v2`), instalada y apagada
 
 - Rama `claude/zealous-shannon-k7w4v4` desde `main` (`fcd7741`, con #90). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago (revisor, generador y planificador simulados). `SUPPORT_SUBSTITUTION_MODE` sigue en `dry_run`; no se tocó ninguna variable de Production. [QA](qa/etapa-2-3-semantica/README.md), ADR-048.
