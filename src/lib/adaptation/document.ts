@@ -195,7 +195,9 @@ function literalUnits(analysis: MaterialAnalysis, plan: Pick<AdaptationPlan, "de
       units.push({ ref: t.id, page, blocks: [textBlock(t, newId())], order: leadsItsSection(analysis, t) ? [order[0], order[1], -1, order[3]] : order });
     }
     for (const v of analysis.visuals.filter((x) => x.page === page)) {
-      if (v.role === "decorative" && context.presentation.decoration === "none") continue;
+      // An explicit activity reference takes precedence over a contradictory decorative classification.
+      const used = v.activity_ids.length > 0 || analysis.activities.some(a => a.resource_ids.includes(v.id));
+      if (v.role === "decorative" && context.presentation.decoration === "none" && !used) continue;
       const block = visualBlock(v, newId());
       if (block) {
         visualIds.set(v.id, block.id);

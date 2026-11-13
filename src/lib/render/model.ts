@@ -81,7 +81,7 @@ export type RenderNode = { key: string } & (
 export interface RenderPage {
   number: number;
   nodes: RenderNode[];
-  /** Two short closing activities may travel together, avoiding a lone short task on the last sheet. */
+  /** A short closing activity pair, or final activity and checklist, travels together. */
   keepLastPair?: boolean;
 }
 
@@ -613,7 +613,9 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
           const id = blockIds.at(-1)!;
           const refs = sources.at(-1) ?? [];
           const figure = FIGURE_KINDS.has(previous.kind) && own.has(id);
-          const lead = !figure && ((LEAD_KINDS.has(previous.kind) && own.has(id)) || (previous.kind === "worked_example" && refs.some((r) => block.trace.source_refs.includes(r))));
+          const linkedLead = (previous.kind === "worked_example" && refs.some((r) => block.trace.source_refs.includes(r))) ||
+            (previous.kind === "vocabulary" && refs.length > 0 && refs.every((r) => block.trace.source_refs.includes(r)));
+          const lead = !figure && ((LEAD_KINDS.has(previous.kind) && own.has(id)) || linkedLead);
           if (!figure && !lead) break;
           current.pop();
           sources.pop();
@@ -724,7 +726,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
         keepUnitTogether: estimatedMm(n) * Math.max(tokens.answerLineMm / MM_PER_ROW, tokens.fontPt / 12.5) <= PAGE_MM,
       } : n);
       const pair = nodes.slice(-2);
-      const keepLastPair = pair.length === 2 && pair.every(n => n.kind === "activity") && pair.reduce((mm, n) => mm + estimatedMm(n), 0) <= PAGE_MM / 2;
+      const keepLastPair = pair.length === 2 && (pair.every(n => n.kind === "activity") || (pair[0]?.kind === "activity" && pair[1]?.kind === "checklist" && pair[1].keepTogether)) && pair.reduce((mm, n) => mm + estimatedMm(n), 0) <= PAGE_MM / 2;
       return keepLastPair ? { ...page, nodes, keepLastPair: true } : { ...page, nodes };
     }),
   };

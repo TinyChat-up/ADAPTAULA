@@ -37,8 +37,9 @@ import type { VisionLocator } from "./vision";
  * v6: a generic figure is located by the marks its analysis names (letters, arrow numbers, measures), all printed on it, legibly;
  *     column-aware zones and a lead zone for such figures; the text inside its own boxes belongs to it.
  * v7: explicit numbered parts and detached marks with a visible leader; revalidate the complete crop before reusing an old one.
+ * v8: activity references override a contradictory decorative classification; acceptance checks remain unchanged.
  */
-export const AUTO_ENGINE_VERSION = "auto_visuals@v7";
+export const AUTO_ENGINE_VERSION = "auto_visuals@v8";
 export const LOCATE_DPI = 100;
 /** Pages of one material that may get a vision call (each call is one page): the cost is bounded per material version. */
 export const MAX_VISION_PAGES = 3;
@@ -122,13 +123,13 @@ export function shapeOf(v: Pick<AnalysisVisual, "kind" | "title" | "description"
  * support), and only those drawn as an image (a table or a chart is rebuilt from its data, it is not cropped).
  */
 export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { page: number; visual: AnalysisVisual }> {
-  return analysis.visuals
-    .filter((v) => (v.role === "required" || v.role === "informative") && v.kind !== "decorative" && !(v.table && v.table.rows.length > 0) && !v.chart)
-    .map((v) => {
-      const shape = shapeOf(v);
-      const users = analysis.activities.filter((a) => v.activity_ids.includes(a.id) || a.resource_ids.includes(v.id));
-      return { id: v.id, page: v.page, shape, activityIds: v.activity_ids, visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null };
-    });
+  return analysis.visuals.flatMap((v) => {
+    const users = analysis.activities.filter(a => v.activity_ids.includes(a.id) || a.resource_ids.includes(v.id));
+    const informative = (v.role === "required" || v.role === "informative") && v.kind !== "decorative";
+    if ((!informative && users.length === 0) || (v.table && v.table.rows.length > 0) || v.chart) return [];
+    const shape = shapeOf(v);
+    return [{ id: v.id, page: v.page, shape, activityIds: users.map(a => a.id), visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null }];
+  });
 }
 
 /** A run where some page could not be rendered: an environment failure, never an answer about the figure. */

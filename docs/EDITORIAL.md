@@ -181,3 +181,12 @@ Una frase con comas, letras repetidas o números que no siguen no lo son. Cuando
 `material_renderer@v8` agrupa la unidad completa con ejemplo y comprobación final referenciados, sin cambiar el orden pedagógico. La estimación habilita mantener juntas las unidades que pueden caber; las extensas siguen por campos, líneas o zonas. Dos actividades finales cortas pueden viajar juntas si su altura estimada combinada es como máximo media hoja útil. La decisión final es de Chromium, no un número fijo de páginas.
 
 Esta regla amplía §7: el ejemplo ya forma parte de la unidad exterior, mientras la actividad interior conserva sus reglas de fragmentación. No se agrupa incondicionalmente una redacción de 40 líneas: eso añadía una hoja innecesaria y se comprueba como regresión. La muestra de cinco tareas conserva tres hojas, con el problema completo y la última compartida por recta y explicación. La cuantificación del espacio es comprobable; su adecuación individual requiere revisión docente.
+
+
+### Ajustes de calidad visual y cierre (2026-11-13)
+
+`material_renderer@v9` conserva la proporción de recortes con dimensiones físicas al aplicar el techo del 60 % de alto útil. El vocabulario previo con referencias exclusivamente de la actividad viaja con ella; una actividad final corta y su lista de revisión pueden mantenerse juntas dentro de la estimación de media página. No se reduce tipografía ni capacidad manuscrita para encajarlas.
+
+`answer_space@v3` no cuenta la frase final «Escribe la operación.» como otro cálculo. Solo cambia el dimensionado: consigna, datos, mínimos originales y necesidades motoras permanecen. En el fixture del estanque la cuadrícula de 4a pasa de nueve a cinco filas de 7 mm; el documento sigue teniendo cinco páginas.
+
+[PDF, comparativas y límites](qa/calidad-visual-pdf/README.md). La mejora visual no certifica seguridad pedagógica: siguen pendientes el glosario que anticipa la relación evaluada y la pertinencia de mostrar el procedimiento en el ejemplo de 4a. No se ha recibido el original con fotos ni la adaptación real de siete páginas.

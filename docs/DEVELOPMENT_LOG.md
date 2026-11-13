@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Correcciones acotadas de calidad visual y PDF
+
+Desde `main` `ae1ba94`, rama `codex/calidad-visual-pdf`. Reproducidos tres fallos PDF en worktree aislado del mismo `main`: imagen alta deformada, vocabulario separado y comprobación final en hoja exclusiva. Corregidos en el renderer existente (v9). Ensamblado/localizador conservan visuales explícitamente referenciados, con evidencias v8 y las mismas garantías. `answer_space@v3` evita contar «Escribe la operación.» como segundo cálculo. Se conserva la puerta conocida de disponibilidad en `visual_resolution`, sin secretos ni nuevas llamadas.
+
+2.515 unidad/BD correctas inicialmente, dos expectativas de versión actualizadas y 37 pruebas de esos archivos repetidas correctamente: 2.517 casos correctos, 18 omitidos y 1 pendiente. Suite PDF: 98 correctas; dos casos añadidos después y archivo focalizado de 4 correcto (100 casos distintos). Typecheck correcto; lint sin errores y un aviso previo. Build bloqueado al descargar Inter/Outfit; no se considera `check` completo. Evidencias [antes/después](qa/calidad-visual-pdf/README.md), todas las páginas inspeccionadas. Faltan los dos PDF reales; no se valida el caso real ni la pertinencia de los apoyos que anticipan respuestas/procedimientos. Sin E2E, IA de pago, migraciones o despliegues. API GitHub rechaza con `Forbidden`; revisar publicación de PR. Siguiente acción: obtener ambos PDF y artefactos autorizados, resolver el build y revisar los riesgos de 3a/4a antes de integrar.
+
 ## 2026-11-13 — Cierre del perfil V3 en acceso y metodología
 
 Rama limpia desde `651d130`: recuperados `b3fc2fc`, `4708703` y `c213b50f`, sin cambios del corpus ni hoja ciega. Reproducidos y corregidos el formato oral no declarado y los grupos de más de seis dimensiones; la nueva lógica de generación se limita a contextos con ámbito pedagógico, preservando el comportamiento histórico. Batería local 2.506 correctas, 18 omitidas y 1 pendiente; 74 focalizadas correctas, typecheck y lint sin errores (un aviso previo). Modelos simulados; sin E2E, IA de pago, migraciones remotas ni despliegues. La equivalencia semántica requiere revisión docente. [QA](qa/perfil-v3-hacer-magia/README.md).
