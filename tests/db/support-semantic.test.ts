@@ -335,7 +335,7 @@ describe("coste y reanudación: ninguna llamada de más", () => {
     const t = await teacher({ reviewerMode: "on", substitution: "dry_run", generator: (call) => (call === 1 ? cellLeaking() : cellSafe()) });
     const [first] = await semanticOf(t.id);
     const { records, ...rest } = first!.semantic!;
-    const stripped = JSON.stringify({ ...rest, records: records.map(({ reason, ...r }) => r) });
+    const stripped = JSON.stringify({ ...rest, records: records.map((r) => ({ ...r, reason: undefined })) });
     expect(stripped).not.toMatch(/Núcleo|ADN|dirige la actividad/);
     expect(first!.semantic!.records[0]!.reason).toBeDefined();
   });

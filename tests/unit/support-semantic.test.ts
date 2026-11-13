@@ -464,7 +464,7 @@ describe("conexión con la sustitución de la etapa 2.2", () => {
     const { out } = statusFor(entry);
     const set = summarize("shadow", out, []);
     expect(set).toMatchObject({ policy: "support_semantic@v1", mode: "shadow", counts: { confirmed: 1, suspected: 0, legitimate: 0, unjudged: 0 } });
-    const json = JSON.stringify({ ...set, records: set.records.map(({ reason, ...r }) => r) });
+    const json = JSON.stringify({ ...set, records: set.records.map((r) => ({ ...r, reason: undefined })) });
     expect(json).not.toMatch(/Núcleo|núcleo|pista|ADN/);
   });
 });
