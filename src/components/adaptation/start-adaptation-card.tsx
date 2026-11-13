@@ -20,6 +20,7 @@ export interface ProfileOption {
 }
 
 export type CreationModeChoice = "automatic" | "review";
+export type SheetTypeChoice = "accessibility" | "methodological";
 
 /**
  * The one entry point that creates an adaptation (reached from the material, from a profile and from the home screen): choose the
@@ -43,7 +44,7 @@ export function StartAdaptationCard({
   visualSupportOffer?: { remaining: number; maxPerAdaptation: number } | null;
   /** The V3 pilot's planner choice (ADR-046): computed on the server for the authorised workspace only. */
   plannerPilot?: boolean;
-  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue }) => Promise<PublicResult<{ adaptationId: string }>>;
+  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; adaptationType?: SheetTypeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
   const uid = useId();
@@ -55,6 +56,7 @@ export function StartAdaptationCard({
   const [visualSupports, setVisualSupports] = useState(false);
   const [requestKey] = useState(() => crypto.randomUUID());
   const [planner, setPlanner] = useState<PlannerChoiceValue>("current");
+  const [sheetType, setSheetType] = useState<SheetTypeChoice>("accessibility");
 
   async function start(mode: CreationModeChoice) {
     if (lock.current) return;
@@ -69,7 +71,7 @@ export function StartAdaptationCard({
     setFieldError(undefined);
     try {
       const choice = plannerPilot ? planner : "current";
-      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}:${choice}`, mode, visualSupports: mode === "automatic" && visualSupports, ...(choice === "v22" ? { planner: choice } : {}) });
+      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}:${choice}:${sheetType}`, mode, adaptationType: sheetType, visualSupports: mode === "automatic" && visualSupports, ...(choice === "v22" ? { planner: choice } : {}) });
       if (result.ok) {
         router.push(`/app/adaptaciones/${result.data.adaptationId}`);
         return;
@@ -115,6 +117,18 @@ export function StartAdaptationCard({
               {selected.summary.lines.length > 3 ? <details><summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">Ver todos los apoyos</summary><ul className="list-disc space-y-1 pl-5">{selected.summary.lines.slice(3).map((line) => <li key={line.text}>{line.text}{line.level ? ` (${line.level})` : ""}</li>)}</ul></details> : null}
             </div>
           ) : null}
+
+          <fieldset className="space-y-2" disabled={pending !== null}>
+            <legend className="text-base font-semibold">Tipo de adaptación para esta ficha</legend>
+            <label className="flex min-h-11 items-start gap-3 py-1">
+              <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "accessibility"} onChange={() => setSheetType("accessibility")} />
+              <span><span className="font-medium">De acceso</span><span className="block text-sm text-muted-foreground">Busca conservar los objetivos y facilitar el acceso mediante consignas, apoyos y estructura. Revisa la propuesta antes de utilizarla.</span></span>
+            </label>
+            <label className="flex min-h-11 items-start gap-3 py-1">
+              <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "methodological"} onChange={() => setSheetType("methodological")} />
+              <span><span className="font-medium">Metodológica</span><span className="block text-sm text-muted-foreground">Mismos objetivos. Además puede cambiar la forma de responder (por ejemplo, menos escritura o respuesta oral) donde no sea lo que se evalúa.</span></span>
+            </label>
+          </fieldset>
 
           {plannerPilot ? <PlannerChoiceField value={planner} onChange={setPlanner} disabled={pending !== null} /> : null}
 

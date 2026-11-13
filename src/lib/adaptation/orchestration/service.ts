@@ -141,6 +141,12 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
   }
   const functional = FunctionalProfileSchema.safeParse(profile.functional_profile);
   if (!functional.success) return { ok: false, code: "invalid", detail: ["Perfil funcional no válido"] };
+  // A curricular adaptation changes objectives: it needs an explicit authorisation for THIS sheet (objectives and analysis), which
+  // does not exist yet. A preference of the profile is never one, so it is refused here instead of running as if it were access.
+  if (request.adaptationType === "curricular") return { ok: false, code: "invalid", detail: ["La adaptación curricular necesita una autorización por ficha que todavía no está disponible"] };
+  // The per-sheet scope applies when the teacher chose a methodological adaptation or the profile carries pedagogical data (V3).
+  // Anything else keeps the context exactly as it was built before.
+  const scope = request.adaptationType === "methodological" ? ("methodological" as const) : request.adaptationType === "accessibility" && functional.data.schema_version === 3 && functional.data.pedagogy ? ("accessibility" as const) : null;
   if (request.visualSupports === true) {
     if (request.creationMode !== "automatic") return { ok: false, code: "invalid" };
     const offer = await deps.visualSupportOffer?.(actor.workspaceId);
@@ -166,6 +172,7 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
       adaptationType: request.adaptationType,
       teacherRequest: request.teacherRequest ?? null,
       visualSupports: request.visualSupports === true,
+      ...(scope ? { sheet: { scope, subjectSlug: material.subject_slug } } : {}),
       title: (request.title ?? material.title).slice(0, 200),
       requestKey: request.requestKey ?? randomUUID(),
       versions: deps.resolveVersions(plannerV3 ? { plannerV3 } : {}),

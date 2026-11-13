@@ -1,5 +1,21 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Cierre del perfil V3 en acceso y metodología
+
+Rama limpia desde `651d130`: recuperados `b3fc2fc`, `4708703` y `c213b50f`, sin cambios del corpus ni hoja ciega. Reproducidos y corregidos el formato oral no declarado y los grupos de más de seis dimensiones; la nueva lógica de generación se limita a contextos con ámbito pedagógico, preservando el comportamiento histórico. Batería local 2.506 correctas, 18 omitidas y 1 pendiente; 74 focalizadas correctas, typecheck y lint sin errores (un aviso previo). Modelos simulados; sin E2E, IA de pago, migraciones remotas ni despliegues. La equivalencia semántica requiere revisión docente. [QA](qa/perfil-v3-hacer-magia/README.md).
+
+## 2026-11-13 — Perfil V3 conectado a «Hacer magia»: adaptación de acceso o metodológica por ficha
+
+- Sobre la rama de Codex `codex/perfil-v3-hacer-magia` (contrato conservado y ampliado en `pedagogical-scope.ts`). Sin migraciones, E2E ni llamadas de pago. [QA](qa/perfil-v3-hacer-magia/README.md).
+- **Qué cambia.** Elección por ficha (acceso / metodológica) en la tarjeta de creación; `context.pedagogy` y tres resoluciones nuevas en `conflicts` (que el planificador v2 ya obedece); invariante de alcance de acceso; alternativa de respuesta según el perfil en `automatic-resolution`; un cambio de espacio de respuesta ya no se envía al generador; la curricular se rechaza en el servidor.
+- **Privacidad.** El texto declarado, el nivel de referencia y las otras áreas no salen del servidor (probado).
+- **Pruebas.** Casos A (lectura, acceso) y B (escritura, metodológica) de extremo a extremo con servicios simulados; curricular 5.º→3.º documentada como pendiente.
+- **Pendiente.** Texto declarado hacia el planificador (versión nueva + cribado); autorización y transformación curricular; ejecutores de unir, completar y ordenar.
+
+## 2026-11-13 — Perfil V3 y Hacer magia: contrato preparatorio
+
+Base `651d130` (#94). Se añade selección exacta de área y verificación local de una autorización propuesta por objetivos y huella, sin habilitarla en el producto. La elección por ficha, la persistencia, la privacidad del texto libre, la transformación curricular y las pruebas A/B/C siguen pendientes. 43 pruebas unitarias focalizadas, typecheck y lint focalizado correctos. [Detalle](qa/perfil-v3-hacer-magia/README.md).
+
 ## 2026-11-13 — Perfil pedagógico: primera entrega
 
 - Perfil V3 opcional por área, nivel orientativo sin inferencia, dos apartados de aprendizajes y preferencias de respuesta y adaptación; información nueva excluida del planificador y no equivale a autorización curricular.

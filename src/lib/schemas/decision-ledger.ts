@@ -105,7 +105,7 @@ export const DecisionLedgerSchema = z.object({
   activities: z.array(LedgerActivitySchema).max(150),
   needs: z.array(z.object({ dimension: DimensionKeySchema, level: z.enum(["low", "medium", "high"]), applied_in: z.array(ActivityRef), blocked_in: z.array(ActivityRef) })).max(69),
   /** Needs the context builder left out, with its own reason (presentation, not applicable, resolved by presentation). */
-  omitted_needs: z.array(z.object({ dimension: DimensionKeySchema, reason: z.enum(["presentation_only", "not_applicable", "resolved_by_presentation"]) })).max(69),
+  omitted_needs: z.array(z.object({ dimension: DimensionKeySchema, reason: z.enum(["presentation_only", "not_applicable", "resolved_by_presentation", "out_of_scope"]) })).max(69),
   /** «No necesita» and «sin valorar» are different: neither activates a support, and neither is inferred. Null: profile not given. */
   profile: z.object({ not_needed: z.array(DimensionKeySchema).max(69), unassessed_count: z.number().int().min(0) }).nullable(),
   residual_barriers: z.array(ResidualBarrierSchema).max(300),

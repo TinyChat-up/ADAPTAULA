@@ -17,6 +17,7 @@ import { fingerprint } from "./fingerprint";
 import { STAGE_RULES, ageBand } from "./stage-rules";
 import { rankByStrengths } from "@/lib/profiles/strength-leverage";
 import { AUDIO_DIMENSIONS, DIMENSION_STRATEGIES, PRESENTATION_DIMENSIONS } from "./strategies";
+import { applySheetScope } from "./pedagogical-scope";
 import { wordCount } from "./text";
 
 /**
@@ -32,13 +33,18 @@ export interface ContextInput {
   adaptationType: AdaptationType;
   teacherRequest?: string | null;
   visualSupports?: boolean;
+  /**
+   * The teacher's per-sheet choice (profile V3): when given, the scope and what the pedagogical profile contributes to this sheet are
+   * resolved here. Absent: the context is exactly the one built before this existed.
+   */
+  sheet?: { scope: "accessibility" | "methodological"; subjectSlug: string | null };
   /** Builder policy. Defaults to the historical one (1) so a context is reproducible; opt in to a later one explicitly. */
   policy?: ContextPolicy;
 }
 
 export interface OmittedNeed {
   dimension: DimensionKey;
-  reason: "presentation_only" | "not_applicable" | "resolved_by_presentation";
+  reason: "presentation_only" | "not_applicable" | "resolved_by_presentation" | "out_of_scope";
 }
 
 type ActiveLevel = Exclude<SupportLevel, "none">;
@@ -161,6 +167,11 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
     else needs.push({ dimension, level, intensity: INTENSITY_FOR_LEVEL[level], strategies: (policy >= 3 ? rankByStrengths(DIMENSION_STRATEGIES[dimension], profile.observations) : [...DIMENSION_STRATEGIES[dimension]]).slice(0, 3) });
   }
   const order = (d: DimensionKey) => DIMENSION_KEYS.indexOf(d);
+  const sheet = input.sheet ? applySheetScope({ scope: input.sheet.scope, profile, subjectSlug: input.sheet.subjectSlug, analysis, needs: [...needs] }) : null;
+  if (sheet) {
+    needs.splice(0, needs.length, ...sheet.needs);
+    for (const dimension of sheet.outOfScope) omitted.push({ dimension, reason: "out_of_scope" });
+  }
   needs.sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || order(a.dimension) - order(b.dimension));
   omitted.sort((a, b) => order(a.dimension) - order(b.dimension));
 
@@ -199,9 +210,10 @@ export function buildAdaptationContext(input: ContextInput): { context: Adaptati
       decorative_visuals: analysis.visuals.filter((v) => v.role === "decorative").map((v) => v.id),
       ambiguous_targets: ambiguousTargets(analysis),
     },
-    conflicts: detectConflicts(new Set(needs.map((n) => n.dimension)), analysis, { literalTexts, writingActivities }),
+    conflicts: [...detectConflicts(new Set(needs.map((n) => n.dimension)), analysis, { literalTexts, writingActivities }), ...(sheet?.conflicts ?? [])],
     teacher_request: sanitizeRequest(input.teacherRequest),
     ...(input.visualSupports === true ? { visual_supports: { requested: true as const } } : {}),
+    ...(sheet ? { pedagogy: sheet.pedagogy } : {}),
     ...(profile.observations && (profile.observations.strengths.length > 0 || profile.observations.barriers.length > 0) ? { learning_observations: profile.observations } : {}),
   };
   return { context: AdaptationContextSchema.parse(context), omitted };
