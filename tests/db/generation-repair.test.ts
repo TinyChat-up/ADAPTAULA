@@ -100,6 +100,37 @@ describe("the real case (Matemáticas 4.º Primaria) now finishes by itself", ()
 });
 
 describe("«Hacer magia»: bounded automatic repair of a generation that fails its audit", () => {
+  it("reintenta una vez más si el apoyo se acortó pero todavía supera el presupuesto", async () => {
+    const shorter = { ...longChecklist, items: [...longChecklist.items.slice(0, 3), "Coloreo y compruebo que no sobra ni falta ninguna parte"] };
+    const t = await teacher(generator((d, call) => call >= 3 ? d : {
+      ...d, segments: d.segments.map((s) => s.decision_id === "dec_1" ? { ...s, supports: [call === 1 ? longChecklist : shorter] } : s),
+    }));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "ready", delivered: true, generationsUsed: 3 });
+    expect(t.spy.generator).toBe(3);
+    expect(t.spy.generatorInputs[2]!.decisions).toEqual(["dec_1"]);
+    expect(await entitlement(id)).toBe("consumed");
+  });
+
+  it("no realiza una tercera llamada si el apoyo no se acorta", async () => {
+    const t = await teacher(generator((d) => ({ ...d, segments: d.segments.map((s) => s.decision_id === "dec_1" ? { ...s, supports: [longChecklist] } : s) })));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "failed", delivered: false, generationsUsed: 2 });
+    expect(t.spy.generator).toBe(2);
+  });
+
+  it("si sigue fuera del presupuesto, se detiene tras la tercera generación", async () => {
+    const shorter = { ...longChecklist, items: [...longChecklist.items.slice(0, 3), "Coloreo y compruebo que no sobra ni falta ninguna parte"] };
+    const t = await teacher(generator((d, call) => ({ ...d, segments: d.segments.map((s) => s.decision_id === "dec_1" ? { ...s, supports: [call === 1 ? longChecklist : shorter] } : s) })));
+    const id = await t.start("automatic");
+    await t.runAll(id);
+    expect(await t.status(id)).toMatchObject({ status: "failed", delivered: false, generationsUsed: 3 });
+    expect(t.spy.generator).toBe(3);
+    expect(await processAdaptationStage(t.orchestrator, id)).toBeNull();
+    expect(t.spy.generator).toBe(3);
+  });
   it("content first: the failing decision is regenerated with a restriction that names the fix — kept, not removed — and delivered", async () => {
     // The model gets dec_4 wrong until it is told precisely what to fix.
     const t = await teacher(generator((d, _call, input) => (restrictionsOf(input, "dec_4").length === 0 ? unauthorizedOn("dec_4")(d) : d)));

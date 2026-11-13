@@ -117,6 +117,21 @@ export function diagnoseGeneration(input: { audit?: Pick<GenerationAudit, "check
 /** A stable signature of what failed and where: two cycles with the same one made no progress. */
 export const failureSignature = (failures: readonly GenerationFailure[]) => failures.map((f) => `${f.rule}@${[...f.decisions].sort().join("+")}`).sort().join(" | ");
 
+/** Progress is established only for the same budget failures with a lower visible word count and an unchanged limit. */
+export function budgetRepairProgress(previous: NormalizedGeneration["issues"], current: NormalizedGeneration["issues"], decisions: readonly string[]): boolean {
+  const read = (issues: NormalizedGeneration["issues"], id: string) => {
+    const matches = issues.filter((i) => i.code === "support_out_of_budget" && i.decision_id === id);
+    if (matches.length !== 1 || typeof matches[0]!.detail !== "string") return null;
+    const match = /^Los apoyos suman (\d+) palabras: superan su presupuesto \((\d+)\) más allá de la tolerancia \((\d+)\)$/.exec(matches[0]!.detail);
+    return match ? { words: Number(match[1]), budget: Number(match[2]), tolerance: Number(match[3]) } : null;
+  };
+  if (!decisions.length || new Set(decisions).size !== decisions.length) return false;
+  return decisions.every((id) => {
+    const before = read(previous, id), after = read(current, id);
+    return !!before && !!after && before.budget === after.budget && before.tolerance === after.tolerance && after.words < before.words;
+  });
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Screening (before assembly)
 // ---------------------------------------------------------------------------------------------------------------------

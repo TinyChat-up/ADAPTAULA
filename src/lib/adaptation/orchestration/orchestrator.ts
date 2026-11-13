@@ -21,7 +21,7 @@ import { fingerprint } from "../fingerprint";
 import { SUPPORT_SOLVES_CHECK, auditGeneration } from "../generation-checks";
 import { decisionSupportBudget, designatedRewriter } from "../generated-v2";
 import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK } from "../generation-checks";
-import { diagnoseGeneration, diagnoseReview, failureSignature, missingRepairedGlossaries, repairLocally, screenGeneration, type GenerationFailure } from "../generation-recovery";
+import { budgetRepairProgress, diagnoseGeneration, diagnoseReview, failureSignature, missingRepairedGlossaries, repairLocally, screenGeneration, type GenerationFailure } from "../generation-recovery";
 import { buildGeneratorInputV2, normalizeGeneration } from "../generator";
 import { classifyPlan } from "../invariants";
 import { modelFacingAnalysis } from "../model-input";
@@ -1459,7 +1459,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const failing = audit.checks.filter((c) => !c.ok);
       // Names and decision ids only: what an operator needs to know why, never content.
       deps.log?.warn("generation_audit_failed", { adaptationId, checks: failing.map((c) => c.name).join("; "), decisions: [...new Set(failing.flatMap((c) => c.decisions ?? []))].join(",") });
-      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing, support: supportRepairOf(loaded, reviewed.effective.decisions, assembled.document, assembled.generation, substitutionMode, new Set((await earlierResolutions(store, adaptationId)).filter((r) => r.action === "substituted").map((r) => r.decision_id))) });
+      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing, generation, inputFp, support: supportRepairOf(loaded, reviewed.effective.decisions, assembled.document, assembled.generation, substitutionMode, new Set((await earlierResolutions(store, adaptationId)).filter((r) => r.action === "substituted").map((r) => r.decision_id))) });
       if (repaired) return repaired;
       // No safe repair left: the precise diagnosis (rule, decision, unit) is kept next to the review, never only a generic code.
       const diagnosis = diagnoseGeneration({ audit });
@@ -1639,7 +1639,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
 async function repairGenerationAutomatically(
   deps: OrchestratorDeps,
   run: StageRun,
-  at: { snapshot: PipelineSnapshot; loaded: Loaded; raw: { plan: AdaptationPlan; fingerprint: string }; reviewArtifact: { fingerprint: string; payload: Record<string, unknown> }; failing: ReadonlyArray<{ name: string; decisions?: string[] }>; support?: SupportRepair },
+  at: { snapshot: PipelineSnapshot; loaded: Loaded; raw: { plan: AdaptationPlan; fingerprint: string }; reviewArtifact: { fingerprint: string; payload: Record<string, unknown> }; failing: ReadonlyArray<{ name: string; decisions?: string[] }>; generation: NormalizedGeneration; inputFp: string; support?: SupportRepair },
 ): Promise<GenerationResult | null> {
   const { snapshot, loaded, raw, reviewArtifact, failing, support } = at;
   const adaptationId = snapshot.adaptation.id;
@@ -1651,16 +1651,26 @@ async function repairGenerationAutomatically(
   if (cycles >= MAX_GENERATION_CYCLES) return null;
   if (failing.some((c) => (c.decisions ?? []).length === 0)) return null;
   const effective = reviewPlan(raw.plan, previous, loaded.analysis, loaded.context).effective.decisions;
-  // The same failures on the same decisions as an earlier cycle: another restriction would generate the same sheet again. Only
-  // leaving the decision out (if every need stays covered) is still worth a cycle; otherwise the honest stop.
+  // The same signature normally means no progress. A budget failure can still have improved: only a shorter support with the
+  // same budget, verified against the persisted previous generation, earns the remaining bounded attempt.
   const signature = failureSignature(diagnoseGeneration({ audit: { checks: failing.map((c) => ({ ok: false, detail: "", ...c })) } }));
   const repeated = await seenSignature(deps.store, adaptationId, signature);
+  let budgetProgress = false;
+  if (repeated && failing.length === 1 && failing[0]!.name === OUT_OF_BUDGET_CHECK) {
+    const current = await deps.store.findArtifact(adaptationId, "generation", { inputFingerprint: at.inputFp });
+    const reusedFrom = (current?.payload as { reused_from?: unknown } | undefined)?.reused_from;
+    if (typeof reusedFrom === "string") {
+      const prior = await deps.store.findArtifact(adaptationId, "generation", { inputFingerprint: reusedFrom });
+      const issues = (prior?.payload as { generation?: { issues?: NormalizedGeneration["issues"] } } | undefined)?.generation?.issues;
+      if (Array.isArray(issues)) budgetProgress = budgetRepairProgress(issues, at.generation.issues, failing[0]!.decisions ?? []);
+    }
+  }
   const asks = new Map<string, Array<string | null>>();
   for (const c of failing) {
     for (const id of c.decisions ?? []) {
       const decision = effective.find((d) => d.id === id);
       const budget = c.name === OUT_OF_BUDGET_CHECK && decision ? budgetRestriction(decisionSupportBudget(decision, loaded.analysis.activities.find((a) => a.id === decision.target))) : null;
-      addAsk(asks, id, repeated ? null : (budget ?? AUDIT_RESTRICTIONS[c.name] ?? null));
+      addAsk(asks, id, repeated ? (budgetProgress ? "La reparación anterior acortó el apoyo pero sigue excediendo el límite: acórtalo de nuevo conservando todas las necesidades, datos y términos esenciales." : null) : (budget ?? AUDIT_RESTRICTIONS[c.name] ?? null));
     }
   }
   // Evidence B rides along: a decision with a structural signal gets its restriction only because this repair already happens.
