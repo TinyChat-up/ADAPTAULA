@@ -51,7 +51,7 @@ export function productionServices(versions: PipelineVersions, analysis: Paramet
       ...(versions.planner.prompt_version === 3 ? { rulesFor: async (context: Parameters<typeof buildRulesBlock>[2]) => buildRulesBlock(frozenRules(await getAgentRules(), versions.rules), analysis, context) } : {}),
     }),
     generator: createModelGenerator({ selection: selection(versions.generator), provider: providerFor(selection(versions.generator), workspaceId), maxOutputTokens: versions.generator.max_output_tokens, version: versions.generator.prompt_version }),
-    reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer), workspaceId), maxOutputTokens: versions.reviewer.max_output_tokens }),
+    reviewer: createModelReviewer({ selection: selection(versions.reviewer), provider: providerFor(selection(versions.reviewer), workspaceId), maxOutputTokens: versions.reviewer.max_output_tokens, version: versions.reviewer.prompt_version }),
   };
 }
 
@@ -60,11 +60,11 @@ export const orchestratorDeps = (): OrchestratorDeps => {
   // The orchestrator's warnings (automatic stops, corrections, a failed generation audit) reach the server log: scalar fields
   // only (ids, codes, check names), never content.
   const log = { warn: (event: string, data: Record<string, unknown>) => logger.warn(event, Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === null || ["string", "number", "boolean"].includes(typeof v) ? (v as string | number | boolean | null) : JSON.stringify(v)]))) };
-  return { store, services: productionServices, entitlements: dbEntitlements(store), log, supportSubstitution: serverEnv().SUPPORT_SUBSTITUTION_MODE, visuals: { resolve: resolveAdaptationVisuals } };
+  return { store, services: productionServices, entitlements: dbEntitlements(store), log, supportSubstitution: serverEnv().SUPPORT_SUBSTITUTION_MODE, reviewerV2: serverEnv().REVIEWER_V2_MODE, visuals: { resolve: resolveAdaptationVisuals } };
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */
-export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, options);
+export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, { ...options, reviewerV2: serverEnv().REVIEWER_V2_MODE !== "off" });
 
 /** The rules package a pilot adaptation is frozen with: the published manifest, offered only where the gate allows it. */
 export const plannerV3PilotRules = (workspaceId: string): RulesFreeze | null => (plannerV3PilotAllowed(workspaceId) ? { version: AGENT_RULES_V22.version, package_sha256: AGENT_RULES_V22.package_sha256 } : null);

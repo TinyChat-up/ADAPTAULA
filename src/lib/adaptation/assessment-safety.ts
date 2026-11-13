@@ -125,7 +125,7 @@ export interface SupportAssessment {
 }
 
 /** Activities whose answer is an explanation or an interpretation (structured fields, not the verb of the instruction). */
-const EXPLAINING = new Set<AnalysisActivity["type"]>(["short_answer", "open_question", "reading_comprehension", "graph_interpretation", "experiment"]);
+export const EXPLAINING = new Set<AnalysisActivity["type"]>(["short_answer", "open_question", "reading_comprehension", "graph_interpretation", "experiment"]);
 const SUPPORT_ORIGINS = new Set<Block["trace"]["origin"]>(["support", "extension"]);
 
 const linesOf = (block: Block): string[] => {

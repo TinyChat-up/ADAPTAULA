@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
+import { PEDAGOGICAL_REVIEWER_V2 } from "@prompts/pedagogical-reviewer/v2";
 import { estimateCostUsd } from "@/lib/ai/costs";
 import { AIError, toAIError } from "@/lib/ai/errors";
-import { parseStructured } from "@/lib/ai/structured";
+import { describeIssues, extractJsonText, parseStructured } from "@/lib/ai/structured";
 import type { AIProvider, ModelSelection, StructuredResponse } from "@/lib/ai/types";
 import {
   CHECK_METHODS,
@@ -11,12 +12,12 @@ import {
   type PedagogicalReview,
   type ReviewCheck,
 } from "@/lib/schemas/pedagogical-review";
-import { ReviewerFindingsSchema, type ReviewerFindings } from "@/lib/schemas/reviewer-findings";
+import { ReviewerFindingsSchema, ReviewerFindingsV2Schema, sanitizeReviewerV2, type ReviewerFindings, type ReviewerFindingsV2, type SanitationCounts, type SupportJudgment } from "@/lib/schemas/reviewer-findings";
 import { zodIssues, type DraftIssue } from "./planner-draft";
 import { assembleReview, deterministicChecks } from "./review";
 import type { ReviewInput } from "./review-checks";
 import { reviewScope, type JudgedCheck, type PedagogicalReviewContext, type ReviewScope } from "./review-context";
-import { RejectedStageOutput, rejectedRun, type PedagogicalReviewer, type StageRunRecord } from "./services";
+import { RejectedStageOutput, rejectedRun, type PedagogicalReviewer, type ReviewerResult, type StageRunRecord } from "./services";
 
 /**
  * The real pedagogical reviewer and, above all, the SERVER-SIDE MERGE that bounds it. The model only observes; this module
@@ -41,9 +42,13 @@ export interface ReviewerCallParams {
   signal?: AbortSignal;
 }
 
-/** The messages of a reviewer request. Exposed so the evals and tests inspect exactly what a model would receive. */
+/**
+ * The messages of a reviewer request. Exposed so the evals and tests inspect exactly what a model would receive. The prompt is the one
+ * the context was built for: a semantic context (version 2) is judged by pedagogical_reviewer@v2, any other by v1, unchanged.
+ */
 export function reviewerRequestParts(params: Pick<ReviewerCallParams, "reviewContext">) {
-  return { prompt: PEDAGOGICAL_REVIEWER_V1, parts: PEDAGOGICAL_REVIEWER_V1.buildUserParts({ reviewContext: params.reviewContext }) };
+  const prompt = params.reviewContext.context_version === 2 ? PEDAGOGICAL_REVIEWER_V2 : PEDAGOGICAL_REVIEWER_V1;
+  return { prompt, parts: prompt.buildUserParts({ reviewContext: params.reviewContext }) };
 }
 
 export interface ReviewerCall {
@@ -108,6 +113,30 @@ export function reviewerRejectionIssues(error: z.ZodError): DraftIssue[] {
   });
 }
 
+export type ReviewerParseV2 =
+  | { outcome: "ok"; findings: ReviewerFindingsV2; judgments: SupportJudgment[]; sanitation: SanitationCounts }
+  | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; error?: z.ZodError };
+
+/**
+ * The same order as v1 (stop reason, JSON, strict contract) with ONE formal clean-up in between (`sanitizeReviewerV2`: an over-long reason is
+ * cut, a stray key of a judgment is dropped, judgments past the limit are dropped). Nothing else is repaired: an invented id, a wrong
+ * verdict or class, a finding with an extra key or a missing field are rejected, and the pipeline's bounded re-ask applies.
+ */
+export function parseReviewerResponseV2(response: StructuredResponse): ReviewerParseV2 {
+  if (response.stopReason === "refusal") return { outcome: "refused", issues: ["El modelo rechazó la petición."] };
+  if (response.stopReason === "max_tokens") return { outcome: "truncated", issues: ["La salida alcanzó el límite de tokens."] };
+  let json: unknown;
+  try {
+    json = JSON.parse(extractJsonText(response.text));
+  } catch {
+    return { outcome: "not_json", issues: ["La respuesta no es JSON válido."] };
+  }
+  const { value, counts } = sanitizeReviewerV2(json);
+  const parsed = ReviewerFindingsV2Schema.safeParse(value);
+  if (!parsed.success) return { outcome: "schema", issues: describeIssues(parsed.error), error: parsed.error };
+  return { outcome: "ok", findings: parsed.data, judgments: parsed.data.support_judgments ?? [], sanitation: counts };
+}
+
 export type ReviewerParse = { outcome: "ok"; findings: ReviewerFindings } | { outcome: "truncated" | "refused" | "not_json" | "schema"; issues: string[]; error?: z.ZodError };
 
 /** Stop reason first (a cut-off answer is never parsed), then JSON, then the strict contract. */
@@ -119,7 +148,7 @@ export function parseReviewerResponse(response: StructuredResponse): ReviewerPar
 }
 
 /** Findings → the draft the merge reads. A request for human review can only raise a PASS to a WARN, never lower anything. */
-export function findingsToDraft(findings: ReviewerFindings): AiReviewDraft {
+export function findingsToDraft(findings: Pick<ReviewerFindings, "findings">): AiReviewDraft {
   return {
     checks: findings.findings.map((f) => {
       const human = f.requires_human_review === true;
@@ -215,12 +244,38 @@ export function buildReviewScoped(input: ReviewInput, ai: AiReviewDraft | null, 
   return { review: assembleReview(input, merged.checks), rejected: merged.rejected, pending: merged.pending };
 }
 
-/** `PedagogicalReviewer` backed by a real model, for the pipeline. A rejected answer throws; there is no repair here. */
-export function createModelReviewer(deps: { selection: ModelSelection; provider: AIProvider; maxOutputTokens: number }): PedagogicalReviewer {
+/**
+ * The semantic checks of the supports added to a review that was already merged (etapa 2.3, `REVIEWER_V2_MODE=on` only). Appended, never
+ * in place of anything: a deterministic FAIL stays, and the verdict and the blocks to revise are computed again over all the checks.
+ */
+export function withSemanticChecks(input: ReviewInput, review: PedagogicalReview, extra: readonly CheckResult[]): PedagogicalReview {
+  return extra.length === 0 ? review : assembleReview(input, [...review.checks, ...extra]);
+}
+
+/**
+ * `PedagogicalReviewer` backed by a real model, for the pipeline. A rejected answer throws; there is no repair here. `version` is the
+ * prompt version frozen with the adaptation: a semantic context (v2) is never sent to a v1 adaptation.
+ */
+export function createModelReviewer(deps: { selection: ModelSelection; provider: AIProvider; maxOutputTokens: number; version?: number }): PedagogicalReviewer {
   return {
-    review: async ({ reviewContext }) => {
+    review: async ({ reviewContext }): Promise<ReviewerResult> => {
       if (!reviewContext) throw new AIError("invalid_output", "reviewer input without a review context");
-      const { response, run } = await callReviewer({ ...deps, reviewContext });
+      const { version, ...callDeps } = deps;
+      if (reviewContext.context_version === 2 && version !== undefined && version !== 2) throw new AIError("invalid_output", "a semantic review context needs pedagogical_reviewer@v2");
+      const { response, run } = await callReviewer({ ...callDeps, reviewContext });
+      if (reviewContext.context_version === 2) {
+        const parsed = parseReviewerResponseV2(response);
+        if (parsed.outcome !== "ok") {
+          const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";
+          throw new RejectedStageOutput(code, `reviewer output rejected: ${parsed.outcome}`, rejectedRun(run, code), {
+            kind: parsed.outcome,
+            issues: parsed.error ? reviewerRejectionIssues(parsed.error) : [],
+            outputTokens: response.usage.outputTokens,
+            maxOutputTokens: deps.maxOutputTokens,
+          });
+        }
+        return { draft: findingsToDraft(parsed.findings), runs: [run], judgments: parsed.judgments, sanitation: parsed.sanitation };
+      }
       const parsed = parseReviewerResponse(response);
       if (parsed.outcome !== "ok") {
         const code = parsed.outcome === "refused" ? "refusal" : parsed.outcome === "truncated" ? "truncated" : "invalid_output";

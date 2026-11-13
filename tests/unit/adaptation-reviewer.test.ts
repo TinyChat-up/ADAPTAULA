@@ -209,7 +209,7 @@ describe("the reviewer observes: it never corrects", () => {
 
   it("the prompt is published, pinned and not active anywhere; the model-backed reviewer plugs into the pipeline", async () => {
     expect(getPedagogicalReviewer(1)).toBe(PEDAGOGICAL_REVIEWER_V1);
-    expect(() => getPedagogicalReviewer(2)).toThrow(/pedagogical_reviewer@v2/);
+    expect(() => getPedagogicalReviewer(3)).toThrow(/pedagogical_reviewer@v3/);
     expect(ACTIVE_ADAPTATION_PROMPT_VERSIONS).not.toHaveProperty("pedagogical_reviewer");
     expect(PEDAGOGICAL_REVIEWER_V1.system).not.toMatch(/claude|anthropic|openai|gpt|sonnet|haiku|opus/i);
     expect(sha(PEDAGOGICAL_REVIEWER_V1.system)).toBe("98a169e7feeccc1fda23c002f36363d42eb2ad95e8c4d9ad635dcf5f1d04aba7");

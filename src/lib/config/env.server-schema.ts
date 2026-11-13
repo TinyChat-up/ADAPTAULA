@@ -60,6 +60,14 @@ export const ServerEnvSchema = z.object({
    */
   SUPPORT_SUBSTITUTION_MODE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "dry_run", "off"]).default("dry_run")),
 
+  /**
+   * Etapa 2.3: the semantic review of the supports (pedagogical_reviewer@v2). `off` (default): the v1 reviewer, nothing changes; `shadow`: the
+   * v2 reviewer judges and the judgments are only RECORDED (verdict and repairs as v1); `on`: its confirmed findings fail the review and are
+   * repaired. It decides the reviewer an adaptation is CREATED with; `on` only after validation and authorization. Independent of
+   * SUPPORT_SUBSTITUTION_MODE, which alone decides whether a confirmed finding may substitute a support.
+   */
+  REVIEWER_V2_MODE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["off", "shadow", "on"]).default("off")),
+
   FLAG_MAX_PLAN_ENABLED: flag(false),
   FLAG_AI_IMAGES_ENABLED: flag(false),
   AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),

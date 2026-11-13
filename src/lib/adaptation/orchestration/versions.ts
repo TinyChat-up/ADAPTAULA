@@ -22,6 +22,13 @@ export const EXPERIMENTAL_PIPELINE = { planner: 2, contextPolicy: 3, generator: 
 export const PIPELINE_OUTPUT_LIMITS = { planner: 4000, generator: 3000, reviewer: 2000 } as const;
 
 /**
+ * `pedagogical_reviewer@v2` (etapa 2.3) judges every support next to the findings v1 already wrote. The most the contract allows is 12 findings
+ * (~700 tokens measured at most 969) plus 12 judgments (~70 tokens each, ~25 when «legitimate»): about 1,800 tokens, with room for the
+ * longest reasons. A budget exceeded is a rejected answer (truncated), never a silently shorter one.
+ */
+export const REVIEWER_V2 = { prompt_version: 2, max_output_tokens: 2600 } as const;
+
+/**
  * `adaptation_planner@v3` (ADR-045/046): only for an adaptation created in the authorised pilot workspace. Its answer carries the
  * method's declarations beside the plan, hence its own output budget (not yet measured with the real model: adjust it from the
  * pilot's records, as a NEW value, never by editing a frozen row).
@@ -67,12 +74,13 @@ const frozen = (selection: ModelSelection) => ({ alias: selection.alias, provide
 /**
  * Pure: alias → provider/model from an env-like map, frozen. Throws a categorized AIError when an alias is not configured.
  * `plannerV3` is passed ONLY after the server checked the pilot gate (ADR-046); every other adaptation keeps the current planner.
+ * `reviewerV2` (etapa 2.3) is passed only when `REVIEWER_V2_MODE` is not `off`; otherwise the reviewer is v1, byte for byte as before.
  */
-export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: RulesFreeze } = {}): PipelineVersions {
+export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: RulesFreeze; reviewerV2?: boolean } = {}): PipelineVersions {
   const v3 = options.plannerV3;
   const planner = getAdaptationPlanner(v3 ? PLANNER_V3_PILOT.prompt_version : EXPERIMENTAL_PIPELINE.planner);
   const generator = getMaterialGenerator(EXPERIMENTAL_PIPELINE.generator);
-  const reviewer = getPedagogicalReviewer(EXPERIMENTAL_PIPELINE.reviewer);
+  const reviewer = getPedagogicalReviewer(options.reviewerV2 ? REVIEWER_V2.prompt_version : EXPERIMENTAL_PIPELINE.reviewer);
   return PipelineVersionsSchema.parse({
     pipeline: PIPELINE_KIND,
     analysis_schema: EXPERIMENTAL_PIPELINE.analysisSchema,
@@ -81,7 +89,7 @@ export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: Ru
     context_policy: EXPERIMENTAL_PIPELINE.contextPolicy,
     generator: { prompt_version: generator.version, schema_version: generator.schemaVersion, max_output_tokens: PIPELINE_OUTPUT_LIMITS.generator, selection: frozen(resolveModel("STANDARD", env)) },
     document_schema: MATERIAL_DOCUMENT_SCHEMA_VERSION,
-    reviewer: { prompt_version: reviewer.version, schema_version: reviewer.schemaVersion, max_output_tokens: PIPELINE_OUTPUT_LIMITS.reviewer, selection: frozen(resolveModel("STANDARD", env)) },
+    reviewer: { prompt_version: reviewer.version, schema_version: reviewer.schemaVersion, max_output_tokens: options.reviewerV2 ? REVIEWER_V2.max_output_tokens : PIPELINE_OUTPUT_LIMITS.reviewer, selection: frozen(resolveModel("STANDARD", env)) },
     review_schema: PEDAGOGICAL_REVIEW_SCHEMA_VERSION,
     ...(v3 ? { rules: { version: v3.version, package_sha256: v3.package_sha256 } } : {}),
   });

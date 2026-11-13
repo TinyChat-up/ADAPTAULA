@@ -7,6 +7,7 @@ import { ADAPTATION_PLANNER_V3 } from "@prompts/adaptation-planner/v3";
 import { MATERIAL_GENERATOR_V1 } from "@prompts/material-generator/v1";
 import { MATERIAL_GENERATOR_V2 } from "@prompts/material-generator/v2";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
+import { PEDAGOGICAL_REVIEWER_V2 } from "@prompts/pedagogical-reviewer/v2";
 import type { z } from "zod";
 import { normalizeAnalysis, type NormalizeOptions } from "@/lib/analysis/normalize";
 import { normalizeAnalysisV2 } from "@/lib/analysis/normalize-v2";
@@ -81,7 +82,7 @@ export function activeMaterialAnalyzer(version: number = ACTIVE_PROMPT_VERSIONS.
 }
 
 /** Prompts of the adaptation pipeline (Fase 4). Same rule: published versions are immutable. */
-export const ADAPTATION_PROMPTS = { adaptation_planner: { 1: ADAPTATION_PLANNER_V1, 2: ADAPTATION_PLANNER_V2, 3: ADAPTATION_PLANNER_V3 }, material_generator: { 1: MATERIAL_GENERATOR_V1, 2: MATERIAL_GENERATOR_V2 }, pedagogical_reviewer: { 1: PEDAGOGICAL_REVIEWER_V1 } } as const;
+export const ADAPTATION_PROMPTS = { adaptation_planner: { 1: ADAPTATION_PLANNER_V1, 2: ADAPTATION_PLANNER_V2, 3: ADAPTATION_PLANNER_V3 }, material_generator: { 1: MATERIAL_GENERATOR_V1, 2: MATERIAL_GENERATOR_V2 }, pedagogical_reviewer: { 1: PEDAGOGICAL_REVIEWER_V1, 2: PEDAGOGICAL_REVIEWER_V2 } } as const;
 export const ACTIVE_ADAPTATION_PROMPT_VERSIONS = { adaptation_planner: 1, material_generator: 1 } as const;
 
 /**
@@ -102,8 +103,8 @@ export function getMaterialGenerator(version: number = ACTIVE_ADAPTATION_PROMPT_
 }
 
 /** The reviewer is published but NOT active anywhere: it needs its first real validation before any default. The version is explicit. */
-export function getPedagogicalReviewer(version: number): typeof PEDAGOGICAL_REVIEWER_V1 {
-  const prompt = (ADAPTATION_PROMPTS.pedagogical_reviewer as Record<number, typeof PEDAGOGICAL_REVIEWER_V1 | undefined>)[version];
+export function getPedagogicalReviewer(version: number): typeof PEDAGOGICAL_REVIEWER_V1 | typeof PEDAGOGICAL_REVIEWER_V2 {
+  const prompt = (ADAPTATION_PROMPTS.pedagogical_reviewer as Record<number, typeof PEDAGOGICAL_REVIEWER_V1 | typeof PEDAGOGICAL_REVIEWER_V2 | undefined>)[version];
   if (!prompt) throw new Error(`No existe pedagogical_reviewer@v${version}.`);
   return prompt;
 }
