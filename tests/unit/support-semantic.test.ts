@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
 import { PEDAGOGICAL_REVIEWER_V2 } from "@prompts/pedagogical-reviewer/v2";
@@ -11,9 +13,9 @@ import { resolveModel } from "@/lib/ai/registry";
 import type { AIProvider, StructuredResponse } from "@/lib/ai/types";
 import { BLOCKING_CHECKS } from "@/lib/schemas/pedagogical-review";
 import { MAX_SUPPORT_JUDGMENTS, ReviewerFindingsSchema, ReviewerFindingsV2Schema, SupportJudgmentSchema, sanitizeReviewerV2, type SupportJudgment } from "@/lib/schemas/reviewer-findings";
-import { CORPUS, corpusById, type CorpusEntry } from "../../evals/support-semantic/corpus";
+import { CORPUS, corpusById, type CorpusEntry, type ReviewLabel } from "../../evals/support-semantic/corpus";
 import { sheetOf } from "../../evals/support-semantic/lib";
-import { ACTIVATION_THRESHOLDS, consistency, readyToActivate, referenceLabel, scoreCorpus, wilsonLower } from "../../evals/support-semantic/score";
+import { EVIDENCE, casesForZeroFailures, consistency, costPerDelivered, criticalFlips, deliverabilityChanges, entryLevel, isCritical, labelLevel, readyFor, referenceLabel, scoreCorpus, upperBound95, wilsonLower } from "../../evals/support-semantic/score";
 import { primariaScenario } from "../../evals/adaptation/reviewer-fixtures";
 
 /**
@@ -469,51 +471,139 @@ describe("conexión con la sustitución de la etapa 2.2", () => {
   });
 });
 
-describe("medición antes de activar", () => {
+describe("medición antes de activar: la estadística que cabe en la muestra", () => {
   const results = (statuses: Record<string, string>) => CORPUS.map((e) => ({ id: e.id, status: (statuses[e.id] ?? e.expected.status) as never }));
+  const label = (source: ReviewLabel["source"], reviewer: string, l: ReviewLabel["label"]): ReviewLabel => ({ source, reviewer, label: l, accept_removal: "depends" });
+  /** The corpus as if a person (with or without an assistant) had labelled it as the team did. */
+  const labelled = (labels: (e: CorpusEntry) => ReviewLabel[]) => CORPUS.map((c) => ({ ...c, review: { status: "reviewed" as const, labels: labels(c), final_label: c.provisional.label, final_by: "human_ai_assisted" as const } }));
 
-  it("la etiqueta de referencia es la de una persona y, hasta que exista, la provisional (y se dice)", () => {
+  it("la etiqueta de referencia es la final de una persona y, hasta que exista, la provisional; el nivel dice quién etiquetó", () => {
     const e = { ...corpusById("est-01") };
     expect(referenceLabel(e)).toBe("performs_competence");
-    expect(referenceLabel({ ...e, review: { status: "reviewed", reviewed_by: "PT", final_label: "ambiguous" } })).toBe("ambiguous");
+    expect(entryLevel(e)).toBe("provisional");
+    expect(labelLevel(CORPUS)).toBe("provisional");
+    expect(referenceLabel({ ...e, review: { status: "reviewed", labels: [], final_label: "ambiguous", final_by: "human" } })).toBe("ambiguous");
     expect(scoreCorpus(CORPUS, results({})).labels).toBe("provisional");
-    expect(scoreCorpus(CORPUS.map((c) => ({ ...c, review: { status: "reviewed" as const, reviewed_by: "PT", final_label: c.provisional.label } })), results({})).labels).toBe("human");
   });
 
-  it("un apoyo legítimo confirmado es un falso positivo; uno que hace la competencia y ni se sospecha, un falso negativo", () => {
+  it("una revisión asistida por IA es UN revisor, no dos; una etiqueta de IA no es una revisión; solo dos personas distintas son independientes", () => {
+    const e = corpusById("est-01");
+    const withLabels = (labels: ReviewLabel[]): CorpusEntry => ({ ...e, review: { status: "reviewed", labels, final_label: "performs_competence", final_by: "human_ai_assisted" } });
+    expect(entryLevel(withLabels([label("human_ai_assisted", "Docente", "performs_competence")]))).toBe("single_reviewer_ai_assisted");
+    // El mismo revisor asistido dos veces, o el asistente como «segundo» revisor, no suben el nivel.
+    expect(entryLevel(withLabels([label("human_ai_assisted", "Docente", "performs_competence"), label("ai", "ChatGPT", "performs_competence")]))).toBe("single_reviewer_ai_assisted");
+    expect(entryLevel(withLabels([label("ai", "ChatGPT", "performs_competence")]))).toBe("provisional");
+    expect(entryLevel(withLabels([label("human", "Docente", "performs_competence"), label("human", "Docente", "performs_competence")]))).toBe("single_human");
+    expect(entryLevel(withLabels([label("human", "Docente", "performs_competence"), label("human", "Especialista", "over_hint")]))).toBe("two_independent_humans");
+    expect(entryLevel(withLabels([label("human_ai_assisted", "Docente", "performs_competence"), label("human", "Especialista", "performs_competence")]))).toBe("single_human");
+  });
+
+  it("el nivel del conjunto es el de su entrada más débil, y los casos críticos o ambiguos sin segunda persona se cuentan", () => {
+    const assisted = labelled(() => [label("human_ai_assisted", "Docente", "performs_competence")]);
+    const score = scoreCorpus(assisted, results({}));
+    expect(score.labels).toBe("single_reviewer_ai_assisted");
+    expect(score.critical_without_second_human).toBe(assisted.filter(isCritical).length);
+    expect(score.critical_without_second_human).toBeGreaterThan(0);
+    const second = labelled((c) => [label("human", "Docente", c.provisional.label), label("human", "Especialista", c.provisional.label)]);
+    expect(scoreCorpus(second, results({}))).toMatchObject({ labels: "two_independent_humans", critical_without_second_human: 0 });
+    // Una sola entrada sin etiquetar baja todo el conjunto.
+    expect(labelLevel([...second.slice(0, -1), CORPUS.at(-1)!])).toBe("provisional");
+  });
+
+  it("un apoyo legítimo confirmado es un falso positivo; uno que hace la competencia y ni se sospecha, un falso negativo; ambos se listan", () => {
     const score = scoreCorpus(CORPUS, results({ "pri-01": "confirmed", "cel-01": "legitimate", "est-08": "unjudged" }));
     expect(score.false_positive_ids).toEqual(["pri-01"]);
     expect(score.false_negative_ids.sort()).toEqual(["cel-01", "est-08"]);
     expect(score.confirmed.precision).toBeLessThan(1);
     expect(score.unjudged).toBe(1);
+    expect(score.evidence).toBe("exploratory");
   });
 
   it("los casos ambiguos no cuentan en las tasas y se declaran excluidos", () => {
     const score = scoreCorpus(CORPUS, results({}));
     expect(score.excluded).toBe(CORPUS.filter((c) => c.provisional.label === "ambiguous").length);
     expect(score.n + score.excluded).toBe(CORPUS.length);
+    expect(score.legitimate_n + score.positives_n).toBeLessThan(score.n + 1);
   });
 
-  it("Wilson: con pocos casos el límite inferior es mucho menor que la proporción; con ninguno, null", () => {
+  it("con 27 apoyos NO se puede afirmar una precisión alta: cero falsos positivos entre los legítimos solo acota la tasa real por encima de ~15 %", () => {
+    const score = scoreCorpus(CORPUS, results({}));
+    expect(score.false_positive_ids).toEqual([]);
+    expect(score.legitimate_n).toBeLessThan(29);
+    expect(score.false_positive_rate_upper95!).toBeGreaterThan(0.1);
+    expect(score.false_positive_rate_upper95!).toBeCloseTo(1 - Math.pow(0.05, 1 / score.legitimate_n), 3);
+    expect(score.evidence).toBe("exploratory");
+    // Ni siquiera con todos los verdaderos positivos acertados el límite inferior de la precisión es «alto».
+    expect(wilsonLower(score.positives_n, score.positives_n)!).toBeLessThan(0.8);
+  });
+
+  it("cuántos casos haría falta ver SIN fallo: 29 para acotar la tasa en 10 %, 59 para 5 %", () => {
+    expect(casesForZeroFailures(0.1)).toBe(29);
+    expect(casesForZeroFailures(0.05)).toBe(59);
+    expect(upperBound95(0, 29)!).toBeLessThanOrEqual(0.1);
+    expect(upperBound95(0, 28)!).toBeGreaterThan(0.1);
+    expect(upperBound95(0, 59)!).toBeLessThanOrEqual(0.05);
+    expect(upperBound95(1, 29)!).toBeGreaterThan(0.1);
+    expect(upperBound95(3, 3)).toBe(1);
+    expect(upperBound95(0, 0)).toBeNull();
     expect(wilsonLower(0, 0)).toBeNull();
-    expect(wilsonLower(10, 10)!).toBeLessThan(0.75);
     expect(wilsonLower(40, 40)!).toBeGreaterThan(0.9);
   });
 
-  it("concordancia entre repeticiones", () => {
+  it("estabilidad: la concordancia global y, sobre todo, los apoyos que una repetición CONFIRMA y otra llama legítimos", () => {
     const a = results({});
     expect(consistency([a])).toBeNull();
     expect(consistency([a, a, a])).toBe(1);
-    expect(consistency([a, results({ "est-01": "legitimate" })])!).toBeCloseTo((CORPUS.length - 1) / CORPUS.length);
+    expect(criticalFlips([a, a, a])).toEqual([]);
+    const flip = results({ "est-01": "legitimate" });
+    expect(consistency([a, flip])!).toBeCloseTo((CORPUS.length - 1) / CORPUS.length);
+    expect(criticalFlips([a, flip])).toEqual(["est-01"]);
+    // Pasar de confirmado a sospechado es ruido, no un cambio de decisión.
+    expect(criticalFlips([a, results({ "est-01": "suspected" })])).toEqual([]);
   });
 
-  it("con el corpus provisional y sin medidas de coste/esquema NO se puede activar: faltan las etiquetas de una persona y más casos", () => {
-    const score = scoreCorpus(CORPUS, results({}));
-    const gate = readyToActivate(score, { consistency: 1, schemaFailureRate: 0 });
+  it("entregabilidad respecto a v1: cada documento que cambia es un caso para una persona, no una tasa", () => {
+    const changes = deliverabilityChanges([{ id: "d1", v1Usable: true, v2Usable: true }, { id: "d2", v1Usable: true, v2Usable: false }, { id: "d3", v1Usable: false, v2Usable: true }]);
+    expect(changes).toEqual({ became_unusable: ["d2"], became_usable: ["d3"], n: 3 });
+  });
+
+  it("coste por adaptación válida y entregada: todo el gasto del grupo (también lo no entregado y las regeneraciones) entre las entregadas; un coste desconocido no lo abarata", () => {
+    const cohort = [
+      { delivered: true, costsUsd: [0.026, 0.018, 0.019] },
+      { delivered: true, costsUsd: [0.026, 0.018, 0.018, 0.019, 0.019] },
+      { delivered: false, costsUsd: [0.026, 0.018] },
+    ];
+    const cost = costPerDelivered(cohort);
+    expect(cost.delivered).toBe(2);
+    expect(cost.total_usd).toBeCloseTo(0.207, 6);
+    expect(cost.usd).toBeCloseTo(0.1035, 6);
+    expect(costPerDelivered([...cohort, { delivered: true, costsUsd: [null] }]).usd).toBeNull();
+    expect(costPerDelivered([{ delivered: false, costsUsd: [0.02] }]).usd).toBeNull();
+  });
+
+  it("con el corpus de 27 y etiquetas asistidas por IA NO está listo para ningún escalón, y dice exactamente qué falta", () => {
+    const score = scoreCorpus(labelled(() => [label("human_ai_assisted", "Docente", "performs_competence")]), results({}));
+    const gate = readyFor("pilot", { score, criticalFlips: [], deliverability: null, explainedChanges: 0, schemaFailureRate: 0, extraUsdPerDelivered: 0.007 });
     expect(gate.ready).toBe(false);
-    expect(gate.missing.join(" ")).toMatch(/etiquetas definitivas de una persona/);
-    expect(gate.missing.join(" ")).toMatch(new RegExp(`al menos ${ACTIVATION_THRESHOLDS.minUnitsJudged} apoyos`));
-    expect(readyToActivate(score, { consistency: null, schemaFailureRate: null }).missing.join(" ")).toMatch(/concordancia|fallos de esquema/);
+    const text = gate.missing.join(" | ");
+    expect(text).toMatch(/al menos 29 apoyos legítimos/);
+    expect(text).toMatch(/comparación de entregabilidad con v1/);
+    const strict = readyFor("default", { score, criticalFlips: [], deliverability: { became_unusable: [], became_usable: [], n: 9 }, explainedChanges: 0, schemaFailureRate: 0, extraUsdPerDelivered: 0.007 });
+    expect(strict.missing.join(" | ")).toMatch(/al menos 59 apoyos legítimos/);
+    expect(strict.missing.join(" | ")).toMatch(/etiquetas definitivas de una persona/);
+    expect(strict.missing.join(" | ")).toMatch(/casos críticos o ambiguos sin segunda persona/);
+  });
+
+  it("un cambio de entregabilidad sin examinar, un salto de decisión o un sobrecoste impiden el escalón, y un falso positivo se nombra", () => {
+    const score = scoreCorpus(CORPUS, results({ "pri-01": "confirmed" }));
+    const gate = readyFor("pilot", { score, criticalFlips: ["est-01"], deliverability: { became_unusable: ["d2"], became_usable: [], n: 9 }, explainedChanges: 0, schemaFailureRate: 0.05, extraUsdPerDelivered: 0.02 });
+    const text = gate.missing.join(" | ");
+    expect(text).toMatch(/pri-01/);
+    expect(text).toMatch(/entre repeticiones \(est-01\)/);
+    expect(text).toMatch(/cambios de entregabilidad respecto a v1 sin examinar/);
+    expect(text).toMatch(/fallos de esquema/);
+    expect(text).toMatch(/sobrecoste por adaptación entregada/);
+    expect(EVIDENCE.maxExtraUsdPerDelivered).toBe(0.01);
   });
 
   it("el corpus recoge las seis clases, la competencia y la necesidad de cada apoyo, sin datos personales y pendiente de revisión humana", () => {
@@ -522,9 +612,43 @@ describe("medición antes de activar", () => {
       expect(c.need.dimension).toBeTruthy();
       expect(c.provisional.rationale.length).toBeGreaterThan(10);
       expect(c.provisional.by).toBe("ai_assisted");
-      expect(c.review).toEqual({ status: "pending_human_review", reviewed_by: null, final_label: null });
+      expect(c.review).toEqual({ status: "pending_human_review", labels: [], final_label: null, final_by: null });
     }
     expect(new Set(CORPUS.map((c) => c.id)).size).toBe(CORPUS.length);
     expect(JSON.stringify(CORPUS)).not.toMatch(/@|display_name|DNI|fecha de nacimiento/i);
+  });
+});
+
+describe("hoja ciega: no enseña ninguna etiqueta previa y cada apoyo está una vez", () => {
+  const dir = path.join(process.cwd(), "docs/qa/etapa-2-3-semantica");
+  const sheet = readFileSync(path.join(dir, "hoja-ciega.md"), "utf8");
+  const csv = readFileSync(path.join(dir, "hoja-ciega-respuestas.csv"), "utf8");
+  const key = JSON.parse(readFileSync(path.join(process.cwd(), "evals/support-semantic/clave-hoja-ciega.json"), "utf8")) as Array<{ item: string; id: string }>;
+
+  it("ninguna etiqueta provisional, motivo, juicio esperado, id del corpus ni origen del apoyo aparece en la hoja", () => {
+    for (const c of CORPUS) {
+      expect(sheet, c.id).not.toContain(c.provisional.rationale);
+      expect(sheet, c.id).not.toMatch(new RegExp(`\\b${c.id}\\b`));
+    }
+    expect(sheet).not.toMatch(/\bai_assisted\b|pilot_sheet|variant|provisional|expected|clave-hoja/i);
+    // Las seis etiquetas solo aparecen como definiciones (una vez cada una), nunca como respuesta de un apoyo.
+    expect(sheet.match(/performs_competence/g)).toHaveLength(1);
+  });
+
+  it("la hoja distingue las etiquetas humanas de las asistidas por IA y no cuenta una revisión asistida como dos revisores", () => {
+    expect(sheet).toMatch(/`human_ai_assisted`.*UN revisor, no dos/);
+    expect(sheet).toMatch(/solo así cuenta como segundo revisor independiente/);
+    expect(sheet).toMatch(/no es una etiqueta/);
+  });
+
+  it("27 apoyos, cada id del corpus una vez, en un orden que no sigue el del corpus; la clave no lleva etiquetas", () => {
+    expect(key).toHaveLength(CORPUS.length);
+    expect(new Set(key.map((k) => k.id))).toEqual(new Set(CORPUS.map((c) => c.id)));
+    expect(new Set(key.map((k) => k.item)).size).toBe(CORPUS.length);
+    expect(key.map((k) => k.id)).not.toEqual(CORPUS.map((c) => c.id));
+    expect(Object.keys(key[0]!).sort()).toEqual(["id", "item"]);
+    expect((sheet.match(/^### B\d\d$/gm) ?? []).length).toBe(CORPUS.length);
+    expect(csv.trim().split("\n")).toHaveLength(CORPUS.length + 1);
+    expect(csv.split("\n")[0]).toBe("item,reviewer,label_source,label,accept_removal,needs_more_context,confidence,comment");
   });
 });

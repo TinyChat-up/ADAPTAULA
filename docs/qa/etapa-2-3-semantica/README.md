@@ -151,36 +151,35 @@ Precios del repositorio (`costs.ts`, sonnet-5-5: 2 $/M entrada, 10 $/M salida) y
 - Los ciclos y las reanudaciones conservan los límites: tres generaciones como máximo (también en BD), una revisión por ciclo, y volver a visitar
   una adaptación terminada no llama a nadie (probado).
 
-## Corpus y medición antes de activar
+## Corpus, evaluación y activación
 
-- [`corpus-revision.md`](corpus-revision.md) / [`.json`](corpus-revision.json): 27 apoyos de las fichas de prueba del equipo (célula, estanque,
-  fracciones, números primos, seres vivos), con la competencia evaluada, el motivo y la necesidad funcional de cada uno, en seis clases
-  (acceso legítimo, tarjeta de criterio, ejemplo metodológico, pista excesiva, realiza la competencia, ambiguo). **Las etiquetas son
-  provisionales** (propuesta del equipo con ayuda de IA, no verdad de referencia): cada fila espera la etiqueta definitiva de una persona con
-  criterio pedagógico y de PT. Regenerar: `pnpm exec tsx evals/support-semantic/export-review.ts`.
-- `evals/support-semantic/score.ts` (puro, probado): falsos positivos (legítimo confirmado: **debe ser 0**), falsos negativos (hace la
-  competencia y ni se sospecha), precisión de lo confirmado con límite inferior de Wilson, recall, apoyos sin juzgar y concordancia entre
-  repeticiones. Mientras haya etiquetas provisionales el informe dice `labels: provisional`.
-- **Umbrales propuestos para pasar de `shadow` a `on`** (`ACTIVATION_THRESHOLDS`, todos a la vez; son una propuesta para quien decide, no
-  evidencia): etiquetas definitivas; ≥ 40 apoyos etiquetados y ≥ 10 verdaderos positivos; precisión de lo confirmado ≥ 0,85 (Wilson);
-  **0** confirmados sobre apoyos legítimos; concordancia entre tres repeticiones ≥ 0,9; fallos de esquema ≤ 2 % (histórico: 2 de 16);
-  apoyos sin juzgar < 5 %; coste dentro de lo previsto.
+Ver [`evaluacion-propuesta.md`](evaluacion-propuesta.md) (qué datos históricos existen de verdad —11 documentos con revisión v1, 9 del
+piloto—, evaluación pequeña de ≈ 1 $, estadística proporcional a la muestra, protocolo de validación humana) y
+[`diseno-retirada-semantica.md`](diseno-retirada-semantica.md) (una sola regeneración semántica y retirada determinista; diseño, no
+implementado).
+
+- **Corpus exploratorio de 27 apoyos** (`evals/support-semantic/corpus.ts`): 15 legítimos, 8 que hacen la competencia, 1 pista excesiva y 3
+  ambiguos. **Con esta muestra no se puede afirmar una precisión alta**: cero falsos positivos entre 15 legítimos acota la tasa real solo por
+  debajo del 18 % (95 %). Las etiquetas del equipo son provisionales y **nunca** son la referencia.
+- **Hoja ciega** [`hoja-ciega.md`](hoja-ciega.md) + [`hoja-ciega-respuestas.csv`](hoja-ciega-respuestas.csv): sin ninguna etiqueta previa; cada
+  respuesta registra quién la da (`human`, `human_ai_assisted`, `ai`). **Una revisión asistida por IA es un revisor, no dos.** Regenerar con
+  `pnpm exec tsx evals/support-semantic/export-blind-sheet.ts`.
+- `evals/support-semantic/score.ts` (puro, probado): falsos positivos sobre legítimos (primera prioridad), falsos negativos en ayudas que
+  entregan respuestas, cotas exactas del 95 %, casos necesarios sin fallo (29 para ≤ 10 %, 59 para ≤ 5 %), nivel de las etiquetas, saltos de
+  confirmado a legítimo entre repeticiones, cambios de entregabilidad respecto a v1 y coste por adaptación válida y entregada. Marca
+  `evidence: "exploratory"` mientras la muestra no permita una afirmación.
 
 ## Procedimiento de validación posterior (requiere autorización; no se ha ejecutado)
 
-1. **Etiquetas.** Una persona con criterio pedagógico y de PT completa «Etiqueta definitiva» en el corpus; se amplía a ≥ 40 apoyos con
-   fichas reales del piloto (sin datos del alumnado).
-2. **Evaluación con el modelo real** (cuesta dinero: ~27 revisiones × 3 repeticiones ≈ 2–3 $ con los precios de arriba; **pedir
-   autorización expresa**): ejecutar el revisor v2 sobre el corpus congelado tres veces y puntuar con `scoreCorpus`/`consistency`.
-3. **`shadow` en un entorno acotado** (p. ej. el workspace del piloto o staging, nunca Production sin autorización): crear adaptaciones
-   con `REVIEWER_V2_MODE=shadow`, leer `semantic` en `pedagogical_review` y `ai_runs` (tokens, coste, `reviewer_schema`) y comparar lo
-   confirmado y lo sospechado con el juicio de una persona.
-4. **Decisión.** Solo con los umbrales cumplidos y autorización expresa: `on` con `SUPPORT_SUBSTITUTION_MODE=dry_run` primero; la
-   sustitución semántica (`on` + `on`) después.
+1. Etiquetado humano de la hoja ciega (0 $; ver la propuesta).
+2. Evaluación pequeña con el modelo real (≈ 0,7–1,3 $; tope 3 $ **solo con autorización expresa**): corpus agrupado por ficha ×3 y los 9
+   documentos del piloto ×2.
+3. Escalón piloto (`on` con la sustitución en `dry_run`, workspace controlado, cada confirmado revisado por una persona) y, solo si se
+   alcanzan los tamaños necesarios, v2 como revisor por defecto con una sola llamada (sin v1 en paralelo).
 
 ## Pruebas
 
-- `tests/unit/support-semantic.test.ts` (49): modos, versiones fijadas, prompt v2 (v1 intacto por huella), contexto (v1 idéntico), contrato y
+- `tests/unit/support-semantic.test.ts` (59: incluye estadística, procedencia de las etiquetas y la hoja ciega): modos, versiones fijadas, prompt v2 (v1 intacto por huella), contexto (v1 idéntico), contrato y
   saneado, casos reales con el revisor simulado (estanque, célula, fracciones, primos, seres vivos), revisor ideal y revisor excesivo,
   juicios ausentes o inventados, más de 12 apoyos, fusión, conexión con la 2.2 y medición.
 - `tests/db/support-semantic.test.ts` (23, PGlite con las migraciones reales): `off`, `shadow`, `on` con la sustitución en `off`/`dry_run`/`on`,

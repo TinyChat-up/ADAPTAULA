@@ -47,7 +47,31 @@ export interface CorpusEntry {
   provisional: { label: CorpusLabel; rationale: string; by: "ai_assisted" };
   /** What a competent semantic reviewer is expected to answer, and what the server policy then makes of it. */
   expected: { judgment: { class: SupportClass; how?: SupportHow; cites_protected?: boolean }; status: SemanticStatus };
-  review: { status: "pending_human_review" | "reviewed"; reviewed_by: string | null; final_label: CorpusLabel | null };
+  review: CorpusReview;
+}
+
+/**
+ * WHO wrote a label matters as much as the label. `human`: a person's own judgment. `human_ai_assisted`: a person who used an AI assistant to
+ * think it through: it is ONE reviewer, never two. `ai`: a label proposed by an AI (including the provisional one): it is never a human label and
+ * never counts as a review. Independence is counted only over distinct `human` reviewers.
+ */
+export type LabelSource = "human" | "human_ai_assisted" | "ai";
+export interface ReviewLabel {
+  source: LabelSource;
+  /** An opaque name or initials of the person; for `ai`, the assistant used. */
+  reviewer: string;
+  label: CorpusLabel;
+  /** Would this reviewer accept the support being withdrawn or regenerated automatically? */
+  accept_removal: "yes" | "no" | "depends";
+  comment?: string;
+}
+export interface CorpusReview {
+  status: "pending_human_review" | "reviewed";
+  /** Every label received, with its source. The provisional one of the team is NOT in this list. */
+  labels: ReviewLabel[];
+  /** The decision of the person who owns it; absent until there is one. It is the reference of the measurement. */
+  final_label: CorpusLabel | null;
+  final_by: LabelSource | null;
 }
 
 export const SHEETS = {
@@ -111,10 +135,10 @@ const example = (problem: string, result: string, steps: string[]) => ({ type: "
 const help = (variant: "key_idea" | "reminder", text: string) => ({ type: "help_box", variant, text });
 const list = (...items: string[]) => ({ type: "list", style: "bullet", items });
 
-const pending = { status: "pending_human_review", reviewed_by: null, final_label: null } as const;
+const pending = { status: "pending_human_review", labels: [], final_label: null, final_by: null } as const;
 const e = (entry: Omit<CorpusEntry, "review" | "provisional"> & { label: CorpusLabel; why: string }): CorpusEntry => {
   const { label, why, ...rest } = entry;
-  return { ...rest, provisional: { label, rationale: why, by: "ai_assisted" }, review: { ...pending } };
+  return { ...rest, provisional: { label, rationale: why, by: "ai_assisted" }, review: { ...pending, labels: [] } };
 };
 
 export const CORPUS: readonly CorpusEntry[] = [
