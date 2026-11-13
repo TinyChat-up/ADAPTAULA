@@ -8,6 +8,7 @@ import { summarizeProfile } from "@/lib/profiles/summary";
 import { checkEntitlement } from "@/lib/permissions/check-entitlement";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { ProfileForm } from "@/components/profiles/profile-form";
+import { PedagogicalReadOnly } from "@/components/profiles/pedagogical-fields";
 import { Alert } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/layout";
 import { AdaptationList } from "@/components/adaptation/adaptation-list";
@@ -105,7 +106,7 @@ export default async function EditProfilePage({ params, searchParams }: PageProp
           expected_updated_at: profile.updated_at,
         }}
         onSubmit={updateProfileAction.bind(null, id)}
-      /> : <ProfileSummaryPanel summary={summarizeProfile(profile.functional_profile)} />}
+      /> : <><ProfileSummaryPanel summary={summarizeProfile(profile.functional_profile)} />{profile.functional_profile.pedagogy ? <PedagogicalReadOnly value={profile.functional_profile.pedagogy} catalog={catalog} /> : null}</>}
     </div>
   );
 }

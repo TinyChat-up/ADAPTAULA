@@ -11,18 +11,19 @@ import type { ProfilePreset } from "./presets";
 export function compactProfile(profile: FunctionalProfile): FunctionalProfile {
   const supports: FunctionalProfile["supports"] = {};
   for (const [key, level] of Object.entries(profile.supports) as [DimensionKey, SupportLevel][]) {
-    if (level !== "none" || profile.schema_version === 2) supports[key] = level;
+    if (level !== "none" || profile.schema_version >= 2) supports[key] = level;
   }
   const limits = Object.fromEntries(Object.entries(profile.limits).filter(([, v]) => v !== undefined));
   const allowances = Object.fromEntries(Object.entries(profile.allowances).filter(([, v]) => v !== undefined && v !== false));
-  return { schema_version: profile.schema_version, supports, limits, allowances, ...(profile.observations ? { observations: profile.observations } : {}) };
+  const pedagogy = profile.pedagogy && { ...profile.pedagogy, areas: profile.pedagogy.areas.map((a) => ({ ...a, knows: a.knows.map((s) => s.trim()).filter(Boolean), needs: a.needs.map((s) => s.trim()).filter(Boolean) })) };
+  return { schema_version: profile.schema_version, supports, limits, allowances, ...(profile.observations ? { observations: profile.observations } : {}), ...(pedagogy ? { pedagogy } : {}) };
 }
 
 export function setSupport(profile: FunctionalProfile, key: DimensionKey, level: SupportLevel | "unknown"): FunctionalProfile {
   const supports = { ...profile.supports };
   if (level === "unknown") delete supports[key];
   else supports[key] = level;
-  return compactProfile({ ...profile, schema_version: 2, supports });
+  return compactProfile({ ...profile, schema_version: profile.schema_version === 3 ? 3 : 2, supports });
 }
 
 /** Adding supports never lowers a teacher's intensity, changes their explicit «none» or erases their observations/permissions. */
@@ -36,7 +37,7 @@ export function addPresets(profile: FunctionalProfile, presets: readonly Profile
     }
     for (const [key, value] of Object.entries(preset.limits ?? {}) as [keyof FunctionalProfile["limits"], number][]) limits[key] = Math.min(limits[key] ?? value, value);
   }
-  return compactProfile({ ...profile, schema_version: 2, supports, limits });
+  return compactProfile({ ...profile, schema_version: profile.schema_version === 3 ? 3 : 2, supports, limits });
 }
 
 export function replaceSupports(profile: FunctionalProfile, presets: readonly ProfilePreset[]): FunctionalProfile {

@@ -29,14 +29,16 @@ function isLimitError(error: { message?: string } | null): boolean {
 
 export const getCatalog = cache(async (): Promise<EducationCatalog> => {
   const supabase = await getSupabase();
-  const [stages, grades] = await Promise.all([
+  const [stages, grades, subjects] = await Promise.all([
     supabase.from("stages").select("slug, name").eq("active", true).order("sort_order"),
     supabase.from("grades").select("slug, stage_slug, name").eq("active", true).order("sort_order"),
+    supabase.from("subjects").select("slug, name").eq("active", true).order("sort_order"),
   ]);
-  if (stages.error || grades.error) throw new Error("No se ha podido cargar el catálogo educativo.");
+  if (stages.error || grades.error || subjects.error) throw new Error("No se ha podido cargar el catálogo educativo.");
   return {
     stages: z.array(z.object({ slug: z.string(), name: z.string() })).parse(stages.data),
     grades: z.array(z.object({ slug: z.string(), stage_slug: z.string(), name: z.string() })).parse(grades.data),
+    subjects: z.array(z.object({ slug: z.string(), name: z.string() })).parse(subjects.data),
   };
 });
 

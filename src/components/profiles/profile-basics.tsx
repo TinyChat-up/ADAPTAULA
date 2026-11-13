@@ -8,7 +8,7 @@ export function ProfileBasics({ name, stage, grade, catalog, errors, onName, onS
   onName: (value: string) => void; onStage: (value: string) => void; onGrade: (value: string) => void;
 }) {
   return <section aria-labelledby="info-titulo" className="space-y-4">
-    <h2 id="info-titulo" className="text-xl font-semibold">01 · Información básica</h2>
+    <h2 id="info-titulo" className="text-xl font-semibold">A · Escolarización y nivel por área</h2>
     <Card className="space-y-5">
       <TextField label="Alias o iniciales" hint="Puedes utilizar un alias o iniciales. No necesitamos el nombre completo ni ningún dato médico." value={name} maxLength={DISPLAY_NAME_MAX} autoComplete="off" required error={errors.display_name} onChange={(e) => onName(e.target.value)} />
       <div className="grid gap-5 sm:grid-cols-2">

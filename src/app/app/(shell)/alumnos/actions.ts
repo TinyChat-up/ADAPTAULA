@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { requireWorkspace, WRITE_ROLES } from "@/lib/auth/workspace";
 import { hasRole } from "@/lib/auth/workspace-select";
 import { checkEntitlement } from "@/lib/permissions/check-entitlement";
-import { isValidStageGrade } from "@/lib/profiles/catalog";
+import { isValidStageGrade, validPedagogicalAreas } from "@/lib/profiles/catalog";
 import {
   createProfile,
   deleteProfile,
@@ -41,7 +41,7 @@ async function validate(
   if (!parsed.success) {
     return {
       ok: false,
-      result: { ok: false, code: "validation", message: "Revisa los campos marcados.", fieldErrors: fieldErrorsFrom(parsed.error) },
+      result: { ok: false, code: "validation", message: "Revisa los campos marcados y los aprendizajes: cada apartado admite hasta cinco ideas de 180 caracteres.", fieldErrors: fieldErrorsFrom(parsed.error) },
     };
   }
   const catalog = await getCatalog();
@@ -55,6 +55,9 @@ async function validate(
         fieldErrors: { grade_slug: "Elige un curso que pertenezca a la etapa." },
       },
     };
+  }
+  if (!validPedagogicalAreas(catalog, parsed.data.functional_profile.pedagogy?.areas ?? [])) {
+    return { ok: false, result: { ok: false, code: "validation", message: "Revisa las áreas y los cursos de referencia.", fieldErrors: {} } };
   }
   return { ok: true, data: parsed.data };
 }

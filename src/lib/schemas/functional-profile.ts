@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PedagogicalProfileSchema } from "./pedagogical-profile";
 import { LearningObservationsSchema } from "./learning-observations";
 
 export const FUNCTIONAL_PROFILE_SCHEMA_VERSION = 2;
@@ -117,10 +118,11 @@ export const DIMENSION_KEYS = Object.keys(DIMENSIONS) as [DimensionKey, ...Dimen
 export const DimensionKeySchema = z.enum(DIMENSION_KEYS);
 
 export const FunctionalProfileSchema = z.object({
-  schema_version: z.union([z.literal(1), z.literal(2)]),
+  schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   /** Absence = not assessed in V2; still no active support, preserving V1 pipeline semantics. */
   supports: z.partialRecord(DimensionKeySchema, SupportLevelSchema),
   observations: LearningObservationsSchema.optional(),
+  pedagogy: PedagogicalProfileSchema.optional(),
   /** Optional precise limits that override what the support levels would imply. */
   limits: z.object({
     max_instruction_words: z.int().min(4).max(40).optional(),
@@ -135,6 +137,7 @@ export const FunctionalProfileSchema = z.object({
   }),
 }).superRefine((profile, ctx) => {
   if (profile.schema_version === 1 && profile.observations !== undefined) ctx.addIssue({ code: "custom", path: ["observations"], message: "Las observaciones requieren la versión 2 del perfil." });
+  if (profile.schema_version !== 3 && profile.pedagogy !== undefined) ctx.addIssue({ code: "custom", path: ["pedagogy"], message: "La información pedagógica requiere la versión 3 del perfil." });
 });
 
 export type FunctionalProfile = z.infer<typeof FunctionalProfileSchema>;
