@@ -251,6 +251,21 @@ export function mockPlanDraftV2(analysis: MaterialAnalysis, context: AdaptationC
       decisions.push({ target: a.id, action: "segment", strategies: ["task_sequencing"], need_refs: [ref("instruction_chunking")!], intensity: chunking.intensity, preserves: preservesOf(a.id) });
     }
   }
+  // Per-sheet scope (profile V3): the stand-in follows the same resolutions a real planner receives in `conflicts`.
+  const sheet = context.pedagogy;
+  if (sheet) {
+    const writing = (["writing_amount", "fine_motor_demand", "alternative_response"] as const).map(need).find((n) => n !== undefined);
+    const strategy = writing?.strategies.find((s) => s === "writing_load_reduction" || s === "response_format");
+    if (writing && strategy && sheet.response) {
+      for (const a of analysis.activities.filter((x) => x.response_format === "write_text" && !context.material.writing_evaluated_activities.includes(x.id))) {
+        decisions.push({ target: a.id, action: "change_response_format", strategies: [strategy], need_refs: [ref(writing.dimension)!], intensity: writing.intensity, preserves: preservesOf(a.id), response_target: sheet.response.available[0]! });
+      }
+    }
+    const focus = context.needs.map((n) => ({ n, s: n.strategies.find((x) => x === "vocabulary_support" || x === "comprehension_support" || x === "prior_knowledge_activation") })).find((x) => x.s !== undefined);
+    if (focus) {
+      for (const id of sheet.focus_targets) decisions.push({ target: id, action: "add_support", strategies: [focus.s!], need_refs: [ref(focus.n.dimension)!], intensity: focus.n.intensity, supports: [{ kind: focus.s === "vocabulary_support" ? "glossary" : "guiding_questions", uses_task_data: false }] });
+    }
+  }
   return { decisions, summary: decisions.length > 0 ? ["Apoyos ejecutivos solo donde hacen falta."] : ["No se necesita adaptar este material para este perfil."] };
 }
 

@@ -5,7 +5,10 @@ export const ADAPTATION_PREFERENCES = ["accessibility", "methodological", "lingu
 const slug = z.string().regex(/^[a-z0-9-]+$/).max(80);
 const statement = z.string().trim().min(1).max(180);
 
-/** Teacher-declared reference only. These values do not authorise a curricular change or enter the planner. */
+/**
+ * Teacher-declared reference. It never authorises a curricular change. What reaches an adaptation is resolved per sheet on the server
+ * (`pedagogical-scope.ts`): the executable response options and the activities the declared learnings point at; never the free text or the level.
+ */
 export const PedagogicalProfileSchema = z.object({
   areas: z.array(z.object({
     subject: slug,
