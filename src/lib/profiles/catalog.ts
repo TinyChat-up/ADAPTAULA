@@ -10,6 +10,11 @@ export interface CatalogGrade {
 export interface EducationCatalog {
   stages: CatalogStage[];
   grades: CatalogGrade[];
+  subjects?: { slug: string; name: string }[];
+}
+
+export function validPedagogicalAreas(catalog: EducationCatalog, areas: readonly { subject: string; reference_grade: string | null }[]): boolean {
+  return areas.every((area) => (catalog.subjects ?? []).some((s) => s.slug === area.subject) && (area.reference_grade === null || catalog.grades.some((g) => g.slug === area.reference_grade)));
 }
 
 /** The grade must exist and belong to the chosen stage (the DB only guarantees each exists on its own). */

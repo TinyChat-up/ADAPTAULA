@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Perfil pedagógico: primera entrega
+
+- Perfil V3 opcional por área, nivel orientativo sin inferencia, dos apartados de aprendizajes y preferencias de respuesta y adaptación; información nueva excluida del planificador y no equivale a autorización curricular.
+- Se reutilizan fortalezas, barreras y tarjetas; V1/V2 conservados. La migración 036 permite V3 e impide que clientes antiguos degraden el perfil. Sin cambios en adaptaciones históricas.
+- Pruebas focalizadas y de BD local; sin E2E, llamadas de pago, migraciones remotas ni despliegue. [Contrato, privacidad y despliegue](qa/perfil-pedagogico-v3/README.md).
+
 ## 2026-11-13 — Presupuesto: distinguir progreso parcial de ausencia de progreso
 
 - La copia recuperada estaba limpia en `11ab50e`, sin procesos de pruebas/Claude ni cambios locales. `main` remoto estaba en `8ec2c23`; la corrección antigua de presupuesto ya estaba integrada. No se ha recuperado trabajo sin confirmar de la sesión interrumpida ni el artefacto real del estanque.

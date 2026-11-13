@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **Perfil pedagógico V3 (primera entrega):** datos opcionales por área y preferencias docentes, conservando tarjetas y perfiles V1/V2. La información nueva se guarda pero no entra en Hacer magia ni autoriza cambios curriculares. Migración 036 solo local; su despliegue requiere coordinar lectores compatibles y escrituras V3. [Alcance y comprobaciones](qa/perfil-pedagogico-v3/README.md). Sin E2E, IA de pago ni migraciones remotas.
+
 > **Reparación de presupuesto tras progreso parcial (2026-11-13):** rama `codex/reparar-presupuesto-estanque`, desde `main` `8ec2c23`. Si una reparación automática reduce un apoyo pero sigue fuera del mismo presupuesto, se permite una última reparación localizada, dentro del máximo existente de tres generaciones. Sin progreso verificable, presupuesto distinto, datos incompletos u otros fallos simultáneos, se conserva la parada anterior. La adaptación real del estanque no se ha ejecutado ni verificado; la reproducción es sintética. Sin llamadas de pago, E2E, migraciones ni despliegue. GitHub API rechazó la consulta de PR; revisar el estado de publicación. Ver [registro](DEVELOPMENT_LOG.md).
 
 > **Piloto de V3 desde la interfaz (2026-11-06):** rama `feature/agente-v22-piloto-interfaz`, sobre la PR #80 (sin merge). Implementado y probado sin red:
