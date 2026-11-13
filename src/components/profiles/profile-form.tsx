@@ -143,7 +143,7 @@ export function ProfileForm({
         ) : null}
 
         <ProfileBasics name={name} stage={stage} grade={grade} catalog={catalog} errors={errors} onName={setName} onStage={(value) => { setStage(value); setGrade(""); }} onGrade={setGrade} />
-        <p className="text-sm text-muted-foreground">Los nuevos niveles por área, aprendizajes y preferencias se guardan en el perfil, pero todavía no intervienen en la generación de fichas.</p>
+        <p className="text-sm text-muted-foreground">Al adaptar una ficha se pueden tener en cuenta las formas de respuesta disponibles y los aprendizajes por reforzar del área correspondiente. El nivel orientativo y lo que sabe hacer todavía no intervienen en la generación ni cambian los objetivos.</p>
         <PedagogicalAreas value={profile.pedagogy ?? emptyPedagogicalProfile()} catalog={catalog} onChange={changePedagogy} />
         <p className="text-sm text-muted-foreground">Puedes completar lo demás después. <a href="#guardar-perfil" className="font-medium text-primary underline underline-offset-2">Ir a guardar el perfil</a></p>
 

@@ -111,6 +111,9 @@ export function validatePlan(plan: AdaptationPlan, analysis: MaterialAnalysis, c
     if (context.pedagogy?.scope === "accessibility" && exceedsAccessScope(d, activity !== undefined)) {
       add("unjustified_change", "block", d, "Adaptación de acceso: en esta ficha no se cambia el formato de respuesta ni se reduce la tarea");
     }
+    if (context.pedagogy?.scope === "methodological" && d.response_target && !context.pedagogy.response?.available.includes(d.response_target)) {
+      add("unjustified_change", "block", d, "El formato de respuesta no está disponible para este perfil y esta ficha");
+    }
 
     if (activity) {
       const writing = evaluatesWriting(analysis, activity);

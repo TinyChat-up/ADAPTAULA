@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkPedagogicalScope, pedagogicalAreaFor } from "@/lib/adaptation/pedagogical-scope";
+import { applySheetScope, checkPedagogicalScope, pedagogicalAreaFor, RESPONSE_NEEDS } from "@/lib/adaptation/pedagogical-scope";
+import { ConflictResolutionSchema, type ContextNeed } from "@/lib/schemas/adaptation-context";
 import { fingerprint } from "@/lib/adaptation/fingerprint";
 import { emptyFunctionalProfile, type FunctionalProfile } from "@/lib/schemas/functional-profile";
 import { fractionsAnalysis } from "../../evals/adaptation/fixtures";
@@ -11,6 +12,20 @@ const profile: FunctionalProfile = { ...emptyFunctionalProfile(), schema_version
 const analysis = fractionsAnalysis();
 
 describe("alcance pedagógico propuesto", () => {
+  it("mantiene válidas todas las necesidades cuando hay más de seis dimensiones de respuesta", () => {
+    const needs: ContextNeed[] = RESPONSE_NEEDS.map((dimension) => ({ dimension, level: "high", intensity: "substantial", strategies: ["response_format"] }));
+    const result = applySheetScope({ scope: "methodological", profile, subjectSlug: null, analysis, needs });
+    const conflicts = result.conflicts.filter((c) => c.key === "methodological_response_formats");
+    expect(conflicts.every((c) => ConflictResolutionSchema.safeParse(c).success)).toBe(true);
+    expect(conflicts.flatMap((c) => c.dimensions)).toEqual(RESPONSE_NEEDS);
+  });
+  it("también conserva las restricciones de acceso con más de seis dimensiones", () => {
+    const needs: ContextNeed[] = RESPONSE_NEEDS.map((dimension) => ({ dimension, level: "high", intensity: "substantial", strategies: ["writing_load_reduction", "response_format"] }));
+    const result = applySheetScope({ scope: "accessibility", profile, subjectSlug: null, analysis, needs });
+    const conflicts = result.conflicts.filter((c) => c.key === "access_scope_keeps_response");
+    expect(conflicts.every((c) => ConflictResolutionSchema.safeParse(c).success)).toBe(true);
+    expect(conflicts.flatMap((c) => c.dimensions)).toEqual(RESPONSE_NEEDS);
+  });
   it("solo utiliza el área exacta y mantiene desconocido un nivel no valorado", () => {
     expect(pedagogicalAreaFor(profile, "conocimiento-medio")?.reference_grade).toBe("3-primaria");
     expect(pedagogicalAreaFor(profile, "matematicas")?.reference_grade).toBeNull();

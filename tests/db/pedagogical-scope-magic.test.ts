@@ -73,7 +73,7 @@ async function magic(script: { profile: FunctionalProfile; type: "accessibility"
 
 const activityBlocks = (doc: MaterialDocument) => allBlocks(doc).filter((b): b is Extract<Block, { type: "activity" }> => b.type === "activity");
 const responseOf = (doc: MaterialDocument, activity: string) => activityBlocks(doc).find((b) => b.trace.source_refs.includes(activity))!.response;
-const check = (review: PedagogicalReview | null, key: string) => review?.checks.filter((c) => c.check === key).map((c) => c.status) ?? [];
+const check = (review: PedagogicalReview | null | undefined, key: string) => review?.checks.filter((c) => c.check === key).map((c) => c.status) ?? [];
 const supportsOn = (doc: MaterialDocument, activity: string) => allBlocks(doc).filter((b) => b.trace.origin === "support" && b.trace.source_refs.includes(activity));
 
 describe("A · 5.º con dificultades lectoras, adaptación de ACCESO: mismos objetivos, apoyos donde hace falta", () => {
@@ -114,7 +114,8 @@ describe("A · 5.º con dificultades lectoras, adaptación de ACCESO: mismos obj
 
   it("privacidad: ni el texto declarado, ni el nivel de referencia, ni otra área salen del servidor (ni al contexto guardado ni al planificador)", async () => {
     const t = await magic({ profile: profileOf(READING, { areas: [area, { subject: "matematicas", reference_grade: "2-primaria", knows: ["Cuenta hasta cien"], needs: ["Restas con llevadas"] }], response_preferences: ["oral"], adaptation_preferences: ["curricular"] }), type: "accessibility" });
-    const sent = JSON.stringify(t.seen.map((s) => ({ context: s.context, material: s.material })));
+    expect(t.created.ok).toBe(true);
+    const sent = JSON.stringify(t.seen!.map((s) => ({ context: s.context, material: s.material })));
     const stored = JSON.stringify(t.context);
     for (const text of [sent, stored]) {
       expect(text).not.toContain(DECLARED_NEED);
@@ -194,6 +195,21 @@ describe("B · 5.º con dificultad de escritura, adaptación METODOLÓGICA: mism
     const noOral = await magic({ profile: profileOf(WRITING, { ...pedagogy, response_preferences: ["match"] }), type: "methodological" });
     expect(noOral.context!.pedagogy!.response).toEqual({ available: ["write_text_short"], unavailable: ["match"] });
     expect(responseOf(noOral.document!, "act_1").kind).toBe("lines");
+  });
+
+  it("no acepta una respuesta oral que el perfil no ha declarado, aunque la proponga el planificador", async () => {
+    const t = await magic({
+      profile: profileOf(WRITING, { ...pedagogy, response_preferences: [] }),
+      type: "methodological",
+      planner: async (_inner, _call, input) => {
+        const ref = `need_${input.context.needs.findIndex((x) => x.dimension === "writing_amount") + 1}`;
+        return { draft: { decisions: [{ target: "act_3", action: "change_response_format", strategies: ["writing_load_reduction"], need_refs: [ref], intensity: "substantial", preserves: protectedFor(pondAnalysis(), "act_3").map((p) => p.id), response_target: "oral_or_alternative" }], summary: ["x"] }, runs: [] } as never;
+      },
+    });
+    expect(t.context!.pedagogy!.response!.available).toEqual(["write_text_short"]);
+    expect(t.status).toBe("ready");
+    expect(t.document).not.toBeNull();
+    expect(responseOf(t.document!, "act_3").kind).not.toBe("oral_or_alternative");
   });
 
   it("un formato cerrado que el sistema no puede validar (unir) NO se promete: se sustituye por el formato disponible del perfil y queda registrado", async () => {

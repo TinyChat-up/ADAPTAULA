@@ -65,14 +65,15 @@ export function candidates(d: Decision, analysis: MaterialAnalysis, context?: Pi
   const text = analysis.texts.find((t) => t.id === d.target);
   // A closed format (choose, mark, match…) needs an answer key nobody produces. Less writing is still less writing with a short
   // open answer, which keeps the student producing: only when the decision is about the writing load, never about choosing.
-  if (activity && isClosed(d) && (d.strategies.includes("writing_load_reduction") || d.strategies.includes("response_format"))) {
+  const unavailable = d.response_target !== undefined && context?.pedagogy?.scope === "methodological" && !context.pedagogy.response?.available.includes(d.response_target);
+  if (activity && (isClosed(d) || unavailable) && (d.strategies.includes("writing_load_reduction") || d.strategies.includes("response_format"))) {
     // A methodological adaptation (profile V3) tries the formats this profile can really use, best first; each one is still checked by
     // the invariants (an oral answer never replaces an evaluated piece of writing) before it is taken.
     const preferred = (context?.pedagogy?.response?.available ?? []).filter((t) => t !== "write_text_short");
     for (const target of preferred) {
       out.push({ edits: { response_target: target, ...(d.action === "change_response_format" ? {} : { action: "change_response_format" as const }) }, reason: `Formato de respuesta disponible para este perfil (${target}) en lugar de un formato cerrado sin clave verificable` });
     }
-    out.push({ edits: { response_target: "write_text_short", ...(d.action === "change_response_format" ? {} : { action: "change_response_format" as const }) }, reason: "Respuesta breve en lugar de un formato cerrado (que necesitaría una clave de respuestas): menos escritura, misma tarea" });
+    out.push({ edits: { response_target: "write_text_short", ...(d.action === "change_response_format" ? {} : { action: "change_response_format" as const }) }, reason: unavailable ? "Respuesta breve en lugar de un formato no disponible para este perfil" : "Respuesta breve en lugar de un formato cerrado (que necesitaría una clave de respuestas): menos escritura, misma tarea" });
   }
   // Reorganising a reading text has no executor; its paragraphs can be labelled in parts, word for word.
   if (text?.kind === "reading_text" && (d.action === "reorganize" || d.action === "segment") && d.strategies.some((s) => s === "text_segmentation" || s === "visual_load_reduction" || s === "spatial_organization")) {

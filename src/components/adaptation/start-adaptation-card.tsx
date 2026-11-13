@@ -122,7 +122,7 @@ export function StartAdaptationCard({
             <legend className="text-base font-semibold">Tipo de adaptación para esta ficha</legend>
             <label className="flex min-h-11 items-start gap-3 py-1">
               <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "accessibility"} onChange={() => setSheetType("accessibility")} />
-              <span><span className="font-medium">De acceso</span><span className="block text-sm text-muted-foreground">Mismos objetivos y misma forma de responder. Cambia cómo llega la tarea: consignas, apoyos y estructura.</span></span>
+              <span><span className="font-medium">De acceso</span><span className="block text-sm text-muted-foreground">Busca conservar los objetivos y facilitar el acceso mediante consignas, apoyos y estructura. Revisa la propuesta antes de utilizarla.</span></span>
             </label>
             <label className="flex min-h-11 items-start gap-3 py-1">
               <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "methodological"} onChange={() => setSheetType("methodological")} />

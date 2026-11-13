@@ -122,7 +122,7 @@ export function applySheetScope(input: { scope: SheetScope; profile: FunctionalP
       return [{ ...n, strategies }];
     });
     const kept = touched.filter((d) => !outOfScope.includes(d));
-    if (kept.length > 0) conflicts.push({ key: "access_scope_keeps_response", dimensions: kept, targets: [], rule: "pedagogical_integrity", guidance: "Adaptación de acceso para esta ficha: no cambies el formato de respuesta ni reduzcas la tarea. Atiende estas necesidades solo con apoyos." });
+    for (let i = 0; i < kept.length; i += 6) conflicts.push({ key: "access_scope_keeps_response", dimensions: kept.slice(i, i + 6), targets: [], rule: "pedagogical_integrity", guidance: "Adaptación de acceso para esta ficha: no cambies el formato de respuesta ni reduzcas la tarea. Atiende estas necesidades solo con apoyos." });
   }
   const response = scope === "methodological" ? responseOptions(profile, needs) : undefined;
   if (response) {
@@ -130,7 +130,7 @@ export function applySheetScope(input: { scope: SheetScope; profile: FunctionalP
     if (dims.length > 0) {
       const formats = response.available.map((f) => FORMAT_ES[f]).filter(Boolean).join(", ");
       const missing = response.unavailable.map((p) => PREFERENCE_ES[p]).filter(Boolean).join(", ");
-      conflicts.push({ key: "methodological_response_formats", dimensions: dims, targets: [], rule: "functional_need", guidance: `Adaptación metodológica: para cambiar la respuesta usa solo ${formats}, en ese orden de preferencia, y nunca donde se evalúa la escritura o una operación.${missing ? ` Aún no disponibles: ${missing}.` : ""}`.slice(0, 240) });
+      for (let i = 0; i < dims.length; i += 6) conflicts.push({ key: "methodological_response_formats", dimensions: dims.slice(i, i + 6), targets: [], rule: "functional_need", guidance: `Adaptación metodológica: para cambiar la respuesta usa solo ${formats}, en ese orden de preferencia, y nunca donde se evalúa la escritura o una operación.${missing ? ` Aún no disponibles: ${missing}.` : ""}`.slice(0, 240) });
     }
   }
   const focus = focusTargets(area, analysis);

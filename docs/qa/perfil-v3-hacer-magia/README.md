@@ -1,15 +1,15 @@
 # Perfil V3 y Hacer magia: primer recorrido funcional (acceso y metodológica)
 
-Sobre la rama preparatoria de Codex (contrato `pedagogical-scope.ts`, conservado). Sin migraciones, sin E2E, sin llamadas de pago; planificador, generador y revisor simulados.
+Sobre la rama preparatoria de Codex (contrato `pedagogical-scope.ts`, conservado). Sin migraciones remotas, sin E2E, sin llamadas de pago; planificador, generador y revisor simulados.
 
 ## Qué funciona ahora
 
 1. **Elección por ficha.** Al adaptar, el docente elige «De acceso» (por defecto) o «Metodológica». La curricular no se ofrece y el servidor la rechaza: necesita una autorización por ficha que no existe.
-2. **Datos pertinentes y nada más.** El servidor resuelve, solo para el área EXACTA de la ficha (slug verificado), tres cosas: el alcance, las formas de respuesta que se pueden ejecutar y las actividades que trabajan lo que el docente declara «por reforzar» (coincidencia léxica hecha en el servidor). **El texto libre, el nivel de referencia, las otras áreas y las preferencias de adaptación no salen del servidor**: ni al contexto guardado ni al planificador.
+2. **Datos pertinentes y nada más.** El servidor resuelve, solo para el área EXACTA de la ficha (slug registrado en el material, sin verificar independientemente su clasificación), tres cosas: el alcance, las formas de respuesta que se pueden ejecutar y las actividades que trabajan lo que el docente declara «por reforzar» (coincidencia léxica hecha en el servidor). **El texto libre, el nivel de referencia, las otras áreas y las preferencias de adaptación no salen del servidor**: ni al contexto guardado ni al planificador.
 3. **Decisiones observables y trazables** (`context.pedagogy` y `context.conflicts`, congelados con la adaptación):
    - *Acceso*: no se ofrece ninguna estrategia que solo cambie la respuesta o reduzca la tarea; una decisión que lo intente la bloquean las invariantes; los apoyos se enfocan en las actividades señaladas.
    - *Metodológica*: se indican los formatos de respuesta disponibles para ese perfil (respuesta breve; oral si el docente la declaró, primero cuando la necesidad de escribir menos es alta; teclado si está permitido). Un formato cerrado sin clave verificable se sustituye por el disponible.
-4. **Sin llamadas nuevas.** El planificador publicado (v2) ya obedece `needs` y `conflicts`; un cambio de espacio de respuesta lo hace el ensamblador y ya no provoca una reescritura de la consigna.
+4. **Sin llamadas nuevas.** El planificador publicado (v2) recibe `needs` y `conflicts`; no se ha comprobado con un modelo real que los siga; un cambio de espacio de respuesta lo hace el ensamblador y ya no provoca una reescritura de la consigna.
 5. **Perfiles antiguos.** Un perfil V1/V2 con adaptación de acceso produce el contexto de siempre.
 
 ## Formatos de ejercicio: compatibilidad real
@@ -23,30 +23,17 @@ Sobre la rama preparatoria de Codex (contrato `pedagogical-scope.ts`, conservado
 ## Límites reales
 
 - **El texto declarado no llega al planificador.** El prompt publicado trata el contexto como fiable; enviar texto libre exige una versión nueva del planificador con un bloque no confiable y un cribado de datos identificativos. Mínimo necesario: `adaptation_planner` nuevo + cribado; no se ha hecho.
-- **La coincidencia léxica es estrecha** (dos palabras de contenido en común con la actividad, sus objetivos o sus textos): una redacción distinta no enfoca nada (nunca empeora la ficha).
+- **La coincidencia léxica es estrecha** (dos palabras de contenido en común con la actividad, sus objetivos o sus textos): una redacción distinta puede no coincidir y coincidencias de palabras pueden señalar actividades que no correspondan; requiere revisión docente.
 - **Curricular (5.º → 3.º): no funciona.** El nivel por área se guarda y el contrato de autorización existe, pero no hay persistencia de la autorización, ni transformación, ni verificación de objetivos modificados. La prueba está documentada como pendiente (`it.todo` en `tests/db/pedagogical-scope-magic.test.ts`).
 - Probado con servicios simulados: no mide lo que hará el modelo real.
 
 ## Pruebas
 
-`tests/db/pedagogical-scope-magic.test.ts` (15 + 1 pendiente): caso A (5.º, lectura, acceso), caso B (5.º, escritura, metodológica), privacidad, área exacta, rechazo del servidor, perfiles antiguos y curricular rechazada.
+`tests/db/pedagogical-scope-magic.test.ts` (casos A y B y una prueba curricular pendiente): caso A (5.º, lectura, acceso), caso B (5.º, escritura, metodológica), privacidad, área exacta, rechazo del servidor, perfiles antiguos y curricular rechazada.
 
----
 
-_Nota anterior de la rama preparatoria (Codex), conservada:_
+## Cierre técnico y límites de la verificación
 
-## Trabajo preparatorio (contrato)
+Se reprodujo y corrigió la aceptación de respuesta oral no declarada: el servidor bloquea formatos fuera de los disponibles. También se dividen las restricciones cuando afectan a más de seis dimensiones, para cumplir el contrato sin perder necesidades. Los controles preservan referencias y elementos identificados por el análisis; no prueban de forma independiente la equivalencia semántica ni garantizan que el modelo respete los objetivos. El resultado requiere revisión docente. El contexto de acceso de perfiles anteriores conserva su comportamiento anterior, que no incorpora la nueva restricción V3 de respuesta.
 
-Base `651d130` (#94 integrada). La primera entrega conserva la información V3 pero no la envía a Hacer magia. El formulario de creación existente fija `accessibility`; la acción genérica acepta más tipos, pero no conserva una autorización curricular detallada por ficha. El contexto histórico está versionado y congelado en la creación; la selección de área debe basarse en el slug del material verificado en servidor, no en una etiqueta del modelo. El planificador v2 ordena adaptar el acceso y sus decisiones exigen necesidades funcionales. Los validadores permiten marcar algunas consecuencias curriculares para revisión, pero eso no demuestra que se haya autorizado un alcance ni que el generador pueda construir y validar objetivos y actividades curriculares. Tampoco todos los cambios de respuesta tienen un ejecutor equivalente seguro.
-
-Esta rama prepara **solo** un contrato puro y pruebas, sin conexión a la interfaz, persistencia, planificador ni generador. Aísla la búsqueda de área por coincidencia exacta; preserva nivel desconocido; comprueba que una hipotética autorización curricular incluya objetivos conocidos vinculados a actividades y la huella del análisis actual. Una actividad con varios objetivos solo entra en el conjunto si todos sus objetivos están autorizados. Esto no demuestra que una transformación sea pedagógicamente válida ni verifica el original independientemente del análisis.
-
-## Trabajo imprescindible pendiente
-
-1. Diseñar la autorización explícita por ficha, vinculada a actor, material, análisis y alcance, con escritura duradera, idempotencia y permisos. No permitir que una preferencia del perfil conceda esa autorización.
-2. Definir qué datos declarados pueden enviarse al proveedor: los campos de aprendizajes son texto libre y la instrucción de no escribir nombres no es una garantía de anonimización. Deben tratarse como entrada no confiable y resolverse las garantías de privacidad antes de conectarlos.
-3. Versionar y congelar contexto y prompts solo para adaptaciones nuevas, sin alterar rutas de perfiles antiguos. Añadir mecanismos para verificar que el alcance se respete en el plan, la generación y la revisión, con trazabilidad actividad–objetivo–transformación; no basta con que el modelo lo declare.
-4. Comprobar y habilitar únicamente formatos que puedan ejecutarse y verificarse sin rebajar la exigencia. Mantener una parada honesta cuando no sea posible.
-5. Ejecutar las tres pruebas de Ciencias de 5.º solicitadas con generadores simulados y las pruebas de autorización, persistencia, acceso cruzado, reintentos e historial. **Aún no se han ejecutado esas tres pruebas ni se ha implementado su comportamiento.**
-
-Las pruebas del contrato son sobre estructuras sintéticas, no sobre adaptaciones generadas ni validación pedagógica. Sin E2E, servicios de pago, migración remota o despliegue. Rama con despliegue de Vercel desactivado.
+Verificación local: batería completa de unidad y BD **2.506 correctas, 18 omitidas y 1 pendiente**, 183 archivos correctos y 1 omitido; adicionalmente 74 focalizadas correctas y 1 pendiente tras los últimos cambios. Typecheck correcto; lint sin errores con un aviso previo en `analysis-run-auth.test.ts`. Sin E2E por indicación. No se ha comprobado producción ni un proveedor real.

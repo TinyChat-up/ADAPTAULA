@@ -10,7 +10,7 @@ import { buildDocument, sequentialIds } from "@/lib/adaptation/document";
 import { studentText, textOf } from "@/lib/adaptation/document-text";
 import { stableStringify } from "@/lib/adaptation/fingerprint";
 import { auditGeneration } from "@/lib/adaptation/generation-checks";
-import { normalizeGeneratedV2 } from "@/lib/adaptation/generated-v2";
+import { decisionsToGenerateV2, normalizeGeneratedV2 } from "@/lib/adaptation/generated-v2";
 import { buildGeneratorInputV2, callGenerator, createModelGenerator, generatorRequestParts, normalizeGeneration, parseGeneratorResponse } from "@/lib/adaptation/generator";
 import { mockGenerateDraft, mockGenerateDraftV2 } from "@/lib/adaptation/mock";
 import { runAdaptation } from "@/lib/adaptation/pipeline";
@@ -69,6 +69,11 @@ describe("the Bachillerato mirror reproduces the real structure the experiments 
 });
 
 describe("generator v2: the original instruction is canonical", () => {
+  it("conserva el comportamiento anterior de generación sin contexto pedagógico nuevo", () => {
+    const d = { ...bachRaw.decisions[0]!, target: bach.activities[4]!.id, action: "change_response_format" as const, response_target: "write_text_short" as const, supports: [] };
+    expect(decisionsToGenerateV2([d], bach, bachContext)).toEqual([d]);
+    expect(decisionsToGenerateV2([d], bach, { ...bachContext, pedagogy: { scope: "methodological", area_matched: false, focus_targets: [], response: { available: ["write_text_short"], unavailable: [] } } })).toEqual([]);
+  });
   it("1 · a short instruction plus executive supports does not multiply text: the original is kept, a requested rewrite is refused", () => {
     const out = assembleBach({
       ...empty,

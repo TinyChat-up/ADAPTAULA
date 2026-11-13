@@ -1,5 +1,9 @@
 # Registro de desarrollo
 
+## 2026-11-13 — Cierre del perfil V3 en acceso y metodología
+
+Rama limpia desde `651d130`: recuperados `b3fc2fc`, `4708703` y `c213b50f`, sin cambios del corpus ni hoja ciega. Reproducidos y corregidos el formato oral no declarado y los grupos de más de seis dimensiones; la nueva lógica de generación se limita a contextos con ámbito pedagógico, preservando el comportamiento histórico. Batería local 2.506 correctas, 18 omitidas y 1 pendiente; 74 focalizadas correctas, typecheck y lint sin errores (un aviso previo). Modelos simulados; sin E2E, IA de pago, migraciones remotas ni despliegues. La equivalencia semántica requiere revisión docente. [QA](qa/perfil-v3-hacer-magia/README.md).
+
 ## 2026-11-13 — Perfil V3 conectado a «Hacer magia»: adaptación de acceso o metodológica por ficha
 
 - Sobre la rama de Codex `codex/perfil-v3-hacer-magia` (contrato conservado y ampliado en `pedagogical-scope.ts`). Sin migraciones, E2E ni llamadas de pago. [QA](qa/perfil-v3-hacer-magia/README.md).

@@ -90,14 +90,14 @@ export function authorizedKinds(decision: Pick<Decision, "supports">): Set<Suppo
   return kinds;
 }
 
-export function decisionsToGenerateV2(effective: readonly Decision[], analysis: MaterialAnalysis, context: Pick<AdaptationContext, "limits">): Decision[] {
+export function decisionsToGenerateV2(effective: readonly Decision[], analysis: MaterialAnalysis, context: Pick<AdaptationContext, "limits" | "pedagogy">): Decision[] {
   return effective.filter((d) => {
     if (d.action === "keep" || d.action === "remove") return false;
     const activity = analysis.activities.find((a) => a.id === d.target);
     if (authorizedKinds(d).size > 0) return true;
     // A change of the answer space the assembler carries out by itself (shorter, oral, keyboard) is about HOW the student answers: it is
     // no reason to rewrite the instruction, however long it is. Nothing to write, no model call for it.
-    if (isDeterministicResponse(d)) return false;
+    if (context.pedagogy && isDeterministicResponse(d)) return false;
     return activity !== undefined && REWRITING.has(d.action) && instructionNeedsRewrite(activity, context.limits.max_instruction_words);
   });
 }
