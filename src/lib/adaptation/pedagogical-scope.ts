@@ -69,7 +69,10 @@ export function responseOptions(profile: FunctionalProfile, needs: readonly Pick
   const high = needs.some((n) => n.level === "high" && (RESPONSE_NEEDS as readonly string[]).includes(n.dimension));
   const available: ResponseTarget[] = ["write_text_short"];
   if (profile.allowances.keyboard) available.push("keyboard");
-  if (declared.includes("oral")) (high ? available.unshift("oral_or_alternative") : available.push("oral_or_alternative"));
+  if (declared.includes("oral")) {
+    if (high) available.unshift("oral_or_alternative");
+    else available.push("oral_or_alternative");
+  }
   return { available, unavailable: declared.filter((p) => p !== "write" && p !== "oral") };
 }
 
