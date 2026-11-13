@@ -107,6 +107,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Etapa 2.2 (2026-11-12).** Sustitución funcional de apoyos que revelan la respuesta ([QA](qa/etapa-2-2-sustitucion/README.md)): solo la evidencia literal y fiable (o un rechazo `would_reveal_answer`) repara y sustituye una vez, dentro de las 3 generaciones; interruptor `SUPPORT_SUBSTITUTION_MODE`, **`dry_run` por defecto** (`on` solo con activación explícita). Implementada y probada con generador simulado; **pendiente de validar en producción**. Siguiente: 2.3 (revisor semántico).
+
 **Etapa 2.1 (2026-11-12).** Auditoría de apoyos unificada con la seguridad de evaluación (`support_audit@v2`, [QA](qa/bloque1-apoyos/README.md)): hallazgos nuevos solo en aviso; la protección bloqueante de siempre intacta. Pendiente: medir su precisión y decidir 2.2 (sustitución funcional) y 2.3 (revisor semántico).
 
 **Bloque 1 (2026-11-12).** Auditoría interna en modo sombra de apoyos que realizan el razonamiento evaluado (`support_audit@v1`, [QA](qa/bloque1-apoyos/README.md)): implementada y probada localmente, **sin efecto** sobre la entrega ni sobre el docente; pendiente de medir su precisión con adaptaciones reales. Después: prevención en el plan y ámbito semántico del revisor. Pendiente aparte: distribución de espacios (sin actividades aisladas en páginas casi vacías, sin reducir letra ni espacio de respuesta).

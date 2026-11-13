@@ -1,5 +1,22 @@
 # Registro de desarrollo
 
+## 2026-11-13 — PR #90: cuatro ajustes tras la revisión (interruptor, ediciones, cobertura, ensayo por defecto)
+
+- **Interruptor efectivo.** La restricción previa (evidencia C) se llamaba desde `resolveAutomatically` sin mirar el interruptor. Pasa a `applySupportGuard`, al final de las resoluciones automáticas y por modo: `off` = comportamiento anterior; `dry_run` = la revisión no cambia y se anota qué haría; `on` = la añade (sin pisar restricciones, sobre los apoyos que la decisión llevará tras la variante segura de V2.2). Pruebas de extremo a extremo (revisión, lo que recibe el generador y registro) en los tres modos.
+- **Ediciones previas.** `planRepair` sustituía la entrada entera de la revisión: ahora conserva acción, formato de respuesta, intensidad, nota, `support_requests`, motivo y todas las restricciones, y solo cambia los apoyos (si las seis restricciones no dejan sitio, no se sustituye). «Ya sustituida» se lee de los artefactos. Pruebas con una decisión editada y con la variante segura de una resolución autónoma de V2.2.
+- **Cobertura real.** `coverageOf`: `same_activity` / `reachable_resource` / `presentation` / `none`; otra actividad con la misma dimensión no cubre nada (antes bastaba para necesidades medias y bajas). Resultado verificado en la ficha final: `applied` solo si el apoyo está en el documento y sirve todas las necesidades (`partial`, `not_generated`, `flagged`, `omitted`, `uncovered` si no).
+- **Despliegue gradual.** `SUPPORT_SUBSTITUTION_MODE` por defecto `dry_run` (también el valor si falta la dependencia); `on` solo por activación explícita. Ciclos y costes acotados tras reinicios y reanudaciones: probado.
+- Sin E2E, llamadas de pago ni migraciones.
+
+## 2026-11-12 — Etapa 2.2: sustitución funcional de apoyos que revelan la respuesta
+
+- Rama `claude/zealous-shannon-k7w4v4` desde `main` (`ba7c116`, #86–#89). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA](qa/etapa-2-2-sustitucion/README.md).
+- **Qué.** Solo evidencia A (parte de la respuesta literal y fiable) o un rechazo `would_reveal_answer` provocan acción: reparación y **una** sustitución por un apoyo que sirva las mismas necesidades (vocabulario secundario, pregunta guía, recordatorio del procedimiento, ejemplo de otro ámbito; elegido por actividad y perfil, sin secuencia fija). B (estructural) viaja solo si ya se repara; C (léxica) es una restricción previa; ninguna añade llamadas.
+- **Cobertura.** Nunca se editan `target`, `dimensions` ni `preserves`; un apoyo omitido o no generado no figura como aplicado (`elsewhere`/`none`); una necesidad esencial sin cobertura es la parada honesta de siempre.
+- **Ciclos.** Dentro de las 3 generaciones: peor caso 1.ª → restricción → sustitución en la 3.ª; probado que no hay cuarta. Interruptor `SUPPORT_SUBSTITUTION_MODE` (`on`/`dry_run`/`off`).
+- **Trazabilidad.** `support_resolution` (códigos e ids; `semantic_review: pending_2_3`) y su resultado verificado.
+- **Pendiente.** Etapa 2.3 (revisor semántico); la analogía de la membrana no es literal.
+
 ## 2026-11-12 — Etapa 2.1: la auditoría de apoyos y la seguridad de evaluación, en un solo sitio (`support_audit@v2`)
 
 - Rama `claude/zealous-shannon-k7w4v4` desde `main` (`18fa6d4`, con #86–#88). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [Medición y detalle](qa/bloque1-apoyos/README.md).

@@ -54,6 +54,12 @@ export const ServerEnvSchema = z.object({
   /** Stages recovered per cron run: one stage can take most of the 300 s budget, and the normal path never waits for the cron. */
   ADAPTATION_JOBS_PER_RUN: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(10).default(1)),
 
+  /**
+   * Etapa 2.2: what a LITERAL, reliable answer in a generated support does. `dry_run` (default): only recorded next to the deterministic
+   * review, nothing changes; `on` (explicit activation): the decision is repaired and its support substituted once; `off`: switched off.
+   */
+  SUPPORT_SUBSTITUTION_MODE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["on", "dry_run", "off"]).default("dry_run")),
+
   FLAG_MAX_PLAN_ENABLED: flag(false),
   FLAG_AI_IMAGES_ENABLED: flag(false),
   AI_IMAGES_PILOT_MODE: optional(z.enum(["local", "staging", "production-pilot"])),

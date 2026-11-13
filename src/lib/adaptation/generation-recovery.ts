@@ -5,7 +5,7 @@ import { responseFor } from "./document";
 import type { NormalizedGeneration } from "./generated";
 import type { DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import { normalizeText } from "./text";
-import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, NON_EFFECTIVE_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK, type AuditCheck, type GenerationAudit } from "./generation-checks";
+import { CONCEPT_LEAK_CHECK, INVALID_BLOCK_CHECK, LITERAL_COPY_CHECK, MISSING_ACTIVITY_CHECK, NON_EFFECTIVE_CHECK, OUT_OF_BUDGET_CHECK, RESPONSE_AREA_CHECK, SUPPORT_DECLINED_CHECK, SUPPORT_SOLVES_CHECK, type AuditCheck, type GenerationAudit } from "./generation-checks";
 
 /**
  * Localized recovery of a generation («Hacer magia» 2.0, docs/ADAPTATION.md § Recuperación localizada). Three pure tools:
@@ -54,6 +54,8 @@ const AUDIT_CATEGORY: Readonly<Record<string, FailureCategory>> = {
   "ninguna frase se repite literalmente dentro de una actividad": "duplicate_support",
   [OUT_OF_BUDGET_CHECK]: "duplicate_support",
   [CONCEPT_LEAK_CHECK]: "answer_leak",
+  [SUPPORT_SOLVES_CHECK]: "answer_leak",
+  [SUPPORT_DECLINED_CHECK]: "answer_leak",
   "trazabilidad completa (todo bloque remite al original o a una decisión)": "traceability",
   "ninguna respuesta inferida aparece (ni en la clave)": "answer_leak",
   "los datos necesarios se conservan": "data_loss",

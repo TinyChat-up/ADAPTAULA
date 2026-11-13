@@ -23,6 +23,22 @@ describe("public env", () => {
   });
 });
 
+describe("server env · sustitución de apoyos (etapa 2.2)", () => {
+  it("por defecto es el ensayo, nunca «on»: solo una activación explícita la enciende; un valor inválido falla", () => {
+    expect(parseServerEnv({}).SUPPORT_SUBSTITUTION_MODE).toBe("dry_run");
+    expect(parseServerEnv({ SUPPORT_SUBSTITUTION_MODE: "" }).SUPPORT_SUBSTITUTION_MODE).toBe("dry_run");
+    expect(parseServerEnv({ SUPPORT_SUBSTITUTION_MODE: "on" }).SUPPORT_SUBSTITUTION_MODE).toBe("on");
+    expect(parseServerEnv({ SUPPORT_SUBSTITUTION_MODE: "off" }).SUPPORT_SUBSTITUTION_MODE).toBe("off");
+    expect(() => parseServerEnv({ SUPPORT_SUBSTITUTION_MODE: "yes" })).toThrow();
+  });
+
+  it(".env.example documenta el ensayo como valor por defecto y no activa la sustitución", () => {
+    const example = readFileSync(path.join(process.cwd(), ".env.example"), "utf8");
+    expect(example).toMatch(/^SUPPORT_SUBSTITUTION_MODE=dry_run$/m);
+    expect(example).not.toMatch(/^SUPPORT_SUBSTITUTION_MODE=on$/m);
+  });
+});
+
 describe("server env", () => {
   it("boots with no AI, Stripe or secret keys (not required until later phases)", () => {
     const env = parseServerEnv({});
