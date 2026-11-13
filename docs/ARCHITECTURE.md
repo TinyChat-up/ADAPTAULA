@@ -2,6 +2,16 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-048 — Revisión semántica de los apoyos: `pedagogical_reviewer@v2` y `REVIEWER_V2_MODE` (2026-11-13)
+
+Un apoyo da acceso a la tarea; no hace lo que la actividad evalúa. Las etapas 2.1 y 2.2 detectan lo verificable; lo semántico (un glosario que explica el significado de las flechas, una analogía que deja deducir un ítem, un ejemplo que resuelve cuando la respuesta no es deducible) solo lo juzga un revisor. La 2.3 añade ese juicio **sin una llamada nueva**.
+
+- **Contrato.** `pedagogical_reviewer@v2` (v1 intacto, huella fijada) devuelve los hallazgos de v1 más `support_judgments` (≤ 12, opcional): `class` (`performs`/`hints`/`legitimate`/`unsure`), `how`, `protected_id`, `reason` (≤ 120). El contexto de la revisión (`context_version: 2`) añade, calculado por el servidor, los apoyos con las necesidades que atienden, qué evalúa cada actividad (protegidos y objetivos) y las señales de la 2.1. El saneado se limita a errores formales (razón larga, clave sobrante de un juicio, juicios de más); un id inventado o un campo ausente es `reviewer_schema` y aplica el reintento acotado de la PR #85.
+- **Política en el servidor** (`support-semantic.ts`). Un juicio no cambia nada por sí mismo: solo es *confirmado* si nombra qué sustituye (un elemento protegido evaluado de esa actividad) y cómo; una analogía, una duda, una tarjeta de criterio o un juicio contradictorio quedan en *sospecha* (WARN, registrada); un juicio que falta o que no cupo (más de 12 apoyos: criterio determinista, lo no evaluado se registra) es *sin juzgar* y avisa. **Nunca un juicio ausente es una aprobación.**
+- **Interruptor.** `REVIEWER_V2_MODE` = `off` (por defecto: v1 exacto) | `shadow` (el v2 juzga y solo se registra) | `on` (lo confirmado hace fallar `answers_not_leaked` y se repara). Decide con qué revisor se **crea** la adaptación (versiones fijadas al crearla); una adaptación fijada con v1 ejecuta siempre v1. Independiente de `SUPPORT_SUBSTITUTION_MODE`: la sustitución de la 2.2 solo se pasa a la reparación semántica con ese interruptor en `on`.
+- **Coste.** Una sola llamada por revisión (la de siempre); salida hasta 2.600 tokens (antes 2.000); peor caso por adaptación 6 revisiones, las mismas que v1 (≈ +0,11 $), típico +0,007 $.
+- **Activación.** `on` solo tras medir (corpus con etiquetas definitivas de una persona con criterio pedagógico y de PT, umbrales en `evals/support-semantic/score.ts`) y con autorización expresa. Detalle y procedimiento: [QA](qa/etapa-2-3-semantica/README.md).
+
 ## ADR-047 — V2.2 en producción para un solo workspace, confirmaciones del docente y avisos (2026-11-10)
 
 Sustituye a la parte de ADR-046 que excluía la producción: el piloto se hace sobre la plataforma desplegada, sin otro entorno.

@@ -77,8 +77,14 @@ export interface AdaptationPlanner {
 export interface MaterialGenerator {
   generate(input: GeneratorInput): Promise<StageResult>;
 }
+/** What a reviewer returns: its findings (the draft) and, for pedagogical_reviewer@v2, its judgments of the supports (untrusted until the server policy reads them). */
+export interface ReviewerResult extends StageResult {
+  judgments?: import("@/lib/schemas/reviewer-findings").SupportJudgment[];
+  sanitation?: import("@/lib/schemas/reviewer-findings").SanitationCounts;
+}
+
 export interface PedagogicalReviewer {
-  review(input: ReviewerInput): Promise<StageResult>;
+  review(input: ReviewerInput): Promise<ReviewerResult>;
 }
 
 /**

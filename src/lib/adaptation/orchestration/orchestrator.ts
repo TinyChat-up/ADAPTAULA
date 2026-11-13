@@ -9,6 +9,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
 import type { AiReviewDraft, PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import type { SanitationCounts, SupportJudgment } from "@/lib/schemas/reviewer-findings";
 import { allBlocks, type MaterialDocument } from "@/lib/schemas/material-document";
 import { reaches, resolveAutomatically } from "../automatic-resolution";
 import { VISUAL_STOP_CODES, applyVisualResolution, unresolvedEssential, visualStopCode, type VisualResolutionPlan, type VisualStopCode } from "../visual-policy";
@@ -34,7 +35,8 @@ import { withheldWithoutConfirmation, type PlannerDeclarations, type RulesUse } 
 import { solvabilityInputs } from "../pipeline";
 import { assembleReview, deterministicChecks } from "../review";
 import { buildPedagogicalReviewContext } from "../review-context";
-import { buildReviewScoped } from "../reviewer";
+import { buildReviewScoped, withSemanticChecks } from "../reviewer";
+import { SEMANTIC_POLICY_VERSION, buildSemanticScope, effectiveReviewerMode, judgeSupports, restrictionFor, semanticChecks, semanticFlags, summarize, type ReviewerV2Mode, type SemanticRecord, type SemanticRecordSet } from "../support-semantic";
 import { preservationRefs, withOriginals } from "../restoration";
 import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
@@ -96,6 +98,13 @@ export interface OrchestratorDeps {
    * repaired, then its support substituted once, and the first generation is told what not to define; `off`: nothing at all.
    */
   supportSubstitution?: SubstitutionMode;
+  /**
+   * Etapa 2.3: what the semantic review of the supports does (`REVIEWER_V2_MODE`). `off` (the default, also when this is missing): the v1
+   * reviewer exactly as before. `shadow`: pedagogical_reviewer@v2 judges and the judgments are only recorded. `on`: its CONFIRMED findings fail
+   * the review and are repaired (a substitution only if `supportSubstitution` is `on` too). It only applies to an adaptation created with the v2
+   * reviewer; one created with v1 always runs v1.
+   */
+  reviewerV2?: ReviewerV2Mode;
   visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 
@@ -944,6 +953,12 @@ function resolutionOutcome(records: readonly SupportResolutionRecord[], loaded: 
   });
 }
 
+/** The semantic judgments (etapa 2.3) the review of THIS document stored next to itself; none when the document was not judged. */
+async function semanticRecordsOf(store: AdaptationStore, adaptationId: string, documentFp: string): Promise<SemanticRecord[]> {
+  const found = (await store.listArtifacts(adaptationId, "pedagogical_review")).filter((a) => (a.payload as { review?: PedagogicalReview }).review?.document_fingerprint === documentFp).at(-1);
+  return (found?.payload as { semantic?: { records?: SemanticRecord[] } } | undefined)?.semantic?.records ?? [];
+}
+
 /** The trace of a support substitution, next to the review it concerns (an `execution_report` with no other content). */
 async function recordSupportResolution(store: AdaptationStore, adaptationId: string, reviewFp: string, support: SupportRepair) {
   await store.putArtifact(adaptationId, null, "execution_report", reviewFp, fingerprint({ review: reviewFp, support_resolution: support.trace }), { review_fingerprint: reviewFp, support_resolution: support.trace });
@@ -1100,8 +1115,22 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
   }
   const asks = new Map<string, Array<string | null>>();
   for (const { check, ids } of perCheck) for (const id of ids) addAsk(asks, id, repeated ? null : (REVIEW_RESTRICTIONS[check] ?? null));
-  const repair = planRepair(raw.plan, previous, loaded, asks, CORRECTION_REASON);
+  // Etapa 2.3 (`REVIEWER_V2_MODE=on` only): what the semantic review CONFIRMED. Each support that did the student's work is asked, in fixed
+  // wording, for what it must not do; a repeat leaves that rung. Only with `SUPPORT_SUBSTITUTION_MODE=on` may it then be substituted: in
+  // `dry_run` or `off` the repair is exactly the one every other review failure gets, never a silent substitution.
+  let support: SupportRepair | undefined;
+  if (effectiveReviewerMode(deps.reviewerV2, loaded.versions.reviewer.prompt_version) === "on") {
+    const confirmed = (await semanticRecordsOf(store, adaptationId, documentFp)).filter((r) => r.status === "confirmed");
+    for (const r of confirmed) for (const id of r.decision_ids) if (appliedIds.has(id)) addAsk(asks, id, repeated ? null : restrictionFor(r));
+    const substitution = deps.supportSubstitution ?? DEFAULT_SUBSTITUTION_MODE;
+    const flags = semanticFlags(confirmed, effective);
+    if (substitution === "on" && flags.size > 0) {
+      support = { mode: substitution, flags, structural: new Map(), alreadySubstituted: new Set((await earlierResolutions(store, adaptationId)).filter((r) => r.action === "substituted").map((r) => r.decision_id)), trace: [] };
+    }
+  }
+  const repair = planRepair(raw.plan, previous, loaded, asks, CORRECTION_REASON, support);
   if (!repair) {
+    if (support && support.trace.length > 0) await recordSupportResolution(store, adaptationId, last.fingerprint, support);
     await recordDiagnosis(store, adaptationId, last.fingerprint, "review", diagnosis.map((d) => ({ ...d, repair: "none" as const })));
     return null;
   }
@@ -1114,7 +1143,7 @@ async function attemptCorrection(deps: OrchestratorDeps, adaptationId: string): 
       throw error;
     }
   }
-  const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { correction_of: last.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.check), signature } });
+  const submitted = await submitPlanReview(deps, adaptationId, repair.review, { automatic: { correction_of: last.fingerprint, restricted: repair.restricted, dropped: repair.dropped, failing: failing.map((c) => c.check), signature, ...(support && support.trace.length > 0 ? { support_resolution: support.trace } : {}) } });
   if (!submitted.ok || !submitted.executable) return null;
   deps.log?.warn("automatic_correction_queued", { adaptationId, restricted: repair.restricted.join(","), dropped: repair.dropped.join(","), checks: failing.map((c) => c.check).join(",") });
   return enqueueAutomatically(deps, adaptationId, submitted.reviewFingerprint);
@@ -1484,17 +1513,29 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     // 9-12. AI review: reuse a persisted merged review, else ask, persist the findings, merge with the precedences, persist.
     current = await advance(store, adaptationId, current, "reviewing_ai");
     failing = "review";
-    const reviewInputFp = reviewFingerprint(documentFp, reviewFp, loaded.versions);
-    const merged = await store.findArtifact(adaptationId, "pedagogical_review", { inputFingerprint: reviewInputFp });
+    const reviewerMode = effectiveReviewerMode(deps.reviewerV2, loaded.versions.reviewer.prompt_version);
+    const semantic = reviewerMode !== "off";
+    // `off` keeps EVERY key it always had. The v2 judgments are asked under their own key (a v1 answer is not reused as if it carried them) and
+    // only `on` has its own merged review, so moving from `shadow` to `on` merges what was already asked: never a second ask.
+    const baseInputFp = reviewFingerprint(documentFp, reviewFp, loaded.versions);
+    const reviewInputFp = semantic ? fingerprint({ review: baseInputFp, judged: SEMANTIC_POLICY_VERSION }) : baseInputFp;
+    const mergedFp = reviewerMode === "on" ? fingerprint({ review: reviewInputFp, applied: SEMANTIC_POLICY_VERSION }) : reviewInputFp;
+    const merged = await store.findArtifact(adaptationId, "pedagogical_review", { inputFingerprint: mergedFp });
     let finalReview;
     if (merged) {
       finalReview = (merged.payload as { review: ReturnType<typeof assembleReview> }).review;
     } else {
       const findings = await store.findArtifact(adaptationId, "reviewer_findings", { inputFingerprint: reviewInputFp });
       let draft: AiReviewDraft;
-      if (findings) draft = (findings.payload as { draft: AiReviewDraft }).draft;
-      else {
-        const reviewContext = buildPedagogicalReviewContext(input, reviewed);
+      let judgments: SupportJudgment[] = [];
+      let sanitation: SanitationCounts | undefined;
+      if (findings) {
+        const saved = findings.payload as { draft: AiReviewDraft; support_judgments?: SupportJudgment[]; sanitation?: SanitationCounts };
+        draft = saved.draft;
+        judgments = saved.support_judgments ?? [];
+        sanitation = saved.sanitation;
+      } else {
+        const reviewContext = buildPedagogicalReviewContext(input, reviewed, { semantic });
         if (!(await store.markProviderCall(run.lease.jobId, run.lease.attempt))) throw new LeaseLostError();
         // A malformed answer (the review is asked as free JSON against a strict contract) gets ONE new ask of the same review, then the
         // stage fails as before: bounded by construction (two calls at most, both kept in `ai_runs`), never a loop. Anything else
@@ -1534,16 +1575,42 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
           }
         }
         draft = answered.draft as AiReviewDraft;
-        const outputFp = fingerprint(draft);
+        if (semantic) {
+          judgments = answered.judgments ?? [];
+          sanitation = answered.sanitation;
+        }
+        const outputFp = fingerprint(semantic ? { draft, judgments } : draft);
         // The second ask is a «repair» call: the index of `ai_runs` keys a call by (job, attempt, purpose, kind, attempt, input), so a repeat
         // recorded as «initial» would be dropped silently and its cost lost.
         for (const r of answered.runs) await store.recordAiRun(runRow({ ...r, callKind: ask > 1 ? "repair" : r.callKind }, run.ids, reviewInputFp, outputFp));
-        await store.putArtifact(adaptationId, run.lease, "reviewer_findings", reviewInputFp, fingerprint({ input: reviewInputFp, output: outputFp }), { draft });
+        await store.putArtifact(adaptationId, run.lease, "reviewer_findings", reviewInputFp, fingerprint({ input: reviewInputFp, output: outputFp }), { draft, ...(semantic ? { support_judgments: judgments, ...(sanitation ? { sanitation } : {}) } : {}) });
         await store.clearProviderCall(run.lease.jobId, run.lease.attempt);
       }
       const outcome = buildReviewScoped(input, draft, reviewed.raw.decisions.map((d) => d.id));
       finalReview = outcome.review;
-      await store.putArtifact(adaptationId, run.lease, "pedagogical_review", reviewInputFp, fingerprint({ input: reviewInputFp, review: finalReview, rejected: outcome.rejected, pending: outcome.pending }), { review: finalReview, rejected: outcome.rejected, pending: outcome.pending });
+      // Etapa 2.3: what the reviewer judged about each support. `shadow` and `on` RECORD it (ids, codes and counts); only `on` lets it change the
+      // review, by appending its checks (a confirmed finding fails `answers_not_leaked`, a suspicion or an unjudged support only warns).
+      let semanticSet: SemanticRecordSet | undefined;
+      let semanticDryRun: SupportResolutionRecord[] = [];
+      if (semantic) {
+        const judged = judgeSupports({ analysis: input.analysis, scope: buildSemanticScope(input.analysis, input.plan, document), document, judgments });
+        semanticSet = summarize(reviewerMode, judged, input.plan.decisions);
+        if (reviewerMode === "on") {
+          finalReview = withSemanticChecks(input, outcome.review, semanticChecks(judged.records));
+          // A substitution configured as `dry_run` never happens silently: it is only recorded what it WOULD do for each confirmed support.
+          if (substitutionMode === "dry_run") {
+            semanticDryRun = [...semanticFlags(judged.records, input.plan.decisions).values()].flatMap((flag) => {
+              const decision = input.plan.decisions.find((d) => d.id === flag.decisionId);
+              const activity = loaded.analysis.activities.find((a) => a.id === flag.activityId);
+              if (!decision || !activity) return [];
+              const plan = planSubstitution({ raw: raw.plan, decision, flagged: flag.kinds, analysis: loaded.analysis, context: loaded.context, activity });
+              return [recordOf(flag, decision, "dry_run", plan ? "would_substitute" : "would_restrict", { to: plan?.to ?? null, option: plan?.option ?? null, coverage: "same_activity" })];
+            });
+          }
+        }
+        deps.log?.warn("support_semantic_review", { adaptationId, mode: reviewerMode, confirmed: semanticSet.counts.confirmed, suspected: semanticSet.counts.suspected, legitimate: semanticSet.counts.legitimate, unjudged: semanticSet.counts.unjudged });
+      }
+      await store.putArtifact(adaptationId, run.lease, "pedagogical_review", mergedFp, fingerprint({ input: mergedFp, review: finalReview, rejected: outcome.rejected, pending: outcome.pending, semantic: semanticSet ?? null }), { review: finalReview, rejected: outcome.rejected, pending: outcome.pending, ...(semanticSet ? { semantic: { ...semanticSet, ...(sanitation ? { sanitation } : {}), ...(semanticDryRun.length > 0 ? { dry_run: semanticDryRun } : {}) } } : {}) });
     }
 
     // 13. Delivered only if usable: approved / approved_with_warnings. Anything else keeps the version but is not a delivery.

@@ -7,6 +7,7 @@ import { planExecutability, type ExecutionRoute } from "./execution";
 import { deterministicChecks } from "./review";
 import type { ReviewInput } from "./review-checks";
 import type { ReviewedPlan } from "./plan-review";
+import { buildSemanticScope, type SemanticActivity, type SemanticSignal, type SupportUnit } from "./support-semantic";
 
 /**
  * The minimum a pedagogical reviewer needs, built deterministically (same input, same context, same fingerprint). It is a
@@ -17,11 +18,13 @@ import type { ReviewedPlan } from "./plan-review";
  */
 
 export const REVIEW_CONTEXT_VERSION = 1;
+/** The context of the semantic review of the supports (pedagogical_reviewer@v2): the v1 context plus what each support needs to be judged. */
+export const REVIEW_CONTEXT_VERSION_SEMANTIC = 2;
 
 export type JudgedCheck = (typeof AI_REVIEW_CHECKS)[number];
 
 export interface PedagogicalReviewContext {
-  context_version: typeof REVIEW_CONTEXT_VERSION;
+  context_version: typeof REVIEW_CONTEXT_VERSION | typeof REVIEW_CONTEXT_VERSION_SEMANTIC;
   language: string;
   audience: { stage: AdaptationContext["education"]["stage"]; age_band: AdaptationContext["audience"]["age_band"]; register: AdaptationContext["audience"]["register"]; infantilization_guard: boolean };
   active_needs: Array<{ dimension: DimensionKey; level: "low" | "medium" | "high" }>;
@@ -40,7 +43,13 @@ export interface PedagogicalReviewContext {
     must_answer: JudgedCheck[];
     /** For a check with an open semantic question: every one of these targets needs its own finding. */
     required_targets: Partial<Record<JudgedCheck, string[]>>;
+    /** Version 2 only: every support that needs its own judgment (`support_judgments`). */
+    support_blocks?: string[];
   };
+  /** Version 2 only. The supports to judge, what their activities evaluate and the audit's hints. No learner data: the sheet's own structure. */
+  supports?: SupportUnit[];
+  activities?: SemanticActivity[];
+  signals?: SemanticSignal[];
 }
 
 const isJudged = (check: ReviewCheck): check is JudgedCheck => (AI_REVIEW_CHECKS as readonly string[]).includes(check);
@@ -59,7 +68,7 @@ export function reviewScope(base: readonly CheckResult[], input: ReviewInput, de
   return { allowed, mustAnswer, required: semantic ? { answers_not_leaked: [...semantic.targets] } : {} };
 }
 
-export function buildPedagogicalReviewContext(input: ReviewInput, reviewed?: ReviewedPlan): PedagogicalReviewContext {
+export function buildPedagogicalReviewContext(input: ReviewInput, reviewed?: ReviewedPlan, options: { semantic?: boolean } = {}): PedagogicalReviewContext {
   const { analysis, context, document } = input;
   const base = deterministicChecks(input);
   const execution = reviewed ? planExecutability(reviewed, analysis, context) : null;
@@ -70,9 +79,12 @@ export function buildPedagogicalReviewContext(input: ReviewInput, reviewed?: Rev
   const adaptedRefs = new Set(blocks.filter((b) => b.trace.origin !== "original").flatMap((b) => b.trace.source_refs));
   const underJudgment = new Set([...adaptedRefs, ...(scope.required.answers_not_leaked ?? [])]);
   const answerFor = new Set(scope.required.answers_not_leaked ?? []);
+  // The semantic review (v2): what each support is judged against. Without it the context is EXACTLY the v1 one.
+  const semantic = options.semantic ? buildSemanticScope(analysis, input.plan, document) : null;
+  const evaluatedOf = new Set(semantic?.activities.flatMap((a) => a.evaluates.protected) ?? []);
 
   return {
-    context_version: REVIEW_CONTEXT_VERSION,
+    context_version: semantic ? REVIEW_CONTEXT_VERSION_SEMANTIC : REVIEW_CONTEXT_VERSION,
     language: context.education.language,
     audience: { stage: context.education.stage, age_band: context.audience.age_band, register: context.audience.register, infantilization_guard: context.audience.infantilization_guard },
     active_needs: context.needs.map((n) => ({ dimension: n.dimension, level: n.level })),
@@ -83,11 +95,12 @@ export function buildPedagogicalReviewContext(input: ReviewInput, reviewed?: Rev
       return { id: rd.id, target: d.target, action: d.action, outcome: route === "deferred_to_renderer" ? "deferred_to_renderer" : rd.outcome, route, supports: d.supports.map((s) => s.kind), addresses: d.dimensions };
     }),
     document: { blocks: blocks.map((b) => ({ id: b.id, type: b.type, origin: b.trace.origin, refs: b.trace.source_refs, decisions: b.trace.decision_ids, text: b.type === "image" || b.type === "chart" ? "" : studentText(b) })) },
-    protected: analysis.protected_elements.filter((p) => p.activity_ids.some((a) => underJudgment.has(a))).map((p) => ({ id: p.id, type: p.type, importance: p.importance, value: p.value, activity_ids: p.activity_ids })),
+    protected: analysis.protected_elements.filter((p) => p.activity_ids.some((a) => underJudgment.has(a)) || evaluatedOf.has(p.id)).map((p) => ({ id: p.id, type: p.type, importance: p.importance, value: p.value, activity_ids: p.activity_ids })),
     internal_reference_only: analysis.activities
       .filter((a) => a.expected_answer.basis === "inferred" && a.expected_answer.value && answerFor.has(a.id))
       .map((a) => ({ activity: a.id, inferred_answer: a.expected_answer.value!, use: "internal_reference_only" as const })),
-    review_scope: { allowed_targets: [...scope.allowed].sort(), must_answer: [...scope.mustAnswer], required_targets: scope.required },
+    review_scope: { allowed_targets: [...scope.allowed].sort(), must_answer: [...scope.mustAnswer], required_targets: scope.required, ...(semantic ? { support_blocks: semantic.units.map((u) => u.block_id) } : {}) },
+    ...(semantic ? { supports: semantic.units, activities: semantic.activities, signals: semantic.signals } : {}),
   };
 }
 

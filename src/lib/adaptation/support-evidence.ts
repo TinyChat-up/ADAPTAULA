@@ -153,7 +153,9 @@ export function contentStems(text: string): Set<string> {
   return out;
 }
 
-const EVALUATED = new Set(["concept", "target_operation", "reasoning_constraint", "formula"]);
+/** The protected elements that say WHAT an activity evaluates (its concept, its operation, its reasoning, its formula). */
+export const EVALUATED_TYPES: ReadonlySet<string> = new Set(["concept", "target_operation", "reasoning_constraint", "formula"]);
+const EVALUATED = EVALUATED_TYPES;
 
 /** What the activity evaluates, from structured fields only: its protected concept/operation/constraint and its objectives. */
 export function evaluatedStems(analysis: MaterialAnalysis, activity: AnalysisActivity): Set<string> {

@@ -39,6 +39,23 @@ describe("server env · sustitución de apoyos (etapa 2.2)", () => {
   });
 });
 
+describe("server env · revisión semántica de los apoyos (etapa 2.3)", () => {
+  it("por defecto está APAGADA (off): shadow y on solo por activación explícita; un valor inválido falla", () => {
+    expect(parseServerEnv({}).REVIEWER_V2_MODE).toBe("off");
+    expect(parseServerEnv({ REVIEWER_V2_MODE: "" }).REVIEWER_V2_MODE).toBe("off");
+    expect(parseServerEnv({ REVIEWER_V2_MODE: "shadow" }).REVIEWER_V2_MODE).toBe("shadow");
+    expect(parseServerEnv({ REVIEWER_V2_MODE: "on" }).REVIEWER_V2_MODE).toBe("on");
+    expect(() => parseServerEnv({ REVIEWER_V2_MODE: "yes" })).toThrow();
+  });
+
+  it(".env.example la documenta apagada y no la activa; es independiente de la sustitución de apoyos", () => {
+    const example = readFileSync(path.join(process.cwd(), ".env.example"), "utf8");
+    expect(example).toMatch(/^REVIEWER_V2_MODE=off$/m);
+    expect(example).not.toMatch(/^REVIEWER_V2_MODE=(on|shadow)$/m);
+    expect(parseServerEnv({ REVIEWER_V2_MODE: "on" }).SUPPORT_SUBSTITUTION_MODE).toBe("dry_run");
+  });
+});
+
 describe("server env", () => {
   it("boots with no AI, Stripe or secret keys (not required until later phases)", () => {
     const env = parseServerEnv({});

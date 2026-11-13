@@ -243,7 +243,7 @@ export function planSubstitution(input: { raw: AdaptationPlan; decision: Decisio
 // Traceability: codes and ids only
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type ResolutionTrigger = "literal_answer" | "declined_reveal" | "structural_signal";
+export type ResolutionTrigger = "literal_answer" | "declined_reveal" | "structural_signal" | "semantic_confirmed";
 export type ResolutionAction = "restricted" | "substituted" | "omitted" | "stopped" | "would_restrict" | "would_substitute";
 /**
  * Where a need stays served after a support is left out: by another decision on the SAME activity, by a resource or a support for the
@@ -271,7 +271,8 @@ export interface SupportResolutionRecord {
   /** The needs (dimensions) that nothing serves for this activity after this. */
   uncovered: DimensionKey[];
   /** The pedagogical meaning of the support is judged by the semantic review (stage 2.3): `cleared` is not a validation. */
-  semantic_review: "pending_2_3";
+  /** `confirmed`: the semantic reviewer (stage 2.3) judged this support and its judgment was confirmed; `pending_2_3`: no semantic judgment (mechanical evidence only). */
+  semantic_review: "pending_2_3" | "confirmed";
 }
 
 const COVERAGE_RANK: Record<ResolutionCoverage, number> = { same_activity: 0, presentation: 1, reachable_resource: 2, none: 3 };
@@ -318,7 +319,7 @@ export function recordOf(flag: SupportFlag, decision: Pick<Decision, "dimensions
     dimensions: [...decision.dimensions],
     coverage: extra.coverage,
     uncovered: extra.uncovered ?? [],
-    semantic_review: "pending_2_3",
+    semantic_review: flag.trigger === "semantic_confirmed" ? "confirmed" : "pending_2_3",
   };
 }
 
