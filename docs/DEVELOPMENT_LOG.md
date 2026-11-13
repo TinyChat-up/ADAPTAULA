@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-13 — PR #90: cuatro ajustes tras la revisión (interruptor, ediciones, cobertura, ensayo por defecto)
+
+- **Interruptor efectivo.** La restricción previa (evidencia C) se llamaba desde `resolveAutomatically` sin mirar el interruptor. Pasa a `applySupportGuard`, al final de las resoluciones automáticas y por modo: `off` = comportamiento anterior; `dry_run` = la revisión no cambia y se anota qué haría; `on` = la añade (sin pisar restricciones, sobre los apoyos que la decisión llevará tras la variante segura de V2.2). Pruebas de extremo a extremo (revisión, lo que recibe el generador y registro) en los tres modos.
+- **Ediciones previas.** `planRepair` sustituía la entrada entera de la revisión: ahora conserva acción, formato de respuesta, intensidad, nota, `support_requests`, motivo y todas las restricciones, y solo cambia los apoyos (si las seis restricciones no dejan sitio, no se sustituye). «Ya sustituida» se lee de los artefactos. Pruebas con una decisión editada y con la variante segura de una resolución autónoma de V2.2.
+- **Cobertura real.** `coverageOf`: `same_activity` / `reachable_resource` / `presentation` / `none`; otra actividad con la misma dimensión no cubre nada (antes bastaba para necesidades medias y bajas). Resultado verificado en la ficha final: `applied` solo si el apoyo está en el documento y sirve todas las necesidades (`partial`, `not_generated`, `flagged`, `omitted`, `uncovered` si no).
+- **Despliegue gradual.** `SUPPORT_SUBSTITUTION_MODE` por defecto `dry_run` (también el valor si falta la dependencia); `on` solo por activación explícita. Ciclos y costes acotados tras reinicios y reanudaciones: probado.
+- Sin E2E, llamadas de pago ni migraciones.
+
 ## 2026-11-12 — Etapa 2.2: sustitución funcional de apoyos que revelan la respuesta
 
 - Rama `claude/zealous-shannon-k7w4v4` desde `main` (`ba7c116`, #86–#89). Sin migraciones, sin despliegue, sin E2E, sin llamadas de pago. [QA](qa/etapa-2-2-sustitucion/README.md).

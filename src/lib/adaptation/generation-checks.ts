@@ -10,7 +10,7 @@ import type { ReviewedPlan } from "./plan-review";
 import { checkOf } from "./review";
 import { visualTreatment } from "./visual-needs";
 import { assessSupports, supportsDefiningEvaluatedConcepts } from "./assessment-safety";
-import { isActionable, revealDeclines, type SubstitutionMode } from "./support-substitution";
+import { DEFAULT_SUBSTITUTION_MODE, isActionable, revealDeclines, type SubstitutionMode } from "./support-substitution";
 
 /**
  * Deterministic audit of one generation against the reviewed plan (docs/ADAPTATION.md § Generador). It does not trust the
@@ -79,7 +79,7 @@ export function auditGeneration(input: {
   generation: NormalizedGeneration;
   document: MaterialDocument;
   review: PedagogicalReview;
-  /** Etapa 2.2: `on` (default) lets a literal, reliable answer in a support start a repair; `dry_run` and `off` never do. */
+  /** Etapa 2.2: `on` (never the default: see `DEFAULT_SUBSTITUTION_MODE`) lets a literal, reliable answer in a support start a repair; `dry_run` and `off` never do. */
   substitution?: SubstitutionMode;
 }): GenerationAudit {
   const { analysis, context, reviewed, generation, document, review } = input;
@@ -150,7 +150,7 @@ export function auditGeneration(input: {
 
   // Etapa 2.2: only LITERAL evidence (an answer part the sheet does not show, stated or grounded in the material) may start a repair, and
   // a support the generator itself declined for revealing the answer: the one substitution is attempted for it. Anything less only warns.
-  if ((input.substitution ?? "on") === "on") {
+  if ((input.substitution ?? DEFAULT_SUBSTITUTION_MODE) === "on") {
     const solving = assessSupports(analysis, document).findings.filter(isActionable);
     add(SUPPORT_SOLVES_CHECK, solving.length === 0, solving.length === 0 ? "ningún apoyo entrega la respuesta" : solving.map((f) => `${f.activity_id}: ${f.code}`).join("; "), solving.flatMap((f) => f.decision_ids.filter((id) => effectiveIds.has(id))), solving.map((f) => f.block_id));
     const declined = revealDeclines(generation);

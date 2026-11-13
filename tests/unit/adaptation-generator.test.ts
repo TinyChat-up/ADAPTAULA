@@ -226,12 +226,15 @@ describe("rules enforced on whatever a model writes", () => {
     expect(allBlocks(out.document).filter((b) => b.trace.source_refs.includes("act_2")).map((b) => b.trace.origin)).toEqual(["original"]);
   });
 
-  it("a refusal because the support would reveal the answer is no longer accepted silently (etapa 2.2): the audit asks for ONE substitution; with the switch off the original stays as before", () => {
+  it("a refusal because the support would reveal the answer: only with the substitution explicitly ON the audit asks for ONE; by default (dry-run) and off the original stays as before", () => {
     const draft: DraftGeneratedSegments = { ...mockDraft(), segments: mockDraft().segments.filter((s) => s.decision_id !== "dec_4"), blocked: [{ decision_id: "dec_4", reason: "would_reveal_answer", note: "Las preguntas guía serían la respuesta." }] };
     const out = assemble(draft);
     expect(out.generation.declined).toEqual(["dec_4"]);
-    expect(out.audit.ok).toBe(false);
-    expect(out.audit.checks.filter((c) => !c.ok).map((c) => c.name)).toEqual([SUPPORT_DECLINED_CHECK]);
+    // Sin activación explícita (el valor por defecto es el ensayo) nada cambia: la ficha se acepta como antes.
+    expect(out.audit.ok).toBe(true);
+    const on = auditGeneration({ analysis, context, reviewed, generation: out.generation, document: out.document, review: out.review, substitution: "on" });
+    expect(on.ok).toBe(false);
+    expect(on.checks.filter((c) => !c.ok).map((c) => c.name)).toEqual([SUPPORT_DECLINED_CHECK]);
     const off = auditGeneration({ analysis, context, reviewed, generation: out.generation, document: out.document, review: out.review, substitution: "off" });
     expect(off.ok).toBe(true);
     expect(auditGeneration({ analysis, context, reviewed, generation: out.generation, document: out.document, review: out.review, substitution: "dry_run" }).ok).toBe(true);

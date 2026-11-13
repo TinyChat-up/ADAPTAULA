@@ -3,8 +3,8 @@ import type { AdaptationPlan, Decision, StrategyKey, SupportKind } from "@/lib/s
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { AnalysisActivity, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { Block } from "@/lib/schemas/material-document";
-import type { DecisionEdits } from "@/lib/schemas/plan-review";
-import { viable } from "./automatic-resolution";
+import type { DecisionEdits, PlanReview } from "@/lib/schemas/plan-review";
+import { reaches, viable } from "./automatic-resolution";
 import { isResolvedByPresentation } from "./context";
 import { DIMENSION_STRATEGIES } from "./strategies";
 import type { SupportFinding, SupportFindingCode } from "./assessment-safety";
@@ -18,6 +18,11 @@ import type { SupportFinding, SupportFindingCode } from "./assessment-safety";
 
 export type SubstitutionMode = "on" | "dry_run" | "off";
 export const SUBSTITUTION_MODES: readonly SubstitutionMode[] = ["on", "dry_run", "off"];
+/**
+ * What happens when nobody turned it on: it only RECORDS what it would do. `on` is an explicit, controlled activation
+ * (`SUPPORT_SUBSTITUTION_MODE=on`), never the default of a deployment or of a missing dependency.
+ */
+export const DEFAULT_SUBSTITUTION_MODE: SubstitutionMode = "dry_run";
 
 /** The only findings that may start a repair: the support carries an answer part the sheet does not show, and it is reliable. */
 export const LITERAL_CODES: readonly SupportFindingCode[] = ["direct_answer_part", "example_solves_item"];
@@ -155,6 +160,35 @@ export function priorGuard(decision: Pick<Decision, "target" | "supports">, anal
   return terms ? [cap(`No definas ni expliques lo que evalúa la actividad: ${terms}. Aclara solo vocabulario secundario de la consigna o del texto.`)] : [];
 }
 
+export interface SupportGuardResult {
+  review: PlanReview;
+  /** The decisions that get (`on`) or WOULD get (`dry_run`) a restriction. Ids only. */
+  guarded: string[];
+}
+
+/**
+ * Evidence C applied to a whole automatic review, AFTER every other resolution (the capability-aware one and the V2.2 autonomous one),
+ * on what each decision will really carry: its effective supports (an edit may have changed them) and its own restrictions, which are
+ * kept: a guard is added to them, never in their place, and only if the six allowed still fit. `on` returns the review with the
+ * guards; `dry_run` returns it UNTOUCHED and lists what it would do; `off` does nothing. A decision left out is never touched.
+ */
+export function applySupportGuard(review: PlanReview, plan: Pick<AdaptationPlan, "decisions">, analysis: MaterialAnalysis, mode: SubstitutionMode): SupportGuardResult {
+  if (mode === "off") return { review, guarded: [] };
+  const guarded: string[] = [];
+  const entries = review.entries.map((entry) => {
+    if (entry.action === "rejected") return entry;
+    const decision = plan.decisions.find((d) => d.id === entry.decision_id);
+    if (!decision) return entry;
+    const guard = priorGuard({ target: decision.target, supports: entry.edits?.supports ?? decision.supports }, analysis);
+    const current = entry.restrictions ?? [];
+    const missing = guard.filter((g) => !current.includes(g));
+    if (missing.length === 0 || current.length + missing.length > 6) return entry;
+    guarded.push(entry.decision_id);
+    return mode === "on" ? { ...entry, restrictions: [...current, ...missing] } : entry;
+  });
+  return { review: mode === "on" ? { ...review, entries } : review, guarded };
+}
+
 /** Structural evidence (B): asked only when a repair is already happening for another reason; never a call of its own. */
 export const STRUCTURAL_RESTRICTIONS: Partial<Record<SupportFindingCode, string>> = {
   example_near_item: "Usa otros números y otros datos que los de la hoja; no demuestres la misma relación que pide la actividad.",
@@ -211,7 +245,12 @@ export function planSubstitution(input: { raw: AdaptationPlan; decision: Decisio
 
 export type ResolutionTrigger = "literal_answer" | "declined_reveal" | "structural_signal";
 export type ResolutionAction = "restricted" | "substituted" | "omitted" | "stopped" | "would_restrict" | "would_substitute";
-export type ResolutionCoverage = "same_activity" | "elsewhere" | "none";
+/**
+ * Where a need stays served after a support is left out: by another decision on the SAME activity, by a resource or a support for the
+ * whole document that REACHES it (`reaches`), by the presentation, or by nothing. Another decision on the same DIMENSION but on an
+ * activity that does not reach this one covers nothing here, whatever the level of the need.
+ */
+export type ResolutionCoverage = "same_activity" | "reachable_resource" | "presentation" | "none";
 
 export interface SupportResolutionRecord {
   decision_id: string;
@@ -227,10 +266,32 @@ export interface SupportResolutionRecord {
   option: OptionId | null;
   /** The needs (dimensions) of the decision: never edited. */
   dimensions: DimensionKey[];
-  /** Where the needs stay served after this: by the substitute on the same activity, by another decision, or by nothing. */
+  /** Where the needs stay served after this (the worst of its dimensions). */
   coverage: ResolutionCoverage;
+  /** The needs (dimensions) that nothing serves for this activity after this. */
+  uncovered: DimensionKey[];
   /** The pedagogical meaning of the support is judged by the semantic review (stage 2.3): `cleared` is not a validation. */
   semantic_review: "pending_2_3";
+}
+
+const COVERAGE_RANK: Record<ResolutionCoverage, number> = { same_activity: 0, presentation: 1, reachable_resource: 2, none: 3 };
+
+/**
+ * What a decision's needs have left once it is left out: per dimension, the closest thing that really serves it FOR THIS ACTIVITY.
+ * `essential`: some uncovered need is a high one (the honest stop). Medium and low needs are recorded, never silently «covered elsewhere».
+ */
+export function coverageOf(decision: Pick<Decision, "id" | "target" | "dimensions">, others: readonly Pick<Decision, "id" | "target" | "dimensions">[], context: Pick<AdaptationContext, "needs" | "presentation">, analysis: MaterialAnalysis): { coverage: ResolutionCoverage; uncovered: DimensionKey[]; essential: boolean } {
+  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
+  const rest = others.filter((k) => k.id !== decision.id);
+  const uncovered: DimensionKey[] = [];
+  let worst: ResolutionCoverage = "same_activity";
+  for (const dim of decision.dimensions) {
+    const serving = rest.filter((k) => k.dimensions.includes(dim));
+    const here: ResolutionCoverage = isResolvedByPresentation(dim, context.presentation) ? "presentation" : serving.some((k) => k.target === decision.target) ? "same_activity" : serving.some((k) => reaches(k, decision, analysis)) ? "reachable_resource" : "none";
+    if (here === "none") uncovered.push(dim);
+    if (COVERAGE_RANK[here] > COVERAGE_RANK[worst]) worst = here;
+  }
+  return { coverage: worst, uncovered, essential: uncovered.some((d) => high.has(d)) };
 }
 
 export interface SupportFlag {
@@ -242,7 +303,7 @@ export interface SupportFlag {
   codes: SupportFindingCode[];
 }
 
-export function recordOf(flag: SupportFlag, decision: Pick<Decision, "dimensions" | "supports">, mode: SubstitutionMode, action: ResolutionAction, extra: { to?: SupportKind[] | null; option?: OptionId | null; coverage: ResolutionCoverage }): SupportResolutionRecord {
+export function recordOf(flag: SupportFlag, decision: Pick<Decision, "dimensions" | "supports">, mode: SubstitutionMode, action: ResolutionAction, extra: { to?: SupportKind[] | null; option?: OptionId | null; coverage: ResolutionCoverage; uncovered?: DimensionKey[] }): SupportResolutionRecord {
   return {
     decision_id: flag.decisionId,
     activity_id: flag.activityId,
@@ -256,6 +317,7 @@ export function recordOf(flag: SupportFlag, decision: Pick<Decision, "dimensions
     option: extra.option ?? null,
     dimensions: [...decision.dimensions],
     coverage: extra.coverage,
+    uncovered: extra.uncovered ?? [],
     semantic_review: "pending_2_3",
   };
 }

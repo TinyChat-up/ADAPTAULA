@@ -1,10 +1,10 @@
 import { auditSupports } from "../support-audit";
 import { assessSupports } from "../assessment-safety";
-import { STRUCTURAL_RESTRICTIONS, SUBSTITUTION_REASON, isActionable, kindsOfBlock, planSubstitution, recordOf, revealDeclines, type SubstitutionMode, type SupportFlag, type SupportResolutionRecord } from "../support-substitution";
+import { DEFAULT_SUBSTITUTION_MODE, STRUCTURAL_RESTRICTIONS, SUBSTITUTION_REASON, applySupportGuard, coverageOf, servesAll, isActionable, kindsOfBlock, planSubstitution, recordOf, revealDeclines, type SubstitutionMode, type SupportFlag, type SupportResolutionRecord } from "../support-substitution";
 import { parseStoredAnalysis } from "@/lib/analysis/parse";
 import { AdaptationContextSchema, type AdaptationContext } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type AdaptationPlan } from "@/lib/schemas/adaptation-plan";
-import type { DimensionKey, FunctionalProfile } from "@/lib/schemas/functional-profile";
+import type { FunctionalProfile } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { DraftGeneratedSegmentsV2Schema, type DraftGeneratedSegmentsV2 } from "@/lib/schemas/generated-segments-v2";
 import { PlanReviewSchema, type PlanReview } from "@/lib/schemas/plan-review";
@@ -91,8 +91,9 @@ export interface OrchestratorDeps {
    * nothing resolves stops the adaptation honestly. Never in «Revisar antes de crear». No adaptation unit is consumed by it.
    */
   /**
-   * Etapa 2.2: what a LITERAL, reliable answer in a support (or a support the generator declined for revealing it) does. `on` (default):
-   * the decision is repaired, then its support substituted once; `dry_run`: only recorded, nothing changes; `off`: nothing.
+   * Etapa 2.2: what a LITERAL, reliable answer in a support (or a support the generator declined for revealing it) does. `dry_run`
+   * (the default, also when this is missing): only recorded, nothing changes, no restriction is added; `on` (explicit): the decision is
+   * repaired, then its support substituted once, and the first generation is told what not to define; `off`: nothing at all.
    */
   supportSubstitution?: SubstitutionMode;
   visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
@@ -119,7 +120,7 @@ const settings = (deps: OrchestratorDeps) => ({ ...DEFAULTS, ...Object.fromEntri
 // Loading and integrity
 // ---------------------------------------------------------------------------------------------------------------------
 
-interface Loaded {
+export interface Loaded {
   snapshot: PipelineSnapshot;
   versions: PipelineVersions;
   analysis: MaterialAnalysis;
@@ -684,13 +685,16 @@ export async function continueAutomatically(deps: OrchestratorDeps, adaptationId
   const lost = new Map(autonomous.uncovered.map((u) => [u.decision_id, u.dimensions]));
   const outcomes = resolution.outcomes.map((o) => (lost.has(o.decision_id) ? { ...o, kind: "unresolved" as const, reason: "Conservar el original deja sin atender una necesidad importante del perfil que ninguna otra decisión cubre", uncovered: lost.get(o.decision_id)! } : o));
   const unresolved = outcomes.filter((o) => o.kind === "unresolved").map((o) => o.decision_id);
-  const review = autonomous.review;
+  // Etapa 2.2 (evidence C), after every resolution and mode-aware: `on` adds the restriction, `dry_run` only records what it would add.
+  const guardMode = deps.supportSubstitution ?? DEFAULT_SUBSTITUTION_MODE;
+  const guard = applySupportGuard(autonomous.review, raw.plan, loaded.analysis, guardMode);
+  const review = guard.review;
   // Why each applied decision exists: the need, the declared barrier it reduces, the declared strength it takes advantage of and what
   // it keeps. From the profile's own declarations (no model, no student data), kept for the teacher to consult afterwards.
   const applied = new Set(review.entries.filter((e) => e.action !== "rejected").map((e) => e.decision_id));
   const justifications = justifyDecisions(raw.plan.decisions.filter((d) => applied.has(d.id)), loaded.context.learning_observations);
   // Saved in every case (audit, and what the status reads); held only when a high need has no executable decision at all.
-  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes, unresolved, ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), justifications } }, { hold: unresolved.length > 0 });
+  const submitted = await submitPlanReview(deps, adaptationId, review, { automatic: { outcomes, unresolved, ...(autonomous.resolutions.length > 0 ? { withheld_resolved: autonomous.resolutions } : {}), ...(guard.guarded.length > 0 ? { support_guard: { mode: guardMode, decisions: guard.guarded } } : {}), justifications } }, { hold: unresolved.length > 0 });
   if (!submitted.ok || !submitted.executable) {
     deps.log?.warn("automatic_review_incomplete", { adaptationId, code: submitted.ok ? "execution_unsupported" : submitted.code, unresolved: resolution.unresolved.length });
     return null;
@@ -771,24 +775,14 @@ function losesCoverage(effective: readonly AdaptationPlan["decisions"][number][]
   return effective.some((d) => drop.has(d.id) && d.dimensions.some((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim) && (!high.has(dim) || reaches(k, d, analysis)))));
 }
 
-/**
- * Needs a dropped decision would leave without anything that serves them, and whether one is ESSENTIAL (a high need, covered only by a
- * decision that REACHES the dropped one's target). Same reading as `losesCoverage`, but split so a support dropped for revealing the
- * answer is told apart: a lost medium or low need is delivered AND recorded (never presented as applied); a lost essential one stops.
- */
-function uncoveredNeeds(effective: readonly AdaptationPlan["decisions"][number][], decision: AdaptationPlan["decisions"][number], context: AdaptationContext, analysis: MaterialAnalysis, dropped: ReadonlySet<string>): { dims: DimensionKey[]; essential: boolean } {
-  const kept = effective.filter((d) => !dropped.has(d.id));
-  const high = new Set(context.needs.filter((n) => n.level === "high").map((n) => n.dimension));
-  const dims = decision.dimensions.filter((dim) => !isResolvedByPresentation(dim, context.presentation) && !kept.some((k) => k.dimensions.includes(dim) && (!high.has(dim) || reaches(k, decision, analysis))));
-  return { dims, essential: dims.some((d) => high.has(d)) };
-}
-
 /** What the repair knows about supports that hand over the answer (etapa 2.2). */
 export interface SupportRepair {
   mode: SubstitutionMode;
   flags: ReadonlyMap<string, SupportFlag>;
   /** Evidence B: decisions with a structural signal. They are asked their restriction only when a repair is happening anyway; never dropped, never a call of their own. */
   structural: ReadonlyMap<string, SupportFlag>;
+  /** Decisions already substituted in an earlier cycle: a second substitution is never attempted. */
+  alreadySubstituted: ReadonlySet<string>;
   /** Filled by `planRepair`, also when it ends in a stop: the trace of every decision it touched (codes and ids only). */
   trace: SupportResolutionRecord[];
 }
@@ -804,7 +798,7 @@ export interface SupportRepair {
  * (`planSubstitution`). If none exists the decision is left out and its needs are recorded as covered elsewhere or uncovered, never
  * as applied; an ESSENTIAL need left uncovered is the honest stop. The result must still be executable.
  */
-function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, asks: ReadonlyMap<string, ReadonlyArray<string | null>>, dropReason: string, support?: SupportRepair): { review: PlanReview; restricted: string[]; dropped: string[] } | null {
+export function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, asks: ReadonlyMap<string, ReadonlyArray<string | null>>, dropReason: string, support?: SupportRepair): { review: PlanReview; restricted: string[]; dropped: string[] } | null {
   const effective = reviewPlan(raw, previous, loaded.analysis, loaded.context).effective.decisions;
   const restricted: string[] = [];
   const drop = new Set<string>();
@@ -819,14 +813,17 @@ function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, a
     // A decision asked only for a structural signal that already carries that restriction is left as it is: it is never left out for it.
     if (soft && (missing.length === 0 || current.length + missing.length > 6)) return e;
     if (wanted.includes(null) || missing.length === 0 || current.length + missing.length > 6) {
-      if (flag && decision && support!.mode === "on" && e.action !== "rejected" && e.reason !== SUBSTITUTION_REASON) {
+      if (flag && decision && support!.mode === "on" && e.action !== "rejected" && !support!.alreadySubstituted.has(e.decision_id)) {
         const activity = loaded.analysis.activities.find((a) => a.id === flag.activityId);
         const plan = activity ? planSubstitution({ raw, decision, flagged: flag.kinds, analysis: loaded.analysis, context: loaded.context, activity }) : null;
-        if (plan) {
+        // The substitution changes ONLY the supports (and adds its restrictions to the ones already there): an earlier edit of this decision
+        // (its action, its response format, the V2.2 resolution's safe variant) and every restriction already asked stay as they were.
+        const restrictions = plan ? [...new Set([...current, ...plan.restrictions])] : [];
+        if (plan && restrictions.length <= 6) {
           support!.trace.push(recordOf(flag, decision, support!.mode, "substituted", { to: plan.to, option: plan.option, coverage: "same_activity" }));
           // The substitute is WRITTEN by the generator, like any restricted decision: without this the saved draft would be reused as it is.
           restricted.push(e.decision_id);
-          return { decision_id: e.decision_id, action: "edited" as const, reason: SUBSTITUTION_REASON, restrictions: plan.restrictions, edits: plan.edits };
+          return { ...e, action: "edited" as const, reason: e.action === "edited" ? e.reason : SUBSTITUTION_REASON, restrictions, edits: { ...(e.action === "edited" ? e.edits : {}), supports: plan.edits.supports } };
         }
       }
       drop.add(e.decision_id);
@@ -845,8 +842,8 @@ function planRepair(raw: AdaptationPlan, previous: PlanReview, loaded: Loaded, a
     let stop = false;
     for (const id of flagged) {
       const decision = effective.find((d) => d.id === id)!;
-      const lost = uncoveredNeeds(effective, decision, loaded.context, loaded.analysis, drop);
-      support!.trace.push(recordOf(support!.flags.get(id)!, decision, support!.mode, lost.essential ? "stopped" : "omitted", { coverage: lost.dims.length === 0 ? "elsewhere" : "none" }));
+      const lost = coverageOf(decision, effective.filter((d) => !drop.has(d.id)), loaded.context, loaded.analysis);
+      support!.trace.push(recordOf(support!.flags.get(id)!, decision, support!.mode, lost.essential ? "stopped" : "omitted", { coverage: lost.coverage, uncovered: lost.uncovered }));
       if (lost.essential) stop = true;
     }
     if (stop) return null;
@@ -888,9 +885,9 @@ function supportFlagsOf(loaded: Loaded, effective: readonly AdaptationPlan["deci
   return flags;
 }
 
-function supportRepairOf(loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, generation: NormalizedGeneration, mode: SubstitutionMode): SupportRepair {
+function supportRepairOf(loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, generation: NormalizedGeneration, mode: SubstitutionMode, alreadySubstituted: ReadonlySet<string>): SupportRepair {
   const flags = supportFlagsOf(loaded, effective, document, generation);
-  return { mode, flags, structural: mode === "on" ? structuralSignalsOf(loaded, effective, document, flags) : new Map(), trace: [] };
+  return { mode, flags, structural: mode === "on" ? structuralSignalsOf(loaded, effective, document, flags) : new Map(), alreadySubstituted, trace: [] };
 }
 
 /** Decisions whose support shows a STRUCTURAL signal (the task's own data, the same relation, an item assigned to its category) and no literal one. */
@@ -907,6 +904,44 @@ function structuralSignalsOf(loaded: Loaded, effective: readonly AdaptationPlan[
     }
   }
   return signals;
+}
+
+/** Every substitution record an earlier cycle of this adaptation kept (in a submitted repair review, or next to a stop), oldest first. */
+async function earlierResolutions(store: AdaptationStore, adaptationId: string): Promise<SupportResolutionRecord[]> {
+  return (await store.listArtifacts(adaptationId, "execution_report")).flatMap((a) => {
+    const p = a.payload as { support_resolution?: SupportResolutionRecord[]; automatic?: { support_resolution?: SupportResolutionRecord[] } };
+    return [...(p.support_resolution ?? []), ...(p.automatic?.support_resolution ?? [])];
+  });
+}
+
+/**
+ * What became of each decision a substitution touched, read from the FINAL sheet, never from the plan:
+ *   · applied        its support (the substitute or the restricted one) is in the document and serves every need of the decision;
+ *   · partial        only some of its needs are served by what is there;
+ *   · not_generated  nothing of it reached the document (the generator wrote nothing, or declined again);
+ *   · flagged        it is there and still hands over the answer;
+ *   · omitted        it was left out and another decision that really reaches the activity serves every need (its support is present);
+ *   · uncovered      it was left out and some need is served by nothing present.
+ * Only `applied` may be read as «the need is applied».
+ */
+function resolutionOutcome(records: readonly SupportResolutionRecord[], loaded: Loaded, effective: readonly AdaptationPlan["decisions"][number][], document: MaterialDocument, flagged: ReadonlySet<string>) {
+  const blocks = allBlocks(document).filter((b) => b.trace.origin === "support" || b.trace.origin === "extension");
+  const presentKinds = (decision: AdaptationPlan["decisions"][number]) => new Set(blocks.filter((b) => b.trace.decision_ids.includes(decision.id)).flatMap((b) => kindsOfBlock(b, decision)));
+  const last = new Map(records.map((r) => [r.decision_id, r] as const));
+  return [...last.values()].map((r) => {
+    const decision = effective.find((d) => d.id === r.decision_id);
+    let result: "applied" | "partial" | "not_generated" | "flagged" | "omitted" | "uncovered";
+    if (r.action === "omitted" || r.action === "stopped") {
+      const covered = r.dimensions.every((dim) => isResolvedByPresentation(dim, loaded.context.presentation) || effective.some((k) => k.id !== r.decision_id && k.dimensions.includes(dim) && (k.target === r.activity_id || reaches(k, { target: r.activity_id }, loaded.analysis)) && (k.supports.length === 0 || presentKinds(k).size > 0)));
+      result = covered ? "omitted" : "uncovered";
+    } else if (!decision) {
+      result = "omitted";
+    } else {
+      const here = [...presentKinds(decision)];
+      result = here.length === 0 ? "not_generated" : !servesAll(here, r.dimensions, loaded.context) ? "partial" : flagged.has(r.decision_id) ? "flagged" : "applied";
+    }
+    return { decision_id: r.decision_id, action: r.action, coverage: r.coverage, uncovered: r.uncovered, result, semantic_review: r.semantic_review };
+  });
 }
 
 /** The trace of a support substitution, next to the review it concerns (an `execution_report` with no other content). */
@@ -1373,7 +1408,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     // replaced by the original before anything else). A document that fails the generation audit without a deterministic FAIL is an
     // invalid generation.
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    const substitutionMode = deps.supportSubstitution ?? "on";
+    const substitutionMode = deps.supportSubstitution ?? DEFAULT_SUBSTITUTION_MODE;
     let assembled = assembleAndCheck(loaded, reviewed, generation, serverDriven(row, reviewArtifact.payload), null, substitutionMode);
     // «Hacer magia»: the visual policy decides, once per generation input (a resumed job reuses its decisions and their cost).
     let visualPlan: VisualResolutionPlan | null = null;
@@ -1395,7 +1430,7 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
       const failing = audit.checks.filter((c) => !c.ok);
       // Names and decision ids only: what an operator needs to know why, never content.
       deps.log?.warn("generation_audit_failed", { adaptationId, checks: failing.map((c) => c.name).join("; "), decisions: [...new Set(failing.flatMap((c) => c.decisions ?? []))].join(",") });
-      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing, support: supportRepairOf(loaded, reviewed.effective.decisions, assembled.document, assembled.generation, substitutionMode) });
+      const repaired = await repairGenerationAutomatically(deps, run, { snapshot, loaded, raw, reviewArtifact, failing, support: supportRepairOf(loaded, reviewed.effective.decisions, assembled.document, assembled.generation, substitutionMode, new Set((await earlierResolutions(store, adaptationId)).filter((r) => r.action === "substituted").map((r) => r.decision_id))) });
       if (repaired) return repaired;
       // No safe repair left: the precise diagnosis (rule, decision, unit) is kept next to the review, never only a generic code.
       const diagnosis = diagnoseGeneration({ audit });
@@ -1415,17 +1450,13 @@ export async function runGenerationStage(deps: OrchestratorDeps, adaptationId: s
     })();
     // Etapa 2.2: the trace of what happened to each support that handed over the answer, and in dry-run what WOULD happen. Codes and ids only.
     const flagsNow = supportFlagsOf(loaded, reviewed.effective.decisions, document, generation);
-    const earlier = (await store.listArtifacts(adaptationId, "execution_report")).flatMap((a) => {
-      const p = a.payload as { support_resolution?: SupportResolutionRecord[]; automatic?: { support_resolution?: SupportResolutionRecord[] } };
-      return [...(p.support_resolution ?? []), ...(p.automatic?.support_resolution ?? [])];
-    });
-    const outcome = earlier.map((r) => ({ decision_id: r.decision_id, action: r.action, coverage: r.coverage, result: r.action === "omitted" || r.action === "stopped" ? (r.coverage === "none" ? "uncovered" : "omitted") : flagsNow.has(r.decision_id) ? "flagged" : "clean", semantic_review: r.semantic_review }));
+    const outcome = resolutionOutcome(await earlierResolutions(store, adaptationId), loaded, reviewed.effective.decisions, document, new Set([...flagsNow.keys()]));
     const dryRun = substitutionMode === "dry_run" ? [...flagsNow.values()].flatMap((flag) => {
       const decision = reviewed.effective.decisions.find((d) => d.id === flag.decisionId);
       const activity = loaded.analysis.activities.find((a) => a.id === flag.activityId);
       if (!decision || !activity) return [];
       const plan = planSubstitution({ raw: raw.plan, decision, flagged: flag.kinds, analysis: loaded.analysis, context: loaded.context, activity });
-      return [recordOf(flag, decision, "dry_run", plan ? "would_substitute" : "would_restrict", { to: plan?.to ?? null, option: plan?.option ?? null, coverage: plan ? "same_activity" : "none" })];
+      return [recordOf(flag, decision, "dry_run", plan ? "would_substitute" : "would_restrict", { to: plan?.to ?? null, option: plan?.option ?? null, coverage: "same_activity" })];
     }) : [];
     if (supportAudit && supportAudit.warnings.length > 0) deps.log?.warn("support_audit_warnings", { adaptationId, codes: [...new Set(supportAudit.warnings.map((w) => w.code))].join(","), activities: [...new Set(supportAudit.warnings.map((w) => w.activity_id))].join(",") });
     await store.putArtifact(adaptationId, run.lease, "deterministic_review", inputFp, fingerprint({ input: inputFp, deterministic, audit }), { review: deterministic, audit, document_fingerprint: documentFp, ...(restored.length > 0 ? { restored_originals: restored } : {}), ...(supportAudit ? { support_audit: supportAudit } : {}), ...(outcome.length > 0 ? { support_resolution_outcome: outcome } : {}), ...(dryRun.length > 0 ? { support_resolution_dry_run: dryRun } : {}) });

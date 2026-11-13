@@ -26,11 +26,26 @@ apoyo sustituto resuelve la consigna (su restricción lo prohíbe y la auditorí
 
 ## Cobertura honesta
 
-Si una decisión se omite, su necesidad se registra como **cubierta por otra decisión** (`elsewhere`) o **sin cubrir** (`none`); un apoyo omitido,
-rechazado o no generado **nunca** figura como aplicado (la revisión determinista lee el documento, no el plan). Una necesidad **esencial** (alta)
-sin otra decisión que la cubra en esa actividad es la parada honesta de siempre; una media o baja se entrega y queda registrada como sin cubrir.
+Si una decisión se omite, cada necesidad se clasifica por lo más cercano que de verdad la sirve **para esa actividad** (`coverageOf`):
+`same_activity` (otra decisión de esa dimensión sobre la misma actividad), `reachable_resource` (sobre un recurso que la actividad usa o sobre el documento
+entero, `reaches`), `presentation` (la resuelve la presentación) o `none`. **La misma dimensión en otra actividad que no la alcanza no cubre nada, sea cual sea
+el nivel de la necesidad.** Una necesidad **esencial** (alta) en `none` es la parada honesta de siempre; una media o baja se entrega y queda registrada como sin cubrir
+(`uncovered`). El resultado se verifica en la **ficha final** (`resolutionOutcome`), no en el plan: `applied` solo si el apoyo (el sustituto o el restringido) está en
+el documento y sirve todas las necesidades; `partial`, `not_generated`, `flagged`, `omitted` (otra decisión que de verdad alcanza la actividad, con su apoyo presente) o `uncovered`.
 
-## Ciclos y coste (sin llamadas nuevas)
+## La sustitución cambia solo el apoyo
+
+La entrada de la revisión conserva su `action`, `response_target`, intensidad, nota, `support_requests`, su motivo y **todas** sus restricciones (las nuevas se añaden;
+si ya no caben las seis no se sustituye). Cubre una decisión ya editada y la variante segura de una resolución autónoma de V2.2. «Ya sustituida» se lee de los artefactos
+(sobrevive a reinicios), no de una marca en el texto del motivo.
+
+## Ciclos y coste (sin llamadas nuevas), también tras reinicios
+
+El límite es por entradas distintas del generador (3) y lo aplica la base de datos: probado con un worker que se reinicia entre cada etapa (una llamada por generación,
+tres como máximo, una sola sustitución), con visitas repetidas tras la parada y pidiendo otra generación a mano (ni un ciclo nuevo ni una llamada, aunque se procese: reutiliza
+la generación guardada).
+
+## Ciclos y coste (detalle)
 
 Dentro de las 3 generaciones de siempre. Peor caso: 1.ª genera → 2.ª regenera con la restricción → **3.ª es la sustitución**; si aun así falla, parada
 honesta (probado: nunca una cuarta llamada). Mejor caso: la restricción basta y son 2. Un rechazo `would_reveal_answer` tarda 2 (la sustitución es la
@@ -38,7 +53,13 @@ honesta (probado: nunca una cuarta llamada). Mejor caso: la restricción basta y
 
 ## Interruptor y ensayo
 
-`SUPPORT_SUBSTITUTION_MODE` = `on` (por defecto) | `dry_run` (solo registra qué haría, `deterministic_review.support_resolution_dry_run`) | `off`.
+`SUPPORT_SUBSTITUTION_MODE` = **`dry_run` (por defecto, también si la dependencia falta)** | `on` (activación explícita y controlada) | `off`.
+
+- `off`: comportamiento anterior intacto (sin restricción previa, sin comprobación nueva, sin registro).
+- `dry_run`: no cambia la generación ni sus restricciones (la revisión automática y lo que recibe el generador son idénticos a `off`); solo anota qué haría:
+  `automatic.support_guard` (qué decisiones recibirían la restricción previa) y `deterministic_review.support_resolution_dry_run` (qué reparación/sustitución habría).
+- `on`: restricción previa, reparación y sustitución. La restricción previa se aplica **al final** de las resoluciones automáticas (`applySupportGuard`), sobre lo que cada
+  decisión llevará de verdad (tras la variante segura o la alternativa de V2.2) y sin pisar sus restricciones.
 
 ## Trazabilidad (códigos e identificadores, sin texto)
 

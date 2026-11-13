@@ -8,7 +8,6 @@ import { classifyDecisionExecution } from "./execution";
 import { fingerprint } from "./fingerprint";
 import { classifyPlan, validatePlan } from "./invariants";
 import { instructionNeedsRewrite } from "./proportion";
-import { priorGuard } from "./support-substitution";
 
 /**
  * «Hacer magia» decides the plan by itself, knowing what the executors can really do (docs/ADAPTATION.md § Hacer magia).
@@ -147,9 +146,7 @@ export function resolveAutomatically(raw: AdaptationPlan, analysis: MaterialAnal
     const step = plan.get(d.id)!;
     if (step.kind !== "open") {
       outcomes.push({ decision_id: d.id, kind: step.kind, reason: step.reason, uncovered: [] });
-      // Etapa 2.2 (evidence C): a glossary or key idea on an activity that asks to explain is told, from the first generation, what not to define.
-      const guard = priorGuard({ target: d.target, supports: step.entry.edits?.supports ?? d.supports }, analysis);
-      entries.push({ decision_id: d.id, ...step.entry, ...(guard.length > 0 ? { restrictions: guard } : {}) });
+      entries.push({ decision_id: d.id, ...step.entry });
       continue;
     }
     const uncovered = d.dimensions.filter((dim) => !covered(d, dim));

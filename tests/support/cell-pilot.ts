@@ -44,3 +44,17 @@ const draftWith = (problem: string, result: string): DraftGeneratedSegmentsV2 =>
 /** What the generator wrote the first time (the answer of item a) as the example) and what a safe example looks like. */
 export const cellLeaking = () => draftWith(CELL_EXAMPLE_LEAK, "Núcleo.");
 export const cellSafe = () => draftWith("Pista: «Bombea la sangre por todo el cuerpo». ¿Qué órgano corresponde?", "El corazón.");
+
+/** The substitute the generator is asked for: an example from another domain AND a reminder of the procedure (a worked example alone does not serve working memory). */
+export const cellSafeWithReminder = () =>
+  DraftGeneratedSegmentsV2Schema.parse({
+    segments: [
+      { decision_id: "dec_1", target: "act_1", supports: [
+        { kind: "worked_example", problem: "Pista: «Bombea la sangre por todo el cuerpo». ¿Qué órgano corresponde?", steps: ["Lee la pista y localiza la función que describe."], result: "El corazón." },
+        { kind: "reminder", text: "Lee cada pista entera y busca en el texto la función que describe." },
+      ] },
+    ],
+    skipped: [],
+    blocked: [],
+    change_summary: ["Un ejemplo resuelto y un recordatorio"],
+  });
