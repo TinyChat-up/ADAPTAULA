@@ -75,3 +75,40 @@ it('estanque del repositorio: mantiene todos los textos en alto contraste sin au
   expect(pdf.pages.map(p => p.body).join(' ')).toContain('18 cm de profundidad');
   expect(pdf.validation.issues).toEqual([]);
 });
+
+it('mantiene los identificadores 3a/3b completos con letra ampliada, sin invadir la consigna', async () => {
+  const doc = sheet(['3a', '3b'].map((label, i) => ({ ...task(`blk_part${i}`, 2), label })));
+  doc.presentation.font_scale = 1.5;
+  doc.presentation.contrast = 'high';
+  const { model } = buildRenderModel(doc, { mode: 'student', deferred: [] });
+  const pdf = await printPdf('quality-part-labels', model);
+  const { placedText } = await import('./analyze');
+  const text = (await placedText(pdf.result.pdf)).flat();
+  // Chromium's tabular digits may be private-use glyphs in PDF.js; compare their baseline to the letter.
+  for (const suffix of ['a', 'b']) {
+    const part = text.find(t => t.str === suffix)!;
+    expect(part).toBeDefined();
+    expect(text.some(t => t !== part && t.x < part.x && Math.abs(t.top - part.top) < 1 && Math.abs(t.height - part.height) < 1)).toBe(true);
+  }
+  const browser = await chromium.launch({ executablePath: localChromium(), args: ['--no-sandbox'] });
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', r => r.abort());
+    await page.setContent(pdf.print.html);
+    await page.evaluate(() => document.fonts.ready);
+    for (const media of ['screen', 'print'] as const) {
+      await page.emulateMedia({ media });
+      const boxes = await page.locator('.ms-activity-head').evaluateAll(heads => heads.map(head => {
+        const label = head.querySelector('.ms-num')!;
+        const range = document.createRange(); range.selectNodeContents(label);
+        const activity = head.closest('.ms-activity')!;
+        const guideTop = activity.getBoundingClientRect().top + parseFloat(getComputedStyle(activity, '::before').top);
+        return { labelRight: range.getBoundingClientRect().right, labelBottom: range.getBoundingClientRect().bottom, guideTop, promptLeft: head.querySelector('.ms-prompt')!.getBoundingClientRect().left };
+      }));
+      for (const box of boxes) {
+        expect(box.labelRight).toBeLessThan(box.promptLeft);
+        expect(box.labelBottom).toBeLessThanOrEqual(box.guideTop);
+      }
+    }
+  } finally { await browser.close(); }
+});

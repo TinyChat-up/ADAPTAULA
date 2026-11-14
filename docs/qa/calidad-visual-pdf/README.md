@@ -2,7 +2,7 @@
 
 Fecha: 2026-11-13. Base: `main` `ae1ba94`. Rama: `codex/calidad-visual-pdf`.
 
-**La prueba visual del caso real NO está superada.** Faltan dos archivos: el PDF original de «Un estanque en equilibrio» con sus fotografías y la adaptación defectuosa de siete páginas. No se han consultado servicios remotos ni generado otra adaptación mediante IA. Las evidencias de esta carpeta son renderizados locales con Chromium, no resultados nuevos del generador real ni materiales aprobados para alumnado.
+**Actualización 2026-11-14 · PR #98:** recibidos e inspeccionados el original de una página y la adaptación real de siete. [Informe del caso real, comparación de todas las páginas, hallazgos y artefactos pendientes](caso-real.md). Se corrige además la separación de las etiquetas `3a/3b`; faltan los datos estructurados para repetir exactamente la exportación. **La prueba visual del caso real NO está superada.** Las evidencias sintéticas anteriores de esta carpeta no representan ese caso: su actividad 4a no existe en los PDF recibidos. No se han consultado servicios remotos ni generado otra adaptación mediante IA. Los materiales reales y sus imágenes permanecen fuera de Git.
 
 ## Diagnóstico y alcance
 
@@ -71,7 +71,7 @@ pnpm check:privacy
 
 Para reproducir solo las correcciones: `pnpm exec vitest run tests/unit/visual-quality.test.ts tests/unit/render-worked-example.test.ts tests/db/automatic-visuals.test.ts` y `pnpm exec vitest run --config vitest.pdf.config.mts tests/pdf/visual-quality.test.ts tests/pdf/pond-layout.test.ts`.
 
-Resultados de esta sesión:
+Resultados de la sesión inicial del 13 de noviembre (las verificaciones adicionales del caso real constan en su [informe](caso-real.md)):
 
 - Unidad/BD completas: 2.515 correctas inicialmente y dos fallos por expectativas literales `material_renderer@v8`. Actualizadas a v9, repetidas las 37 pruebas de los dos archivos afectados: todas correctas. Resultado conjunto: **2.517 pruebas correctas; 18 omitidas y 1 pendiente**, sin repetir la suite completa. Última comprobación focalizada adicional: 13 correctas.
 - Integración visual PGlite: 16 correctas. Detectó durante el desarrollo que faltaba admitir `auto_visuals@v8` en las evidencias; corregido, conservando la validación cerrada.
@@ -84,4 +84,4 @@ Resultados de esta sesión:
 
 ## Decisión y siguiente paso
 
-Cambios acotados preparados para revisión; **no dar por cerrada la calidad pedagógica real ni recomendar integración final** hasta resolver el build en un entorno con acceso a las fuentes y revisar original/adaptación defectuosa. La corrección semántica del apoyo de 3a y la elección de procedimiento de 4a requieren un caso de evaluación explícito, no eliminar contenido desde CSS. La API de GitHub devuelve `Forbidden` desde este entorno; la publicación de PR se registra en el cierre de la entrega sin inventar un número.
+Cambios acotados preparados para revisión en la [PR #98](https://github.com/TinyChat-up/ADAPTAULA/pull/98); **no dar por cerrada la calidad pedagógica real ni recomendar integración final**. Los PDF reales ya están revisados: el siguiente paso es recibir los artefactos estructurados enumerados en el [informe](caso-real.md), repetir la exportación sin IA y revisar los apoyos de 3a/3b. La actividad 4a solo pertenece al fixture anterior. El build requiere un entorno con acceso a las fuentes. La API de GitHub devuelve `Forbidden`; actualizar la rama existente actualiza sus commits, sin crear otra PR.

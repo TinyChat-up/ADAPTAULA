@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-14 — PR #98: contraste con los PDF reales y etiquetas de apartado
+
+Se continúa `codex/calidad-visual-pdf` desde `4c4bc40`, conservando los cambios previos. Los dos PDF suministrados están identificados por huella y revisados página a página (original 1, adaptación 7); no se publican sus bytes ni fotografías en Git. La lectura se conserva, pero faltan las dos fotos contextuales y el esquema incrustado ya tiene rótulos truncados. Se demuestra extracción local completa; no se modifica la adaptación persistida ni se atribuye sin evidencia el origen del fallo al análisis. La transcripción experimental al modelo produce ocho páginas: no es una reproducción equivalente ni un «después» válido.
+
+Reproducido el salto de `3a/3b` en el renderer anterior de la misma PR mediante contraprueba aislada; la nueva prueba falla antes y pasa después. Corrección mínima en `nodes.tsx`/`material.css`, sin cambiar consigna, letra o espacio. 54 unitarias y 27 PDF focalizadas correctas; typecheck correcto; lint cero errores y un aviso previo. Build vuelve a fallar por descarga de Inter/Outfit de Google Fonts, sin cambiar el producto para eludirlo. Sin E2E, IA pagada, producción, migración, merge ni despliegue.
+
+[Informe y paquete mínimo necesario](qa/calidad-visual-pdf/caso-real.md). Pendientes: documento persistido de la revisión exacta, contexto y artefactos visuales para reproducir la exportación; validar paginación y recuperación de fotografías; revisar la pista semántica de 3a y los cuatro eslabones impuestos a 3b. No se declara resuelto el caso real ni se recomienda integrar como solución completa. La actividad 4a y el resultado 5→5 de la sesión anterior pertenecen únicamente al fixture, no a estos PDF.
+
 ## 2026-11-13 — Correcciones acotadas de calidad visual y PDF
 
 Desde `main` `ae1ba94`, rama `codex/calidad-visual-pdf`. Reproducidos tres fallos PDF en worktree aislado del mismo `main`: imagen alta deformada, vocabulario separado y comprobación final en hoja exclusiva. Corregidos en el renderer existente (v9). Ensamblado/localizador conservan visuales explícitamente referenciados, con evidencias v8 y las mismas garantías. `answer_space@v3` evita contar «Escribe la operación.» como segundo cálculo. Se conserva la puerta conocida de disponibilidad en `visual_resolution`, sin secretos ni nuevas llamadas.

@@ -189,4 +189,6 @@ Esta regla amplía §7: el ejemplo ya forma parte de la unidad exterior, mientra
 
 `answer_space@v3` no cuenta la frase final «Escribe la operación.» como otro cálculo. Solo cambia el dimensionado: consigna, datos, mínimos originales y necesidades motoras permanecen. En el fixture del estanque la cuadrícula de 4a pasa de nueve a cinco filas de 7 mm; el documento sigue teniendo cinco páginas.
 
-[PDF, comparativas y límites](qa/calidad-visual-pdf/README.md). La mejora visual no certifica seguridad pedagógica: siguen pendientes el glosario que anticipa la relación evaluada y la pertinencia de mostrar el procedimiento en el ejemplo de 4a. No se ha recibido el original con fotos ni la adaptación real de siete páginas.
+[PDF, comparativas y límites](qa/calidad-visual-pdf/README.md). La mejora visual no certifica seguridad pedagógica: siguen pendientes el glosario que anticipa la relación evaluada y la pertinencia de mostrar el procedimiento en el ejemplo de 4a del fixture sintético.
+
+Actualización 2026-11-14: recibidos los [PDF reales](qa/calidad-visual-pdf/caso-real.md); no contienen actividad 4a. Los apartados de un dígito y una letra (`3a`, `3b`) permanecen en una línea también con fuente ×1,5, sin invadir la consigna; su guía vertical comienza debajo del rótulo para no cruzar la letra. No cambia el tamaño ni la capacidad de respuesta. La imagen real tiene rótulos cortados en sus propios píxeles: el CSS no puede restaurarlos. La paginación exacta sigue sin validarse hasta disponer del documento estructurado de esa versión.
