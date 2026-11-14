@@ -19,7 +19,8 @@
       "feature/agente-v22-activacion-workspace": false,
       "codex/perfil-pedagogico-v3": false,
       "codex/perfil-v3-hacer-magia": false,
-      "codex/perfil-v3-acceso-metodologia": false
+      "codex/perfil-v3-acceso-metodologia": false,
+      "codex/calidad-visual-pdf": false
     }
   }
 }

@@ -2,7 +2,7 @@ import "server-only";
 import { answerSignatures, criticalTokens, hasToken, leakedSignature, normalizeText } from "@/lib/adaptation/text";
 import { materialNumbers } from "@/lib/adaptation/facts";
 import { AdaptationError } from "@/lib/adaptation/orchestration/errors";
-import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan } from "@/lib/adaptation/visual-policy";
+import { VISUAL_POLICY_VERSION, contractOf, visualNeedsOfDocument, type ActivityRewrite, type VisualAction, type VisualNeedCategory, type VisualNeedOutcome, type VisualResolutionPlan, type IllustrationWithheld } from "@/lib/adaptation/visual-policy";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { rewriteEquivalence, substitutionEquivalence, taskProfile } from "@/lib/adaptation/pedagogical-equivalence";
 import { substitutionFeedback, type SubstitutionRejectionCode } from "@/lib/adaptation/substitution-feedback";
@@ -428,11 +428,15 @@ export async function resolveMagicVisuals(deps: MagicVisualDeps, input: MagicVis
     if (activity) {
       const purpose = "Comprender el contexto de la actividad sin representar ni nombrar su respuesta, ni mostrar cantidades, operaciones o resultados. No reemplaza las figuras del original. Solo crear una escena si reduce una barrera de comprensión; si sería decoración o resolvería la pregunta, rechazarla.";
       const outcome = await illustrate(activity.id, [activity], null, purpose);
-      const need: VisualNeedOutcome = { key: activity.id, origin: "referenced", essential: false, activityIds: [activity.id], category: outcome?.ok ? "generated_illustration" : "rewritable_without_visual", resolution: outcome?.ok ? { action: "illustration", asset: outcome.asset, alt: outcome.asset.alt } : { action: "omit", reason: outcome && !outcome.ok ? outcome.reason : "optional_support_unavailable" }, attempts: [outcome ? "illustrate" : "omit"] };
+      const unavailable = outcome && !outcome.ok ? outcome.reason
+        : deps.illustrationsWithheld ? `illustration_withheld_${deps.illustrationsWithheld}`
+        : illustrations >= Math.min(ILLUSTRATION_LIMITS.perAdaptation, deps.maxIllustrations ?? ILLUSTRATION_LIMITS.perAdaptation)
+          ? "illustration_limit_reached" : "optional_support_unavailable";
+      const need: VisualNeedOutcome = { key: activity.id, origin: "referenced", essential: false, activityIds: [activity.id], category: outcome?.ok ? "generated_illustration" : "rewritable_without_visual", resolution: outcome?.ok ? { action: "illustration", asset: outcome.asset, alt: outcome.asset.alt } : { action: "omit", reason: unavailable }, attempts: [outcome ? "illustrate" : "omit"] };
       outcomes.push({ ...need, contract: { ...contractOf(need, null), reason: "teacher_requested_context_support" } });
     }
   }
-  return { policy_version: VISUAL_POLICY_VERSION, needs: outcomes };
+  return { policy_version: VISUAL_POLICY_VERSION, needs: outcomes, ...(deps.illustrationsWithheld ? { illustrationsWithheld: deps.illustrationsWithheld } : {}) };
 }
 
 /** The style a decision asked for its visual (`requested` image block), if the sheet has it. */
@@ -474,4 +478,4 @@ async function substituteAll(assistants: VisualAssistants, record: (run: AIRunRe
  * (`not_offered`), not in this workspace's plan (`plan`), this month's used up (`quota`), or not set up / temporarily down
  * (`service`, retried later, never blamed on the plan).
  */
-export type IllustrationWithheld = "disabled" | "not_offered" | "plan" | "quota" | "service";
+export type { IllustrationWithheld } from "@/lib/adaptation/visual-policy";

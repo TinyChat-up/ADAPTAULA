@@ -202,10 +202,10 @@ ul.ms-list { list-style: disc; }
 .ms-legend { list-style: none; margin: .4em 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3em 1.2em; font-size: .85em; }
 .ms-swatch { display: inline-block; width: 1em; height: .7em; border: 1px solid var(--ms-ink); vertical-align: middle; }
 
-/* Un visual se reduce (sin deformarse) a 3/4 del alto útil de la página: cabe con la cabecera de la hoja, un título y su pie, así
-   que nunca se corta ni deja una página casi vacía al imprimir. */
+/* Techo del 60 % del alto útil; Figure reduce las dos dimensiones de los recortes físicos.
+   Contain preserva el contenido también cuando no hay dimensiones físicas disponibles. */
 .ms-figure { margin: 0; break-inside: avoid; display: flex; flex-direction: column; align-items: center; gap: .35em; }
-.ms-figure img { display: block; width: auto; height: auto; max-width: 92%; max-height: calc((var(--ms-page-h) - 2 * var(--ms-margin)) * .6); border: 1px solid var(--ms-rule-soft); }
+.ms-figure img { display: block; width: auto; height: auto; max-width: 92%; max-height: calc((var(--ms-page-h) - 2 * var(--ms-margin)) * .6); object-fit: contain; border: 1px solid var(--ms-rule-soft); }
 .ms-figure .ms-caption { margin: 0; font-weight: 400; font-size: .85em; color: var(--ms-soft); text-align: center; break-after: auto; }
 /* A crop prints at the size it had on paper (never stretched to the column); a reconstruction at its own millimetres. */
 .ms-figure img[data-physical] { max-width: 100%; }
@@ -258,8 +258,8 @@ ul.ms-list { list-style: disc; }
    dónde respondo (blanco con líneas). Las ayudas llevan un filo verde petróleo. Nada depende del color.
    ====================================================================================================================== */
 [data-design="claro"] { --claro-gutter: 11mm; --claro-num: 1.05em; }
-/* Enlarging the text must not split an activity number across two lines. */
-[data-design="claro"] .ms-num[data-numeric] { white-space: nowrap; }
+/* Enlarging the text must not split a short activity identifier across two lines. */
+[data-design="claro"] .ms-num:is([data-numeric], [data-part]) { white-space: nowrap; }
 [data-design="claro"][data-stage="primaria"] { --claro-gutter: 13mm; --claro-num: 1.3em; }
 [data-design="claro"][data-stage="bachillerato"] { --claro-gutter: 10mm; --claro-num: .95em; }
 
@@ -291,6 +291,8 @@ ul.ms-list { list-style: disc; }
 /* C · Actividad guiada: número en la columna guía, un filo fino que la recorre, enunciado, pasos y respuesta juntos. */
 [data-design="claro"] .ms-activity { --ms-num-w: 0px; --ms-num-gap: 0px; position: relative; padding-top: .5em; }
 [data-design="claro"] .ms-activity::before { content: ""; position: absolute; left: -2.6mm; top: .75em; bottom: .15em; border-left: 1px solid var(--ms-rule-soft); }
+/* A compound label is wider: start the guide below its line box instead of drawing through the letter. */
+[data-design="claro"] .ms-activity:has(> .ms-activity-head > .ms-num[data-part])::before { top: calc(var(--claro-num) / 2 + var(--ms-leading) * 1em + 1mm); }
 [data-design="claro"] .ms-activity-head { display: block; }
 [data-design="claro"] .ms-num { position: absolute; left: calc(-1 * var(--claro-gutter)); top: .5em; width: calc(var(--claro-gutter) - 4mm); min-width: 0; height: auto; padding: 0; justify-content: flex-start; background: none; border: 0; border-radius: 0; color: var(--ms-accent); font-size: var(--claro-num); font-weight: 700; line-height: calc(var(--ms-leading) * 1em / var(--claro-num-ratio, 1)); font-variant-numeric: tabular-nums; letter-spacing: .01em; print-color-adjust: economy; -webkit-print-color-adjust: economy; }
 [data-design="claro"] .ms-num { --claro-num-ratio: 1.05; }
