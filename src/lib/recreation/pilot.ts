@@ -25,7 +25,7 @@ export interface PlannerAnswer {
   /** Why no answer was asked for: the budget would not cover the call. */
   stop?: "budget_exhausted";
 }
-export type Planner = (input: RecreationInput, repairOf?: readonly PlanIssue[]) => Promise<PlannerAnswer>;
+export type Planner = (input: RecreationInput, repairOf?: readonly PlanIssue[], previousPlan?: RecreationPlan) => Promise<PlannerAnswer>;
 
 /** A plan given in advance (tests, the hand-written pilot): what a model call would return, without one. */
 export const fixedPlanner = (plan: unknown): Planner => async () => ({ draft: plan, run: null });
@@ -66,7 +66,10 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
   let repairOf: PlanIssue[] | undefined;
   let last: PlannedRecreation | null = null;
   for (let call = 1; call <= MAX_CALLS; call++) {
-    const answer = await planner(input, repairOf);
+    // A verifier rejection leaves a structurally valid plan: let Claude repair THAT plan, rather than regenerate blindly.
+    // Invalid contracts are not replayed as if they were trusted valid plans.
+    const previousPlan = last?.status === "rejected" ? last.plan : undefined;
+    const answer = await planner(input, repairOf, previousPlan);
     if (answer.run) runs.push(answer.run);
     if (answer.stop === "budget_exhausted") return last ?? { status: "budget_exhausted", runs, calls: call - 1 };
     const parsed = RecreationPlanSchema.safeParse(answer.draft);
