@@ -139,7 +139,13 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     await store.markProviderCall(job.id, job.attempts);
     const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE });
     await store.clearProviderCall(job.id, job.attempts);
-    if (planned.status !== "planned") throw planFailure(planned);
+    if (planned.status !== "planned") {
+      // Content-free diagnostics: codes and schema paths only, never plans, quotes, answers or student data.
+      const codes = planned.status === "rejected" ? [...new Set(planned.issues.filter((i) => i.severity === "error").map((i) => i.code))] : [planned.status];
+      const paths = planned.status === "rejected" ? [...new Set(planned.issues.filter((i) => i.severity === "error").map((i) => i.path))] : [];
+      deps.log?.warn("recreation_plan_rejected", { adaptationId, status: planned.status, calls: planned.calls, codes: codes.slice(0, 20).join(","), paths: paths.slice(0, 20).join(",") });
+      throw planFailure(planned);
+    }
     await store.setStep(job.id, job.attempts, "validating", 80);
     await store.putRecreationPlan(adaptationId, run.lease, planned.plan, planned.verification, fingerprint(planned.plan));
     if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
