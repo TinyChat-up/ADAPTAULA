@@ -1,5 +1,99 @@
 # Registro de desarrollo
 
+## 2026-11-18 — PR #101 (cont.): respuestas solo en el servidor, revisión, tarjetas ilustradas, versiones y evaluación real preparada
+
+Sobre la misma rama `claude/recreacion-plataforma`. ADR-052.
+
+**Corregido:**
+- la propuesta exponía `answer_key` a los miembros; ahora se separa en línea, versión visible (CHECK sin respuestas) e interno (solo servidor);
+- un material sin comprobar se mostraba como listo; ahora tiene el estado «revisión», con un aviso sin respuestas;
+- el motor de impresión no fijaba las imágenes de las tarjetas;
+- no se podían recuperar versiones ni había idempotencia.
+
+**Añadido:**
+- tarjetas ilustradas (`for_cards`), con reutilización de ilustraciones aprobadas;
+- restaurar versión;
+- reserva y devolución de cupo;
+- guion `pnpm eval:recreation` con bloqueos y libro de gasto (no ejecutado; ensayo 0 $ correcto).
+
+**Pruebas:** BD 8 de acceso directo; plataforma 12; recorrido 8; verificador 24; evaluación 9; PDF 4; demostración 1.
+
+**Pendiente:**
+- autorización de la prueba real (techo ≈ 1,63 $, propuesta `--max-usd 2`);
+- aplicar la migración;
+- conexión a la base de datos.
+
+[Informe](qa/recreacion-plataforma/README.md).
+
+## 2026-11-18 — Recreación en la plataforma: explicación en pantalla, generar una vez, sin solucionarios
+
+Rama `claude/recreacion-plataforma` sobre la PR #100. ADR-051.
+
+- **Contrato:**
+  - `explanation` (qué, por qué, cómo), redactada en la misma llamada y validada (sin respuestas ni diagnósticos, motivos ligados a necesidades);
+  - `visual_style` común;
+  - `sorting_board` ligado a su clasificación.
+- **Piloto del estanque:** 7 actividades (antes 9), ilustración de contexto al inicio, tarjetas y tablero en una página.
+- **Persistencia y vista:**
+  - `RecreationRecord` y `MemoryRecreationStore`;
+  - `loadRecreationView` sin acceso a IA;
+  - `createRecreation` y `regenerateRecreation` con permisos, cupo, presupuesto, confirmación y versiones.
+- **Pantalla:** `RecreationScreen` dentro de `AppShell`, más la demostración `/demo/recreacion` (solo con `ADAPTAULA_DEMO=1`).
+- **Ya no se producen** la guía ni la clave en PDF.
+
+**Pruebas:** 9 de plataforma (consultar 100 veces = 0 llamadas nuevas; regenerar controlado), 24 del verificador, 8 del recorrido, 1 del registro de demostración y 4 PDF. Capturas de escritorio y móvil.
+
+**Pendiente:**
+- aplicar la migración propuesta (con autorización);
+- ruta `/app/recreaciones/[id]` con base de datos;
+- evaluación real (peor caso 1,72 $).
+
+[Informe](qa/recreacion-plataforma/README.md).
+
+## 2026-11-18 — Recreación: colaboración Claude + OpenAI (simulada) y verificadores honestos
+
+Rama `claude/recreacion-colaboracion` sobre `claude/recreacion-pedagogica` (PR #99). ADR-050.
+
+- **Verificadores:** cifras respaldadas por su cita; secuencias por su base; `anchored` como «sin comprobar»; equivalencia por objetivo con el razonamiento siempre pendiente; pistas cruzadas parafraseadas y relaciones reveladas.
+- **Planificador:** sobre `callStructured`, con tope de gasto y una reparación.
+- **Recursos visuales:** decisión A/B/C con el pipeline existente `illustrate()`.
+- **Materiales:** tarjetas recortables (`cut_cards`) y guía breve + clave y revisión con procedencia.
+- **Recorrido completo simulado** (`MockProvider` con respuestas fijas y `MockImageProvider`).
+
+**Pruebas:** 30 unitarias y 4 PDF nuevas; suites de unidad 2.021, BD 515 y PDF 100, correctas.
+
+**Simulado:** plan, brief, revisión e imagen. **Sin llamadas de pago.**
+
+**Pendiente:**
+- autorización de la evaluación real (peor caso 2,58 $ para 6 recorridos);
+- tabla o fila anfitriona para conectar con `generated_assets`, la cuota y `ai_runs`;
+- revisor semántico sobre la ficha recreada.
+
+[Informe](qa/recreacion-pedagogica/README.md).
+
+## 2026-11-18 — Motor de recreación pedagógica: diseño y piloto aislado del estanque
+
+Rama `claude/recreacion-pedagogica` desde `main` `ae1ba94`, independiente de las PR #97 y #98.
+
+- **Implementado:**
+  - contrato `recreation_plan@v1`;
+  - verificador: alcance, objetivos y operaciones mínimas, citas literales, soluciones deterministas, pistas y novedad;
+  - compilador a ficha del alumno y guía docente (`MaterialDocument`);
+  - entrada minimizada y prompt `recreation_planner` v1 (no ejecutado);
+  - piloto del estanque con 10 actividades nuevas, de selección, relación, orden, V/F, cálculo y respuesta breve, y el esquema `flow` desde datos.
+- **Simulado:** el plan del piloto, escrito a mano con el contrato del modelo.
+- **Probado:** 15 unitarias y 2 PDF; PDF de ejemplo en `docs/qa/recreacion-pedagogica/`.
+
+La revisión página a página detectó y corrigió pistas cruzadas entre actividades que el verificador no puede ver. No se cambia «Hacer magia», ni se usan migraciones, IA de pago, merge ni despliegue.
+
+- **Pendiente:**
+  - evaluación del planificador con un modelo, con presupuesto autorizado;
+  - revisor semántico sobre la ficha recreada;
+  - conexión a versiones, cuotas y la interfaz;
+  - hoja de recortables.
+
+[Informe](qa/recreacion-pedagogica/README.md).
+
 ## 2026-11-13 — Cierre del perfil V3 en acceso y metodología
 
 Rama limpia desde `651d130`: recuperados `b3fc2fc`, `4708703` y `c213b50f`, sin cambios del corpus ni hoja ciega. Reproducidos y corregidos el formato oral no declarado y los grupos de más de seis dimensiones; la nueva lógica de generación se limita a contextos con ámbito pedagógico, preservando el comportamiento histórico. Batería local 2.506 correctas, 18 omitidas y 1 pendiente; 74 focalizadas correctas, typecheck y lint sin errores (un aviso previo). Modelos simulados; sin E2E, IA de pago, migraciones remotas ni despliegues. La equivalencia semántica requiere revisión docente. [QA](qa/perfil-v3-hacer-magia/README.md).

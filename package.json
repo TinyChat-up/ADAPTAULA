@@ -29,6 +29,7 @@
     "eval:pedagogy": "node --import tsx evals/pedagogical-quality/run.ts",
     "eval:analysis:mock": "node --import tsx evals/material-analysis/run.ts --mock",
     "eval:illustrations": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx evals/illustrations/run.ts",
+    "eval:recreation": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.eval.config.mts",
     "eval:illustrations:mock": "node --conditions=react-server --import tsx evals/illustrations/run.ts --mock",
     "eval:analysis:size": "node --import tsx evals/material-analysis/size.ts",
     "eval:analysis:compare": "node --import tsx evals/material-analysis/compare.ts",
