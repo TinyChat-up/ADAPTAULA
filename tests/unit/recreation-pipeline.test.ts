@@ -8,7 +8,7 @@ import { resolveModel } from "@/lib/ai/registry";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { mockStack, runMockRecreation } from "../support/recreation-mocks";
 import { planRecreation } from "@/lib/recreation/pilot";
-import { RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/v1";
+import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
 import { recreationInput } from "@/lib/recreation/input";
 
 /**
@@ -38,7 +38,7 @@ describe("recorrido completo simulado", () => {
     expect(observed[1]!.errors).toBeGreaterThan(0);
     expect(observed[1]!.previous).toEqual(bad);
     const input = recreationInput(request.analysis, request.context, request.scope);
-    const parts = RECREATION_PLANNER_V1.buildUserParts(input, [{ severity: "error", code: "solution_revealed", path: "activities.ra_7", message: "Error de prueba" }], bad);
+    const parts = RECREATION_PLANNER_V2.buildUserParts(input, [{ severity: "error", code: "solution_revealed", path: "activities.ra_7", message: "Error de prueba" }], bad);
     const body = parts.map((p) => p.type === "text" ? p.text : "").join("");
     expect(body).toContain("<previous_plan>");
     expect(body).toContain("solution_revealed");
