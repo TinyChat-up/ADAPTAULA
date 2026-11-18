@@ -9,7 +9,7 @@ export function Figure({ node, mode, design }: { node: Extract<RenderNode, { kin
   if (node.state === "available" && (node.spec || node.src)) {
     return (
       <figure className="ms-figure" data-spec={node.spec?.kind}>
-        {design === "claro" && node.spec?.kind !== "cut_cards" ? <p className="ms-cue">Observa</p> : null}
+        {design === "claro" && node.spec?.kind !== "cut_cards" && node.spec?.kind !== "sort_board" ? <p className="ms-cue">Observa</p> : null}
         {node.spec ? (
           <VisualSpecView spec={node.spec} label={node.alt} />
         ) : (

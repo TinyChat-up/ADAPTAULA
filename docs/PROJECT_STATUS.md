@@ -113,6 +113,8 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Recreación en la plataforma (2026-11-18, simulado; ADR-051, [QA](qa/recreacion-plataforma/README.md)).** Pantalla con ficha, materiales recortables y explicación (qué, por qué, cómo). Se genera una vez y se consulta sin IA; regenerar es explícito; no hay solucionarios. Siguiente: migración propuesta (sin aplicar) y evaluación real con autorización (peor caso 1,72 $).
+
 **Recreación con Claude + OpenAI (2026-11-18, simulado; ADR-050, [QA](qa/recreacion-pedagogica/README.md)).**
 
 - **Implementado y probado sin gasto:**

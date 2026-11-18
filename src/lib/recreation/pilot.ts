@@ -48,7 +48,7 @@ export interface RecreationRequest {
 }
 
 export type RecreationOutcome =
-  | { status: "ready"; plan: RecreationPlan; verification: Verification; visuals: ResolvedVisual[]; compiled: CompiledRecreation; provenance: ProvenanceRecord[]; runs: AIRunRecord[]; calls: number }
+  | { status: "ready"; plan: RecreationPlan; verification: Verification; visuals: ResolvedVisual[]; compiled: CompiledRecreation; provenance: ProvenanceRecord[]; runs: AIRunRecord[]; calls: number; plannerLabel: string }
   | { status: "invalid_contract"; issues: string[]; runs: AIRunRecord[]; calls: number }
   | { status: "rejected"; plan: RecreationPlan; issues: PlanIssue[]; runs: AIRunRecord[]; calls: number }
   | { status: "budget_exhausted"; runs: AIRunRecord[]; calls: number };
@@ -83,8 +83,8 @@ export async function runRecreation(planner: Planner, request: RecreationRequest
     const needs = request.context.needs.map((n) => n.dimension);
     const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel });
     const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
-    const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals, provenance });
-    return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls: call };
+    const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals });
+    return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls: call, plannerLabel: request.plannerLabel };
   }
   return last!;
 }
@@ -101,6 +101,7 @@ function provenanceOf(plan: RecreationPlan, verification: Verification, visuals:
   });
   for (const v of plan.visuals) out.push({ resource: `Esquema «${v.title}»`, produced_by: `renderer (flow) con los rótulos de ${v.source_ref}`, checked_by: "rótulos citados del original", status: "exacto" });
   for (const v of visuals) out.push({ resource: `Imagen ${v.request_id}`, produced_by: v.provenance.produced_by ?? "ninguno", checked_by: v.provenance.reviewed_by ?? "—", status: v.route === "none" ? (v.essential ? "FALTA (imprescindible)" : "no incluida") : v.route });
-  for (const m of plan.materials) out.push({ resource: `Tarjetas ${m.id}`, produced_by: planner, checked_by: "sin pistas de la solución", status: "recortables" });
+  for (const m of plan.materials) out.push({ resource: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} ${m.id}`, produced_by: `${planner}; dibujo: renderer`, checked_by: "ligado a su actividad, sin pistas de la solución", status: "recortable" });
+  out.push({ resource: "Explicación para el docente", produced_by: planner, checked_by: "sin soluciones ni diagnósticos; cada motivo ligado a una necesidad", status: "en pantalla" });
   return out;
 }

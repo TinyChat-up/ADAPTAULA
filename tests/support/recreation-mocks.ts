@@ -61,7 +61,8 @@ export interface MockRun {
   calls: Record<string, number>;
 }
 
-export async function runMockRecreation(options: MockOptions = {}): Promise<MockRun> {
+/** The simulated stack (planner, illustration gate, counters), to run the route or to create and regenerate through the service. */
+export function mockStack(options: MockOptions = {}) {
   const analysis = pondAnalysis();
   const context = buildAdaptationContext({ profile: POND_PILOT_PROFILE, education: { stage: null, grade: null, subject: null }, analysis, adaptationType: "accessibility" }).context;
   const plans = options.plans ?? [POND_RECREATION_PLAN];
@@ -105,6 +106,12 @@ export async function runMockRecreation(options: MockOptions = {}): Promise<Mock
     budget: { limitUsd: 0.5, spentUsd: async () => 0 },
   };
   const illustrations: IllustrationGate = options.imagesAuthorized ? { available: true, deps, workspaceId: "11111111-1111-4111-8111-111111111111", recreationId: "22222222-2222-4222-8222-222222222222", producer: `MockImageProvider (${MOCK_IMAGE.model})` } : { available: false, reason: "disabled" };
-  const outcome = await runRecreation(planner, { analysis, context, scope: "methodological", plannerLabel: `recreation_planner v1 · ${MOCK_TEXT.model}`, illustrations });
+  const request = { analysis, context, scope: "methodological" as const, plannerLabel: `recreation_planner v1 · ${MOCK_TEXT.model}`, illustrations };
+  return { planner, request, runs, assets, calls };
+}
+
+export async function runMockRecreation(options: MockOptions = {}): Promise<MockRun> {
+  const { planner, request, runs, assets, calls } = mockStack(options);
+  const outcome = await runRecreation(planner, request);
   return { outcome, runs, assets, calls };
 }

@@ -48,37 +48,27 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
     expect(pdf.pages[first]!.png.byteLength).toBeGreaterThan(10_000);
     const text = body(pdf.pages);
     for (const label of ["Algas", "Larvas de insectos", "Ranas", "Garzas"]) expect(text).toContain(label);
-    expect(text).not.toMatch(/Criterios|Guía docente|SIN COMPROBAR|Solución/);
+    expect(text).not.toMatch(/Criterios|Guía docente|SIN COMPROBAR|Solución|Clave/);
     expect(text).not.toMatch(/\b12 cm\b/);
   });
 
-  it("hoja de tarjetas recortables: una página, seis tarjetas grandes con su instrucción", async () => {
+  it("materiales para recortar: tarjetas grandes con línea de corte y el tablero de clasificación, con sus instrucciones", async () => {
     const { run, compiled } = await ready(authorized);
-    const { validation, pdf } = await print("recreation-cards", compiled.cards!, run);
+    const { validation, pdf } = await print("recreation-materials", compiled.materials!, run);
     expect(validation.status).toBe("renderable");
     expect(pdf.validation.issues).toEqual([]);
-    expect(pdf.pages).toHaveLength(1);
+    expect(pdf.pages.length).toBeLessThanOrEqual(2);
     const text = body(pdf.pages);
     expect(text).toContain("Recorta las tarjetas");
-    for (const card of ["Algas", "Agua", "Larvas de insectos", "Luz solar", "Garzas", "Temperatura"]) expect(text).toContain(card);
+    expect(text).toContain("Coloca cada tarjeta en su columna");
+    for (const card of ["Algas", "Agua", "Larvas de insectos", "Luz solar", "Garzas", "Temperatura", "Ser vivo", "Elemento no vivo"]) expect(text).toContain(card);
     expect(pdf.print.html).toContain('class="ms-cutcards"');
+    expect(pdf.print.html).toContain('class="ms-sortboard"');
   });
 
-  it("guía docente breve y clave aparte: aplicación y estado de la revisión; clave con su estado, equivalencia, imágenes y procedencia", async () => {
-    const { run, compiled } = await ready(authorized);
-    const guide = await print("recreation-guide", compiled.guide, run);
-    expect(guide.validation.status).toBe("renderable");
-    expect(guide.pdf.validation.issues).toEqual([]);
-    expect(guide.pdf.pages.length).toBeLessThanOrEqual(2);
-    const g = body(guide.pdf.pages);
-    for (const needle of ["Cómo aplicarla", "Qué observar", "sin comprobar"]) expect(g).toContain(needle);
-    expect(g).not.toContain("Solución");
-    const key = await print("recreation-key", compiled.key, run);
-    expect(key.validation.status).toBe("renderable");
-    expect(key.pdf.validation.issues).toEqual([]);
-    const k = body(key.pdf.pages);
-    for (const needle of ["Clave de respuestas", "Equivalencia con el original", "Procedencia", "SIN COMPROBAR", "Comprobada por el sistema", "ilustración generada y revisada"]) expect(k).toContain(needle);
-    expect(k).toMatch(/Solución: 30\D{1,6}18\D{1,6}12 cm/);
+  it("no se produce ninguna clave ni informe para imprimir: solo la ficha y los materiales", async () => {
+    const { compiled } = await ready(authorized);
+    expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace"]);
   });
 
   it("sin imágenes autorizadas: la ficha se imprime sin la ilustración y la guía dice por qué", async () => {
@@ -86,7 +76,6 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
     const student = await print("recreation-student-sin-imagenes", compiled.student, run);
     expect(student.validation.status).toBe("renderable");
     for (const page of student.pdf.pages.slice(0, -1)) expect(page.ink).toBeGreaterThan(0.03);
-    const key = await print("recreation-key-sin-imagenes", compiled.key, run);
-    expect(body(key.pdf.pages)).toContain("generación no disponible");
+    expect(run.outcome.status === "ready" && run.outcome.visuals[0]!.attempts.join(" ")).toContain("generación no disponible");
   });
 });

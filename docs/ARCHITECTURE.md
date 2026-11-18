@@ -2,6 +2,26 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-051 — Recreación en la plataforma: se genera una vez, se muestra con una explicación en pantalla, sin solucionarios (2026-11-18)
+
+- **Producto.** El docente ve, en una sola pantalla (`RecreationScreen`, componentes existentes):
+  - la ficha del alumno;
+  - los materiales para recortar (tarjetas `cut_cards` y tablero `sort_board`, ligados a su actividad);
+  - una explicación breve: qué se ha adaptado, por qué y cómo utilizarlo.
+
+  No hay solucionario, clave en PDF, estados de verificación ni procedencia a la vista.
+- **Sin llamadas extra.** La explicación la redacta Claude en la misma llamada del plan (`explanation`) y la valida el servidor: sin respuestas, sin diagnósticos y con cada motivo ligado a una necesidad del contexto. El estilo visual es uno por material (`visual_style`) y viaja a cada brief.
+- **Generar una vez.**
+  - `createRecreation` comprueba permisos, cupo y presupuesto, ejecuta el recorrido y guarda un `RecreationRecord`.
+  - `loadRecreationView` lee el registro y no importa nada que pueda llamar a una IA: abrir, recargar, cambiar de sección o imprimir no consume tokens.
+  - `regenerateRecreation` es explícita: comprueba lo mismo, pide confirmación y crea una versión nueva conservando la anterior.
+- **Seguridad pedagógica intacta.**
+  - Las respuestas siguen dentro (`answer_key` y verificación internas) para comprobar las actividades; la vista envía la ficha con la clave vacía.
+  - Un plan que no supera una comprobación imprescindible no se guarda.
+  - Una imagen imprescindible que falta deja el material «incompleto», con un mensaje llano.
+- **Persistencia del producto:** propuesta de migración `recreations` y `generated_assets.recreation_id` en `docs/qa/recreacion-plataforma/`, **no aplicada**.
+- **Demostración:** `/demo/recreacion`, solo con `ADAPTAULA_DEMO=1` y nunca en producción.
+
 ## ADR-050 — Recreación con Claude y OpenAI: verificación honesta, planificador sobre `src/lib/ai` y recursos visuales A/B/C (2026-11-18)
 
 Evolución de ADR-049, sin cambiar «Hacer magia» ni las adaptaciones guardadas.

@@ -202,6 +202,22 @@ function CutCards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cut_card
   );
 }
 
+/** A sorting board: a header per group and a tall empty area under it to place the cards (same markup on screen and in print). */
+function SortBoard({ spec, label }: { spec: Extract<VisualSpec, { kind: "sort_board" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      <ul className="ms-sortboard" style={{ gridTemplateColumns: `repeat(${spec.columns.length}, 1fr)` }}>
+        {spec.columns.map((c, i) => (
+          <li key={i}>
+            <span className="ms-sortboard-head">{c}</span>
+            <span className="ms-sortboard-area" aria-hidden />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: string }) {
   switch (spec.kind) {
     case "fraction_bar":
@@ -222,5 +238,7 @@ export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: strin
       return <Flow spec={spec} label={label} />;
     case "cut_cards":
       return <CutCards spec={spec} label={label} />;
+    case "sort_board":
+      return <SortBoard spec={spec} label={label} />;
   }
 }

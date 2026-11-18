@@ -222,7 +222,8 @@ function figureRows(n: RenderNode): number {
   if (n.kind === "chart") return 8;
   if (n.kind !== "image") return 0;
   // Cut-out cards: two per row, each about 38 mm tall (≈ 5 rows).
-  if (n.spec?.kind === "cut_cards") return 1 + Math.ceil(n.spec.items.length / 2) * 5;
+  if (n.spec?.kind === "cut_cards") return 1 + Math.ceil(n.spec.items.length / 3) * 4;
+  if (n.spec?.kind === "sort_board") return 11;
   if (n.spec) return n.spec.kind === "number_line" ? 4 : n.spec.kind === "part_whole" ? 6 : 3;
   if (n.heightMm) return Math.ceil(Math.min(n.heightMm, MAX_FIGURE_MM) / MM_PER_ROW) + 1;
   return n.widthMm ? Math.ceil(n.widthMm / 3 / MM_PER_ROW) + 1 : 8;

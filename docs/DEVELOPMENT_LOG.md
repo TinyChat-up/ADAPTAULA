@@ -1,5 +1,30 @@
 # Registro de desarrollo
 
+## 2026-11-18 — Recreación en la plataforma: explicación en pantalla, generar una vez, sin solucionarios
+
+Rama `claude/recreacion-plataforma` sobre la PR #100. ADR-051.
+
+- **Contrato:**
+  - `explanation` (qué, por qué, cómo), redactada en la misma llamada y validada (sin respuestas ni diagnósticos, motivos ligados a necesidades);
+  - `visual_style` común;
+  - `sorting_board` ligado a su clasificación.
+- **Piloto del estanque:** 7 actividades (antes 9), ilustración de contexto al inicio, tarjetas y tablero en una página.
+- **Persistencia y vista:**
+  - `RecreationRecord` y `MemoryRecreationStore`;
+  - `loadRecreationView` sin acceso a IA;
+  - `createRecreation` y `regenerateRecreation` con permisos, cupo, presupuesto, confirmación y versiones.
+- **Pantalla:** `RecreationScreen` dentro de `AppShell`, más la demostración `/demo/recreacion` (solo con `ADAPTAULA_DEMO=1`).
+- **Ya no se producen** la guía ni la clave en PDF.
+
+**Pruebas:** 9 de plataforma (consultar 100 veces = 0 llamadas nuevas; regenerar controlado), 24 del verificador, 8 del recorrido, 1 del registro de demostración y 4 PDF. Capturas de escritorio y móvil.
+
+**Pendiente:**
+- aplicar la migración propuesta (con autorización);
+- ruta `/app/recreaciones/[id]` con base de datos;
+- evaluación real (peor caso 1,72 $).
+
+[Informe](qa/recreacion-plataforma/README.md).
+
 ## 2026-11-18 — Recreación: colaboración Claude + OpenAI (simulada) y verificadores honestos
 
 Rama `claude/recreacion-colaboracion` sobre `claude/recreacion-pedagogica` (PR #99). ADR-050.

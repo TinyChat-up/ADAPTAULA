@@ -120,7 +120,8 @@ async function resolveOne(r: VisualRequest, ctx: VisualContext): Promise<Resolve
     activity: activities.map((a) => a.prompt).join(" "),
     objective: objectives.join("; ") || null,
     // The prompt of the brief (image_brief v1) is reused as published: what must be shown and avoided travels in its «missing» field.
-    missing: `Debe verse: ${r.must_show.join(", ")}. Estilo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`,
+    // The material's one style goes into every brief, so its pictures look like one set.
+    missing: `Debe verse: ${r.must_show.join(", ")}. Estilo común del material: ${ctx.plan.visual_style} Tipo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`.slice(0, 1400),
     purpose: r.purpose,
     supports: ctx.needs.slice(0, 8),
     expectedAnswer: null,

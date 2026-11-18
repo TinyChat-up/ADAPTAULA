@@ -1,5 +1,10 @@
 # Motor de recreación: colaboración Claude + OpenAI (piloto del estanque)
 
+> **Sustituido en parte por ADR-051** ([recreación en la plataforma](../recreacion-plataforma/README.md)).
+> - El producto ya no genera la guía ni la clave y revisión en PDF: la explicación se muestra en pantalla y las respuestas quedan solo para las comprobaciones internas.
+> - Los PDF enlazados abajo se han retirado. Los vigentes están en `docs/qa/recreacion-plataforma/`.
+> - El resto de este informe (verificadores, recorrido simulado, coste) sigue vigente.
+
 2026-11-18 · rama `claude/recreacion-colaboracion`, sobre `claude/recreacion-pedagogica` (PR #99). Sin IA de pago, E2E, migraciones, merge ni despliegue. «Hacer magia» no cambia. Diseño: [RECREATION.md](../../RECREATION.md) · ADR-049 y ADR-050.
 
 ## Material generado (recorrido completo simulado)
