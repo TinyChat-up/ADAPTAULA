@@ -1,28 +1,38 @@
 # Motor de recreación pedagógica (piloto aislado)
 
-Decisión: [ADR-049](ARCHITECTURE.md). Informe del piloto: [qa/recreacion-pedagogica](qa/recreacion-pedagogica/README.md).
+Decisiones: [ADR-049, ADR-050 y ADR-051](ARCHITECTURE.md). Pantalla y modo «generar una vez»: [QA plataforma](qa/recreacion-plataforma/README.md).
+
+> **ADR-051.** El producto entrega la ficha y los materiales, y muestra en pantalla la explicación que Claude redacta en la misma llamada del plan. Ya no hay guía ni clave en PDF; las respuestas quedan internas. Abrir una recreación lee el registro guardado (`view.ts`) sin llamar a ninguna IA; regenerar es explícito (`create.ts`). Informe del piloto: [qa/recreacion-pedagogica](qa/recreacion-pedagogica/README.md).
 
 «Hacer magia» adapta la ficha original conservando sus actividades y su estructura. El motor de recreación usa la ficha como **fuente** de contenidos, objetivos y exigencia cognitiva, y diseña **actividades nuevas** según el perfil y el alcance autorizado. Esta primera entrega es un recorrido vertical aislado. No cambia «Hacer magia», ninguna ruta, ninguna tabla ni ninguna variable de producción.
 
 ## Recorrido
 
 ```
-MaterialAnalysis + AdaptationContext (perfil → necesidades, presentación)
-   │  recreationInput()          solo necesidades funcionales + material como datos no confiables
+MaterialAnalysis + AdaptationContext (perfil → necesidades, límites, formatos)
+   │  recreationInput()          sin identificadores ni texto libre; material como datos no confiables
    ▼
-planificador (inyectado)         modelo vía src/lib/ai (prompt recreation_planner v1) · en el piloto, plan fijo
-   │  RecreationPlanSchema       contrato recreation_plan@v1
+createRecreationPlanner()        proveedor de src/lib/ai + callStructured + recreation_planner v1 · tope de gasto · ai_runs
+   │  RecreationPlanSchema       contrato recreation_plan@v1 (≤ 1 reparación con los motivos)
    ▼
-verifyPlan()                     alcance, objetivos y operaciones, citas, soluciones, pistas, novedad
-   │
+verifyPlan()                     recreation_verify@v2: alcance, objetivos/operaciones, citas y cifras, soluciones, pistas,
+   │                             equivalencia por objetivo (razonamiento siempre pendiente)
    ▼
-compileRecreation()              ficha del alumno + guía docente: dos MaterialDocument
-   │
+resolveVisuals()                 A original · B esquema por código · C illustrate() (puerta, cuota, presupuesto, revisión)
+   ▼
+compileRecreation()              ficha del alumno · tarjetas recortables · guía breve · clave y revisión (procedencia)
    ▼
 buildRenderModel → renderPrintHtml → Chromium   (el renderer y el motor PDF de siempre)
 ```
 
-Código: `src/lib/recreation/{contract,verify,compile,input,pilot}.ts`, `prompts/recreation-planner/v1.ts`. Piloto: `evals/recreation/pond-plan.ts`.
+Código: `src/lib/recreation/{contract,verify,planner,visuals,compile,input,pilot}.ts`, `prompts/recreation-planner/v1.ts`. Piloto: `evals/recreation/pond-plan.ts`. Recorrido simulado: `tests/support/recreation-mocks.ts`.
+
+> **Actualización ADR-050:** el estado de cada ejecutor ya no es el de la tabla siguiente.
+> - `classify` sigue siendo `anchored`, ahora presentado como «sin comprobar».
+> - `sequence` solo es `verified` según su `basis`: orden del texto, o temporal/causal demostrado con conectores.
+> - `compute` solo es `verified` con cifras inequívocas.
+>
+> Las tarjetas se imprimen en su propia hoja. La guía se divide en guía breve y clave y revisión.
 
 ## Auditoría: qué se reutiliza
 

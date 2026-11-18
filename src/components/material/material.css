@@ -230,6 +230,19 @@ ul.ms-list { list-style: disc; }
 .ms-vsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5em; }
 .ms-vsteps > li { flex: 1 1 9em; display: flex; gap: .45em; align-items: flex-start; border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .45em .6em; }
 .ms-vstep-n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; border-radius: 50%; border: 1.5px solid var(--ms-accent); color: var(--ms-accent); font-weight: 700; font-size: .85em; }
+/* Tarjetas recortables: dos por fila, texto grande, línea de corte discontinua; cada tarjeta no se parte entre páginas. */
+.ms-cutcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+.ms-cutcards > li { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 28mm; padding: 3mm; border: 1.2px dashed var(--ms-ink); margin: -0.6px; font-size: 1.35em; font-weight: 700; break-inside: avoid; overflow-wrap: break-word; hyphens: manual; }
+/* Tablero de clasificación: una columna por grupo, cabecera con el acento y un área vacía alta para colocar las tarjetas. */
+.ms-cutcards[data-illustrated] > li { flex-direction: column; gap: 3mm; min-height: 64mm; }
+.ms-figure .ms-cutcard-picture { display: block; width: 100%; max-width: 100%; max-height: 40mm; object-fit: contain; border: 0; }
+.ms-figure:has(> .ms-vsupport[data-spec="sort_board"]), .ms-figure:has(> .ms-vsupport[data-spec="cut_cards"]) { align-items: stretch; }
+.ms-vsupport[data-spec="sort_board"], .ms-vsupport[data-spec="cut_cards"] { width: 100%; }
+.ms-sortboard { list-style: none; margin: 0; padding: 0; display: grid; gap: 4mm; }
+.ms-sortboard > li { display: flex; flex-direction: column; border: 1.5px solid var(--ms-ink); border-radius: 2mm; overflow: hidden; break-inside: avoid; }
+.ms-sortboard-head { padding: 3mm; text-align: center; font-weight: 700; font-size: 1.3em; background: var(--ms-accent); color: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.ms-sortboard-area { display: block; min-height: 150mm; }
+[data-contrast="high"] .ms-sortboard-head { background: #fff; color: var(--ms-ink); border-bottom: 1.5px solid var(--ms-ink); }
 .ms-vcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(10em, 1fr)); gap: .5em; }
 .ms-vcards > li { display: flex; flex-direction: column; gap: .15em; border: 1px solid var(--ms-rule-soft); border-left: 3px solid var(--ms-accent); padding: .4em .6em; }
 .ms-missing { border: 2px dashed var(--ms-ink); padding: .6em .8em; font-size: .85em; font-weight: 600; }

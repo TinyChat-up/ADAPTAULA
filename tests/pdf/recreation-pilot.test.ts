@@ -1,52 +1,86 @@
 import { describe, expect, it } from "vitest";
-import { buildAdaptationContext } from "@/lib/adaptation/context";
-import { runRecreation } from "@/lib/recreation/pilot";
+import { generatedWidthMm } from "@/lib/render/generated";
 import { buildRenderModel } from "@/lib/render/model";
-import { POND_PILOT_PROFILE, POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
-import { pondAnalysis } from "../support/pond-case";
+import { assetRef } from "@/lib/render/print/pinned-assets";
+import type { MaterialDocument } from "@/lib/schemas/material-document";
+import { runMockRecreation } from "../support/recreation-mocks";
 import { printPdf } from "./harness";
 
 /**
- * The recreation pilot printed by the product's renderer and engine (docs/qa/recreacion-pedagogica): the student's sheet and the
- * teacher's guide, every page. Output in `.pdf-smoke/recreation-pond-*`.
+ * The recreation route printed by the product's renderer and engine (docs/qa/recreacion-pedagogica): simulated Claude and simulated
+ * OpenAI, every document and every page. Output in `.pdf-smoke/recreation-*`. The illustration is the local mock drawing: what is
+ * tested is the route and the sheet, not a model.
  */
-const analysis = pondAnalysis();
-const context = buildAdaptationContext({ profile: POND_PILOT_PROFILE, education: { stage: null, grade: null, subject: null }, analysis, adaptationType: "accessibility" }).context;
-const outcome = runRecreation(async () => POND_RECREATION_PLAN, { analysis, context, scope: "methodological" });
-const printed = (async () => {
-  const result = await outcome;
-  if (result.status !== "ready") throw new Error(JSON.stringify(result));
-  const student = buildRenderModel(result.compiled.student, { mode: "student", deferred: [] });
-  const guide = buildRenderModel(result.compiled.guide, { mode: "student", deferred: [] });
-  return { student: { ...student, pdf: await printPdf("recreation-pond-student", student.model) }, guide: { ...guide, pdf: await printPdf("recreation-pond-guide", guide.model) } };
-})();
+const authorized = runMockRecreation({ imagesAuthorized: true });
+const withoutImages = runMockRecreation({ imagesAuthorized: false });
 
-describe("piloto de recreación del estanque · PDF", () => {
-  it("la ficha del alumno se imprime sin avisos, sin páginas casi vacías y sin la clave", async () => {
-    const { student } = await printed;
-    expect(student.validation.status).toBe("renderable");
-    expect(student.pdf.validation.issues).toEqual([]);
-    const pages = student.pdf.pages;
-    expect(pages.length).toBeGreaterThanOrEqual(2);
-    expect(pages.length).toBeLessThanOrEqual(5);
-    // The last page may be short; none before it is almost empty (a page with one stray line is ≈ 1 % ink).
-    for (const page of pages.slice(0, -1)) expect(page.ink).toBeGreaterThan(0.03);
-    const text = pages.map((p) => p.body).join("\n");
-    for (const prompt of ["ser vivo o un elemento no vivo", "Numera del 1 al 3", "Calcula cuántos centímetros bajó", "Piensa una medida"]) expect(text).toContain(prompt);
-    expect(text).not.toMatch(/30 − 18|\b12 cm\b|Criterios|Guía docente/);
-    // The flow is drawn from data with the original's four labels.
+async function print(name: string, doc: MaterialDocument, run: Awaited<typeof authorized>) {
+  const generated: Record<string, { src: string; widthMm: number }> = {};
+  const pins = [];
+  for (const [assetId, a] of run.assets) {
+    generated[assetId] = { src: assetRef({ assetId, sha256: a.sha256 }), widthMm: generatedWidthMm(a.width, a.height) };
+    pins.push({ assetId, sha256: a.sha256, mime: "image/png" as const, bytes: a.bytes });
+  }
+  const { model, validation } = buildRenderModel(doc, { mode: "student", deferred: [], generated });
+  // Every stored picture the document points to (a generated image block or a card's picture) is pinned: nothing is fetched.
+  const json = JSON.stringify(doc);
+  const used = pins.filter((p) => json.includes(p.assetId));
+  return { validation, pdf: await printPdf(name, model, used, used.length ? 1 : 0) };
+}
+
+const ready = async (run: Promise<Awaited<typeof authorized>>) => {
+  const r = await run;
+  if (r.outcome.status !== "ready") throw new Error(r.outcome.status);
+  return { run: r, compiled: r.outcome.compiled };
+};
+const body = (pages: { body: string }[]) => pages.map((p) => p.body).join("\n");
+
+describe("recreación del estanque · PDF del recorrido completo simulado", () => {
+  it("ficha del alumno: ilustración en la página de la actividad 1, sin páginas casi vacías, sin la clave", async () => {
+    const { run, compiled } = await ready(authorized);
+    const { validation, pdf } = await print("recreation-student", compiled.student, run);
+    expect(validation.status).not.toBe("not_renderable");
+    // The generated picture is reported as semantically unverified by the renderer: it says so, it does not hide it.
+    expect(validation.issues.some((i) => i.code === "visual_semantics_unverified")).toBe(true);
+    expect(pdf.validation.issues).toEqual([]);
+    expect(pdf.result.blockedRequests).toEqual([]);
+    for (const page of pdf.pages.slice(0, -1)) expect(page.ink).toBeGreaterThan(0.03);
+    const first = pdf.pages.findIndex((p) => p.text.includes("ser vivo o un elemento no vivo"));
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(pdf.pages[first]!.png.byteLength).toBeGreaterThan(10_000);
+    const text = body(pdf.pages);
     for (const label of ["Algas", "Larvas de insectos", "Ranas", "Garzas"]) expect(text).toContain(label);
-  }, 180_000);
+    expect(text).not.toMatch(/Criterios|Guía docente|SIN COMPROBAR|Solución|Clave/);
+    expect(text).not.toMatch(/\b12 cm\b/);
+  });
 
-  it("la guía docente lleva la trazabilidad, las soluciones y las tarjetas para recortar", async () => {
-    const { guide } = await printed;
-    expect(guide.validation.status).toBe("renderable");
-    expect(guide.pdf.validation.issues).toEqual([]);
-    expect(guide.pdf.pages.length).toBeLessThanOrEqual(4);
-    const text = guide.pdf.pages.map((p) => p.body).join("\n");
-    expect(text.toLowerCase()).toContain("solo para el profesorado");
-    // pdf.js drops the «−» and «=» glyphs of Inter when it extracts text (pdftotext keeps them): match the numbers.
-    expect(text).toMatch(/Solución: 30\D{1,6}18\D{1,6}12 cm/);
-    for (const needle of ["Comprobada por el sistema", "Tarjetas para recortar", "Temperatura"]) expect(text).toContain(needle);
-  }, 180_000);
+  it("materiales para recortar: tarjetas grandes con línea de corte y el tablero de clasificación, con sus instrucciones", async () => {
+    const { run, compiled } = await ready(authorized);
+    const { validation, pdf } = await print("recreation-materials", compiled.materials!, run);
+    expect(validation.status).toBe("renderable");
+    expect(pdf.validation.issues).toEqual([]);
+    expect(pdf.pages.length).toBeLessThanOrEqual(2);
+    const text = body(pdf.pages);
+    expect(text).toContain("Recorta las tarjetas");
+    expect(text).toContain("Coloca cada tarjeta en su columna");
+    for (const card of ["Algas", "Agua", "Larvas de insectos", "Luz solar", "Garzas", "Temperatura", "Ser vivo", "Elemento no vivo"]) expect(text).toContain(card);
+    expect(pdf.print.html).toContain('class="ms-cutcards" data-illustrated="true"');
+    expect(pdf.result.blockedRequests).toEqual([]);
+    // Each card carries its own picture, and its name is printed by the renderer (not drawn by the image model).
+    expect((pdf.print.html.match(/class="ms-cutcard-picture"/g) ?? []).length).toBe(6);
+    expect(pdf.print.html).toContain('class="ms-sortboard"');
+  });
+
+  it("no se produce ninguna clave ni informe para imprimir: solo la ficha y los materiales", async () => {
+    const { compiled } = await ready(authorized);
+    expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace"]);
+  });
+
+  it("sin imágenes autorizadas: la ficha se imprime sin la ilustración y la guía dice por qué", async () => {
+    const { run, compiled } = await ready(withoutImages);
+    const student = await print("recreation-student-sin-imagenes", compiled.student, run);
+    expect(student.validation.status).toBe("renderable");
+    for (const page of student.pdf.pages.slice(0, -1)) expect(page.ink).toBeGreaterThan(0.03);
+    expect(run.outcome.status === "ready" && run.outcome.visuals[0]!.attempts.join(" ")).toContain("generación no disponible");
+  });
 });

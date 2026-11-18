@@ -4,29 +4,37 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
+import type { ResolvedVisual } from "./visuals";
 
 /**
- * A verified recreation plan → two existing `MaterialDocument`s, printed by the one renderer we have (no new layout code):
- *   student  the new activities, with the original's reading split in parts and the visual drawn from data; the closed answers go to
- *            `answer_key`, which the student view never renders (ADR-008);
- *   guide    for the teacher only: traceability of each activity to its objective, how each solution is known, what to observe and
- *            the cards to cut out. Solutions live here as text, never in the student's document.
- * Block ids are assigned here (`blk_r…`), deterministic for one plan, so the same plan prints the same sheet.
+ * A verified recreation plan → the student's material, as existing `MaterialDocument`s printed by the one renderer we have:
+ *   student    the new activities, the original's reading in parts, each picture right before the activity that uses it (an essential
+ *              picture that could not be made is a visible gap and the sheet is not printable); the closed answers go to `answer_key`,
+ *              which no student view renders (ADR-008) and no screen of this mode shows: it stays for the server's checks;
+ *   materials  the manipulatives of each activity on their own sheet: cards to cut out and the board to sort them on.
+ * Nothing else is produced: no answer key and no report for the teacher (ADR-051). The teacher's explanation is the plan's own
+ * `explanation`, shown on screen. Block ids are deterministic for one plan, so the same plan prints the same sheet.
  */
 
 const LETTERS = "ABCDEFGH";
-const STATUS_ES: Record<VerifiedActivity["status"], string> = { verified: "Comprobada por el sistema", anchored: "Apoyada en el texto; revisar el sentido", teacher_review: "Respuesta abierta: valorar con los criterios" };
-const OP_ES: Record<string, string> = { identify: "identificar", locate_evidence: "localizar pruebas", classify: "clasificar", sequence: "ordenar", interpret_relation: "interpretar relaciones", predict: "predecir", calculate: "calcular", evaluate_claim: "valorar una afirmación", justify: "justificar", propose: "proponer" };
-const METHOD_ES: Record<string, string> = { selection_response: "respuesta por selección", guided_sequence: "secuencia guiada", segmented_reading: "lectura por partes", visual_organizer: "organizador visual", sentence_frames: "inicios de frase", manipulative_sorting: "clasificación manipulativa", worked_contrast: "contraste con ejemplo" };
 
 export interface CompiledRecreation {
   student: MaterialDocument;
-  guide: MaterialDocument;
+  /** The manipulatives (cards, boards), when the plan has them. */
+  materials: MaterialDocument | null;
   /** One row per activity: its printed label, the block it became and what it is traced to. */
   trace: Array<{ activity_id: string; label: string; block_id: string; objective_ids: string[]; operations: string[]; status: VerifiedActivity["status"] }>;
 }
 
-export function compileRecreation(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, presentation: Presentation): CompiledRecreation {
+export interface CompileInput {
+  plan: RecreationPlan;
+  verification: Verification;
+  analysis: MaterialAnalysis;
+  presentation: Presentation;
+  visuals: readonly ResolvedVisual[];
+}
+
+export function compileRecreation({ plan, verification, analysis, presentation, visuals }: CompileInput): CompiledRecreation {
   if (!verification.ok) throw new Error("recreation_plan_not_verified");
   let n = 0;
   const id = () => `blk_r${String(++n).padStart(4, "0")}`;
@@ -45,6 +53,23 @@ export function compileRecreation(plan: RecreationPlan, verification: Verificati
   };
 
   const blocks: Block[] = [{ id: id(), type: "heading", level: 1, text: plan.title, trace: { origin: "structure", source_refs: [], decision_ids: [] } }];
+  /** The block a resolved picture becomes (the original, the exact scheme, the generated image, or the gap of an essential one). */
+  const imageBlock = (v: ResolvedVisual, a: RecreationActivity): Block => {
+    const src = v.source!;
+    const dec = decisions(a.strategy_ids)[0] ?? "dec_1";
+    const source =
+      src.kind === "original" ? { kind: "original" as const, visual_ref: src.visual_ref }
+      : src.kind === "figure" ? { kind: "figure" as const, spec: src.spec, provenance: "reconstruction" as const, visual_ref: src.visual_ref }
+      : src.kind === "generated" ? { kind: "generated" as const, asset_id: src.asset_id, sha256: src.sha256, decision_id: dec }
+      : { kind: "requested" as const, decision_id: dec, purpose: src.purpose.slice(0, 300), style: "illustration" as const, essential: true };
+    return { id: id(), type: "image", alt_text: v.alt.slice(0, 300), source, trace: { origin: "support", source_refs: a.objective_ids, decision_ids: decisions(a.strategy_ids) } };
+  };
+  // A CONTEXT picture is looked at before reading (to recognise what the text names): it opens the sheet, before the reading.
+  const isContext = (v: ResolvedVisual) => plan.visual_requests.find((r) => r.id === v.request_id)?.function === "context" && plan.reading !== null;
+  for (const v of visuals.filter((x) => x.source && isContext(x))) {
+    const a = plan.activities.find((x) => x.id === v.activity_ids[0]);
+    if (a) blocks.push(imageBlock(v, a));
+  }
   if (plan.reading) {
     const source = analysis.texts.find((t) => t.id === plan.reading!.source_ref)!;
     const paragraphs = source.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -66,6 +91,12 @@ export function compileRecreation(plan: RecreationPlan, verification: Verificati
     const label = String(index + 1);
     const t = { origin: "adapted" as const, source_refs: [...a.objective_ids, ...factRefs(a)].slice(0, 12), decision_ids: decisions(a.strategy_ids) };
     const resources: string[] = [];
+    // The other pictures this activity is the first to use, right before it.
+    for (const v of visuals.filter((x) => x.activity_ids[0] === a.id && x.source && !isContext(x))) {
+      const block = imageBlock(v, a);
+      resources.push(block.id);
+      blocks.push(block);
+    }
     for (const v of plan.visuals.filter((x) => a.visual_ids.includes(x.id))) {
       const block = id();
       resources.push(block);
@@ -88,7 +119,36 @@ export function compileRecreation(plan: RecreationPlan, verification: Verificati
     pages: [{ blocks }],
     answer_key: answerKey,
   });
-  return { student, guide: compileGuide(plan, verification, analysis, presentation, meta, trace), trace };
+  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace };
+}
+
+/** The manipulatives on their own sheet, by activity: what to do, then the cards (large, with cutting lines) and the board. */
+function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"], decisionOf: ReadonlyMap<string, string>, visuals: readonly ResolvedVisual[]): MaterialDocument | null {
+  if (plan.materials.length === 0) return null;
+  let n = 0;
+  const id = () => `blk_c${String(++n).padStart(4, "0")}`;
+  const structure = { origin: "structure" as const, source_refs: [], decision_ids: [] };
+  // One sheet per material: the cards to cut out on one, the board to sort them on the next, each with its own instruction.
+  const pages: Array<{ blocks: Block[] }> = [];
+  for (const m of plan.materials) {
+    const blocks: Block[] = pages.length === 0 ? [{ id: id(), type: "heading", level: 1, text: "Materiales para recortar", trace: structure }] : [];
+    const label = trace.find((t) => t.activity_id === m.activity_id)?.label ?? "?";
+    const activity = plan.activities.find((a) => a.id === m.activity_id);
+    const dec = activity?.strategy_ids.map((s) => decisionOf.get(s)).find(Boolean) ?? "dec_1";
+    const t = { origin: "support" as const, source_refs: activity?.objective_ids ?? [], decision_ids: [dec] };
+    // The cards' approved pictures, card by card (none when generation was not available: the card keeps its printed name).
+    const illustrated = m.kind === "cut_out_cards" ? visuals.find((v) => plan.visual_requests.find((r) => r.id === v.request_id)?.for_cards === m.id)?.cards : undefined;
+    const pictures = m.kind === "cut_out_cards" && illustrated?.some((c) => c.asset) ? m.cards.map((card) => illustrated.find((c) => c.text === card)?.asset?.asset_id ?? null) : undefined;
+    const spec = m.kind === "cut_out_cards" ? { kind: "cut_cards" as const, spec_version: VISUAL_SPEC_VERSION, items: m.cards, ...(pictures ? { pictures } : {}) } : { kind: "sort_board" as const, spec_version: VISUAL_SPEC_VERSION, columns: m.columns };
+    const alt = m.kind === "cut_out_cards" ? `Tarjetas para recortar: ${m.cards.join(", ")}.` : `Tablero con ${m.columns.length} columnas: ${m.columns.join(", ")}.`;
+    blocks.push(
+      { id: id(), type: "heading", level: 2, text: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} · actividad ${label}`, trace: structure },
+      { id: id(), type: "instruction", text: m.instructions, trace: t },
+      { id: id(), type: "image", alt_text: alt, source: { kind: "figure", spec, provenance: "generated", decision_id: dec }, trace: t },
+    );
+    pages.push({ blocks });
+  }
+  return MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Materiales: ${meta.title}` }, presentation: { ...presentation, max_tasks_per_page: null }, admin_fields: [], pages, answer_key: [] });
 }
 
 function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpec; key: Omit<MaterialDocument["answer_key"][number], "block_id" | "basis"> } {
@@ -117,81 +177,3 @@ function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpe
   }
 }
 
-function solutionText(s: Solution, a: RecreationActivity): string {
-  switch (s.kind) {
-    case "pairs": {
-      const e = a.executor.kind === "classify" ? a.executor : null;
-      return s.pairs.map((p, i) => `${i + 1}-${LETTERS[e?.categories.findIndex((c) => c.label === p.category) ?? 0]} (${p.item}: ${p.category.toLowerCase()})`).join(", ");
-    }
-    case "order":
-      return s.solution.map((x, i) => `${i + 1}. ${x}`).join(" → ");
-    case "number":
-      return `${s.operation} ${s.unit}`;
-    case "options":
-      return s.correct.join(" / ");
-    case "truth":
-      return s.values.map((v, i) => `${i + 1}: ${v.value ? "V" : "F"}`).join(", ");
-    case "criteria":
-      return `Criterios: ${s.criteria.join(" ")}`;
-  }
-}
-
-function compileGuide(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"]): MaterialDocument {
-  let n = 0;
-  const id = () => `blk_g${String(++n).padStart(4, "0")}`;
-  const structure = { origin: "structure" as const, source_refs: [], decision_ids: [] };
-  const objectiveText = new Map(analysis.pedagogical_intent.objectives.map((o) => [o.id, o.text]));
-  const byId = new Map(plan.activities.map((a) => [a.id, a]));
-  const strategies = new Map(plan.strategies.map((s) => [s.id, s]));
-  const blocks: Block[] = [
-    { id: id(), type: "heading", level: 1, text: `Guía docente: ${plan.title}`, trace: structure },
-    { id: id(), type: "help_box", variant: "key_idea", title: "Solo para el profesorado", text: plan.guide.overview, trace: structure },
-    { id: id(), type: "heading", level: 2, text: "Objetivos que se conservan", trace: structure },
-    {
-      id: id(),
-      type: "table",
-      headers: ["Objetivo del original", "Operaciones que se evalúan"],
-      rows: plan.objectives.map((o) => [objectiveText.get(o.objective_id) ?? o.objective_id, o.operations.map((op) => OP_ES[op] ?? op).join(", ")]),
-      trace: { origin: "structure", source_refs: plan.objectives.map((o) => o.objective_id), decision_ids: [] },
-    },
-    { id: id(), type: "heading", level: 2, text: "Actividades y soluciones", trace: structure },
-  ];
-  // One compact block per activity (a wide table of long solutions printed one word per line over nine pages).
-  for (const row of trace) {
-    const a = byId.get(row.activity_id)!;
-    const solution = verification.activities.find((v) => v.id === row.activity_id)!;
-    const observe = plan.guide.per_activity.find((g) => g.activity_id === row.activity_id)?.observe;
-    const method = a.strategy_ids.map((s) => METHOD_ES[strategies.get(s)?.method ?? ""] ?? s).join(", ");
-    blocks.push(
-      { id: id(), type: "heading", level: 3, text: `Actividad ${row.label}`, trace: structure },
-      {
-        id: id(),
-        type: "list",
-        style: "bullet",
-        items: [
-          `Objetivo: ${row.objective_ids.map((o) => objectiveText.get(o) ?? o).join("; ")} (${row.operations.map((op) => OP_ES[op] ?? op).join(", ")}).`,
-          ...(method ? [`Estrategia: ${method}.`] : []),
-          `Solución: ${solutionText(solution.solution, a)}`.slice(0, 300),
-          `Cómo se sabe: ${STATUS_ES[row.status]}.`,
-          ...(observe ? [`Qué observar: ${observe}`] : []),
-        ],
-        trace: { origin: "structure", source_refs: row.objective_ids, decision_ids: [] },
-      },
-    );
-  }
-  const warnings = verification.issues.filter((i) => i.severity === "warning").map((i) => i.message);
-  if (warnings.length > 0) blocks.push({ id: id(), type: "help_box", variant: "reminder", title: "Pendiente de revisar", text: warnings.join(" "), trace: structure });
-  for (const m of plan.materials) {
-    const label = trace.find((t) => t.activity_id === m.activity_id)?.label ?? "?";
-    const rows: string[][] = [];
-    for (let i = 0; i < m.cards.length; i += 3) rows.push([0, 1, 2].map((j) => m.cards[i + j] ?? ""));
-    blocks.push(
-      { id: id(), type: "heading", level: 2, text: `Tarjetas para recortar (actividad ${label})`, trace: structure },
-      { id: id(), type: "paragraph", text: m.purpose, trace: structure },
-      { id: id(), type: "table", headers: ["", "", ""], rows, trace: structure },
-    );
-  }
-  // The guide is read by the teacher: the student's reading supports (larger type, wider spacing) do not apply; contrast does.
-  const teacher: Presentation = { ...presentation, font_scale: 1, line_spacing: "normal", spacing: "normal", max_tasks_per_page: null, answer_space: "standard" };
-  return MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Guía docente: ${meta.title}` }, presentation: teacher, admin_fields: [], pages: [{ blocks }], answer_key: [] });
-}

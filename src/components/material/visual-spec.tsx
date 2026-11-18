@@ -188,7 +188,43 @@ function Cards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cards" }>; 
   );
 }
 
-export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: string }) {
+/** Cards to cut out: each text in its own large box with a dashed cutting line (same markup on screen and in print). */
+function CutCards({ spec, label, pictures }: { spec: Extract<VisualSpec, { kind: "cut_cards" }>; label: string; pictures?: ReadonlyArray<string | null> }) {
+  const illustrated = pictures?.some(Boolean) ?? false;
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      {spec.title ? <p className="ms-vsupport-title">{spec.title}</p> : null}
+      <ul className="ms-cutcards" data-illustrated={illustrated || undefined}>
+        {spec.items.map((item, i) => (
+          <li key={i}>
+            {/* The picture is decorative for a screen reader: the card's name is printed right below it. */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- an already-authorised asset (or inlined data URI in print); sizing is the sheet's */}
+            {pictures?.[i] ? <img src={pictures[i]!} alt="" className="ms-cutcard-picture" /> : null}
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** A sorting board: a header per group and a tall empty area under it to place the cards (same markup on screen and in print). */
+function SortBoard({ spec, label }: { spec: Extract<VisualSpec, { kind: "sort_board" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      <ul className="ms-sortboard" style={{ gridTemplateColumns: `repeat(${spec.columns.length}, 1fr)` }}>
+        {spec.columns.map((c, i) => (
+          <li key={i}>
+            <span className="ms-sortboard-head">{c}</span>
+            <span className="ms-sortboard-area" aria-hidden />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function VisualSpecView({ spec, label, pictures }: { spec: VisualSpec; label: string; pictures?: ReadonlyArray<string | null> }) {
   switch (spec.kind) {
     case "fraction_bar":
       return <Bar spec={spec} label={label} />;
@@ -206,5 +242,9 @@ export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: strin
       return <Cards spec={spec} label={label} />;
     case "flow":
       return <Flow spec={spec} label={label} />;
+    case "cut_cards":
+      return <CutCards spec={spec} label={label} {...(pictures ? { pictures } : {})} />;
+    case "sort_board":
+      return <SortBoard spec={spec} label={label} />;
   }
 }

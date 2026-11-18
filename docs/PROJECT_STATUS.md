@@ -113,6 +113,19 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**PR #101 continuada (ADR-052):** las respuestas quedan solo en el servidor (propuesta con pruebas de acceso directo), el material tiene estado de revisión, hay tarjetas ilustradas, versiones recuperables e idempotencia. La evaluación real está preparada (`pnpm eval:recreation`) y espera autorización (techo ≈ 1,63 $).
+
+**Recreación en la plataforma (2026-11-18, simulado; ADR-051, [QA](qa/recreacion-plataforma/README.md)).** Pantalla con ficha, materiales recortables y explicación (qué, por qué, cómo). Se genera una vez y se consulta sin IA; regenerar es explícito; no hay solucionarios. Siguiente: migración propuesta (sin aplicar) y evaluación real con autorización (peor caso 1,72 $).
+
+**Recreación con Claude + OpenAI (2026-11-18, simulado; ADR-050, [QA](qa/recreacion-pedagogica/README.md)).**
+
+- **Implementado y probado sin gasto:**
+  - verificadores endurecidos;
+  - planificador sobre `src/lib/ai`;
+  - imágenes A/B/C con `illustrate()`;
+  - tarjetas recortables, guía breve y clave aparte.
+- **Siguiente:** evaluación real con autorización (≤ 3 USD) y persistencia propia de las recreaciones.
+
 **Motor de recreación pedagógica (2026-11-18, piloto aislado).** Contrato `recreation_plan@v1` (ADR-049, [diseño](RECREATION.md), [QA y PDF](qa/recreacion-pedagogica/README.md)). La ficha original es una fuente de objetivos y exigencia; el motor diseña actividades nuevas, verifica sus citas y soluciones y las imprime con el renderer de siempre: ficha del alumno con la clave separada y guía docente.
 
 - **Implementado y probado** con un plan escrito a mano (Ciencias de 5.º, el estanque).
