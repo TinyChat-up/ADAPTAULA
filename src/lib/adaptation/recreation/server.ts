@@ -27,6 +27,7 @@ export const productionRecreation = (): RecreationServices => ({
       provider: providerFor(selection, ids.workspaceId),
       selection,
       maxOutputTokens: component.max_output_tokens,
+      promptVersion: component.prompt_version,
       budget: { limitUsd: RECREATION_PLANNER_LIMITS.budgetUsd, spentUsd },
       recordAiRun: record,
     });
