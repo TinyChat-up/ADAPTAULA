@@ -113,6 +113,16 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Motor de recreación pedagógica (2026-11-18, piloto aislado).** Contrato `recreation_plan@v1` (ADR-049, [diseño](RECREATION.md), [QA y PDF](qa/recreacion-pedagogica/README.md)). La ficha original es una fuente de objetivos y exigencia; el motor diseña actividades nuevas, verifica sus citas y soluciones y las imprime con el renderer de siempre: ficha del alumno con la clave separada y guía docente.
+
+- **Implementado y probado** con un plan escrito a mano (Ciencias de 5.º, el estanque).
+- **No conectado** a «Hacer magia», rutas, versiones ni cuotas.
+- El prompt `recreation_planner` v1 no se ha ejecutado.
+- **Siguiente:**
+  - evaluar el planificador con un modelo, con presupuesto autorizado;
+  - revisor semántico de pistas cruzadas;
+  - persistencia como versión.
+
 **Etapa 2.3 (2026-11-13).** Revisión semántica de los apoyos (`pedagogical_reviewer@v2`, ADR-048, [QA](qa/etapa-2-3-semantica/README.md)): cada apoyo recibe un juicio del revisor en la misma llamada de siempre y el servidor decide qué puede cambiar (confirmado repara; sospecha avisa; sin juzgar nunca aprueba). **Instalada y apagada** (`REVIEWER_V2_MODE=off`): `shadow` registra los juicios semánticos sin consecuencias, pero **no es transparente** (los hallazgos generales los da la misma llamada v2 y pueden cambiar el veredicto respecto a `off`); `on` solo tras medir y autorizar. Implementada y probada con revisor simulado; **precisión y consistencia del modelo real, y etiquetas del corpus (provisionales), pendientes de validar**. Siguiente: etiquetado por una persona con criterio pedagógico y de PT, evaluación con el modelo real (con autorización) y `shadow` acotado.
 
 **Etapa 2.2 (2026-11-12).** Sustitución funcional de apoyos que revelan la respuesta ([QA](qa/etapa-2-2-sustitucion/README.md)): solo la evidencia literal y fiable (o un rechazo `would_reveal_answer`) repara y sustituye una vez, dentro de las 3 generaciones; interruptor `SUPPORT_SUBSTITUTION_MODE`, **`dry_run` por defecto** (`on` solo con activación explícita). Implementada y probada con generador simulado; **pendiente de validar en producción**. Siguiente: 2.3 (revisor semántico).

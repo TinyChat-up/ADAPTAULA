@@ -2,6 +2,33 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-049 — Motor de recreación pedagógica: contrato `recreation_plan@v1` y piloto aislado (2026-11-18)
+
+La ficha original pasa a ser una **fuente** de contenidos, objetivos y exigencia cognitiva, no un formato que conservar. Un plan versionado separa siete partes:
+
+- objetivos y nivel autorizado;
+- operaciones cognitivas evaluadas;
+- estrategias;
+- actividades nuevas;
+- formatos y soluciones;
+- materiales visuales y manipulativos;
+- guía docente.
+
+El servidor comprueba el plan, deriva las soluciones que se pueden calcular y lo imprime con el renderer existente como dos `MaterialDocument`: la ficha del alumno, con la clave separada, y la guía docente.
+
+- **Exigencia:**
+  - todos los objetivos se conservan (`kept`), con al menos las operaciones que el servidor lee en los enunciados del original;
+  - el alcance curricular se rechaza sin autorización por ficha;
+  - recrear exige alcance metodológico.
+- **Soluciones:**
+  - `sequence` (orden de las citas en el texto) y `compute` (aritmética) son `verified`;
+  - `classify`, `select` y `true_false` son `anchored`: cada respuesta cita el original y el docente revisa el sentido;
+  - las respuestas breves llevan solo criterios.
+  - Nada se da por válido porque el mismo modelo escribiera su solución.
+- **Datos:** cada dato que usa una actividad es una cita literal comprobada contra el análisis. Del alumno solo viajan sus necesidades funcionales. El material va como datos no confiables.
+- **Aislado:** sin rutas, tablas, cuotas ni cambios en «Hacer magia». El planificador se inyecta. En el piloto es un plan escrito a mano, y el prompt `recreation_planner` v1 no se ejecuta.
+- Detalle en [RECREATION.md](RECREATION.md) y [QA](qa/recreacion-pedagogica/README.md).
+
 ## ADR-048 — Revisión semántica de los apoyos: `pedagogical_reviewer@v2` y `REVIEWER_V2_MODE` (2026-11-13)
 
 Un apoyo da acceso a la tarea; no hace lo que la actividad evalúa. Las etapas 2.1 y 2.2 detectan lo verificable; lo semántico (un glosario que explica el significado de las flechas, una analogía que deja deducir un ítem, un ejemplo que resuelve cuando la respuesta no es deducible) solo lo juzga un revisor. La 2.3 añade ese juicio **sin una llamada nueva**.

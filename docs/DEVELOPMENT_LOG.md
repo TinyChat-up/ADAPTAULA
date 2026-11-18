@@ -1,5 +1,28 @@
 # Registro de desarrollo
 
+## 2026-11-18 — Motor de recreación pedagógica: diseño y piloto aislado del estanque
+
+Rama `claude/recreacion-pedagogica` desde `main` `ae1ba94`, independiente de las PR #97 y #98.
+
+- **Implementado:**
+  - contrato `recreation_plan@v1`;
+  - verificador: alcance, objetivos y operaciones mínimas, citas literales, soluciones deterministas, pistas y novedad;
+  - compilador a ficha del alumno y guía docente (`MaterialDocument`);
+  - entrada minimizada y prompt `recreation_planner` v1 (no ejecutado);
+  - piloto del estanque con 10 actividades nuevas, de selección, relación, orden, V/F, cálculo y respuesta breve, y el esquema `flow` desde datos.
+- **Simulado:** el plan del piloto, escrito a mano con el contrato del modelo.
+- **Probado:** 15 unitarias y 2 PDF; PDF de ejemplo en `docs/qa/recreacion-pedagogica/`.
+
+La revisión página a página detectó y corrigió pistas cruzadas entre actividades que el verificador no puede ver. No se cambia «Hacer magia», ni se usan migraciones, IA de pago, merge ni despliegue.
+
+- **Pendiente:**
+  - evaluación del planificador con un modelo, con presupuesto autorizado;
+  - revisor semántico sobre la ficha recreada;
+  - conexión a versiones, cuotas y la interfaz;
+  - hoja de recortables.
+
+[Informe](qa/recreacion-pedagogica/README.md).
+
 ## 2026-11-13 — Cierre del perfil V3 en acceso y metodología
 
 Rama limpia desde `651d130`: recuperados `b3fc2fc`, `4708703` y `c213b50f`, sin cambios del corpus ni hoja ciega. Reproducidos y corregidos el formato oral no declarado y los grupos de más de seis dimensiones; la nueva lógica de generación se limita a contextos con ámbito pedagógico, preservando el comportamiento histórico. Batería local 2.506 correctas, 18 omitidas y 1 pendiente; 74 focalizadas correctas, typecheck y lint sin errores (un aviso previo). Modelos simulados; sin E2E, IA de pago, migraciones remotas ni despliegues. La equivalencia semántica requiere revisión docente. [QA](qa/perfil-v3-hacer-magia/README.md).
