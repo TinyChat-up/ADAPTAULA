@@ -66,7 +66,7 @@ export type RenderNode = { key: string } & (
    * physical width in the original, so it prints at its own size (never stretched to the column).
    */
   /** `repeated`: a copy of a figure already printed on an earlier page, shown again next to another activity that compares it. */
-  | { kind: "image"; state: "available" | "missing" | "pending" | "omitted"; src?: string; spec?: VisualSpec; widthMm?: number; heightMm?: number; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure; origin: "original" | "requested"; repeated?: boolean }
+  | { kind: "image"; state: "available" | "missing" | "pending" | "omitted"; src?: string; spec?: VisualSpec; pictures?: Array<string | null>; widthMm?: number; heightMm?: number; alt: string; caption?: string; essential: boolean; failure?: VisualAssetFailure; origin: "original" | "requested"; repeated?: boolean }
   | { kind: "help_box"; variant: "key_idea" | "reminder" | "tip" | "strategy"; title?: string; paragraphs: Run[][] }
   | { kind: "checklist"; title?: string; items: string[]; keepTogether: boolean }
   | { kind: "vocabulary"; title?: string; items: Array<{ term: string; definition: string }> }
@@ -222,8 +222,8 @@ function figureRows(n: RenderNode): number {
   if (n.kind === "chart") return 8;
   if (n.kind !== "image") return 0;
   // Cut-out cards: two per row, each about 38 mm tall (≈ 5 rows).
-  if (n.spec?.kind === "cut_cards") return 1 + Math.ceil(n.spec.items.length / 3) * 4;
-  if (n.spec?.kind === "sort_board") return 11;
+  if (n.spec?.kind === "cut_cards") return 1 + Math.ceil(n.spec.items.length / 3) * (n.spec.pictures?.some(Boolean) ? 9 : 4);
+  if (n.spec?.kind === "sort_board") return 22;
   if (n.spec) return n.spec.kind === "number_line" ? 4 : n.spec.kind === "part_whole" ? 6 : 3;
   if (n.heightMm) return Math.ceil(Math.min(n.heightMm, MAX_FIGURE_MM) / MM_PER_ROW) + 1;
   return n.widthMm ? Math.ceil(n.widthMm / 3 / MM_PER_ROW) + 1 : 8;
@@ -387,7 +387,9 @@ function checkedFigure(node: Extract<RenderNode, { kind: "image" }>, spec: Visua
     ctx.issues.push({ code: "structure_inconsistent", severity: "error", message: "Una figura contiene divisiones, celdas o etiquetas incoherentes. Revisa el recurso antes de imprimir." });
     return { ...node, state: "missing" };
   }
-  return { ...node, spec: parsed.data, alt: node.caption ?? describeSpec(parsed.data) };
+  // Cut-out cards with their illustrations: each picture is a stored, approved asset resolved like any generated image.
+  const pictures = parsed.data.kind === "cut_cards" && parsed.data.pictures ? parsed.data.pictures.map((id) => (id ? (ctx.options.generated?.[id]?.src ?? null) : null)) : undefined;
+  return { ...node, spec: parsed.data, ...(pictures ? { pictures } : {}), alt: node.caption ?? describeSpec(parsed.data) };
 }
 
 function nodeOf(block: Block, ctx: Ctx): RenderNode {

@@ -22,8 +22,10 @@ async function print(name: string, doc: MaterialDocument, run: Awaited<typeof au
     pins.push({ assetId, sha256: a.sha256, mime: "image/png" as const, bytes: a.bytes });
   }
   const { model, validation } = buildRenderModel(doc, { mode: "student", deferred: [], generated });
-  const used = JSON.stringify(doc).includes('"kind":"generated"');
-  return { validation, pdf: await printPdf(name, model, used ? pins : [], used ? 1 : 0) };
+  // Every stored picture the document points to (a generated image block or a card's picture) is pinned: nothing is fetched.
+  const json = JSON.stringify(doc);
+  const used = pins.filter((p) => json.includes(p.assetId));
+  return { validation, pdf: await printPdf(name, model, used, used.length ? 1 : 0) };
 }
 
 const ready = async (run: Promise<Awaited<typeof authorized>>) => {
@@ -62,7 +64,10 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
     expect(text).toContain("Recorta las tarjetas");
     expect(text).toContain("Coloca cada tarjeta en su columna");
     for (const card of ["Algas", "Agua", "Larvas de insectos", "Luz solar", "Garzas", "Temperatura", "Ser vivo", "Elemento no vivo"]) expect(text).toContain(card);
-    expect(pdf.print.html).toContain('class="ms-cutcards"');
+    expect(pdf.print.html).toContain('class="ms-cutcards" data-illustrated="true"');
+    expect(pdf.result.blockedRequests).toEqual([]);
+    // Each card carries its own picture, and its name is printed by the renderer (not drawn by the image model).
+    expect((pdf.print.html.match(/class="ms-cutcard-picture"/g) ?? []).length).toBe(6);
     expect(pdf.print.html).toContain('class="ms-sortboard"');
   });
 

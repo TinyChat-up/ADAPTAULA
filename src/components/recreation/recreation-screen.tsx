@@ -22,13 +22,17 @@ export interface RecreationScreenProps {
   /** Optional actions; absent ones are not shown. */
   downloads?: { sheet?: string; materials?: string };
   regenerate?: ReactNode;
+  /** Link to look at another version (looking reads the stored version; nothing is generated). */
+  versionHref?: (version: number) => string;
+  /** Restoring an older version as the current one: a server action that re-checks the role. Absent: not offered. */
+  restore?: (version: number) => ReactNode;
 }
 
-export function RecreationScreen({ view, imageSrc, subjectLabel, downloads, regenerate }: RecreationScreenProps) {
+export function RecreationScreen({ view, imageSrc, subjectLabel, downloads, regenerate, versionHref, restore }: RecreationScreenProps) {
   const generated = Object.fromEntries(view.assets.map((a) => [a.asset_id, { src: imageSrc[a.asset_id] ?? "", widthMm: generatedWidthMm(a.width, a.height) }]));
   // The same projection as the viewer, the editor and the PDF (one renderer for screen and print).
   const student = sheetModel({ document: view.student, subjectName: null, generated, deferred: [] }, "student").model;
-  const materials = view.materials ? sheetModel({ document: view.materials, subjectName: null, deferred: [] }, "student").model : null;
+  const materials = view.materials ? sheetModel({ document: view.materials, subjectName: null, deferred: [], generated }, "student").model : null;
   const activities = view.explanation.observe.length;
 
   return (
@@ -49,7 +53,10 @@ export function RecreationScreen({ view, imageSrc, subjectLabel, downloads, rege
             </div>
           ) : null}
         </div>
+        {view.version !== view.currentVersion ? <Alert tone="info" title={`Estás viendo la versión ${view.version}`}>La versión que se usa ahora es la {view.currentVersion}.</Alert> : null}
+        {/* Never hidden to simplify the screen: an incomplete material, or one that needs a look before use, says so in one line. */}
         {view.state.kind === "incomplete" ? <Alert tone="warning" title="Falta algo antes de usarla">{view.state.message}</Alert> : null}
+        {view.state.kind === "review" ? <Alert tone="info" title="Revísala antes de usarla">{view.state.message}</Alert> : null}
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
@@ -68,6 +75,19 @@ export function RecreationScreen({ view, imageSrc, subjectLabel, downloads, rege
               <ul className="mt-3 space-y-2">{view.explanation.observe.map((o) => <li key={o.activity}><span className="font-semibold">{o.activity}.</span> {o.text}</li>)}</ul>
             </details>
           </Explanation>
+          {view.versions.length > 1 && versionHref ? (
+            <details className="rounded-card border border-border bg-surface p-4 text-sm">
+              <summary className="cursor-pointer font-medium">Versiones ({view.versions.length})</summary>
+              <ul className="mt-3 space-y-2">
+                {view.versions.map((v) => (
+                  <li key={v.version} className="flex flex-wrap items-center justify-between gap-2">
+                    <a href={versionHref(v.version)} className="underline-offset-2 hover:underline" aria-current={v.version === view.version ? "page" : undefined}>Versión {v.version}{v.current ? " (la que se usa)" : ""}</a>
+                    {!v.current && restore ? restore(v.version) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           {regenerate ? (
             <details className="rounded-card border border-border bg-surface p-4 text-sm">
               <summary className="flex cursor-pointer items-center gap-2 font-medium"><RefreshCw aria-hidden className="size-4" /> Regenerar el material</summary>
@@ -115,7 +135,7 @@ function Explanation({ icon, title, children }: { icon: ReactNode; title: string
 export function RegenerateNotice({ action, disabledReason }: { action?: (formData: FormData) => void | Promise<void>; disabledReason?: string }) {
   return (
     <>
-      <p>Se creará una versión nueva del material y se usará una adaptación de tu plan. La versión actual se conserva.</p>
+      <p>Se creará una versión nueva del material y se usará una adaptación de tu plan. Las versiones anteriores se conservan y puedes volver a ellas.</p>
       <form action={action}>
         <input type="hidden" name="confirmed" value="1" />
         <Button type="submit" variant="secondary" disabled={!action} title={disabledReason}>Crear una versión nueva</Button>

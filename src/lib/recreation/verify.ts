@@ -236,6 +236,10 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
       else if (!plan.activities.some((a) => r.activity_ids.includes(a.id) && a.objective_ids.includes(id))) error("visual_request_untraced", `visual_requests.${r.id}`, `${id} no lo trabaja ninguna de sus actividades.`);
     }
     if (r.original_ref && !analysis.visuals.some((v) => v.id === r.original_ref)) error("visual_request_original_unknown", `visual_requests.${r.id}`, `${r.original_ref} no existe.`);
+    if (r.for_cards) {
+      const cards = plan.materials.find((m) => m.id === r.for_cards);
+      if (!cards || cards.kind !== "cut_out_cards" || !r.activity_ids.includes(cards.activity_id)) error("visual_request_cards_unknown", `visual_requests.${r.id}`, "Las ilustraciones de tarjetas deben ser de unas tarjetas de sus actividades.");
+    }
   }
 
   // 6 · Activities: traced, new, proportionate, and with a solution obtained the safest way their format allows.

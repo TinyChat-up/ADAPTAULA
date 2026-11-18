@@ -4,6 +4,7 @@ import { IMAGE_REVIEW_V1 } from "@prompts/image-review/v1";
 import { buildAdaptationContext } from "@/lib/adaptation/context";
 import { MockProvider } from "@/lib/ai/providers/mock";
 import { MockImageProvider } from "@/lib/ai/providers/mock-images";
+import type { ImageRequest } from "@/lib/ai/types";
 import { resolveModel } from "@/lib/ai/registry";
 import type { AIRunRecord, StructuredRequest } from "@/lib/ai/types";
 import { callStructured } from "@/lib/materials/visuals/auto/assistants";
@@ -38,8 +39,24 @@ export const MOCK_BRIEF = {
   conceptual_constraints: ["Ningún animal está comiendo a otro."],
   alt_text: "Dibujo de un estanque con agua, algas, plantas acuáticas en la orilla, una rana, una garza y el sol.",
 };
-const approve = () => ({ elements: BRIEF_ELEMENTS.map((name) => ({ name, present: true, marker_ok: null, label_ok: null })), prohibited_found: [], conceptual_errors: [], extra_text: false, illegible_text: false, answer_revealed: false, age_appropriate: true, printable: true, matches_activity: true, verdict: "approved" });
-const reject = () => ({ ...approve(), extra_text: true, verdict: "rejected" });
+const textOf = (r: StructuredRequest) => r.messages.flatMap((m) => m.content).map((c) => (c.type === "text" ? c.text : "")).join("\n");
+/** The brief a model would write for a card: the one item named on it, nothing else (no labels, no markers). */
+const cardBrief = (card: string) => ({
+  ...MOCK_BRIEF,
+  kind: "vocabulary_support",
+  concept: card,
+  pedagogical_purpose: "Reconocer el elemento de la tarjeta al clasificarla.",
+  required_elements: [{ name: card.toLowerCase(), marker: null, label: null }],
+  composition: "El elemento solo, centrado, sobre fondo claro.",
+  conceptual_constraints: [],
+  alt_text: `Ilustración de ${card.toLowerCase()}.`,
+});
+/** The review echoes the elements of the brief it is shown (the brief travels as JSON in the review's text). */
+const approve = (r?: StructuredRequest) => {
+  const names = r ? [...textOf(r).matchAll(/"name":"([^"]+)"/g)].map((m) => m[1]!) : BRIEF_ELEMENTS;
+  return { elements: (names.length ? names : BRIEF_ELEMENTS).map((name) => ({ name, present: true, marker_ok: null, label_ok: null })), prohibited_found: [], conceptual_errors: [], extra_text: false, illegible_text: false, answer_revealed: false, age_appropriate: true, printable: true, matches_activity: true, verdict: "approved" };
+};
+const reject = (r?: StructuredRequest) => ({ ...approve(r), extra_text: true, verdict: "rejected" });
 
 export interface MockOptions {
   /** Whether the workspace may generate illustrations (the product's flag + pilot + plan gate, decided by the caller). */
@@ -70,8 +87,12 @@ export function mockStack(options: MockOptions = {}) {
   const count = (name: string) => (calls[name] = (calls[name] ?? 0) + 1);
   const fixtures: Record<string, (r: StructuredRequest) => unknown> = {
     recreation_plan: () => plans[Math.min(count("recreation_plan") - 1, plans.length - 1)],
-    illustration_brief: () => (count("illustration_brief"), options.brief ?? MOCK_BRIEF),
-    illustration_review: () => (count("illustration_review"), options.review === "reject" ? reject() : approve()),
+    illustration_brief: (r) => {
+      count("illustration_brief");
+      const card = /tarjeta recortable: ([^.]+)\./.exec(textOf(r))?.[1];
+      return options.brief ?? (card ? cardBrief(card) : MOCK_BRIEF);
+    },
+    illustration_review: (r) => (count("illustration_review"), options.review === "reject" ? reject(r) : approve(r)),
   };
   const provider = new MockProvider({ fixtures });
   const runs: AIRunRecord[] = [];
@@ -81,7 +102,7 @@ export function mockStack(options: MockOptions = {}) {
   const assets = new Map<string, { sha256: string; bytes: Uint8Array; width: number; height: number }>();
   const stored = new Map<string, StoredIllustration>();
   let reserved = 0;
-  const images = new MockImageProvider();
+  const images = new DistinctMockImages();
   const deps: IllustrationDeps = {
     brief: (input) => callStructured(provider, MOCK_TEXT, "image_brief", IMAGE_BRIEF_V1, IMAGE_BRIEF_V1.buildUserText(input), 1500),
     async image({ prompt, size, timeoutMs }) {
@@ -114,4 +135,34 @@ export async function runMockRecreation(options: MockOptions = {}): Promise<Mock
   const { planner, request, runs, assets, calls } = mockStack(options);
   const outcome = await runRecreation(planner, request);
   return { outcome, runs, assets, calls };
+}
+
+/**
+ * The product's `MockImageProvider` draws the same outline for every prompt. For the visual example, each prompt gets its own
+ * simple drawing (a shape and a soft colour from the prompt's hash), still a local placeholder: no model, no quality claim.
+ */
+class DistinctMockImages {
+  private readonly base = new MockImageProvider();
+  async generateImage(request: ImageRequest) {
+    const result = await this.base.generateImage(request);
+    const [width, height] = request.size.split("x").map(Number) as [number, number];
+    const hash = createHash("sha256").update(request.prompt).digest();
+    const napi = await import("@napi-rs/canvas");
+    const canvas = napi.createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    const hue = hash[0]! * 360 / 255;
+    ctx.fillStyle = `hsl(${hue}, 45%, 72%)`;
+    ctx.strokeStyle = `hsl(${hue}, 50%, 28%)`;
+    ctx.lineWidth = Math.round(width / 90);
+    const shape = hash[1]! % 3;
+    ctx.beginPath();
+    if (shape === 0) ctx.ellipse(width / 2, height / 2, width * 0.3, height * 0.3, 0, 0, Math.PI * 2);
+    else if (shape === 1) ctx.roundRect(width * 0.2, height * 0.22, width * 0.6, height * 0.56, width * 0.08);
+    else { ctx.moveTo(width / 2, height * 0.18); ctx.lineTo(width * 0.8, height * 0.78); ctx.lineTo(width * 0.2, height * 0.78); ctx.closePath(); }
+    ctx.fill();
+    ctx.stroke();
+    return { ...result, image: { data: new Uint8Array(await canvas.encode("png")), mediaType: "image/png" as const } };
+  }
 }

@@ -48,7 +48,7 @@ export interface RecreationRequest {
 }
 
 export type RecreationOutcome =
-  | { status: "ready"; plan: RecreationPlan; verification: Verification; visuals: ResolvedVisual[]; compiled: CompiledRecreation; provenance: ProvenanceRecord[]; runs: AIRunRecord[]; calls: number; plannerLabel: string }
+  | { status: "ready"; plan: RecreationPlan; verification: Verification; visuals: ResolvedVisual[]; compiled: CompiledRecreation; provenance: ProvenanceRecord[]; runs: AIRunRecord[]; calls: number; plannerLabel: string; cardAssets: Array<{ asset_id: string; sha256: string; width: number; height: number }> }
   | { status: "invalid_contract"; issues: string[]; runs: AIRunRecord[]; calls: number }
   | { status: "rejected"; plan: RecreationPlan; issues: PlanIssue[]; runs: AIRunRecord[]; calls: number }
   | { status: "budget_exhausted"; runs: AIRunRecord[]; calls: number };
@@ -81,10 +81,11 @@ export async function runRecreation(planner: Planner, request: RecreationRequest
       continue;
     }
     const needs = request.context.needs.map((n) => n.dimension);
-    const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel });
+    const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 } });
     const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
     const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals });
-    return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls: call, plannerLabel: request.plannerLabel };
+    const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));
+    return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls: call, plannerLabel: request.plannerLabel, cardAssets };
   }
   return last!;
 }

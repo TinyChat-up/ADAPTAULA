@@ -119,30 +119,36 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     pages: [{ blocks }],
     answer_key: answerKey,
   });
-  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf), trace };
+  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace };
 }
 
 /** The manipulatives on their own sheet, by activity: what to do, then the cards (large, with cutting lines) and the board. */
-function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"], decisionOf: ReadonlyMap<string, string>): MaterialDocument | null {
+function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"], decisionOf: ReadonlyMap<string, string>, visuals: readonly ResolvedVisual[]): MaterialDocument | null {
   if (plan.materials.length === 0) return null;
   let n = 0;
   const id = () => `blk_c${String(++n).padStart(4, "0")}`;
   const structure = { origin: "structure" as const, source_refs: [], decision_ids: [] };
-  const blocks: Block[] = [{ id: id(), type: "heading", level: 1, text: "Materiales para recortar", trace: structure }];
+  // One sheet per material: the cards to cut out on one, the board to sort them on the next, each with its own instruction.
+  const pages: Array<{ blocks: Block[] }> = [];
   for (const m of plan.materials) {
+    const blocks: Block[] = pages.length === 0 ? [{ id: id(), type: "heading", level: 1, text: "Materiales para recortar", trace: structure }] : [];
     const label = trace.find((t) => t.activity_id === m.activity_id)?.label ?? "?";
     const activity = plan.activities.find((a) => a.id === m.activity_id);
     const dec = activity?.strategy_ids.map((s) => decisionOf.get(s)).find(Boolean) ?? "dec_1";
     const t = { origin: "support" as const, source_refs: activity?.objective_ids ?? [], decision_ids: [dec] };
-    const spec = m.kind === "cut_out_cards" ? { kind: "cut_cards" as const, spec_version: VISUAL_SPEC_VERSION, items: m.cards } : { kind: "sort_board" as const, spec_version: VISUAL_SPEC_VERSION, columns: m.columns };
+    // The cards' approved pictures, card by card (none when generation was not available: the card keeps its printed name).
+    const illustrated = m.kind === "cut_out_cards" ? visuals.find((v) => plan.visual_requests.find((r) => r.id === v.request_id)?.for_cards === m.id)?.cards : undefined;
+    const pictures = m.kind === "cut_out_cards" && illustrated?.some((c) => c.asset) ? m.cards.map((card) => illustrated.find((c) => c.text === card)?.asset?.asset_id ?? null) : undefined;
+    const spec = m.kind === "cut_out_cards" ? { kind: "cut_cards" as const, spec_version: VISUAL_SPEC_VERSION, items: m.cards, ...(pictures ? { pictures } : {}) } : { kind: "sort_board" as const, spec_version: VISUAL_SPEC_VERSION, columns: m.columns };
     const alt = m.kind === "cut_out_cards" ? `Tarjetas para recortar: ${m.cards.join(", ")}.` : `Tablero con ${m.columns.length} columnas: ${m.columns.join(", ")}.`;
     blocks.push(
       { id: id(), type: "heading", level: 2, text: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} · actividad ${label}`, trace: structure },
       { id: id(), type: "instruction", text: m.instructions, trace: t },
       { id: id(), type: "image", alt_text: alt, source: { kind: "figure", spec, provenance: "generated", decision_id: dec }, trace: t },
     );
+    pages.push({ blocks });
   }
-  return MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Materiales: ${meta.title}` }, presentation: { ...presentation, max_tasks_per_page: null }, admin_fields: [], pages: [{ blocks }], answer_key: [] });
+  return MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Materiales: ${meta.title}` }, presentation: { ...presentation, max_tasks_per_page: null }, admin_fields: [], pages, answer_key: [] });
 }
 
 function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpec; key: Omit<MaterialDocument["answer_key"][number], "block_id" | "basis"> } {

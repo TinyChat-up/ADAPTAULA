@@ -1,5 +1,170 @@
 # Recreación en la plataforma: materiales visuales y explicación en pantalla
 
+> **Continuación (ADR-052): seguridad, calidad pedagógica y preparación de la prueba real.** Las secciones nuevas están al
+> principio. Las de la entrega anterior siguen debajo, con las correcciones señaladas.
+
+## A. Errores corregidos en esta continuación
+
+1. **Respuestas expuestas en la propuesta de almacenamiento** (grave).
+   - **Problema:** `student_document` llevaba `answer_key` y se concedía SELECT a los miembros. Quitar la clave en React no protege una consulta directa.
+   - **Solución en el registro:** se guarda en tres partes, igual que en la propuesta de tablas:
+     - **línea**;
+     - **versión**, solo lo que se muestra; un `CHECK` en la base de datos y el esquema `RecreationVersionSchema` rechazan cualquier `answer_key` no vacía;
+     - **interno**, con respuestas, plan, verificación, procedencia y llamadas; tabla con RLS y **sin políticas ni permisos** para `anon` y `authenticated`.
+   - **Solución en el código:** la vista recibe un `RecreationReader`, que no tiene ningún método para leer lo interno.
+2. **Material presentado como listo sin estar comprobado.**
+   - **Problema:** un material cuyas respuestas de clasificación o selección solo están apoyadas en el texto se mostraba sin aviso.
+   - **Ahora hay tres estados:**
+     - **lista**;
+     - **revisión**: un aviso breve que nombra las actividades («Antes de usarla, revisa las actividades 1 y 3: comprueba con el texto que cada pregunta tiene una sola respuesta correcta»), sin dar respuestas;
+     - **incompleta**: falta algo imprescindible.
+   - Un plan con una actividad inconsistente se **rechaza** (una reparación como máximo) y no se guarda.
+3. **El motor de impresión no conocía las imágenes de las tarjetas.**
+   - **Problema:** `renderPrintHtml` y `modelAssetRefs` solo fijaban imágenes de bloque. Un PDF con tarjetas ilustradas habría pedido las imágenes por red, y el motor lo habría rechazado.
+   - **Solución:** ahora se fijan y se incrustan también las de las tarjetas. Sigue sin permitirse ninguna petición de red (probado).
+4. **Las versiones no se podían recuperar y no había idempotencia.**
+   - `restoreVersion` y `restore_recreation_version` permiten volver a una versión anterior. Solo puede hacerlo quien tiene permiso de escritura, y solo con versiones que existen. No llaman a ninguna IA.
+   - La misma clave de petición no genera dos veces ni reserva dos unidades de cupo.
+   - La unidad se reserva antes de llamar y se devuelve si no se guarda nada.
+
+## B. Pruebas ejecutadas
+
+- **Acceso directo a los datos** (`tests/db/recreation-storage.test.ts`, 8 pruebas, PGlite con las migraciones reales más la propuesta):
+  - una versión con respuestas se rechaza en la propia base de datos;
+  - propietario, docente y lector leen la versión sin ninguna respuesta;
+  - **nadie salvo el rol de servicio** lee los internos;
+  - otro workspace no ve nada; `anon` no lee;
+  - nadie escribe desde el cliente;
+  - una versión no puede colgarse de una línea de otro workspace;
+  - restaurar: el lector y otro workspace no pueden; una versión inexistente da error; la restauración no borra ninguna;
+  - la clave de idempotencia es única.
+- **Plataforma** (`recreation-platform.test.ts`, 12 pruebas):
+  - lo interno lleva la clave y lo visible no;
+  - el esquema rechaza un documento con respuestas;
+  - la vista no tiene forma de leer lo interno;
+  - estado «revisión» con su aviso sin respuestas;
+  - 100 aperturas sin llamadas;
+  - imprimir desde lo guardado;
+  - idempotencia;
+  - cupo, permiso y presupuesto antes de llamar;
+  - devolución de la unidad;
+  - regenerar con confirmación;
+  - **reutilización de las ilustraciones aprobadas** sin sobrescribir;
+  - versión antigua y restauración sin llamadas.
+- **Recorrido** (`recreation-pipeline.test.ts`, 8 pruebas): 1 ilustración de contexto y 6 de tarjetas, con 7 briefs, 7 imágenes y 7 revisiones simuladas; rechazos; imagen imprescindible ausente.
+- **Verificador** (`recreation.test.ts`, 24 pruebas).
+- **Evaluación** (`recreation-eval.test.ts`, 9 pruebas):
+  - bloqueos de la ejecución real;
+  - techo previo;
+  - guarda de gasto: una imagen que no cabe no se envía, una llamada fallida cuenta con toda su reserva, un modelo sin precio no se envía nunca, y el texto se mide con el medidor del producto;
+  - ensayo completo sin coste.
+- **PDF** (`recreation-pilot.test.ts`, 4 pruebas) y **registro de demostración** (1 prueba).
+- **Ensayo de la evaluación** desde la línea de órdenes (`RECREATION_EVAL_ARGS="--dry-run" pnpm eval:recreation`):
+  - **0 $**, 22 llamadas simuladas;
+  - ficha de 4 páginas, materiales de 2 y 7 imágenes;
+  - informe y registro de llamadas, todo con el motor real de impresión.
+
+## C. Almacenamiento seguro (propuesta, no aplicada)
+
+[`propuesta-migracion.sql`](propuesta-migracion.sql):
+
+| Tabla | Contenido | Quién lee |
+| --- | --- | --- |
+| `recreation_lines` | material, `current_version`, `idempotency_key` (única por workspace) | miembros del workspace |
+| `recreation_versions` | ficha y materiales **sin respuestas** (CHECK), explicación, estado, referencias a imágenes | miembros del workspace |
+| `recreation_internals` | respuestas, plan, verificación, procedencia, decisiones visuales, llamadas | **solo el servidor** (RLS sin políticas, sin permisos) |
+| `generated_assets.recreation_line_id` | imágenes de la línea, nunca sobrescritas | miembros (como hoy) |
+
+- **Escritura:** solo el servidor.
+- **Restaurar:** función `security definer` con `can_write_workspace`.
+- **Cupo:** `consume_quota` / `refund_quota` con clave `recreation:<línea>:v<n>`, en la misma transacción que la inserción de la versión.
+
+## D. Ejemplo visual (simulado)
+
+| Ficha y explicación | Materiales: tarjetas ilustradas |
+| --- | --- |
+| ![Pantalla](pantalla-escritorio.png) | ![Materiales](pantalla-materiales.png) |
+
+- **Ilustración de contexto**, que abre la ficha: para reconocer el estanque antes de leer.
+- **Tarjetas** con una ilustración cada una:
+  - mismo estilo (`visual_style`), mismo encuadre;
+  - sin marcos ni colores que distingan grupos;
+  - **el nombre lo imprime Adaptaula**, no el modelo de imagen.
+- **Esquema alimentario** dibujado por código, con los rótulos del original.
+- **Tablero de clasificación**, en su propia hoja con su instrucción.
+- Las imágenes son **dibujos locales de prueba** (formas y colores distintos por petición), no ilustraciones reales.
+- Archivos: [ficha](estanque-ficha-alumno.pdf) · [materiales](estanque-materiales-recortables.pdf) · [móvil](pantalla-movil.png).
+
+## E. Guion de la prueba real (preparado, NO ejecutado)
+
+`evals/recreation/run-real.ts` y `budget.ts`. Se ejecuta con `pnpm eval:recreation`, mediante vitest, el mismo entorno que imprime los PDF de las pruebas.
+
+```
+RECREATION_EVAL_ARGS="--dry-run" pnpm eval:recreation                                   # ensayo, 0 $
+RECREATION_EVAL_AUTHORIZED=si RECREATION_EVAL_ARGS="--authorized --max-usd 2 --prices-verified AAAA-MM-DD" pnpm eval:recreation
+```
+
+- **Motor exacto del producto:** `createRecreation` → planificador (Claude, alias `STANDARD`) → verificación → recursos visuales → `illustrate()` (OpenAI, alias `IMAGE_QUALITY`, y revisión por Claude) → documentos → motor de impresión.
+- **Caso:** el estanque con su análisis y su perfil de prueba.
+- **Bloqueos.** No se ejecuta si falta cualquiera de estos:
+  - `--authorized` **y** `RECREATION_EVAL_AUTHORIZED=si`;
+  - `--max-usd` ≤ 3;
+  - `--prices-verified` con la fecha en que una persona comprobó los precios vigentes (no anterior a la de la tabla);
+  - las dos claves;
+  - los modelos configurados listados por cada proveedor (consulta gratuita);
+  - que los dos tengan precio en `costs.ts`;
+  - que no haya ya una ejecución real (`--again`).
+- **Dinero:**
+  - un solo libro con el límite;
+  - Claude se mide con el `SpendMeter` del producto: cuenta gratuita de tokens, reserva del peor caso antes de enviar y sin reintentos del SDK;
+  - OpenAI se mide con un envoltorio igual;
+  - plan, reparación, brief, imagen, revisión y cada reintento son peticiones admitidas una a una;
+  - **lo que no cabe no se envía.**
+- **Resultados** en `evals/results/recreation/<fecha>/` (ignorado por git):
+  - `line.json` y `version.json`: lo que vería un miembro, sin respuestas;
+  - `internal.json`: local;
+  - `assets/*.png`, `student.pdf` y `materials.pdf` con su HTML;
+  - `calls.json`: cada llamada con su coste reservado y real, su estado y su error;
+  - `report.md`: estado, gasto, rechazos por presupuesto, decisiones visuales y avisos de verificación.
+
+  Para revisarlos sin ninguna API: `ADAPTAULA_DEMO=1 ADAPTAULA_DEMO_DIR=<carpeta> pnpm dev` → `/demo/recreacion`.
+
+## F. Presupuesto máximo y límites efectivos
+
+Calculado con la tabla de `costs.ts`: Sonnet 5.5 a 2/10 $ por millón de tokens y `gpt-image-2` a 5/30 $ por millón, sin verificar contra las páginas de precios actuales.
+
+| Llamada | Techo por llamada |
+| --- | --- |
+| Plan (o reparación), con ≤ 8 000 tokens de salida | 0,107 $ |
+| Brief o revisión de una imagen | 0,023 $ |
+| Imagen 1536×1024, calidad media (contexto) | 0,067 $ |
+| Imagen 1024×1024, calidad media (tarjeta) | 0,047 $ |
+| **Techo del recorrido** (plan + reparación + 7 imágenes × (brief + 2 × (imagen + revisión))) | **≈ 1,63 $** |
+
+- **Propuesta:** `--max-usd 2` para un recorrido. El esperado real ronda 0,6–0,9 $: casi siempre basta un intento por imagen.
+- **Límite duro del guion:** 3 $.
+- **Esto no es una garantía:** el límite efectivo es el libro, que detiene cualquier llamada que no quepa. Antes de ejecutar, una persona debe comprobar modelos y precios (`--prices-verified`).
+
+## G. Problemas pendientes
+
+- **Sin autorizar ni ejecutar:**
+  - la prueba real con Claude y OpenAI;
+  - la calidad visual de verdad, sin probar.
+- **No aplicado:**
+  - la migración propuesta;
+  - la conexión a la base de datos de producción (ruta `/app/recreaciones/[id]`);
+  - las URLs firmadas;
+  - la reserva de cupo dentro de una transacción.
+- **Sin comprobar automáticamente:**
+  - el **sentido** de las respuestas de clasificación y selección;
+  - que el conjunto exija el mismo razonamiento que el original.
+
+  El primero lo cubre ahora el aviso de revisión en pantalla. El segundo es un juicio pedagógico.
+- **Revisión de imágenes:** la hace el mismo proveedor de texto (Claude con visión) y las puertas deterministas. Una persona debe revisar las imágenes de la prueba real.
+- **Fuera de alcance:** cartas con dos caras y las tarjetas como imágenes recortables a sangre.
+
+---
+
 2026-11-18 · rama `claude/recreacion-plataforma`, sobre `claude/recreacion-colaboracion` (PR #100, que depende de la #99). ADR-051. Sin IA de pago, migraciones remotas, merge ni despliegue. «Hacer magia» y las adaptaciones guardadas no cambian.
 
 ## 1. Propuesta visual de la pantalla
@@ -46,7 +211,7 @@ regenerar (explícito) regenerateRecreation → permisos · cupo · presupuesto 
   - las tarjetas son exactamente sus elementos.
 - **Persistencia:** `RecreationRecord`, con la ficha, los materiales, la explicación y las imágenes, más una parte `internal` que la vista nunca envía.
   - En la demo y en las pruebas, en memoria.
-  - Para el producto, [propuesta de migración](propuesta-migracion.sql) **no aplicada**: tabla `recreations` por versión, `generated_assets.recreation_id`, `ai_runs.recreation_id`, RLS de lectura para miembros y la columna `internal` sin conceder.
+  - Para el producto, [propuesta de migración](propuesta-migracion.sql) **no aplicada**. ~~Tabla `recreations` con la clave en `student_document` legible por los miembros~~: **corregido en ADR-052** (sección C). Ahora hay tres tablas y las respuestas solo están en `recreation_internals`, que no puede leer ningún cliente.
 
 ## 3. Explicaciones en pantalla (el estanque)
 

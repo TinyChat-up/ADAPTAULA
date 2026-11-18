@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allBlocks } from "@/lib/schemas/material-document";
 import { buildRenderModel } from "@/lib/render/model";
-import { recordOf } from "@/lib/recreation/record";
+import { versionOf } from "@/lib/recreation/record";
 import { worstCallUsd } from "@/lib/recreation/planner";
 import { resolveModel } from "@/lib/ai/registry";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
@@ -20,17 +20,21 @@ const ready = async (options: Parameters<typeof runMockRecreation>[0] = {}) => {
 describe("recorrido completo simulado", () => {
   it("imágenes autorizadas: plan del «Claude» simulado, ilustración del «OpenAI» simulado revisada; la de contexto abre la ficha, antes de la lectura", async () => {
     const { outcome, runs, assets, calls } = await ready({ imagesAuthorized: true });
-    expect(calls).toMatchObject({ recreation_plan: 1, illustration_brief: 1, image: 1, illustration_review: 1 });
+    // One context illustration + one per card (6): 7 briefs, 7 images, 7 reviews; one plan.
+    expect(calls).toMatchObject({ recreation_plan: 1, illustration_brief: 7, image: 7, illustration_review: 7 });
     const visual = outcome.visuals[0]!;
     expect(visual).toMatchObject({ request_id: "vr_1", route: "C_generated" });
-    expect(assets.size).toBe(1);
+    expect(assets.size).toBe(7);
+    expect(outcome.visuals[1]!.cards!.map((c) => c.text)).toEqual(["Algas", "Agua", "Larvas de insectos", "Luz solar", "Garzas", "Temperatura"]);
+    expect(outcome.visuals[1]!.cards!.every((c) => c.asset)).toBe(true);
     const blocks = allBlocks(outcome.compiled.student);
     const image = blocks.findIndex((b) => b.type === "image" && b.source.kind === "generated");
     const reading = blocks.findIndex((b) => b.type === "reading_text");
     expect(image).toBeGreaterThan(-1);
     expect(image).toBeLessThan(reading);
     // Every model call is recorded as ai_runs would get it: purpose, prompt and version, model, cost; never the content.
-    expect(runs.map((r) => `${r.purpose}:${r.promptKey}@v${r.promptVersion}`)).toEqual(["plan:recreation_planner@v1", "image_brief:image_brief@v1", "image:image_render@v1", "image_review:image_review@v1"]);
+    expect(runs.map((r) => `${r.purpose}:${r.promptKey}@v${r.promptVersion}`).slice(0, 4)).toEqual(["plan:recreation_planner@v1", "image_brief:image_brief@v1", "image:image_render@v1", "image_review:image_review@v1"]);
+    expect(runs).toHaveLength(1 + 7 * 3);
     expect(JSON.stringify(runs)).not.toMatch(/estanque|larvas|Algas/);
     expect(runs.every((r) => r.estimatedCostUsd === 0)).toBe(true);
   });
@@ -61,8 +65,8 @@ describe("recorrido completo simulado", () => {
     expect(outcome.visuals[0]).toMatchObject({ route: "none", essential: true, source: { kind: "missing" } });
     expect(allBlocks(outcome.compiled.student).some((b) => b.type === "image" && b.source.kind === "requested" && b.source.essential === true)).toBe(true);
     // The teacher is told in words, with the activity: the record is «incomplete», never shown as ready.
-    const record = recordOf(outcome, { id: "33333333-3333-4333-8333-333333333333", version: 1, workspaceId: "11111111-1111-4111-8111-111111111111", materialId: "44444444-4444-4444-8444-444444444444", now: "2026-11-18T10:00:00Z" }, [], { contract: "c", verifier: "v", visuals: "x", planner: "p" })!;
-    expect(record.state).toMatchObject({ kind: "incomplete", message: expect.stringMatching(/Falta una imagen necesaria para la actividad 1/) });
+    const stored = versionOf(outcome, { id: "33333333-3333-4333-8333-333333333333", lineId: "77777777-7777-4777-8777-777777777777", version: 1, workspaceId: "11111111-1111-4111-8111-111111111111", now: "2026-11-18T10:00:00Z" }, [], { contract: "c", verifier: "v", visuals: "x", planner: "p" })!;
+    expect(stored.version).toMatchObject({ state: "incomplete", state_message: expect.stringMatching(/Falta una imagen necesaria para la actividad 1/) });
     // The renderer does not print a stand-in on the student's sheet; its validation says the sheet is incomplete.
     const { validation } = buildRenderModel(outcome.compiled.student, { mode: "student", deferred: [] });
     expect(validation.status).not.toBe("renderable");
@@ -71,7 +75,7 @@ describe("recorrido completo simulado", () => {
 
   it("una ilustración que la revisión rechaza no llega a la ficha: se cuenta, se intenta una vez más y se informa", async () => {
     const { outcome, calls, assets } = await ready({ imagesAuthorized: true, review: "reject" });
-    expect(calls.image).toBe(2);
+    expect(calls.image).toBe(14); // two attempts per picture, none approved
     expect(assets.size).toBe(0);
     expect(outcome.visuals[0]).toMatchObject({ route: "none" });
     expect(outcome.visuals[0]!.attempts.join(" ")).toContain("review_rejected");

@@ -91,6 +91,11 @@ export const VisualRequestSchema = z.object({
   original_ref: z.string().regex(/^vis_[0-9]{1,4}$/).nullable(),
   /** Without it the activity cannot be done: its absence is reported, never hidden. */
   essential: z.boolean(),
+  /**
+   * The cut-out cards this request illustrates (a `cut_out_cards` material): one picture PER CARD, each showing that card's item,
+   * all in the material's style. The card's name is printed by the renderer under its picture, never drawn by the image model.
+   */
+  for_cards: Id("rm").nullable(),
 });
 export type VisualRequest = z.infer<typeof VisualRequestSchema>;
 

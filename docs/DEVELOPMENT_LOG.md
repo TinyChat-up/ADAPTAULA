@@ -1,5 +1,30 @@
 # Registro de desarrollo
 
+## 2026-11-18 — PR #101 (cont.): respuestas solo en el servidor, revisión, tarjetas ilustradas, versiones y evaluación real preparada
+
+Sobre la misma rama `claude/recreacion-plataforma`. ADR-052.
+
+**Corregido:**
+- la propuesta exponía `answer_key` a los miembros; ahora se separa en línea, versión visible (CHECK sin respuestas) e interno (solo servidor);
+- un material sin comprobar se mostraba como listo; ahora tiene el estado «revisión», con un aviso sin respuestas;
+- el motor de impresión no fijaba las imágenes de las tarjetas;
+- no se podían recuperar versiones ni había idempotencia.
+
+**Añadido:**
+- tarjetas ilustradas (`for_cards`), con reutilización de ilustraciones aprobadas;
+- restaurar versión;
+- reserva y devolución de cupo;
+- guion `pnpm eval:recreation` con bloqueos y libro de gasto (no ejecutado; ensayo 0 $ correcto).
+
+**Pruebas:** BD 8 de acceso directo; plataforma 12; recorrido 8; verificador 24; evaluación 9; PDF 4; demostración 1.
+
+**Pendiente:**
+- autorización de la prueba real (techo ≈ 1,63 $, propuesta `--max-usd 2`);
+- aplicar la migración;
+- conexión a la base de datos.
+
+[Informe](qa/recreacion-plataforma/README.md).
+
 ## 2026-11-18 — Recreación en la plataforma: explicación en pantalla, generar una vez, sin solucionarios
 
 Rama `claude/recreacion-plataforma` sobre la PR #100. ADR-051.

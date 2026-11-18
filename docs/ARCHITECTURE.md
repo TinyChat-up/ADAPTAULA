@@ -2,6 +2,27 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-052 — Recreación: respuestas solo en el servidor, estado de revisión, tarjetas ilustradas, versiones y evaluación real preparada (2026-11-18)
+
+- **Respuestas.** El registro y la propuesta de tablas se separan en tres partes: línea, versión visible e interno.
+  - La versión visible no puede contener respuestas: lo impiden un `CHECK` en la base de datos y el esquema en el código.
+  - Lo interno no tiene políticas ni permisos para los clientes.
+  - La vista recibe un lector sin acceso a lo interno.
+  - Hay pruebas de acceso directo con PGlite sobre las migraciones reales más la propuesta.
+- **Estado.** `ready` / `review` / `incomplete`. «Revisión» cuando alguna respuesta cerrada solo está apoyada en el texto: aviso breve con las actividades y sin respuestas. Un plan inconsistente se rechaza y no se guarda.
+- **Imágenes.** Una petición visual puede ilustrar unas tarjetas (`for_cards`): una imagen por tarjeta, con el mismo estilo; el nombre lo imprime el renderer.
+  - Hay un límite de imágenes por recreación.
+  - La clave de necesidad lleva una huella de lo pedido: misma petición, imagen reutilizada; petición distinta, imagen nueva sin sobrescribir.
+  - El motor de impresión fija también las imágenes de las tarjetas.
+- **Versiones.**
+  - `restoreVersion` y `restore_recreation_version` cambian el puntero sin IA.
+  - Idempotencia por clave de petición.
+  - Reserva de cupo antes de llamar y devolución si no se guarda.
+- **Evaluación real preparada, no ejecutada** (`evals/recreation/run-real.ts`).
+  - Bloqueos de autorización, límite, precios comprobados por una persona, claves y modelos listados.
+  - Un libro de gasto con el `SpendMeter` del producto para Claude y un envoltorio equivalente para OpenAI.
+  - Resultados guardados para revisarlos sin llamar a ninguna API.
+
 ## ADR-051 — Recreación en la plataforma: se genera una vez, se muestra con una explicación en pantalla, sin solucionarios (2026-11-18)
 
 - **Producto.** El docente ve, en una sola pantalla (`RecreationScreen`, componentes existentes):

@@ -79,7 +79,11 @@ export async function renderPrintHtml(model: RenderModel, pinnedAssets: readonly
     ...model,
     pages: model.pages.map((page) => ({
       ...page,
-      nodes: mapNodes(page.nodes, (node) => (node.kind === "image" && node.state === "available" && node.src ? { ...node, src: dataUri("image/png", byRef.get(node.src)!.bytes) } : node)),
+      nodes: mapNodes(page.nodes, (node) => {
+        if (node.kind !== "image" || node.state !== "available") return node;
+        const pictures = node.pictures?.map((p) => (p ? dataUri("image/png", byRef.get(p)!.bytes) : null));
+        return { ...node, ...(node.src ? { src: dataUri("image/png", byRef.get(node.src)!.bytes) } : {}), ...(pictures ? { pictures } : {}) };
+      }),
     })),
   };
 

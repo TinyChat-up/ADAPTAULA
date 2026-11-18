@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createRecreation, regenerateRecreation, type GenerationDeps } from "@/lib/recreation/create";
-import { MemoryRecreationStore } from "@/lib/recreation/record";
+import { createRecreation, regenerateRecreation, restoreVersion, type GenerationDeps } from "@/lib/recreation/create";
+import { MemoryRecreationStore, RecreationVersionSchema } from "@/lib/recreation/record";
 import { loadRecreationView } from "@/lib/recreation/view";
-import { buildRenderModel } from "@/lib/render/model";
+import { sheetModel } from "@/lib/render/sheet-model";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { mockStack } from "../support/recreation-mocks";
 
 /**
- * The platform mode (ADR-051): generate once, store, then open as many times as wanted without any model call; regenerate only when
- * asked, after permissions, allowance and budget, as a new version. Simulated Claude and OpenAI; 0 paid calls.
+ * The platform mode (ADR-051, ADR-052): generate once and store (the answers apart, server-only), then open — the current version
+ * or an older one — without any model call; regenerate or restore only when asked. Simulated Claude and OpenAI; 0 paid calls.
  */
 const WS = "11111111-1111-4111-8111-111111111111";
 const MATERIAL = "44444444-4444-4444-8444-444444444444";
@@ -18,11 +18,13 @@ function setup(over: Partial<GenerationDeps> = {}, options: Parameters<typeof mo
   const stack = mockStack(options);
   const store = new MemoryRecreationStore();
   let n = 0;
+  const reserved: string[] = [];
+  const refunded: string[] = [];
   const deps: GenerationDeps = {
     store,
     planner: stack.planner,
     canWrite: async () => true,
-    entitlement: async () => ({ allowed: true }),
+    quota: { reserve: async (key) => (reserved.push(key), "reserved"), refund: async (key) => void refunded.push(key) },
     budgetAllows: async () => true,
     newId: () => `55555555-5555-4555-8555-${String(++n).padStart(12, "0")}`,
     now: () => "2026-11-18T10:00:00Z",
@@ -31,100 +33,140 @@ function setup(over: Partial<GenerationDeps> = {}, options: Parameters<typeof mo
   };
   const request = { ...stack.request, workspaceId: WS, materialId: MATERIAL };
   const totalCalls = () => Object.values(stack.calls).reduce((a, b) => a + b, 0);
-  return { stack, store, deps, request, totalCalls };
+  return { stack, store, deps, request, totalCalls, reserved, refunded };
 }
+const created = async (s: ReturnType<typeof setup>, key = "peticion-0001") => {
+  const r = await createRecreation(s.deps, { ...s.request, idempotencyKey: key });
+  if (r.status !== "created") throw new Error(r.status);
+  return r;
+};
 
-describe("generar una vez, consultar sin IA", () => {
-  it("abrir, recargar o cambiar de pestaña cien veces no llama a ningún modelo", async () => {
-    const { store, deps, request, totalCalls } = setup();
-    const created = await createRecreation(deps, request);
-    expect(created.status).toBe("created");
-    const after = totalCalls();
-    expect(after).toBe(4); // plan, brief, image, review: once
-    const id = created.status === "created" ? created.record.id : "";
-    for (let i = 0; i < 100; i++) expect(await loadRecreationView(store, id)).not.toBeNull();
-    expect(totalCalls()).toBe(after);
-    expect(store.reads).toBe(100);
+describe("las respuestas no están en lo que se muestra ni en lo que se guarda para mostrar", () => {
+  it("la versión guardada no lleva clave; la parte interna (solo servidor) sí", async () => {
+    const s = setup();
+    const r = await created(s);
+    expect(r.version.student.answer_key).toEqual([]);
+    expect(r.version.materials?.answer_key ?? []).toEqual([]);
+    const internal = await s.store.getInternal(r.version.id);
+    expect(internal!.answer_key.student.length).toBe(7);
+    expect(JSON.stringify(internal)).toContain("30 − 18 = 12");
+    expect(JSON.stringify(r.version)).not.toMatch(/30 − 18|Criterios|anchored|verified|recreation_verify/);
   });
 
-  it("el módulo de la vista no puede llamar a una IA: no importa proveedores, planificador ni pipeline de imágenes", () => {
+  it("el esquema de la versión visible rechaza un documento con respuestas", async () => {
+    const s = setup();
+    const r = await created(s);
+    expect(RecreationVersionSchema.safeParse({ ...r.version, student: { ...r.version.student, answer_key: [{ block_id: "blk_r0005", basis: "new_item", value: "x" }] } }).success).toBe(false);
+  });
+
+  it("la vista solo recibe un lector: no tiene forma de leer la parte interna", async () => {
+    const s = setup();
+    const r = await created(s);
+    const reader = { getLine: s.store.getLine.bind(s.store), getVersion: s.store.getVersion.bind(s.store), listVersions: s.store.listVersions.bind(s.store) };
+    const view = (await loadRecreationView(reader, r.line.id))!;
+    expect(Object.keys(view).sort()).toEqual(["assets", "createdAt", "currentVersion", "explanation", "id", "materials", "state", "student", "title", "version", "versions"]);
+    expect(JSON.stringify(view)).not.toMatch(/30 − 18|Criterios|answer_key":\[\{|"plan":|"verification":|"internal"/);
+  });
+});
+
+describe("estado del material: lista, revisión o incompleta, sin dar respuestas", () => {
+  it("con respuestas apoyadas en el texto pero no demostradas, pide revisión de esas actividades, sin decir cuáles son las respuestas", async () => {
+    const s = setup();
+    const r = await created(s);
+    expect(r.version.state).toBe("review");
+    expect(r.version.review_activities).toEqual(["1", "3"]);
+    expect(r.version.state_message).toBe("Antes de usarla, revisa las actividades 1 y 3: comprueba con el texto que cada pregunta tiene una sola respuesta correcta.");
+    expect(r.version.state_message).not.toMatch(/Ser vivo|alimentan|algas/i);
+  });
+});
+
+describe("generar una vez, consultar sin IA", () => {
+  it("abrir, recargar o cambiar de sección cien veces no llama a ningún modelo", async () => {
+    const s = setup();
+    const r = await created(s);
+    const after = s.totalCalls();
+    for (let i = 0; i < 100; i++) expect(await loadRecreationView(s.store, r.line.id)).not.toBeNull();
+    expect(s.totalCalls()).toBe(after);
+  });
+
+  it("el módulo de la vista no puede llamar a una IA: no importa proveedores, planificador, pipeline de imágenes ni creación", () => {
     for (const file of ["src/lib/recreation/view.ts", "src/lib/recreation/record.ts"]) {
       const runtime = readFileSync(file, "utf8").split("\n").filter((l) => /^import\s/.test(l) && !/^import\s+type\s/.test(l));
       expect(runtime.join("\n")).not.toMatch(/lib\/ai|planner|pilot|visuals|illustrate|create/);
     }
   });
 
-  it("la vista no lleva soluciones ni datos internos: sin clave, sin plan, sin verificación, sin procedencia", async () => {
-    const { store, deps, request } = setup();
-    const created = await createRecreation(deps, request);
-    const view = (await loadRecreationView(store, created.status === "created" ? created.record.id : ""))!;
-    expect(Object.keys(view).sort()).toEqual(["assets", "createdAt", "explanation", "id", "materials", "state", "student", "title", "version"]);
-    expect(view.student.answer_key).toEqual([]);
-    const dump = JSON.stringify(view);
-    expect(dump).not.toMatch(/30 − 18|Criterios|verified|anchored|teacher_review|SIN COMPROBAR|recreation_verify/);
-    expect(dump).not.toContain("Que las larvas de insectos se alimentan de algas\",\"correct");
-    // The record keeps the answer key for the server's checks.
-    expect(store.history(view.id)[0]!.student.answer_key.length).toBe(7);
-  });
-
-  it("la explicación se guarda con la adaptación y se muestra tal cual: qué, por qué y cómo, sin respuestas", async () => {
-    const { store, deps, request } = setup();
-    const created = await createRecreation(deps, request);
-    const view = (await loadRecreationView(store, created.status === "created" ? created.record.id : ""))!;
-    expect(view.explanation.adapted.length).toBeGreaterThanOrEqual(2);
-    expect(view.explanation.why.length).toBeGreaterThanOrEqual(1);
-    expect(view.explanation.how_to_use.length).toBeGreaterThanOrEqual(3);
-    expect(view.explanation.observe.map((o) => o.activity)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
-    expect(JSON.stringify(view.explanation)).not.toMatch(/\b12\b|dislexia|TDAH|diagnóstico/i);
-  });
-
-  it("la ficha y los materiales se pueden imprimir desde lo guardado: el modelo de impresión sale del registro, sin llamadas", async () => {
-    const { store, deps, request, totalCalls } = setup();
-    const created = await createRecreation(deps, request);
-    const before = totalCalls();
-    const view = (await loadRecreationView(store, created.status === "created" ? created.record.id : ""))!;
-    expect(buildRenderModel(view.materials!, { mode: "student", deferred: [] }).validation.status).toBe("renderable");
-    expect(view.assets).toHaveLength(1);
-    expect(totalCalls()).toBe(before);
+  it("imprimir desde lo guardado: los modelos de impresión salen del registro, sin llamadas", async () => {
+    const s = setup();
+    const r = await created(s);
+    const before = s.totalCalls();
+    const view = (await loadRecreationView(s.store, r.line.id))!;
+    expect(sheetModel({ document: view.materials!, subjectName: null, deferred: [] }, "student").validation.status).toBe("renderable");
+    expect(s.totalCalls()).toBe(before);
   });
 });
 
-describe("regenerar es una acción aparte, explícita y controlada", () => {
-  it("sin confirmar: avisa de que se creará una versión nueva y no llama a nada", async () => {
-    const { deps, request, totalCalls } = setup();
-    const created = await createRecreation(deps, request);
-    const before = totalCalls();
-    const id = created.status === "created" ? created.record.id : "";
-    const asked = await regenerateRecreation(deps, { id, confirmed: false, request });
-    expect(asked).toMatchObject({ status: "confirm", message: expect.stringContaining("versión nueva") });
-    expect(totalCalls()).toBe(before);
+describe("idempotencia, cupo y presupuesto antes de cualquier llamada", () => {
+  it("la misma petición dos veces (doble clic, reintento) no genera dos veces ni reserva dos unidades", async () => {
+    const s = setup();
+    const first = await created(s, "peticion-repetida");
+    const calls = s.totalCalls();
+    const second = await created(s, "peticion-repetida");
+    expect(second.reused).toBe(true);
+    expect(second.line.id).toBe(first.line.id);
+    expect(s.totalCalls()).toBe(calls);
+    expect(s.reserved).toHaveLength(1);
   });
 
-  it("confirmado: versión 2; la versión 1 se conserva", async () => {
-    const { store, deps, request } = setup();
-    const created = await createRecreation(deps, request);
-    const id = created.status === "created" ? created.record.id : "";
-    const again = await regenerateRecreation(deps, { id, confirmed: true, request });
-    expect(again).toMatchObject({ status: "created", record: { id, version: 2 } });
-    expect(store.history(id).map((r) => r.version)).toEqual([1, 2]);
-    expect((await loadRecreationView(store, id))!.version).toBe(2);
-  });
-
-  it("sin permiso, sin cupo o sin presupuesto: no se llama a ningún modelo y se dice por qué", async () => {
-    for (const [over, status] of [[{ canWrite: async () => false }, "forbidden"], [{ entitlement: async () => ({ allowed: false as const, reason: "quota" as const }) }, "quota"], [{ budgetAllows: async () => false }, "budget"]] as const) {
-      const { deps, request, totalCalls, store } = setup(over as Partial<GenerationDeps>);
-      expect(await createRecreation(deps, request)).toMatchObject({ status });
-      expect(totalCalls()).toBe(0);
-      expect(store.reads).toBe(0);
+  it("sin permiso, sin cupo o sin presupuesto: 0 llamadas y el motivo; un plan inválido devuelve la unidad", async () => {
+    for (const [over, status] of [[{ canWrite: async () => false }, "forbidden"], [{ quota: { reserve: async () => "quota" as const, refund: async () => undefined } }, "quota"], [{ budgetAllows: async () => false }, "budget"]] as const) {
+      const s = setup(over as Partial<GenerationDeps>);
+      expect(await createRecreation(s.deps, { ...s.request, idempotencyKey: "peticion-0002" })).toMatchObject({ status });
+      expect(s.totalCalls()).toBe(0);
     }
-  });
-
-  it("un plan que no supera las comprobaciones no se guarda ni se muestra como correcto", async () => {
     const bad = structuredClone(POND_RECREATION_PLAN);
     bad.activities[4]!.steps = ["Debe darte 12."];
-    const { deps, request, store } = setup({}, { plans: [bad, bad] });
-    const result = await createRecreation(deps, request);
-    expect(result).toMatchObject({ status: "failed", outcome: "rejected", message: expect.stringContaining("No se ha guardado nada") });
-    expect(store.reads).toBe(0);
+    const s = setup({}, { plans: [bad, bad] });
+    expect(await createRecreation(s.deps, { ...s.request, idempotencyKey: "peticion-0003" })).toMatchObject({ status: "failed", message: expect.stringContaining("No se ha guardado nada") });
+    expect(s.refunded).toEqual(s.reserved);
+  });
+});
+
+describe("versiones: regenerar crea otra, recuperar una anterior no llama a nada", () => {
+  it("regenerar pide confirmación; confirmado crea la versión 2 y la 1 sigue intacta", async () => {
+    const s = setup();
+    const r = await created(s);
+    const before = s.totalCalls();
+    expect(await regenerateRecreation(s.deps, { lineId: r.line.id, confirmed: false, request: s.request })).toMatchObject({ status: "confirm" });
+    expect(s.totalCalls()).toBe(before);
+    expect(await regenerateRecreation(s.deps, { lineId: r.line.id, confirmed: true, request: s.request })).toMatchObject({ status: "created", version: { version: 2 } });
+    expect((await s.store.listVersions(r.line.id)).map((v) => v.version)).toEqual([1, 2]);
+    expect((await s.store.getVersion(r.line.id, 1))!.id).toBe(r.version.id);
+  });
+
+  it("una regeneración con las mismas peticiones visuales reutiliza las ilustraciones aprobadas; ninguna se sobrescribe", async () => {
+    const s = setup();
+    const r = await created(s);
+    const images = s.stack.calls.image ?? 0;
+    const again = await regenerateRecreation(s.deps, { lineId: r.line.id, confirmed: true, request: s.request });
+    expect(s.stack.calls.image ?? 0).toBe(images);
+    if (again.status !== "created") throw new Error(again.status);
+    expect(again.version.assets.map((a) => a.asset_id).sort()).toEqual(r.version.assets.map((a) => a.asset_id).sort());
+    expect((await s.store.getVersion(r.line.id, 1))!.assets).toEqual(r.version.assets);
+  });
+
+  it("abrir una versión anterior y recuperarla: sin llamadas, solo cambia la versión actual", async () => {
+    const s = setup();
+    const r = await created(s);
+    await regenerateRecreation(s.deps, { lineId: r.line.id, confirmed: true, request: s.request });
+    const before = s.totalCalls();
+    const old = (await loadRecreationView(s.store, r.line.id, 1))!;
+    expect(old).toMatchObject({ version: 1, currentVersion: 2 });
+    expect(old.versions.map((v) => [v.version, v.current])).toEqual([[2, true], [1, false]]);
+    expect(await restoreVersion({ store: s.store, canWrite: async () => false }, { lineId: r.line.id, version: 1, workspaceId: WS })).toEqual({ status: "forbidden" });
+    expect(await restoreVersion(s.deps, { lineId: r.line.id, version: 1, workspaceId: "99999999-9999-4999-8999-999999999999" })).toEqual({ status: "not_found" });
+    expect(await restoreVersion(s.deps, { lineId: r.line.id, version: 1, workspaceId: WS })).toEqual({ status: "restored" });
+    expect((await loadRecreationView(s.store, r.line.id))!.version).toBe(1);
+    expect(s.totalCalls()).toBe(before);
   });
 });
