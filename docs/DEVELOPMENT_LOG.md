@@ -1,5 +1,55 @@
 # Registro de desarrollo
 
+## 2026-11-18 — PR #101 (cont.): respuestas solo en el servidor, revisión, tarjetas ilustradas, versiones y evaluación real preparada
+
+Sobre la misma rama `claude/recreacion-plataforma`. ADR-052.
+
+**Corregido:**
+- la propuesta exponía `answer_key` a los miembros; ahora se separa en línea, versión visible (CHECK sin respuestas) e interno (solo servidor);
+- un material sin comprobar se mostraba como listo; ahora tiene el estado «revisión», con un aviso sin respuestas;
+- el motor de impresión no fijaba las imágenes de las tarjetas;
+- no se podían recuperar versiones ni había idempotencia.
+
+**Añadido:**
+- tarjetas ilustradas (`for_cards`), con reutilización de ilustraciones aprobadas;
+- restaurar versión;
+- reserva y devolución de cupo;
+- guion `pnpm eval:recreation` con bloqueos y libro de gasto (no ejecutado; ensayo 0 $ correcto).
+
+**Pruebas:** BD 8 de acceso directo; plataforma 12; recorrido 8; verificador 24; evaluación 9; PDF 4; demostración 1.
+
+**Pendiente:**
+- autorización de la prueba real (techo ≈ 1,63 $, propuesta `--max-usd 2`);
+- aplicar la migración;
+- conexión a la base de datos.
+
+[Informe](qa/recreacion-plataforma/README.md).
+
+## 2026-11-18 — Recreación en la plataforma: explicación en pantalla, generar una vez, sin solucionarios
+
+Rama `claude/recreacion-plataforma` sobre la PR #100. ADR-051.
+
+- **Contrato:**
+  - `explanation` (qué, por qué, cómo), redactada en la misma llamada y validada (sin respuestas ni diagnósticos, motivos ligados a necesidades);
+  - `visual_style` común;
+  - `sorting_board` ligado a su clasificación.
+- **Piloto del estanque:** 7 actividades (antes 9), ilustración de contexto al inicio, tarjetas y tablero en una página.
+- **Persistencia y vista:**
+  - `RecreationRecord` y `MemoryRecreationStore`;
+  - `loadRecreationView` sin acceso a IA;
+  - `createRecreation` y `regenerateRecreation` con permisos, cupo, presupuesto, confirmación y versiones.
+- **Pantalla:** `RecreationScreen` dentro de `AppShell`, más la demostración `/demo/recreacion` (solo con `ADAPTAULA_DEMO=1`).
+- **Ya no se producen** la guía ni la clave en PDF.
+
+**Pruebas:** 9 de plataforma (consultar 100 veces = 0 llamadas nuevas; regenerar controlado), 24 del verificador, 8 del recorrido, 1 del registro de demostración y 4 PDF. Capturas de escritorio y móvil.
+
+**Pendiente:**
+- aplicar la migración propuesta (con autorización);
+- ruta `/app/recreaciones/[id]` con base de datos;
+- evaluación real (peor caso 1,72 $).
+
+[Informe](qa/recreacion-plataforma/README.md).
+
 ## 2026-11-18 — Recreación: colaboración Claude + OpenAI (simulada) y verificadores honestos
 
 Rama `claude/recreacion-colaboracion` sobre `claude/recreacion-pedagogica` (PR #99). ADR-050.

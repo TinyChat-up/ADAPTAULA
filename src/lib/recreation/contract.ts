@@ -91,6 +91,11 @@ export const VisualRequestSchema = z.object({
   original_ref: z.string().regex(/^vis_[0-9]{1,4}$/).nullable(),
   /** Without it the activity cannot be done: its absence is reported, never hidden. */
   essential: z.boolean(),
+  /**
+   * The cut-out cards this request illustrates (a `cut_out_cards` material): one picture PER CARD, each showing that card's item,
+   * all in the material's style. The card's name is printed by the renderer under its picture, never drawn by the image model.
+   */
+  for_cards: Id("rm").nullable(),
 });
 export type VisualRequest = z.infer<typeof VisualRequestSchema>;
 
@@ -164,10 +169,35 @@ export const RecreationPlanSchema = z.object({
    * arrows, numbers and labels are never asked of an image model: `needs_exact` sends them to code or to nothing.
    */
   visual_requests: z.array(VisualRequestSchema).max(3),
-  /** Printable manipulatives: cards to cut out, printed on their own sheet with cutting lines. */
-  materials: z.array(z.object({ id: Id("rm"), kind: z.literal("cut_out_cards"), activity_id: Id("ra"), purpose: Text(160), instructions: Text(120), cards: z.array(Text(40)).min(2).max(12) })).max(4),
-  /** For the teacher: how to apply the sheet (a few short steps) and what to observe in each activity. */
-  guide: z.object({ overview: Text(400), application: z.array(Text(160)).min(1).max(5), per_activity: z.array(z.object({ activity_id: Id("ra"), observe: Text(200) })).max(12) }),
+  /**
+   * One illustration style for the whole material (consistency between pictures): drawing technique, palette, level of detail.
+   * Never text inside the pictures. Sent to every illustration brief of this material.
+   */
+  visual_style: Text(200),
+  /**
+   * Printable manipulatives, each tied to ONE activity: cards to cut out, and a board with one column per group to sort them on.
+   * Nothing on a card or board says where an item goes: the board's columns are the groups the activity already names.
+   */
+  materials: z
+    .array(
+      z.discriminatedUnion("kind", [
+        z.object({ id: Id("rm"), kind: z.literal("cut_out_cards"), activity_id: Id("ra"), purpose: Text(160), instructions: Text(120), cards: z.array(Text(40)).min(2).max(12) }),
+        z.object({ id: Id("rm"), kind: z.literal("sorting_board"), activity_id: Id("ra"), purpose: Text(160), instructions: Text(120), columns: z.array(Text(30)).min(2).max(4) }),
+      ]),
+    )
+    .max(4),
+  /**
+   * What the teacher reads on screen, written in plain language in the same call (no second call): what was adapted, why (each reason
+   * tied to the context's functional needs, never a diagnosis or a label), and how to use the materials step by step. It never
+   * contains an answer: the server checks it like any student-facing text.
+   */
+  explanation: z.object({
+    adapted: z.array(Text(260)).min(2).max(4),
+    why: z.array(z.object({ text: Text(260), needs: z.array(DimensionKeySchema).min(1).max(4) })).min(1).max(4),
+    how_to_use: z.array(Text(180)).min(3).max(6),
+  }),
+  /** What to watch in each activity while the student works (one short sentence each; shown with «Cómo utilizar»). */
+  guide: z.object({ per_activity: z.array(z.object({ activity_id: Id("ra"), observe: Text(200) })).max(12) }),
 });
 export type RecreationPlan = z.infer<typeof RecreationPlanSchema>;
 export type RecreationActivity = RecreationPlan["activities"][number];

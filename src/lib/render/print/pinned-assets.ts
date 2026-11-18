@@ -50,8 +50,16 @@ export function verifyPinnedAsset(asset: PinnedAsset): void {
 export function modelAssetRefs(model: RenderModel): string[] {
   const refs = new Set<string>();
   for (const node of flatNodes(model.pages.flatMap((p) => p.nodes))) {
+    if (node.kind !== "image" || node.state !== "available") continue;
+    // Cut-out cards drawn by the sheet carry their approved pictures: each one is pinned like any image.
+    for (const picture of node.pictures ?? []) {
+      if (!picture) continue;
+      const pin = parseAssetRef(picture);
+      if (!pin) throw new PinnedAssetError("asset_unpinned");
+      refs.add(assetRef(pin));
+    }
     // A reconstruction (VisualSpec) is drawn by the sheet itself: it has no bytes to pin.
-    if (node.kind !== "image" || node.state !== "available" || node.spec) continue;
+    if (node.spec) continue;
     const pin = node.src ? parseAssetRef(node.src) : null;
     if (!pin) throw new PinnedAssetError("asset_unpinned");
     refs.add(assetRef(pin));

@@ -236,6 +236,10 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
       else if (!plan.activities.some((a) => r.activity_ids.includes(a.id) && a.objective_ids.includes(id))) error("visual_request_untraced", `visual_requests.${r.id}`, `${id} no lo trabaja ninguna de sus actividades.`);
     }
     if (r.original_ref && !analysis.visuals.some((v) => v.id === r.original_ref)) error("visual_request_original_unknown", `visual_requests.${r.id}`, `${r.original_ref} no existe.`);
+    if (r.for_cards) {
+      const cards = plan.materials.find((m) => m.id === r.for_cards);
+      if (!cards || cards.kind !== "cut_out_cards" || !r.activity_ids.includes(cards.activity_id)) error("visual_request_cards_unknown", `visual_requests.${r.id}`, "Las ilustraciones de tarjetas deben ser de unas tarjetas de sus actividades.");
+    }
   }
 
   // 6 · Activities: traced, new, proportionate, and with a solution obtained the safest way their format allows.
@@ -262,7 +266,17 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   // 7 · Nothing the student reads gives away a closed answer, in its words or in other words.
   for (const leak of leaks(plan, verified)) error("solution_revealed", leak.path, leak.message);
 
-  for (const m of plan.materials) if (!ids.has(m.activity_id)) error("material_activity_unknown", `materials.${m.id}`, `${m.activity_id} no existe.`);
+  for (const m of plan.materials) {
+    if (!ids.has(m.activity_id)) error("material_activity_unknown", `materials.${m.id}`, `${m.activity_id} no existe.`);
+    // A board sorts the items of a classification into ITS groups: other columns would teach (or test) something else.
+    const target = plan.activities.find((a) => a.id === m.activity_id)?.executor;
+    if (m.kind === "sorting_board" && (target?.kind !== "classify" || normalize(m.columns.join("|")) !== normalize(target.categories.map((c) => c.label).join("|")))) error("board_mismatch", `materials.${m.id}`, "Las columnas del tablero deben ser los grupos de su actividad de clasificar.");
+    if (m.kind === "cut_out_cards" && target?.kind === "classify") {
+      const items = new Set(target.item_fact_ids.map((id) => facts.get(id)).flatMap((f) => (f?.kind === "membership" ? [normalize(f.item)] : [])));
+      if (m.cards.some((c) => !items.has(normalize(c))) || m.cards.length !== items.size) error("cards_mismatch", `materials.${m.id}`, "Las tarjetas deben ser exactamente los elementos que se clasifican.");
+    }
+  }
+  for (const issue of explanationIssues(plan, verified, needs)) error(issue.code, "explanation", issue.message);
   for (const g of plan.guide.per_activity) if (!ids.has(g.activity_id)) error("guide_activity_unknown", "guide", `${g.activity_id} no existe.`);
   for (const a of plan.activities) if (!plan.guide.per_activity.some((g) => g.activity_id === a.id)) warning("guide_missing", `activities.${a.id}`, "Sin indicación para el docente.");
 
@@ -431,7 +445,7 @@ function studentTexts(plan: RecreationPlan, a: RecreationActivity, verified: Rea
     : solution?.kind === "order" ? solution.printed
     : solution?.kind === "pairs" ? solution.pairs.map((p) => p.item)
     : [];
-  const cards = plan.materials.filter((m) => m.activity_id === a.id).flatMap((m) => [m.instructions, ...m.cards]);
+  const cards = plan.materials.filter((m) => m.activity_id === a.id).flatMap((m) => [m.instructions, ...(m.kind === "cut_out_cards" ? m.cards : [])]);
   return [a.prompt, ...a.steps, ...printed, ...visuals, ...cards];
 }
 
@@ -520,4 +534,28 @@ export function equivalenceReview(plan: RecreationPlan, analysis: MaterialAnalys
     checks.push({ code: "reasoning", status: "pending", note: "Que las actividades nuevas exijan el mismo razonamiento no lo comprueba el sistema: lo confirma el docente (o una revisión semántica)." });
     return { objective_id: objective, checks };
   });
+}
+
+/** Labels of conditions: the explanation speaks of functional needs, never of diagnoses (docs/PRIVACY.md). */
+const DIAGNOSTIC = /\b(dislex\w*|tdah|tda|tea|autis\w*|asperger|discalcul\w*|disgraf\w*|discapacidad\w*|trastorno\w*|sindrome\w*|diagnost\w*|deficit\w*|hiperactiv\w*|deficiencia\w*|retraso\w*|patolog\w*)\b/;
+
+/**
+ * The teacher's explanation is shown on screen as it is: plain language, no diagnosis, every reason tied to a need of this context,
+ * and no answer of any activity (a result, a correct option, the group of an item, an order) — the same rule as the student's texts.
+ */
+export function explanationIssues(plan: RecreationPlan, verified: readonly VerifiedActivity[], needs: ReadonlySet<DimensionKey>): Array<{ code: string; message: string }> {
+  const out: Array<{ code: string; message: string }> = [];
+  const texts = [...plan.explanation.adapted, ...plan.explanation.why.map((w) => w.text), ...plan.explanation.how_to_use, ...plan.guide.per_activity.map((g) => g.observe)];
+  if (texts.some((t) => DIAGNOSTIC.test(normalize(t)))) out.push({ code: "explanation_diagnostic", message: "La explicación nombra un diagnóstico o una etiqueta: habla de necesidades funcionales." });
+  for (const w of plan.explanation.why) for (const n of w.needs) if (!needs.has(n)) out.push({ code: "explanation_need_unknown", message: `${n} no es una necesidad de este contexto.` });
+  const all = texts.map(normalize);
+  for (const v of verified) {
+    const s = v.solution;
+    const says = (claim: string) => all.some((t) => t.includes(normalize(claim).replace(/^que /, "")) || saysInOrder(claim, t));
+    if (s.kind === "number" && all.some((t) => new RegExp(`\\b${s.value}\\b`).test(t))) out.push({ code: "explanation_reveals", message: `La explicación da el resultado de ${v.id}.` });
+    if (s.kind === "options" && s.correct.some(says)) out.push({ code: "explanation_reveals", message: `La explicación da la opción correcta de ${v.id}.` });
+    if (s.kind === "pairs" && s.pairs.some((p) => all.some((t) => t.includes(normalize(p.item)) && t.includes(normalize(p.category))))) out.push({ code: "explanation_reveals", message: `La explicación dice a qué grupo va un elemento de ${v.id}.` });
+    if (s.kind === "order" && all.some((t) => s.solution.filter((x) => t.includes(normalize(x))).length >= 2)) out.push({ code: "explanation_reveals", message: `La explicación da el orden de ${v.id}.` });
+  }
+  return out;
 }

@@ -1,0 +1,683 @@
+{
+ "record_version": 2,
+ "id": "66666666-6666-4666-8666-000000000002",
+ "line_id": "66666666-6666-4666-8666-000000000001",
+ "version": 1,
+ "workspace_id": "11111111-1111-4111-8111-111111111111",
+ "title": "Un estanque en equilibrio",
+ "created_at": "2026-11-18T10:00:00.000Z",
+ "state": "review",
+ "state_message": "Antes de usarla, revisa las actividades 1 y 3: comprueba con el texto que cada pregunta tiene una sola respuesta correcta.",
+ "review_activities": [
+  "1",
+  "3"
+ ],
+ "student": {
+  "schema_version": 1,
+  "meta": {
+   "title": "Un estanque en equilibrio",
+   "language": "es",
+   "stage": "primaria",
+   "grade": "5-primaria",
+   "subject": "Ciencias de la Naturaleza",
+   "topic": "Seres vivos y cambios en un ecosistema"
+  },
+  "presentation": {
+   "font_scale": 1.15,
+   "line_spacing": "relaxed",
+   "spacing": "normal",
+   "contrast": "normal",
+   "decoration": "standard",
+   "max_tasks_per_page": null,
+   "color_independent": false,
+   "text_alternatives_for_visuals": false
+  },
+  "admin_fields": [
+   {
+    "type": "student_name",
+    "label": "Nombre"
+   },
+   {
+    "type": "date",
+    "label": "Fecha"
+   }
+  ],
+  "pages": [
+   {
+    "blocks": [
+     {
+      "id": "blk_r0001",
+      "type": "heading",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "level": 1,
+      "text": "Un estanque en equilibrio"
+     },
+     {
+      "id": "blk_r0002",
+      "type": "image",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_2"
+       ],
+       "decision_ids": [
+        "dec_3",
+        "dec_2"
+       ]
+      },
+      "source": {
+       "kind": "generated",
+       "asset_id": "00000000-0000-4000-8000-000000000001",
+       "sha256": "28874001b3f6462fc495c356d09892f937b40899d2f796e5072334605d02f945",
+       "decision_id": "dec_3"
+      },
+      "alt_text": "Ilustración de la actividad"
+     },
+     {
+      "id": "blk_r0003",
+      "type": "instruction",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "text": "Lee el texto por partes. Después, haz las actividades."
+     },
+     {
+      "id": "blk_r0004",
+      "type": "reading_text",
+      "trace": {
+       "origin": "original",
+       "source_refs": [
+        "ctt_1"
+       ],
+       "decision_ids": [
+        "dec_1"
+       ]
+      },
+      "paragraphs": [
+       "En un estanque situado junto al pueblo viven algas, plantas acuáticas, larvas de insectos, ranas y garzas. La luz del sol permite que las algas y las plantas crezcan. Algunas larvas se alimentan de algas; las ranas comen insectos y sus larvas; y las garzas pueden alimentarse de ranas. El agua, la luz y la temperatura también influyen en la vida del estanque.",
+       "En mayo, la profundidad del agua en una zona del estanque era de 30 centímetros. Después de varias semanas sin lluvia, en junio bajó a 18 centímetros. Algunas plantas quedaron fuera del agua, hubo menos lugares donde refugiarse y se observaron menos larvas en la orilla.",
+       "Un grupo de estudiantes quiere averiguar cómo afecta ese cambio a los seres vivos. Para ello, observa el estanque, compara datos y piensa en posibles relaciones entre sus componentes."
+      ],
+      "literal": true,
+      "segment_labels": [
+       "Parte 1. Quién vive en el estanque",
+       "Parte 2. Qué cambió de mayo a junio",
+       "Parte 3. Qué quieren averiguar"
+      ]
+     },
+     {
+      "id": "blk_r0005",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_2",
+        "ctt_3"
+       ],
+       "decision_ids": [
+        "dec_3",
+        "dec_2"
+       ]
+      },
+      "label": "1",
+      "prompt": "¿Cada componente del estanque es un ser vivo o un elemento no vivo? Coloca las tarjetas en el tablero y después escribe la letra en cada casilla.",
+      "response": {
+       "kind": "match",
+       "left": [
+        {
+         "id": "i1",
+         "text": "Algas"
+        },
+        {
+         "id": "i2",
+         "text": "Agua"
+        },
+        {
+         "id": "i3",
+         "text": "Larvas de insectos"
+        },
+        {
+         "id": "i4",
+         "text": "Luz solar"
+        },
+        {
+         "id": "i5",
+         "text": "Garzas"
+        },
+        {
+         "id": "i6",
+         "text": "Temperatura"
+        }
+       ],
+       "right": [
+        {
+         "id": "c1",
+         "text": "Ser vivo"
+        },
+        {
+         "id": "c2",
+         "text": "Elemento no vivo"
+        }
+       ]
+      }
+     },
+     {
+      "id": "blk_r0006",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_1"
+       ],
+       "decision_ids": [
+        "dec_1",
+        "dec_4"
+       ]
+      },
+      "label": "2",
+      "prompt": "Lee la parte 2. Escribe dos cambios del estanque entre mayo y junio. Para cada uno, copia las palabras del texto que lo demuestran.",
+      "response": {
+       "kind": "lines",
+       "lines": 4
+      }
+     },
+     {
+      "id": "blk_r0007",
+      "type": "sentence_starters",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_1"
+       ],
+       "decision_ids": [
+        "dec_1",
+        "dec_4"
+       ]
+      },
+      "items": [
+       "Un cambio es",
+       "En el texto pone"
+      ]
+     },
+     {
+      "id": "blk_r0008",
+      "type": "image",
+      "trace": {
+       "origin": "original",
+       "source_refs": [
+        "vis_2"
+       ],
+       "decision_ids": [
+        "dec_6",
+        "dec_2"
+       ]
+      },
+      "source": {
+       "kind": "figure",
+       "spec": {
+        "spec_version": 1,
+        "kind": "flow",
+        "title": "Esquema del estanque",
+        "items": [
+         "Algas",
+         "Larvas de insectos",
+         "Ranas",
+         "Garzas"
+        ]
+       },
+       "provenance": "reconstruction",
+       "visual_ref": "vis_2"
+      },
+      "alt_text": "Esquema del estanque: Algas, Larvas de insectos, Ranas, Garzas, unidos por flechas."
+     },
+     {
+      "id": "blk_r0009",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_3",
+        "ctt_1"
+       ],
+       "decision_ids": [
+        "dec_6",
+        "dec_2"
+       ]
+      },
+      "label": "3",
+      "prompt": "Mira el esquema. ¿Qué indica la flecha que va de las algas a las larvas de insectos? Marca una respuesta.",
+      "resource_block_ids": [
+       "blk_r0008"
+      ],
+      "response": {
+       "kind": "choice",
+       "options": [
+        {
+         "id": "o1",
+         "text": "Que las algas son más grandes que las larvas."
+        },
+        {
+         "id": "o2",
+         "text": "Que las larvas de insectos se alimentan de algas."
+        },
+        {
+         "id": "o3",
+         "text": "Que las algas se alimentan de larvas."
+        },
+        {
+         "id": "o4",
+         "text": "Que las larvas viven encima de las algas."
+        }
+       ],
+       "multiple": false
+      }
+     },
+     {
+      "id": "blk_r0010",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_3"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "label": "4",
+      "prompt": "Imagina que casi desaparecen las larvas de insectos. ¿Qué les pasaría a las ranas? Explica tu idea con el esquema.",
+      "response": {
+       "kind": "lines",
+       "lines": 3
+      }
+     },
+     {
+      "id": "blk_r0011",
+      "type": "sentence_starters",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_3"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "items": [
+       "Creo que las ranas",
+       "porque en el esquema"
+      ]
+     },
+     {
+      "id": "blk_r0012",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_4",
+        "ctt_1"
+       ],
+       "decision_ids": [
+        "dec_5"
+       ]
+      },
+      "label": "5",
+      "prompt": "Busca en la parte 2 cuánto medía el agua en mayo y en junio. Calcula cuántos centímetros bajó.",
+      "steps": [
+       "Escribe la operación.",
+       "Escribe el resultado y su unidad."
+      ],
+      "response": {
+       "kind": "fields",
+       "fields": [
+        {
+         "label": "Operación",
+         "space": "lines",
+         "lines": 1
+        },
+        {
+         "label": "Resultado",
+         "space": "lines",
+         "lines": 1,
+         "unit": true
+        }
+       ]
+      }
+     },
+     {
+      "id": "blk_r0013",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_5"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "label": "6",
+      "prompt": "Lee esta idea: «Si baja el agua, todos los seres vivos del estanque se ven afectados exactamente igual». ¿Estás de acuerdo? Explica con una prueba del texto.",
+      "response": {
+       "kind": "lines",
+       "lines": 3
+      }
+     },
+     {
+      "id": "blk_r0014",
+      "type": "sentence_starters",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_5"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "items": [
+       "Estoy / No estoy de acuerdo porque",
+       "El texto dice que"
+      ]
+     },
+     {
+      "id": "blk_r0015",
+      "type": "activity",
+      "trace": {
+       "origin": "adapted",
+       "source_refs": [
+        "obj_5"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "label": "7",
+      "prompt": "Piensa una medida para cuidar el estanque. Di a qué ser vivo y a qué elemento no vivo ayudaría.",
+      "response": {
+       "kind": "lines",
+       "lines": 3
+      }
+     },
+     {
+      "id": "blk_r0016",
+      "type": "sentence_starters",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_5"
+       ],
+       "decision_ids": [
+        "dec_4"
+       ]
+      },
+      "items": [
+       "Yo propongo",
+       "Ayudaría a"
+      ]
+     }
+    ]
+   }
+  ],
+  "answer_key": []
+ },
+ "materials": {
+  "schema_version": 1,
+  "meta": {
+   "title": "Materiales: Un estanque en equilibrio",
+   "language": "es",
+   "stage": "primaria",
+   "grade": "5-primaria",
+   "subject": "Ciencias de la Naturaleza",
+   "topic": "Seres vivos y cambios en un ecosistema"
+  },
+  "presentation": {
+   "font_scale": 1.15,
+   "line_spacing": "relaxed",
+   "spacing": "normal",
+   "contrast": "normal",
+   "decoration": "standard",
+   "max_tasks_per_page": null,
+   "color_independent": false,
+   "text_alternatives_for_visuals": false
+  },
+  "admin_fields": [],
+  "pages": [
+   {
+    "blocks": [
+     {
+      "id": "blk_c0001",
+      "type": "heading",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "level": 1,
+      "text": "Materiales para recortar"
+     },
+     {
+      "id": "blk_c0002",
+      "type": "heading",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "level": 2,
+      "text": "Tarjetas · actividad 1"
+     },
+     {
+      "id": "blk_c0003",
+      "type": "instruction",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_2"
+       ],
+       "decision_ids": [
+        "dec_3"
+       ]
+      },
+      "text": "Recorta las tarjetas por la línea de puntos."
+     },
+     {
+      "id": "blk_c0004",
+      "type": "image",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_2"
+       ],
+       "decision_ids": [
+        "dec_3"
+       ]
+      },
+      "source": {
+       "kind": "figure",
+       "spec": {
+        "spec_version": 1,
+        "kind": "cut_cards",
+        "items": [
+         "Algas",
+         "Agua",
+         "Larvas de insectos",
+         "Luz solar",
+         "Garzas",
+         "Temperatura"
+        ],
+        "pictures": [
+         "00000000-0000-4000-8000-000000000002",
+         "00000000-0000-4000-8000-000000000003",
+         "00000000-0000-4000-8000-000000000004",
+         "00000000-0000-4000-8000-000000000005",
+         "00000000-0000-4000-8000-000000000006",
+         "00000000-0000-4000-8000-000000000007"
+        ]
+       },
+       "provenance": "generated",
+       "decision_id": "dec_3"
+      },
+      "alt_text": "Tarjetas para recortar: Algas, Agua, Larvas de insectos, Luz solar, Garzas, Temperatura."
+     }
+    ]
+   },
+   {
+    "blocks": [
+     {
+      "id": "blk_c0005",
+      "type": "heading",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "level": 2,
+      "text": "Tablero · actividad 1"
+     },
+     {
+      "id": "blk_c0006",
+      "type": "instruction",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_2"
+       ],
+       "decision_ids": [
+        "dec_3"
+       ]
+      },
+      "text": "Coloca cada tarjeta en su columna. Puedes cambiarla de sitio hasta estar seguro."
+     },
+     {
+      "id": "blk_c0007",
+      "type": "image",
+      "trace": {
+       "origin": "support",
+       "source_refs": [
+        "obj_2"
+       ],
+       "decision_ids": [
+        "dec_3"
+       ]
+      },
+      "source": {
+       "kind": "figure",
+       "spec": {
+        "spec_version": 1,
+        "kind": "sort_board",
+        "columns": [
+         "Ser vivo",
+         "Elemento no vivo"
+        ]
+       },
+       "provenance": "generated",
+       "decision_id": "dec_3"
+      },
+      "alt_text": "Tablero con 2 columnas: Ser vivo, Elemento no vivo."
+     }
+    ]
+   }
+  ],
+  "answer_key": []
+ },
+ "explanation": {
+  "adapted": [
+   "Se trabajan los mismos cinco objetivos que en la ficha original: los cambios del estanque, los seres vivos y los elementos no vivos, la cadena alimentaria, el cálculo de cuánto bajó el agua y la valoración de una idea con una propuesta para cuidarlo.",
+   "Hay siete actividades nuevas: clasificar con tarjetas y un tablero, escribir dos cambios con su prueba, interpretar una flecha del esquema, predecir qué les pasaría a las ranas, calcular escribiendo la operación, valorar una idea y proponer una medida.",
+   "El texto original se mantiene igual, dividido en tres partes con título, y se añade una ilustración del estanque para reconocer sus componentes antes de empezar."
+  ],
+  "why": [
+   "El texto se lee por partes y cada actividad dice en qué parte buscar: así se encuentra la información sin releerlo entero.",
+   "Donde lo que se aprende no es escribir, se responde colocando tarjetas o marcando; donde hay que explicar, la respuesta es breve y empieza con un inicio de frase.",
+   "Las consignas son cortas y van en pasos cuando hay más de una cosa que hacer."
+  ],
+  "how_to_use": [
+   "Antes de la clase, imprima la ficha y la hoja de materiales; recorte las tarjetas o deje que el alumno lo haga.",
+   "Empiece por la ilustración: pídale que señale lo que reconoce del estanque antes de leer.",
+   "Lean juntos el título de cada parte; el alumno lee una parte cada vez, cuando la actividad lo pide.",
+   "En la actividad 1, deje que coloque las tarjetas en el tablero y que después escriba las letras en la ficha.",
+   "En las respuestas escritas, recuérdele los inicios de frase y acepte una respuesta oral si escribir le bloquea."
+  ],
+  "observe": [
+   {
+    "activity": "1",
+    "text": "Si duda con agua, luz o temperatura, pregunte si nacen, crecen o se reproducen; no le diga el grupo."
+   },
+   {
+    "activity": "2",
+    "text": "Que busque en la parte 2 antes de escribir; valore la localización, no la ortografía de la copia."
+   },
+   {
+    "activity": "3",
+    "text": "Lea el esquema con él si lo necesita; la interpretación de la flecha es suya."
+   },
+   {
+    "activity": "4",
+    "text": "Admita la respuesta oral si escribir le bloquea; anote la idea, no la forma."
+   },
+   {
+    "activity": "5",
+    "text": "Compruebe que escribe la operación además del resultado."
+   },
+   {
+    "activity": "6",
+    "text": "Cualquier postura vale si la defiende con una prueba del texto."
+   },
+   {
+    "activity": "7",
+    "text": "Que nombre un ser vivo y un elemento no vivo."
+   }
+  ]
+ },
+ "assets": [
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000001",
+   "sha256": "28874001b3f6462fc495c356d09892f937b40899d2f796e5072334605d02f945",
+   "width": 1536,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000002",
+   "sha256": "db0815ad7fdcdff6ec30a7944f1d6e4542e4d9fcf375fd79d4e4cd452e4ad4da",
+   "width": 1024,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000003",
+   "sha256": "fad708b506047cf004a0161239b0e5348a869e5b42d5b760046484919660203e",
+   "width": 1024,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000004",
+   "sha256": "ac64b7ff6cc02161b3f322da38e3396d897e3fedd0697c9e8cad4d858bd141d1",
+   "width": 1024,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000005",
+   "sha256": "8ac4b4ec346d3df7efbfe2aa658e23288a394d57409db9b53f1eccfcc66b813e",
+   "width": 1024,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000006",
+   "sha256": "eb30ad6d7c48cbaa00295a82f2c4a74f28b7df8f69efd7ca4706ec8c17276fe7",
+   "width": 1024,
+   "height": 1024
+  },
+  {
+   "asset_id": "00000000-0000-4000-8000-000000000007",
+   "sha256": "01ffdc7a9949ea7e6756e64d53b43140975b61ce2008b991353c2f8c8b17effa",
+   "width": 1024,
+   "height": 1024
+  }
+ ]
+}

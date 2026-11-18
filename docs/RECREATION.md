@@ -1,6 +1,8 @@
 # Motor de recreación pedagógica (piloto aislado)
 
-Decisiones: [ADR-049 y ADR-050](ARCHITECTURE.md). Informe del piloto: [qa/recreacion-pedagogica](qa/recreacion-pedagogica/README.md).
+Decisiones: [ADR-049, ADR-050 y ADR-051](ARCHITECTURE.md). Pantalla y modo «generar una vez»: [QA plataforma](qa/recreacion-plataforma/README.md).
+
+> **ADR-051.** El producto entrega la ficha y los materiales, y muestra en pantalla la explicación que Claude redacta en la misma llamada del plan. Ya no hay guía ni clave en PDF; las respuestas quedan internas. Abrir una recreación lee el registro guardado (`view.ts`) sin llamar a ninguna IA; regenerar es explícito (`create.ts`). Informe del piloto: [qa/recreacion-pedagogica](qa/recreacion-pedagogica/README.md).
 
 «Hacer magia» adapta la ficha original conservando sus actividades y su estructura. El motor de recreación usa la ficha como **fuente** de contenidos, objetivos y exigencia cognitiva, y diseña **actividades nuevas** según el perfil y el alcance autorizado. Esta primera entrega es un recorrido vertical aislado. No cambia «Hacer magia», ninguna ruta, ninguna tabla ni ninguna variable de producción.
 

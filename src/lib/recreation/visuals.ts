@@ -5,6 +5,7 @@ import { illustrate, type IllustrationDeps } from "@/lib/materials/visuals/illus
 import { VISUAL_SPEC_VERSION, type VisualSpec } from "@/lib/visuals/spec";
 import type { RecreationPlan, VisualRequest } from "./contract";
 import { normalize, type Verification } from "./verify";
+import { fingerprint } from "@/lib/adaptation/fingerprint";
 
 /**
  * How each picture the planner asked for is produced (ADR-050). The planner never decides it; this does, in this order:
@@ -36,6 +37,8 @@ export interface ResolvedVisual {
     | { kind: "missing"; purpose: string }
     | null;
   alt: string;
+  /** For a request that illustrates cards: each card's picture (or why it has none). The cards print their names either way. */
+  cards?: Array<{ text: string; asset: { asset_id: string; sha256: string; width: number; height: number } | null; reason: string }>;
   /** Each route considered, and why it was or was not taken. */
   attempts: string[];
   provenance: { requested_by: string; decided_by: string; produced_by: string | null; reviewed_by: string | null };
@@ -55,6 +58,8 @@ export interface VisualContext {
   locatedOriginals: ReadonlySet<string>;
   illustrations: IllustrationGate;
   planner: string;
+  /** Pictures already asked for in this recreation (shared by every request: the cap is per recreation). */
+  imagesUsed: { count: number };
 }
 
 const EXACT_WORDS = /\b(flecha|flechas|etiqueta|etiquetas|rotulo|rotulos|numero|numeros|cifra|cifras|texto escrito|letra|letras|grafica|tabla)\b|\d/;
@@ -106,30 +111,84 @@ async function resolveOne(r: VisualRequest, ctx: VisualContext): Promise<Resolve
   if (!exact.ok) return missing(`C: no se genera: ${exact.reason}`);
   if (!ctx.illustrations.available) return missing(`C: generación no disponible (${ctx.illustrations.reason})`);
   const gate = ctx.illustrations;
+  if (r.for_cards) return resolveCards(r, ctx, gate, base, attempts, provenance);
+  if (!takeImage(ctx)) return missing(`C: límite de ${RECREATION_VISUAL_LIMITS.maxImages} imágenes por recreación`);
+  const outcome = await illustrateFor(r, ctx, gate, null);
+  if (outcome.ok) return { ...base, alt: outcome.asset.alt || r.alt_text, route: "C_generated", source: { kind: "generated", asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, attempts: [...attempts, outcome.cached ? "C: ilustración ya aprobada, reutilizada" : `C: generada y aprobada en ${outcome.attempts} intento(s)`], provenance: provenance(gate.producer, "image_review v1 + puertas de Adaptaula") };
+  if (scheme) return { ...base, route: "B_code", source: { kind: "figure", spec: scheme, visual_ref: r.original_ref! }, attempts: [...attempts, `C: ${outcome.reason}`, "B: esquema exacto como alternativa"], provenance: provenance(`renderer (${scheme.kind})`, "datos del original") };
+  return missing(`C: ${outcome.reason}${outcome.detail.length ? ` (${outcome.detail.slice(0, 3).join(", ")})` : ""}`);
+}
+
+/** Pictures one recreation may have (each a unit of the plan's image allowance and a share of the budget). */
+export const RECREATION_VISUAL_LIMITS = { maxImages: 8 } as const;
+
+function takeImage(ctx: VisualContext): boolean {
+  if (ctx.imagesUsed.count >= RECREATION_VISUAL_LIMITS.maxImages) return false;
+  ctx.imagesUsed.count++;
+  return true;
+}
+
+/**
+ * One call of the existing illustration pipeline for a request (or for one card of it). The need key carries a fingerprint of
+ * what is asked: the same request in a later version REUSES the approved picture (no call); a different one makes a new picture
+ * and never overwrites the old (generated_assets rows are inserted, not replaced).
+ */
+function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<IllustrationGate, { available: true }>, card: string | null) {
   const signatures = answersOf(ctx, r.activity_ids);
   const activities = ctx.plan.activities.filter((a) => r.activity_ids.includes(a.id));
   const objectives = ctx.analysis.pedagogical_intent.objectives.filter((o) => r.objective_ids.includes(o.id)).map((o) => o.text);
   const prohibited = [...ALWAYS_PROHIBITED, ...r.prohibited];
-  const outcome = await illustrate(withoutText(gate.deps, prohibited), {
+  const show = card ? [`solo esto: ${card}`, ...r.must_show] : r.must_show;
+  const asked = { show, style: ctx.plan.visual_style, kind: r.style, detail: r.detail, prohibited, purpose: r.purpose };
+  return illustrate(withoutText(gate.deps, prohibited), {
     workspaceId: gate.workspaceId,
     adaptationId: gate.recreationId,
-    needKey: `recreation:${r.id}`,
+    needKey: `recreation:${r.id}:${fingerprint(asked).slice(0, 16)}`,
     stage: ctx.analysis.identification.stage.value,
     grade: ctx.analysis.identification.grade.value,
     subject: ctx.analysis.identification.subject.value,
     activity: activities.map((a) => a.prompt).join(" "),
     objective: objectives.join("; ") || null,
     // The prompt of the brief (image_brief v1) is reused as published: what must be shown and avoided travels in its «missing» field.
-    missing: `Debe verse: ${r.must_show.join(", ")}. Estilo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`,
-    purpose: r.purpose,
+    // The material's one style goes into every brief, so its pictures look like one set.
+    missing: `${card ? `Ilustración para una tarjeta recortable: ${card}. ` : ""}Debe verse: ${show.join(", ")}. Estilo común del material: ${ctx.plan.visual_style} Tipo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`.slice(0, 1400),
+    purpose: card ? `${r.purpose} (tarjeta: ${card})` : r.purpose,
     supports: ctx.needs.slice(0, 8),
     expectedAnswer: null,
     signatures,
     lowDetail: r.detail !== "moderate" || ctx.needs.some((n) => LOW_DETAIL.includes(n)),
   });
-  if (outcome.ok) return { ...base, alt: outcome.asset.alt || r.alt_text, route: "C_generated", source: { kind: "generated", asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, attempts: [...attempts, outcome.cached ? "C: ilustración ya aprobada, reutilizada" : `C: generada y aprobada en ${outcome.attempts} intento(s)`], provenance: provenance(gate.producer, "image_review v1 + puertas de Adaptaula") };
-  if (scheme) return { ...base, route: "B_code", source: { kind: "figure", spec: scheme, visual_ref: r.original_ref! }, attempts: [...attempts, `C: ${outcome.reason}`, "B: esquema exacto como alternativa"], provenance: provenance(`renderer (${scheme.kind})`, "datos del original") };
-  return missing(`C: ${outcome.reason}${outcome.detail.length ? ` (${outcome.detail.slice(0, 3).join(", ")})` : ""}`);
+}
+
+/** Cards: one picture per card, in order. A card without a picture keeps its printed name (the card works without it). */
+async function resolveCards(
+  r: VisualRequest,
+  ctx: VisualContext,
+  gate: Extract<IllustrationGate, { available: true }>,
+  base: Pick<ResolvedVisual, "request_id" | "activity_ids" | "essential" | "alt">,
+  attempts: string[],
+  provenance: (produced: string | null, reviewed: string | null) => ResolvedVisual["provenance"],
+): Promise<ResolvedVisual> {
+  const material = ctx.plan.materials.find((m) => m.id === r.for_cards);
+  const items = material?.kind === "cut_out_cards" ? material.cards : [];
+  const cards: NonNullable<ResolvedVisual["cards"]> = [];
+  for (const text of items) {
+    if (!takeImage(ctx)) {
+      cards.push({ text, asset: null, reason: "límite de imágenes" });
+      continue;
+    }
+    const outcome = await illustrateFor(r, ctx, gate, text);
+    cards.push(outcome.ok ? { text, asset: { asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, reason: outcome.cached ? "reutilizada" : "generada y aprobada" } : { text, asset: null, reason: outcome.reason });
+  }
+  const made = cards.filter((c) => c.asset).length;
+  return {
+    ...base,
+    route: made > 0 ? "C_generated" : "none",
+    source: null,
+    cards,
+    attempts: [...attempts, `C: ${made} de ${items.length} tarjetas ilustradas`, ...cards.filter((c) => !c.asset).map((c) => `${c.text}: ${c.reason}`)],
+    provenance: provenance(made > 0 ? gate.producer : null, made > 0 ? "image_review v1 + puertas de Adaptaula" : null),
+  };
 }
 
 /** The answers of the activities a picture serves: no label or description of the picture may carry them (`validateBrief`). */

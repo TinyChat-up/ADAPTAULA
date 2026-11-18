@@ -11,7 +11,7 @@ import { z } from "zod";
  */
 
 export const VISUAL_SPEC_VERSION = 1 as const;
-export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow", "cut_cards"] as const;
+export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow", "cut_cards", "sort_board"] as const;
 export type VisualSpecKind = (typeof VISUAL_SPEC_KINDS)[number];
 
 const Count = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -58,10 +58,20 @@ export const FlowSpecSchema = z.object({ ...base, kind: z.literal("flow"), title
  * Cards to cut out and handle (the recreation engine's manipulatives): one short text per card, printed large, two per row, with a
  * dashed cutting line around each. Nothing on a card says where it goes: the sorting is the student's.
  */
-export const CutCardsSpecSchema = z.object({ ...base, kind: z.literal("cut_cards"), title: SupportText(60).optional(), items: z.array(SupportText(40)).min(2).max(12) });
+export const CutCardsSpecSchema = z.object({
+  ...base,
+  kind: z.literal("cut_cards"),
+  title: SupportText(60).optional(),
+  items: z.array(SupportText(40)).min(2).max(12),
+  /** One approved illustration per card (`generated_assets` id), or null: the card's text is always printed by the renderer. */
+  pictures: z.array(z.string().uuid().nullable()).max(12).optional(),
+});
+
+/** A sorting board: one tall column per group (the groups the activity names), with an empty area to place the cut-out cards. */
+export const SortBoardSpecSchema = z.object({ ...base, kind: z.literal("sort_board"), columns: z.array(SupportText(30)).min(2).max(4) });
 
 export const VisualSpecSchema = z
-  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema, CutCardsSpecSchema])
+  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema, CutCardsSpecSchema, SortBoardSpecSchema])
   .superRefine((spec, ctx) => {
     for (const message of specIssues(spec)) ctx.addIssue({ code: "custom", message });
   });
@@ -103,6 +113,7 @@ export function specIssues(spec: { kind: string } & Record<string, unknown>): st
     if (new Set(s.shaded).size !== s.shaded.length) issues.push("partes sombreadas repetidas");
     if (s.shaded.some((i) => i >= s.parts)) issues.push("una parte sombreada no existe");
   }
+  if (s.kind === "cut_cards" && s.pictures && s.pictures.length !== s.items.length) issues.push("una ilustración por tarjeta");
   if (s.kind === "grid") {
     if (new Set(s.shaded).size !== s.shaded.length) issues.push("celdas sombreadas repetidas");
     if (s.shaded.some((i) => i >= s.rows * s.cols)) issues.push("una celda sombreada no existe");
@@ -145,6 +156,8 @@ export function describeSpec(spec: VisualSpec): string {
       return `${spec.title ? `${spec.title}. ` : ""}Esquema de ${spec.items.length} recuadros unidos por flechas, en este orden: ${spec.items.join(" → ")}.`;
     case "cut_cards":
       return `${spec.title ? `${spec.title}. ` : ""}${spec.items.length} tarjetas para recortar: ${spec.items.join(", ")}.`;
+    case "sort_board":
+      return `Tablero de clasificación con ${spec.columns.length} columnas vacías: ${spec.columns.join(", ")}.`;
   }
 }
 

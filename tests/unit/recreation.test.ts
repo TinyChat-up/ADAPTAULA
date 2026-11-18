@@ -29,43 +29,38 @@ const status = (p: RecreationPlan, id: string, a = analysis) => verify(p, a).act
 const activity = (p: RecreationPlan, id: string) => p.activities.find((a) => a.id === id)!;
 
 describe("recreation_plan@v1 · piloto del estanque", () => {
-  it("cumple el contrato, se verifica y produce ficha, tarjetas y guía", async () => {
+  it("cumple el contrato, se verifica y produce la ficha y los materiales (sin clave ni informe)", async () => {
     expect(RecreationPlanSchema.safeParse(POND_RECREATION_PLAN).success).toBe(true);
     const { compiled, verification } = await ready();
     expect(verification.issues.filter((i) => i.severity === "error")).toEqual([]);
-    expect(compiled.trace).toHaveLength(9);
-    expect(compiled.cards).not.toBeNull();
-    expect(allBlocks(compiled.student).filter((b) => b.type === "activity")).toHaveLength(9);
+    expect(compiled.trace).toHaveLength(7);
+    expect(compiled.materials).not.toBeNull();
+    expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace"]);
+    expect(allBlocks(compiled.student).filter((b) => b.type === "activity")).toHaveLength(7);
   });
 
   it("el número de actividades responde a los objetivos (≤ 2 por objetivo), no a un número fijo", () => {
     expect(POND_RECREATION_PLAN.activities.length).toBeLessThanOrEqual(2 * POND_RECREATION_PLAN.objectives.length);
     const many = plan();
-    for (let i = 0; i < 2; i++) many.activities.push({ ...activity(many, "ra_10"), id: `ra_${20 + i}` });
+    for (let i = 0; i < 4; i++) many.activities.push({ ...activity(many, "ra_7"), id: `ra_${20 + i}` });
     expect(verify(many).issues.map((i) => i.code)).toContain("workload");
   });
 
-  it("solo se declara «verificado» lo que el servidor demuestra: la resta sí; la secuencia temporal sin conectores, no", async () => {
+  it("solo se declara «verificado» lo que el servidor demuestra; lo demás queda interno como no comprobado", async () => {
     const { verification } = await ready();
     const by = new Map(verification.activities.map((a) => [a.id, a]));
-    expect(by.get("ra_7")).toMatchObject({ status: "verified", solution: { kind: "number", value: 12, unit: "cm", operation: "30 − 18 = 12" } });
-    expect(by.get("ra_4")!.status).toBe("anchored");
-    expect(verification.issues.map((i) => i.code)).toContain("sequence_order_unproven");
-    for (const id of ["ra_1", "ra_2", "ra_5"]) expect(by.get(id)!.status).toBe("anchored");
+    expect(by.get("ra_5")).toMatchObject({ status: "verified", solution: { kind: "number", value: 12, unit: "cm", operation: "30 − 18 = 12" } });
+    for (const id of ["ra_1", "ra_3"]) expect(by.get(id)!.status).toBe("anchored");
     expect(verification.review_required).toBe(true);
   });
 
-  it("la clave queda fuera del material del alumno y la guía dice cuáles no están comprobadas", async () => {
+  it("la clave queda dentro (para las comprobaciones) y fuera de todo lo que se muestra", async () => {
     const { compiled } = await ready();
+    expect(compiled.student.answer_key.length).toBe(7);
     const { model } = buildRenderModel(compiled.student, { mode: "student", deferred: [] });
     const dump = JSON.stringify(model);
     expect(dump).not.toContain("30 − 18");
     expect(dump).not.toMatch(/\b12\b/);
-    const key = JSON.stringify(compiled.key);
-    expect(key).toContain("30 − 18 = 12 cm");
-    expect(key).toContain("SIN COMPROBAR");
-    expect(JSON.stringify(compiled.guide)).toContain("1 soluciones comprobadas por el sistema, 4 sin comprobar");
-    expect(JSON.stringify(compiled.guide)).not.toContain("30 − 18");
   });
 
   it("las actividades son nuevas y cada una se traza a sus objetivos y estrategias", async () => {
@@ -89,6 +84,35 @@ describe("recreation_plan@v1 · piloto del estanque", () => {
   });
 });
 
+describe("explicación para el docente y materiales", () => {
+  it("sin diagnósticos, con motivos ligados a necesidades reales del contexto y sin respuestas", () => {
+    const a = plan();
+    a.explanation.why[0]!.text = "Como tiene dislexia, el texto se divide en partes.";
+    expect(codes(a)).toContain("explanation_diagnostic");
+    const b = plan();
+    b.explanation.why[0]!.needs = ["high_contrast"];
+    expect(codes(b)).toContain("explanation_need_unknown");
+    const c = plan();
+    c.explanation.adapted[0] = "En la actividad 5 el agua bajó 12 centímetros.";
+    expect(codes(c)).toContain("explanation_reveals");
+    const d = plan();
+    d.explanation.how_to_use[0] = "Recuerde que las algas son un ser vivo.";
+    expect(codes(d)).toContain("explanation_reveals");
+    const e = plan();
+    e.explanation.how_to_use[0] = "Explíquele que las larvas de insectos se alimentan de algas.";
+    expect(codes(e)).toContain("explanation_reveals");
+  });
+
+  it("cada material va ligado a su actividad: el tablero con sus grupos y las tarjetas con sus elementos", () => {
+    const a = plan();
+    a.materials = a.materials.map((m) => (m.kind === "sorting_board" ? { ...m, columns: ["Animales", "Plantas"] } : m));
+    expect(codes(a)).toContain("board_mismatch");
+    const b = plan();
+    b.materials = b.materials.map((m) => (m.kind === "cut_out_cards" ? { ...m, cards: ["Algas", "Agua", "Peces"] } : m));
+    expect(codes(b)).toContain("cards_mismatch");
+  });
+});
+
 describe("Fase 1 · cantidades: la cita debe respaldar la cifra y su unidad", () => {
   const withQuote = (quote: string, value = 30, unit = "cm") => {
     const p = plan();
@@ -104,10 +128,10 @@ describe("Fase 1 · cantidades: la cita debe respaldar la cifra y su unidad", ()
   it("una cita sin unidad o con varias cifras deja la solución «sin comprobar», nunca «verificada»", () => {
     const noUnit = withQuote("profundidad del agua en una zona del estanque era de 30");
     expect(codes(noUnit)).toEqual([]);
-    expect(status(noUnit, "ra_7")).toBe("anchored");
+    expect(status(noUnit, "ra_5")).toBe("anchored");
     const two = plan();
     two.facts = two.facts.map((f) => (f.id === "f_14" && f.kind === "quantity" ? { ...f, quote: "era de 30 centímetros. Después de varias semanas sin lluvia, en junio bajó a 18 centímetros" } : f));
-    expect(status(two, "ra_7")).toBe("anchored");
+    expect(status(two, "ra_5")).toBe("anchored");
     expect(verify(two).issues.map((i) => i.code)).toContain("quantity_ambiguous");
   });
 });
@@ -120,28 +144,21 @@ describe("Fase 1 · secuencias: aparecer antes en el texto no es ocurrir antes",
     }),
     { pageCount: 2 },
   ).analysis;
-  const seq = (basis: "text_order" | "temporal" | "causal", links: Array<{ from_fact_id: string; to_fact_id: string; evidence_fact_id: string }>, prompt?: string) => {
+  const seq = (basis: "text_order" | "temporal" | "causal", links: Array<{ from_fact_id: string; to_fact_id: string; evidence_fact_id: string }>, prompt?: string, events = OWN_EVENTS) => {
     const p = plan();
-    p.facts = [
-      ...p.facts.filter((f) => !["f_9", "f_10", "f_11"].includes(f.id)),
-      { id: "f_9", kind: "event", source_ref: "ctt_1", quote: "dejó de llover durante semanas", label: "Deja de llover." },
-      { id: "f_10", kind: "event", source_ref: "ctt_1", quote: "bajó el nivel del agua", label: "Baja el agua." },
-      { id: "f_11", kind: "event", source_ref: "ctt_1", quote: "algunas plantas quedaron fuera del agua", label: "Las plantas quedan fuera." },
-      { id: "f_20", kind: "statement", source_ref: "ctt_1", quote: "dejó de llover durante semanas. Después bajó el nivel del agua" },
-      { id: "f_21", kind: "statement", source_ref: "ctt_1", quote: "bajó el nivel del agua. Por eso algunas plantas quedaron fuera del agua" },
-    ];
+    p.facts = [...p.facts, ...events];
     const a = activity(p, "ra_4");
     a.executor = { kind: "sequence", basis, event_fact_ids: ["f_9", "f_10", "f_11"], links };
     if (prompt) a.prompt = prompt;
     return p;
   };
-  it("temporal sin pruebas: sin comprobar (el estanque real)", () => {
-    expect(status(plan(), "ra_4")).toBe("anchored");
+  it("temporal sin pruebas, con el texto real del estanque: sin comprobar", () => {
+    expect(status(seq("temporal", [], undefined, POND_EVENTS), "ra_4")).toBe("anchored");
   });
-  it("temporal con un conector entre cada par: verificada; si falta un eslabón, no", () => {
+  it("temporal con un conector entre cada par: verificada; si falta un eslabón o el conector es de otro tipo, no", () => {
     const both = [{ from_fact_id: "f_9", to_fact_id: "f_10", evidence_fact_id: "f_20" }, { from_fact_id: "f_10", to_fact_id: "f_11", evidence_fact_id: "f_21" }];
-    expect(status(seq("temporal", both), "ra_4", ordered)).toBe("anchored"); // «por eso» is causal, not temporal: the 2nd step is not proven in time
-    expect(status(seq("causal", both), "ra_4", ordered)).toBe("anchored"); // «después» is temporal, not causal: the 1st step is not proven as a cause
+    expect(status(seq("temporal", both), "ra_4", ordered)).toBe("anchored"); // «por eso» is causal, not temporal
+    expect(status(seq("causal", both), "ra_4", ordered)).toBe("anchored"); // «después» is temporal, not causal
     expect(status(seq("temporal", both.slice(0, 1)), "ra_4", ordered)).toBe("anchored");
     const temporalOnly = sequenceWithBothTemporal();
     expect(status(temporalOnly.plan, "ra_4", temporalOnly.analysis)).toBe("verified");
@@ -155,49 +172,45 @@ describe("Fase 1 · secuencias: aparecer antes en el texto no es ocurrir antes",
 describe("Fase 1 · pistas cruzadas y soluciones equivocadas", () => {
   it("una afirmación verdadera de otra actividad que parafrasea la opción correcta", () => {
     const p = plan();
-    activity(p, "ra_6").executor = { kind: "true_false", statements: [{ text: "En junio el nivel del agua del estanque bajó.", value: true, evidence_fact_id: "f_7" }, { text: "Las ranas viven en el agua.", value: false, evidence_fact_id: "f_8" }] };
-    activity(p, "ra_6").operations = ["predict", "justify"];
-    expect(verify(p).issues.find((i) => i.code === "solution_revealed")?.message).toMatch(/con otras palabras/);
+    activity(p, "ra_4").executor = { kind: "true_false", statements: [{ text: "Las larvas de insectos se alimentan de las algas del estanque.", value: true, evidence_fact_id: "f_12" }, { text: "Las ranas viven en el agua.", value: false, evidence_fact_id: "f_12" }] };
+    expect(verify(p).issues.filter((i) => i.code === "solution_revealed").map((i) => i.message).join(" ")).toMatch(/con otras palabras|relación une/);
   });
   it("otra actividad que dice la relación que el esquema pide interpretar", () => {
     const p = plan();
-    activity(p, "ra_3").steps = ["Recuerda que las larvas comen algas."];
+    activity(p, "ra_2").steps = ["Recuerda que las larvas comen algas."];
     expect(verify(p).issues.find((i) => i.code === "solution_revealed")?.message).toMatch(/relación une/);
   });
-  it("el resultado, la opción correcta literal, el grupo de un ítem o la secuencia en orden", () => {
+  it("el resultado, la opción correcta literal o el grupo de un ítem", () => {
     const a = plan();
-    activity(a, "ra_7").steps = ["Debe darte 12."];
+    activity(a, "ra_5").steps = ["Debe darte 12."];
     expect(codes(a)).toContain("solution_revealed");
     const b = plan();
-    activity(b, "ra_6").steps = ["Que las larvas de insectos se alimentan de algas."];
+    activity(b, "ra_4").steps = ["Que las larvas de insectos se alimentan de algas."];
     expect(codes(b)).toContain("solution_revealed");
     const c = plan();
     activity(c, "ra_1").steps = ["Las algas son un ser vivo."];
     expect(codes(c)).toContain("solution_revealed");
-    const d = plan();
-    activity(d, "ra_3").steps = ["Pasan varias semanas sin llover; algunas plantas se quedan sin agua alrededor; hay menos sitios para esconderse."];
-    expect(codes(d)).toContain("solution_revealed");
   });
   it("un distractor que dice lo mismo que el dato de la opción correcta; pero no el que invierte la relación", () => {
     const p = plan();
-    const sel = activity(p, "ra_5").executor;
+    const sel = activity(p, "ra_3").executor;
     if (sel.kind !== "select") throw new Error("fixture");
     sel.options[0] = { text: "Que algunas larvas se alimentan de algas.", correct: false, evidence_fact_id: null };
     expect(codes(p)).toContain("distractor_supported");
-    expect(codes(plan())).not.toContain("distractor_supported"); // «las algas se alimentan de larvas» is the reverse, a fair distractor
+    expect(codes(plan())).not.toContain("distractor_supported");
   });
   it("selección sin cita o con recuento distinto; V/F uniforme", () => {
     const p = plan();
-    const s = activity(p, "ra_2").executor;
+    const s = activity(p, "ra_3").executor;
     if (s.kind !== "select") throw new Error("fixture");
     s.options = s.options.map((o) => (o.correct ? { ...o, evidence_fact_id: null } : o));
     expect(codes(p)).toContain("option_unanchored");
     const q = plan();
-    const t = activity(q, "ra_2").executor;
-    if (t.kind === "select") t.correct_count = 1;
+    const t = activity(q, "ra_3").executor;
+    if (t.kind === "select") t.correct_count = 2;
     expect(codes(q)).toContain("correct_count_mismatch");
     const r = plan();
-    activity(r, "ra_6").executor = { kind: "true_false", statements: [{ text: "La luz llega al estanque.", value: true, evidence_fact_id: "f_7" }, { text: "Hay algas.", value: true, evidence_fact_id: "f_8" }] };
+    activity(r, "ra_4").executor = { kind: "true_false", statements: [{ text: "La luz llega al estanque.", value: true, evidence_fact_id: "f_12" }, { text: "Hay algas.", value: true, evidence_fact_id: "f_12" }] };
     expect(codes(r)).toContain("true_false_uniform");
   });
 });
@@ -212,8 +225,7 @@ describe("Fase 1 · equivalencia pedagógica: lo que se comprueba y lo que queda
   });
   it("justificar pasa a elegir entre opciones: baja la exigencia y se rechaza", () => {
     const p = plan();
-    const a = activity(p, "ra_6");
-    a.executor = { kind: "select", correct_count: 1, options: [{ text: "Tendrían menos alimento.", correct: true, evidence_fact_id: "f_12" }, { text: "Tendrían más alimento.", correct: false, evidence_fact_id: null }, { text: "No les pasaría nada.", correct: false, evidence_fact_id: null }] };
+    activity(p, "ra_4").executor = { kind: "select", correct_count: 1, options: [{ text: "Tendrían menos alimento.", correct: true, evidence_fact_id: "f_12" }, { text: "Tendrían más alimento.", correct: false, evidence_fact_id: null }, { text: "No les pasaría nada.", correct: false, evidence_fact_id: null }] };
     expect(codes(p)).toContain("equivalence_production");
   });
   it("menos elementos que clasificar que en el original: se rechaza", () => {
@@ -225,8 +237,8 @@ describe("Fase 1 · equivalencia pedagógica: lo que se comprueba y lo que queda
   it("objetivo perdido, operación perdida, alcance curricular o de acceso, enunciado copiado, cita inventada", async () => {
     const p = plan();
     p.objectives = p.objectives.filter((o) => o.objective_id !== "obj_4");
-    p.activities = p.activities.filter((a) => a.id !== "ra_7");
-    p.guide.per_activity = p.guide.per_activity.filter((g) => g.activity_id !== "ra_7");
+    p.activities = p.activities.filter((a) => a.id !== "ra_5");
+    p.guide.per_activity = p.guide.per_activity.filter((g) => g.activity_id !== "ra_5");
     expect(codes(p)).toContain("objective_dropped");
     const q = plan();
     q.objectives = q.objectives.map((o) => (o.objective_id === "obj_3" ? { ...o, operations: o.operations.filter((op) => op !== "predict") } : o));
@@ -234,7 +246,7 @@ describe("Fase 1 · equivalencia pedagógica: lo que se comprueba y lo que queda
     expect(codes({ ...plan(), scope: { type: "curricular", authorized_objective_ids: ["obj_4"] } })).toContain("curricular_not_supported");
     expect(codes({ ...plan(), scope: { type: "accessibility" } })).toContain("recreation_requires_methodological");
     const r = plan();
-    activity(r, "ra_7").prompt = "¿Cuántos centímetros descendió el nivel del agua? Escribe la operación.";
+    activity(r, "ra_5").prompt = "¿Cuántos centímetros descendió el nivel del agua? Escribe la operación.";
     expect(codes(r)).toContain("activity_not_new");
     const s = plan();
     s.facts = s.facts.map((f) => (f.id === "f_12" ? { ...f, quote: "Las larvas comen ranas" } : f));
@@ -242,6 +254,21 @@ describe("Fase 1 · equivalencia pedagógica: lo que se comprueba y lo que queda
     expect(await runRecreation(fixedPlanner({ ...plan(), scope: { type: "curricular", authorized_objective_ids: ["obj_4"] } }), { analysis, context, scope: "methodological", plannerLabel: "x" })).toMatchObject({ status: "rejected", issues: [{ code: "scope_mismatch" }] });
   });
 });
+
+type Fact = RecreationPlan["facts"][number];
+/** The pond's own events (its real text: no connector between them). */
+const POND_EVENTS: Fact[] = [
+  { id: "f_9", kind: "event", source_ref: "ctt_1", quote: "Después de varias semanas sin lluvia", label: "Pasan varias semanas sin llover." },
+  { id: "f_10", kind: "event", source_ref: "ctt_1", quote: "Algunas plantas quedaron fuera del agua", label: "Algunas plantas se quedan sin agua alrededor." },
+  { id: "f_11", kind: "event", source_ref: "ctt_1", quote: "hubo menos lugares donde refugiarse", label: "Hay menos sitios para esconderse." },
+];
+const OWN_EVENTS: Fact[] = [
+  { id: "f_9", kind: "event", source_ref: "ctt_1", quote: "dejó de llover durante semanas", label: "Deja de llover." },
+  { id: "f_10", kind: "event", source_ref: "ctt_1", quote: "bajó el nivel del agua", label: "Baja el agua." },
+  { id: "f_11", kind: "event", source_ref: "ctt_1", quote: "algunas plantas quedaron fuera del agua", label: "Las plantas quedan fuera." },
+  { id: "f_20", kind: "statement", source_ref: "ctt_1", quote: "dejó de llover durante semanas. Después bajó el nivel del agua" },
+  { id: "f_21", kind: "statement", source_ref: "ctt_1", quote: "bajó el nivel del agua. Por eso algunas plantas quedaron fuera del agua" },
+];
 
 describe("Fase 3 · qué puede pedirse a un modelo de imagen", () => {
   it("nada que dependa de rótulos, flechas o números; ni pedirlos dentro de la imagen", () => {
@@ -277,10 +304,8 @@ function sequenceWithBothTemporal() {
   ).analysis;
   const p = plan();
   p.facts = [
-    ...p.facts.filter((f) => !["f_9", "f_10", "f_11"].includes(f.id)),
-    { id: "f_9", kind: "event", source_ref: "ctt_1", quote: "dejó de llover durante semanas", label: "Deja de llover." },
-    { id: "f_10", kind: "event", source_ref: "ctt_1", quote: "bajó el nivel del agua", label: "Baja el agua." },
-    { id: "f_11", kind: "event", source_ref: "ctt_1", quote: "algunas plantas quedaron fuera del agua", label: "Las plantas quedan fuera." },
+    ...p.facts,
+    ...OWN_EVENTS.slice(0, 3),
     { id: "f_20", kind: "statement", source_ref: "ctt_1", quote: "dejó de llover durante semanas. Después bajó el nivel del agua" },
     { id: "f_21", kind: "statement", source_ref: "ctt_1", quote: "bajó el nivel del agua. Más tarde algunas plantas quedaron fuera del agua" },
   ];
