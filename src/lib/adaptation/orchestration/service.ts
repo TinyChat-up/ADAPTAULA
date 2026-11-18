@@ -52,7 +52,7 @@ export interface ServiceDeps {
   orchestrator: OrchestratorDeps;
   reader: AdaptationReader;
   /** The versions for NEW adaptations (resolved once, then persisted). `plannerV3` only after the pilot gate allowed it. */
-  resolveVersions: (options?: { plannerV3?: RulesFreeze }) => PipelineVersions;
+  resolveVersions: (options?: { plannerV3?: RulesFreeze; recreation?: boolean }) => PipelineVersions;
   /**
    * The V3 pilot (ADR-046): the rules package a NEW adaptation of this workspace may be planned with, or null when the pilot gate
    * refuses it (any other workspace, deployment or backend). Absent: no pilot at all.
@@ -60,6 +60,11 @@ export interface ServiceDeps {
   plannerV3Pilot?: (workspaceId: string) => RulesFreeze | null;
   now?: () => Date;
   visualSupportOffer?: (workspaceId: string) => Promise<{ remaining: number; maxPerAdaptation: number } | null>;
+  /**
+   * ADR-053: whether «Hacer magia» of this workspace is created with the recreation engine (the server's switch, never the browser's).
+   * Absent: never. It only decides the engine of NEW automatic adaptations; every existing one keeps the engine it was created with.
+   */
+  recreationEngine?: (workspaceId: string) => boolean;
 }
 
 export type ServiceError =
@@ -144,10 +149,14 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
   // A curricular adaptation changes objectives: it needs an explicit authorisation for THIS sheet (objectives and analysis), which
   // does not exist yet. A preference of the profile is never one, so it is refused here instead of running as if it were access.
   if (request.adaptationType === "curricular") return { ok: false, code: "invalid", detail: ["La adaptación curricular necesita una autorización por ficha que todavía no está disponible"] };
+  // ADR-053: «Hacer magia» with the recreation engine builds a NEW sheet that keeps what is learnt, the level and the cognitive demand
+  // (the methodological scope). The choice and the scope are the server's: a type or an image request sent by the browser cannot change them.
+  const recreation = request.creationMode === "automatic" && deps.recreationEngine?.(actor.workspaceId) === true;
+  const adaptationType = recreation ? ("methodological" as const) : request.adaptationType;
   // The per-sheet scope applies when the teacher chose a methodological adaptation or the profile carries pedagogical data (V3).
   // Anything else keeps the context exactly as it was built before.
-  const scope = request.adaptationType === "methodological" ? ("methodological" as const) : request.adaptationType === "accessibility" && functional.data.schema_version === 3 && functional.data.pedagogy ? ("accessibility" as const) : null;
-  if (request.visualSupports === true) {
+  const scope = adaptationType === "methodological" ? ("methodological" as const) : adaptationType === "accessibility" && functional.data.schema_version === 3 && functional.data.pedagogy ? ("accessibility" as const) : null;
+  if (request.visualSupports === true && !recreation) {
     if (request.creationMode !== "automatic") return { ok: false, code: "invalid" };
     const offer = await deps.visualSupportOffer?.(actor.workspaceId);
     if (!offer) return { ok: false, code: "visual_supports_unavailable" };
@@ -169,13 +178,13 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
       learnerProfileId: request.learnerProfileId,
       profile: functional.data,
       education: { stage: profile.stage_slug ?? material.stage_slug, grade: profile.grade_slug ?? material.grade_slug, subject: material.subject_slug },
-      adaptationType: request.adaptationType,
+      adaptationType,
       teacherRequest: request.teacherRequest ?? null,
-      visualSupports: request.visualSupports === true,
+      visualSupports: request.visualSupports === true && !recreation,
       ...(scope ? { sheet: { scope, subjectSlug: material.subject_slug } } : {}),
       title: (request.title ?? material.title).slice(0, 200),
       requestKey: request.requestKey ?? randomUUID(),
-      versions: deps.resolveVersions(plannerV3 ? { plannerV3 } : {}),
+      versions: deps.resolveVersions({ ...(plannerV3 ? { plannerV3 } : {}), ...(recreation ? { recreation: true } : {}) }),
       creationMode: request.creationMode ?? "review",
     });
     return { ok: true, data: { adaptationId } };

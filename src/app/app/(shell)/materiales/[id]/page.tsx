@@ -27,6 +27,8 @@ import { getWorkspaceUsage } from "@/lib/plans/usage";
 import { IN_PROGRESS, type MaterialStatus } from "@/lib/materials/types";
 import { labelsFor } from "@/lib/profiles/catalog";
 import { getCatalog, listProfiles } from "@/lib/profiles/repository";
+import { recreationAllowed } from "@/lib/adaptation/recreation/engine";
+import { serverEnv } from "@/lib/config/env.server";
 import { AdaptationList } from "@/components/adaptation/adaptation-list";
 import { listAdaptations } from "@/lib/adaptation/orchestration/page-data";
 import { hasRole } from "@/lib/auth/workspace-select";
@@ -166,6 +168,7 @@ export default async function MaterialPage({ params, searchParams }: PageProps<"
                   canWrite={canWrite}
                   visualSupportOffer={visualOffer}
                   plannerPilot={plannerPilot}
+                  recreation={recreationAllowed(serverEnv(), ctx.workspace.id)}
                   newProfileHref={`/app/alumnos/nuevo?material=${material.id}`}
                   create={createAdaptationFromMaterialAction.bind(null, material.id)}
                 />

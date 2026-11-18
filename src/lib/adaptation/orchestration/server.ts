@@ -16,6 +16,8 @@ import { createModelReviewer } from "../reviewer";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAdaptationVisuals } from "@/lib/materials/visuals/auto/server";
 import { visualSupportOffer } from "@/lib/materials/visuals/illustrate/server";
+import { recreationAllowed } from "../recreation/engine";
+import { productionRecreation } from "../recreation/server";
 import { dbEntitlements } from "./entitlements-db";
 import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
@@ -60,11 +62,11 @@ export const orchestratorDeps = (): OrchestratorDeps => {
   // The orchestrator's warnings (automatic stops, corrections, a failed generation audit) reach the server log: scalar fields
   // only (ids, codes, check names), never content.
   const log = { warn: (event: string, data: Record<string, unknown>) => logger.warn(event, Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === null || ["string", "number", "boolean"].includes(typeof v) ? (v as string | number | boolean | null) : JSON.stringify(v)]))) };
-  return { store, services: productionServices, entitlements: dbEntitlements(store), log, supportSubstitution: serverEnv().SUPPORT_SUBSTITUTION_MODE, reviewerV2: serverEnv().REVIEWER_V2_MODE, visuals: { resolve: resolveAdaptationVisuals } };
+  return { store, services: productionServices, entitlements: dbEntitlements(store), log, supportSubstitution: serverEnv().SUPPORT_SUBSTITUTION_MODE, reviewerV2: serverEnv().REVIEWER_V2_MODE, visuals: { resolve: resolveAdaptationVisuals }, recreation: productionRecreation() };
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */
-export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, { ...options, reviewerV2: serverEnv().REVIEWER_V2_MODE !== "off" });
+export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze; recreation?: boolean } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, { ...options, reviewerV2: serverEnv().REVIEWER_V2_MODE !== "off" });
 
 /** The rules package a pilot adaptation is frozen with: the published manifest, offered only where the gate allows it. */
 export const plannerV3PilotRules = (workspaceId: string): RulesFreeze | null => (plannerV3PilotAllowed(workspaceId) ? { version: AGENT_RULES_V22.version, package_sha256: AGENT_RULES_V22.package_sha256 } : null);
@@ -102,5 +104,5 @@ export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
 }
 
 export function serviceDeps(supabase: SupabaseClient): ServiceDeps {
-  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv, visualSupportOffer, plannerV3Pilot: plannerV3PilotRules };
+  return { orchestrator: orchestratorDeps(), reader: supabaseReader(supabase), resolveVersions: resolveVersionsFromEnv, visualSupportOffer, plannerV3Pilot: plannerV3PilotRules, recreationEngine: (workspaceId) => recreationAllowed(serverEnv(), workspaceId) };
 }

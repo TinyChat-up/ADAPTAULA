@@ -291,6 +291,20 @@ export class AdaptationStore {
     return { duplicate: data.duplicate, status: data.status };
   }
 
+  // --- the recreation engine's server-only data (ADR-053, migration 037) ------------------------------------------------------
+  /** The verified plan (with its solutions) that passes from the planning stage to the generation stage. Never member-readable. */
+  async putRecreationPlan(adaptationId: string, lease: { jobId: string; attempt: number } | null, plan: unknown, verification: unknown, planFingerprint: string): Promise<void> {
+    await this.call("put_recreation_plan", { p_adaptation: adaptationId, p_job: lease?.jobId ?? null, p_attempt: lease?.attempt ?? null, p_plan: plan, p_verification: verification, p_fp: planFingerprint });
+  }
+  async getRecreationPlan(adaptationId: string): Promise<{ plan: unknown; verification: unknown; plan_fingerprint: string } | null> {
+    const data = await this.call("get_recreation_plan", { p_adaptation: adaptationId });
+    return data === null ? null : z.object({ plan: z.unknown(), verification: z.unknown(), plan_fingerprint: Fingerprint }).parse(data);
+  }
+  /** The readable part and the server-only part of a persisted version, in one call. */
+  async putRecreationVersion(adaptationId: string, lease: { jobId: string; attempt: number } | null, versionId: string, publicPart: unknown, internalPart: unknown): Promise<void> {
+    await this.call("put_recreation_version", { p_adaptation: adaptationId, p_job: lease?.jobId ?? null, p_attempt: lease?.attempt ?? null, p_version: versionId, p_public: publicPart, p_internal: internalPart });
+  }
+
   // --- entitlements (docs/BILLING.md § Adaptaciones) --------------------------------------------------------------------
   async reserveEntitlement(adaptationId: string, userId: string | null): Promise<{ allowed: boolean; reason?: string; state?: string; duplicate?: boolean }> {
     return z.object({ allowed: z.boolean(), reason: z.string().optional(), state: z.string().optional(), duplicate: z.boolean().optional() }).parse(await this.call("reserve_adaptation_entitlement", { p_adaptation: adaptationId, p_user: userId }));

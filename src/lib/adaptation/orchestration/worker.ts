@@ -1,6 +1,8 @@
 import "server-only";
 import { logger } from "@/lib/logger";
 import { continueAutomatically, correctAutomatically, latestReviewFingerprint, resumeAutomatically, runGenerationStage, runPlanningStage, type OrchestratorDeps, type StageOutcome } from "./orchestrator";
+import { usesRecreation } from "../recreation/engine";
+import { resumeRecreation, runRecreationGeneration, runRecreationPlanning } from "../recreation/stages";
 import type { StageName } from "./store";
 
 /**
@@ -62,6 +64,8 @@ export interface ProcessOptions {
 
 /** The one processor of a stage job, whoever calls it. The stage functions claim the job themselves: a held job is `skipped`. */
 async function runStageJob(deps: OrchestratorDeps, adaptationId: string, stage: StageName): Promise<StageOutcome> {
+  // ADR-053: an adaptation created with the recreation engine runs ITS stages (frozen at creation); every other one, the original ones.
+  if (usesRecreation((await deps.store.getPipeline(adaptationId))?.adaptation.pipeline_versions)) return stage === "planning" ? runRecreationPlanning(deps, adaptationId) : runRecreationGeneration(deps, adaptationId);
   if (stage === "planning") {
     const planned = await runPlanningStage(deps, adaptationId);
     // «Hacer magia»: a valid plan goes on to generation (queued, run by the next request) instead of waiting for a person.
@@ -91,7 +95,9 @@ export async function processAdaptationStage(deps: OrchestratorDeps, adaptationI
   let job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
   // An automatic adaptation interrupted between two steps (the process died, a refresh): resume it now.
   if (!job && snapshot?.adaptation.creation_mode === "automatic") {
-    if (!(await resumeAutomatically(deps, adaptationId))) return null;
+    if (usesRecreation(snapshot.adaptation.pipeline_versions)) {
+      if (!(await resumeRecreation(deps, adaptationId))) return null;
+    } else if (!(await resumeAutomatically(deps, adaptationId))) return null;
     snapshot = await deps.store.getPipeline(adaptationId);
     job = snapshot?.jobs.find((j) => j.status === "queued" || j.status === "processing");
   }

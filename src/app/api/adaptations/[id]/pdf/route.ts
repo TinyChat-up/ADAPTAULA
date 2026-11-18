@@ -13,6 +13,7 @@ import { generatedDeps } from "@/lib/render/generated";
 import { exportAdaptationPdf, type PdfExportError } from "@/lib/render/pdf-export";
 import { pdfEngine } from "@/lib/render/print/server";
 import { draftStore } from "@/lib/editor/store";
+import { recreationMaterialsOf } from "@/lib/adaptation/recreation/reader";
 import { PDF_HEADERS, pdfRevision } from "@/lib/render/pdf-contract";
 
 // The first PDF of a new instance unpacks Chromium (≈2–3 s); a render is well under a second after that.
@@ -53,7 +54,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/adapt
   const expectedVersion = rawVersion === null ? undefined : Number(rawVersion);
   if (expectedVersion !== undefined && !z.number().int().positive().safeParse(expectedVersion).success) return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
   const actor: Actor = { userId: auth.ctx.user.id, workspaceId: auth.ctx.workspace.id, canWrite: hasRole(auth.ctx.role, WRITE_ROLES) };
-  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision, expectedVersion);
+  // ADR-053: `?documento=materiales` prints the cut-out materials of a recreated sheet (read with the user's RLS; nothing is generated).
+  const document = new URL(request.url).searchParams.get("documento");
+  if (document !== null && document !== "materiales") return withRequestId(apiError(404, "not_found", ERRORS.not_found.message));
+  const alternate = document === "materiales" ? { read: () => recreationMaterialsOf(supabase, id) } : undefined;
+  const result = await exportAdaptationPdf({ service: serviceDeps(supabase), visuals: visualDeps(supabase), resources: resourceDeps(supabase), generated: generatedDeps(supabase), engine: pdfEngine(), drafts: draftStore(supabase) }, actor, id, draftRevision, expectedVersion, alternate);
   if (!result.ok) {
     logger.warn("pdf_request", { requestId, outcome: result.code, durationMs: Math.round(performance.now() - started) });
     return withRequestId(apiError(ERRORS[result.code].status, result.code, ERRORS[result.code].message));

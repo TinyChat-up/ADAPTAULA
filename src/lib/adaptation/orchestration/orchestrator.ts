@@ -39,6 +39,7 @@ import { buildReviewScoped, withSemanticChecks } from "../reviewer";
 import { SEMANTIC_POLICY_VERSION, buildSemanticScope, effectiveReviewerMode, judgeSupports, restrictionFor, semanticChecks, semanticFlags, summarize, type ReviewerV2Mode, type SemanticRecord, type SemanticRecordSet } from "../support-semantic";
 import { preservationRefs, withOriginals } from "../restoration";
 import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
+import type { RecreationServices } from "../recreation/services";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
 import { AdaptationError, FAILURE_KIND, classifyAIFailure, type AdaptationErrorCode, type Stage } from "./errors";
 import { EntitlementError, FailureBudgetError, GenerationLimitError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type CreationMode, type PipelineSnapshot } from "./store";
@@ -105,6 +106,8 @@ export interface OrchestratorDeps {
    * reviewer; one created with v1 always runs v1.
    */
   reviewerV2?: ReviewerV2Mode;
+  /** ADR-053: the recreation engine's services (models and illustration gate). Absent: an adaptation created with that engine cannot run. */
+  recreation?: RecreationServices;
   visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 
@@ -280,7 +283,7 @@ export async function createAdaptation(deps: OrchestratorDeps, input: CreateAdap
 // Shared stage machinery
 // ---------------------------------------------------------------------------------------------------------------------
 
-interface StageRun {
+export interface StageRun {
   job: ClaimedStage;
   ids: Parameters<typeof runRow>[1];
   lease: { jobId: string; attempt: number };
@@ -1918,3 +1921,9 @@ export async function recoverFailedPlanning(deps: OrchestratorDeps, adaptationId
     throw error;
   }
 }
+
+/**
+ * The stage machinery the recreation engine (ADR-053) reuses as it is: the same claim and lease, the same failure taxonomy and retry
+ * policy, the same ordered transitions, the same ambiguity stop and the same `ai_runs` rows. It adds no domain rule of the original engine.
+ */
+export const stageKit = { claim, failStage, advance, load, settings, stopOnAmbiguity, planningFingerprint, runRow, release };

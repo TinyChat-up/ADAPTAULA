@@ -722,3 +722,10 @@ La disponibilidad de generación exige la configuración cerrada `AI_IMAGES_PILO
 ## Piloto privado de Stripe TEST en producción (2026-10-23)
 
 La decisión del fundador permite `production-pilot` en Vercel Production para un único backend y workspace. Se mantiene la generación de imágenes tras flag independiente. La migración 030 guarda una solicitud privada, asocia el Checkout TEST a una suscripción y caduca el plan efectivo sin Cron; solo modifica condiciones efectivas de esa concesión, no la tabla de planes. Se reutilizan `subscriptions`, cuotas e idempotencia transaccional de `stripe_events`; los eventos se registran con prefijo `pilot-test:`. Las suscripciones anteriores se rechazan para evitar sobrescribir condiciones. Una integración LIVE futura necesitará reconciliar/segregar explícitamente estos registros TEST antes de habilitar cobros. [Procedimiento](qa/stripe-piloto-produccion/README.md).
+
+## ADR-052b — «Hacer magia» con el motor de recreación (ADR-053, 2026-11-18)
+
+- **Decisión.** El motor de recreación sustituye al de siempre en «Hacer magia», detrás de `HACER_MAGIA_ENGINE` (`off` por defecto | `pilot` | `on`), fijado en `pipeline_versions.engine` al crear la adaptación. «Revisar antes de crear» y las adaptaciones históricas no cambian.
+- **Reutilización.** La recreación es una adaptación: mismos estados, trabajos, cuota, versiones, `ai_runs` y PDF. Solo cambian las etapas (`src/lib/adaptation/recreation/`).
+- **Datos.** Migración 037 (solo local): `recreation_versions` (legible, sin respuestas), `recreation_internals` y `recreation_plans` (solo servidor).
+- **Consecuencias.** Un solo camino en la tarjeta con el indicador encendido; alcance metodológico fijado por el servidor; sin edición de la ficha recreada. Pasos de activación: [QA](qa/hacer-magia-recreacion/README.md).
