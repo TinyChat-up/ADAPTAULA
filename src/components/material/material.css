@@ -164,6 +164,10 @@ ul.ms-list { list-style: disc; }
    evitar el salto después la pegaría a la actividad siguiente. */
 .ms-activity[data-table-answer]:not(:has(> .ms-activity-figures)) { break-after: avoid; }
 .ms-activity-supports { margin-top: .55em; display: flex; flex-direction: column; gap: .5em; break-after: avoid; break-inside: avoid; }
+/* An activity too tall to keep whole (no data-keep) may continue between two of its figures (each figure stays whole, and the first
+   one stays with the prompt): one unbreakable block of a diagram and a framed support pushed the whole activity onto a new sheet and
+   left the previous one almost empty (the pond sheet's 3a). */
+.ms-activity:not([data-keep]) > .ms-activity-figures { break-inside: auto; break-after: auto; }
 /* Al menos dos líneas de escritura acompañan al enunciado y a sus apoyos; el resto puede seguir en la página siguiente. */
 .ms-answer > .ms-lines > div:nth-child(-n+2) { break-before: avoid; }
 
@@ -229,6 +233,10 @@ ul.ms-list { list-style: disc; }
 .ms-vflow-arrow { font-weight: 600; }
 .ms-vsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5em; }
 .ms-vsteps > li { flex: 1 1 9em; display: flex; gap: .45em; align-items: flex-start; border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .45em .6em; }
+/* Four steps or more read as one list, a step per row: in two narrow columns each wrapped to five lines and the support grew larger
+   than the activity it serves (the real pond sheet: five steps, 130 mm beside an 18 mm diagram). Same type size, less height. */
+.ms-vsteps:has(> li:nth-child(4)) { gap: .3em; }
+.ms-vsteps:has(> li:nth-child(4)) > li { flex-basis: 100%; padding: .25em .6em; }
 .ms-vstep-n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; border-radius: 50%; border: 1.5px solid var(--ms-accent); color: var(--ms-accent); font-weight: 700; font-size: .85em; }
 .ms-vcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(10em, 1fr)); gap: .5em; }
 .ms-vcards > li { display: flex; flex-direction: column; gap: .15em; border: 1px solid var(--ms-rule-soft); border-left: 3px solid var(--ms-accent); padding: .4em .6em; }

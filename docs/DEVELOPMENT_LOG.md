@@ -1,5 +1,9 @@
 # Registro de desarrollo
 
+## 2026-11-18 — PR #98: validación con los artefactos guardados del estanque
+
+Lectura de solo lectura del documento, análisis, plan, generación y resolución visual de la versión real. El documento reproduce exactamente las 7 páginas, y la reconstrucción desde los artefactos coincide con lo guardado. Causas: el estimador infravalora las unidades y el «no partir» empuja una actividad entera; el bloque de figuras es indivisible; los pasos van en dos columnas; el recorte no incluye los nombres del esquema; las fotos se omiten por ser `illustrative` y no tener actividad; no se pidió ninguna imagen generada. Correcciones: tope de media página para «no partir», figuras divisibles en actividades no compactas, pasos en una columna y recorte con nombres del análisis (`withNamedLabels`). Resultado en el caso real: 7 → 6 páginas, ninguna casi vacía, esquema con rótulos, sin reducir letra ni respuestas. Pruebas: `pdf-quality-real-case.test.ts` (sintética, falla sin la corrección), unitarias, BD y PDF correctas; typecheck, lint y privacidad correctos. Pendientes: fotografías, glosario que revela 3a, cuatro eslabones de 3b. [Informe](qa/calidad-visual-pdf/caso-real.md).
+
 ## 2026-11-14 — PR #98: contraste con los PDF reales y etiquetas de apartado
 
 Se continúa `codex/calidad-visual-pdf` desde `4c4bc40`, conservando los cambios previos. Los dos PDF suministrados están identificados por huella y revisados página a página (original 1, adaptación 7); no se publican sus bytes ni fotografías en Git. La lectura se conserva, pero faltan las dos fotos contextuales y el esquema incrustado ya tiene rótulos truncados. Se demuestra extracción local completa; no se modifica la adaptación persistida ni se atribuye sin evidencia el origen del fallo al análisis. La transcripción experimental al modelo produce ocho páginas: no es una reproducción equivalente ni un «después» válido.

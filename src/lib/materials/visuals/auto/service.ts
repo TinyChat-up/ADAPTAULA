@@ -128,7 +128,8 @@ export function autoTargets(analysis: MaterialAnalysis): Array<VisualTarget & { 
     const informative = (v.role === "required" || v.role === "informative") && v.kind !== "decorative";
     if ((!informative && users.length === 0) || (v.table && v.table.rows.length > 0) || v.chart) return [];
     const shape = shapeOf(v);
-    return [{ id: v.id, page: v.page, shape, activityIds: users.map(a => a.id), visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null }];
+    const labels = v.text ? v.text.split(/[;\n]/).map((l) => l.trim()).filter((l) => l.length > 0) : [];
+    return [{ id: v.id, page: v.page, shape, activityIds: users.map(a => a.id), visual: v, marks: shape === "figure" ? expectedMarks(v, users) : null, labels }];
   });
 }
 

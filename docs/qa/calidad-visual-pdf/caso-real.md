@@ -92,3 +92,82 @@ pnpm check:privacy
 - Sin E2E, pruebas de la aplicación en escritorio/móvil, IA de pago, servicios remotos de datos, migraciones, merge ni despliegue.
 
 **Recomendación: NO MERGE como solución completa del caso real.** Las correcciones acotadas tienen pruebas, pero faltan la reproducción con el documento persistido y la revisión de apoyos que anticipan respuestas. Próximo paso: aportar ese paquete mínimo, imprimirlo con el único renderer existente y corregir únicamente las diferencias reproducidas, preservando el perfil y la capacidad de respuesta.
+
+---
+
+# Validación con los artefactos guardados (2026-11-18)
+
+Continuación sobre `591efaa`. Ya están los artefactos que faltaban en la sección anterior: el documento guardado de la versión, su análisis, plan, revisión, generación, contexto de presentación y resolución visual, leídos **en solo lectura** con la autorización del propietario. No se ha modificado Supabase ni regenerado nada. Sin IA, E2E, migraciones, merge ni despliegue. Los PDF del usuario, el documento y las imágenes siguen fuera de Git; las pruebas que se suben usan equivalentes sintéticos.
+
+## Reproducción exacta
+
+| Comprobación | Resultado |
+| --- | --- |
+| Documento guardado → renderer de esta rama (CLARO, mismo recorte de 1482 × 180 px) | **7 páginas**, mismo reparto que el PDF descargado (p. 4 con una sola entrada de glosario; p. 7 de continuación). |
+| Reconstrucción desde análisis + plan revisado + contexto + segmentos generados + resolución visual (`buildDocument` → `applyVisualResolution` → `addVisualSupports`) | **Idéntica** al documento guardado: los defectos no vienen de ediciones posteriores ni de datos perdidos. |
+| Localizador automático, parte determinista, sobre la página original | El esquema (`vis_3`) solo pasa el umbral con la visión; las fotografías (`vis_1`) **no se buscan**. |
+
+## Causas raíz
+
+1. **Página casi vacía (p. 4).** El estimador de altura se queda corto: la unidad de la actividad 2 se calculaba en 134 mm y ocupa 243 mm; la 3a, «compacta» por filas (18), ocupa casi una página. Con «no partir» activado, Chromium la empuja entera a la hoja siguiente y después la parte igualmente. El bloque de figuras (esquema + tarjeta de pasos) era además indivisible.
+2. **Apoyo más grande que la actividad.** Los cinco pasos «Cómo mirar las flechas» se dibujaban en dos columnas estrechas: unos 130 mm junto a un esquema de 18 mm.
+3. **Esquema sin rótulos.** El recorte aceptado acaba justo encima de los rótulos «Algas · Larvas de insectos · Ranas · Garzas». El localizador solo añadía rótulos de una letra o número (los de una recta numérica), no nombres, aunque el análisis los lista en `visual.text`.
+4. **Fotografías perdidas.** El análisis las clasifica como `illustrative` y ninguna actividad las usa. `autoTargets` no las busca y la política las omite (`optional_original`). No es un fallo del recorte ni del alto contraste.
+5. **No hay imágenes nuevas (Claude/OpenAI).** El plan no pidió ningún apoyo visual generado de imagen; solo una figura por especificación (`steps`). La ruta de OpenAI no llega a evaluarse. Tampoco habría sido prioritaria: reutilizar una foto original válida va antes que generarla.
+
+## Correcciones de esta actualización
+
+| Corrección | Archivo | Prueba |
+| --- | --- | --- |
+| Solo se marca «no partir» (unidad y caja) lo que la estimación sitúa por debajo de **media página**: el estimador se equivoca por defecto y un «no partir» erróneo cuesta una hoja casi vacía. | `src/lib/render/model.ts` | `pdf-quality-real-case.test.ts`: falla con el tope anterior y pasa con el nuevo; una actividad corta sigue entera. |
+| Estimación: tarjetas de pasos o fichas según su texto; glosario, ayudas, listas y organizadores según sus líneas. | `src/lib/render/model.ts` | Suites unitarias y PDF existentes. |
+| Una actividad no compacta puede continuar entre sus figuras; cada figura sigue entera y la primera, con la consigna. | `material.css` | Regla verificada en CSS; ensayo real 7 → 6 páginas. |
+| Cuatro pasos o más: uno por fila, mismo tamaño de letra y menos altura (unos 130 → 75 mm). | `material.css` | Ídem. |
+| El recorte de una figura incluye los nombres de sus partes que el análisis lee, solo si **todos** aparecen a ≤ 8 mm y a lo ancho de la figura. Nunca texto corrido. Se aplica después de aceptar, así que no cambia qué región se elige. | `auto/locate.ts`, `auto/service.ts` | Unitarias sintéticas: crece con todos los nombres; no cambia si falta uno, si están lejos o si hay texto corrido. Página real: el recorte pasa de 0,0624 a 0,0906 de alto e incluye los cuatro rótulos. |
+| Expectativa CSS de la matriz v3 actualizada a la regla de `3a/3b` que ya cambió esta PR (fallaba en `591efaa`). | `real-run-v3-matrix.test.ts` | Pasa. |
+
+`auto_visuals@v8` y `material_renderer@v9` no se publicaron aún (la PR no está fusionada): el cambio va en esas mismas versiones.
+
+## ANTES / DESPUÉS en el caso real (renderer de Adaptaula, PDF de Chromium)
+
+El ANTES es el documento guardado con el recorte de producción. El DESPUÉS es el mismo documento con esta rama y el recorte con rótulos, recalculado desde la página original con el localizador nuevo. La comparativa de imágenes se entrega aparte y no se sube a Git.
+
+| Criterio | ANTES | DESPUÉS |
+| --- | --- | --- |
+| Páginas | 7 | **6** |
+| Páginas casi vacías sin justificar | p. 4 (1 % de tinta) y p. 7 (2 %) | **Ninguna.** La última (2,6 %) contiene las líneas de 3b y su autocomprobación. |
+| Imágenes deformadas o cortadas | Esquema sin rótulos | Esquema con sus cuatro rótulos; proporción conservada. Sin recortes de borde en el PDF. |
+| Fotografías útiles conservadas | No | **No (pendiente, ver abajo)** |
+| Apoyos mayores que la actividad | Pasos ≈ 130 mm | Pasos ≈ 75 mm; el esquema sigue siendo pequeño (27 mm, como en el original) |
+| Identidad (perfil con color) | Acento y esquema en color | Igual |
+| Contraste y necesidades funcionales | Letra ampliada, líneas amplias | **Igual: sin reducir letra ni interlineado.** |
+| Espacios de respuesta | 3 / tabla 3×2 / 3 / organizador + líneas | **Idénticos** |
+| Páginas forzadas o letra reducida | — | No: el cambio solo afecta a dónde se puede cortar. |
+| Respuesta junto al enunciado | 3a: líneas dos páginas después | 3a: líneas en la página siguiente. Mejora, pero sigue separada. |
+
+## Valoración pedagógica (A–F), sin cambios de contenido en esta actualización
+
+- **A · Objetivos y contenidos.** Se mantienen la lectura literal, las cuatro consignas y los seis componentes. No se reduce la demanda curricular.
+- **B · Medidas de acceso.** Letra y líneas amplias, glosario y pasos son de acceso. Se conservan.
+- **C · Apoyos visuales.** El esquema ya es legible. Las fotografías de contexto siguen ausentes. La tarjeta de pasos es un apoyo de método legítimo si el objetivo no es elegir el procedimiento.
+- **D · Carga de lectura y escritura.** La lista «Antes de entregar» al inicio y los pasos de la actividad 1 añaden lectura antes de la tarea (pendiente de orden).
+- **E · Riesgo de anticipar la respuesta.** **Alto en 3a:** la definición «Serie de seres vivos en la que cada uno se alimenta del anterior» dice lo que indican las flechas. El ejemplo de la actividad 2 enseña el criterio con otros elementos: aceptable como ejemplo de método. Este caso pertenece al revisor semántico (2.3), hoy en `off`; no se resuelve borrando a mano.
+- **F · Coherencia de actividades y espacios.** 3b: el organizador de **cuatro eslabones** fija una longitud que el original no pide. Además el análisis la clasifica como redacción, así que recibe 10 líneas por curso **además** de las casillas: espacio duplicado. No se cambia la regla de redacción: una prueba fija deliberadamente que «Escribe sobre tu barrio» con 2 líneas impresas pase a 10 en 5.º.
+
+## Resuelto / pendiente
+
+**Resuelto y probado:** página casi vacía por «no partir» erróneo; bloque de figuras indivisible; pasos desproporcionados; esquema sin rótulos; etiqueta `3a/3b` (actualización anterior).
+
+**Pendiente (con causa identificada):**
+
+1. **Fotografías de contexto.** Necesitan una regla de destino (encabezado o lectura) para imágenes `illustrative` sin actividad, o extraer los objetos de imagen nativos del PDF. Hoy se omiten por diseño. Decisión de producto.
+2. **3a: el glosario revela la respuesta.** Corresponde al revisor 2.3 (`REVIEWER_V2_MODE`), que sigue en `off` hasta validarse con el corpus.
+3. **3b: cuatro eslabones fijos y espacio duplicado.** Es del planificador y del análisis, no del renderer.
+4. **Líneas de 3a en la página siguiente a su enunciado.** Viene de la altura real de figuras y apoyos; no se fuerza con letra menor.
+5. **Alto contraste sin identidad.** Los tokens son negro puro por regla probada («alto contraste es blanco y negro»). Un acento oscuro AAA sería una decisión de diseño.
+6. **El estimador sigue siendo aproximado.** Una medición en Chromium antes de imprimir sería exacta, pero el motor de impresión no maqueta por contrato (ADR): se deja como propuesta.
+7. **Recorte por la derecha (≈ 2 mm de la garza).** Lo decide el candidato que eligió el localizador con visión; no se amplía sin evidencia.
+
+Pruebas de esta actualización: 1.993 unitarias y 515 de BD correctas; 101 PDF correctas; typecheck correcto; lint con 0 errores y el aviso preexistente `_id`; `check:privacy` correcto. No se ejecutan E2E ni `pnpm build` (bloqueado por Google Fonts, ver arriba).
+
+**Recomendación:** fusionable como mejora de presentación con pruebas. **No** declara apta la ficha del estanque: siguen abiertos los puntos 1 a 3.
