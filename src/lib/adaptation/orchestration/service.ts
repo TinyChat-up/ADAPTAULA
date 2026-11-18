@@ -20,6 +20,7 @@ import { methodNotes, type MethodNote } from "../v22/notes";
 import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
+import type { RecreationApproach } from "@/lib/recreation/input";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,
@@ -52,7 +53,7 @@ export interface ServiceDeps {
   orchestrator: OrchestratorDeps;
   reader: AdaptationReader;
   /** The versions for NEW adaptations (resolved once, then persisted). `plannerV3` only after the pilot gate allowed it. */
-  resolveVersions: (options?: { plannerV3?: RulesFreeze; recreation?: boolean }) => PipelineVersions;
+  resolveVersions: (options?: { plannerV3?: RulesFreeze; recreation?: boolean; approach?: RecreationApproach }) => PipelineVersions;
   /**
    * The V3 pilot (ADR-046): the rules package a NEW adaptation of this workspace may be planned with, or null when the pilot gate
    * refuses it (any other workspace, deployment or backend). Absent: no pilot at all.
@@ -124,6 +125,8 @@ export interface CreateAdaptationRequest {
   creationMode?: CreationMode;
   /** `v22`: the experimental planner, honoured only where the server's pilot gate allows it (never decided by the browser). */
   planner?: PlannerChoice;
+  /** ADR-053: the teacher's orientation for «Hacer magia» (auto by default). Frozen with the adaptation. */
+  approach?: RecreationApproach;
 }
 
 export const PLANNER_CHOICES = ["current", "v22"] as const;
@@ -184,7 +187,7 @@ export async function createAdaptationCommand(deps: ServiceDeps, actor: Actor, r
       ...(scope ? { sheet: { scope, subjectSlug: material.subject_slug } } : {}),
       title: (request.title ?? material.title).slice(0, 200),
       requestKey: request.requestKey ?? randomUUID(),
-      versions: deps.resolveVersions({ ...(plannerV3 ? { plannerV3 } : {}), ...(recreation ? { recreation: true } : {}) }),
+      versions: deps.resolveVersions({ ...(plannerV3 ? { plannerV3 } : {}), ...(recreation ? { recreation: true, approach: request.approach ?? "auto" } : {}) }),
       creationMode: request.creationMode ?? "review",
     });
     return { ok: true, data: { adaptationId } };

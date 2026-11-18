@@ -100,6 +100,12 @@ function planFailure(planned: Exclude<PlannedRecreation, { status: "planned" }>)
   }
 }
 
+/** A failure the system will not retry by itself gives the unit back: a failed «Hacer magia» never costs one. */
+async function releaseOnFinalFailure(deps: OrchestratorDeps, adaptationId: string, workspaceId: string, outcome: StageOutcome): Promise<StageOutcome> {
+  if (outcome.outcome === "failed" || outcome.outcome === "human_action_required") await stageKit.release(deps, { id: adaptationId, workspaceId }, `recreation_${outcome.code ?? "failed"}`);
+  return outcome;
+}
+
 export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId: string): Promise<StageOutcome> {
   const store = deps.store;
   const snapshot = await store.getPipeline(adaptationId);
@@ -137,7 +143,7 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     const planner = deps.recreation.planner({ versions: loaded.versions, ids, spentUsd: () => plannerSpent(store, adaptationId), record: recorder(store, ids) });
     // A call whose outcome is unknown (the process dies in the middle) is never repeated by itself: the next attempt stops as ambiguous.
     await store.markProviderCall(job.id, job.attempts);
-    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE });
+    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto" });
     await store.clearProviderCall(job.id, job.attempts);
     if (planned.status !== "planned") {
       // Content-free diagnostics: codes and schema paths only, never plans, quotes, answers or student data.
@@ -152,7 +158,7 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     return { outcome: "completed", status: await handoff(deps, adaptationId), jobId: job.id };
   } catch (error) {
     if (error instanceof LeaseLostError) return { outcome: "skipped", status: await statusOf(store, adaptationId), jobId: job.id };
-    return stageKit.failStage(deps, run, "planning", error);
+    return releaseOnFinalFailure(deps, adaptationId, ids.workspaceId, await stageKit.failStage(deps, run, "planning", error));
   }
 }
 
@@ -220,9 +226,11 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
 
     current = await stageKit.advance(store, adaptationId, current, "reviewing_deterministic");
     await store.setStep(job.id, job.attempts, "reviewing", 60);
-    current = await stageKit.advance(store, adaptationId, current, "reviewing_ai");
+    await stageKit.advance(store, adaptationId, current, "reviewing_ai");
     const made = versionOf(outcome, { id: randomUUID(), lineId: adaptationId, version: 1, workspaceId: ids.workspaceId, now: new Date().toISOString() }, [], { contract: RECREATION_CONTRACT, verifier: RECREATION_VERIFIER_VERSION, visuals: RECREATION_VISUALS_VERSION, planner: plannerLabel });
     if (!made) throw new AdaptationError("generator_validation", "la recreación no produjo una versión");
+    // A sheet that lacks something essential (a picture an activity needs) is never delivered as final.
+    if (made.version.state === "incomplete") throw new AdaptationError("generator_validation", "falta un recurso imprescindible");
     // The sheet that is stored in the adaptation's version carries NO answers (`versionOf` emptied the key and kept it in `internal`).
     const version = await store.persistVersion(adaptationId, run.lease, made.version.student, { plan: stored.plan_fingerprint, review: stored.plan_fingerprint, generation: genFp });
     await store.putRecreationVersion(
@@ -239,7 +247,7 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     return { outcome: "completed", status: "ready", jobId: job.id, delivered: true, version: version.version };
   } catch (error) {
     if (error instanceof LeaseLostError) return { outcome: "skipped", status: await statusOf(store, adaptationId), jobId: job.id };
-    return stageKit.failStage(deps, run, "generation", error);
+    return releaseOnFinalFailure(deps, adaptationId, ids.workspaceId, await stageKit.failStage(deps, run, "generation", error));
   }
 }
 

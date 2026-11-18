@@ -120,7 +120,7 @@ export function originalOperations(analysis: MaterialAnalysis): Record<string, C
   return Object.fromEntries(Object.entries(out).map(([id, ops]) => [id, COGNITIVE_OPERATIONS.filter((op) => ops.has(op))]));
 }
 
-const EXECUTOR_OPERATION: Partial<Record<RecreationActivity["executor"]["kind"], CognitiveOperation>> = { classify: "classify", sequence: "sequence", compute: "calculate" };
+export const EXECUTOR_OPERATION: Partial<Record<RecreationActivity["executor"]["kind"], CognitiveOperation>> = { classify: "classify", sequence: "sequence", compute: "calculate" };
 /** Operations the student PRODUCES (writes or says): replacing them by choosing among given options lowers the demand. */
 const PRODUCTION_OPERATIONS: ReadonlySet<CognitiveOperation> = new Set(["justify", "propose", "predict", "locate_evidence"]);
 

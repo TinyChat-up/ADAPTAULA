@@ -5,7 +5,8 @@ import { MODEL_ALIASES, type ModelSelection } from "@/lib/ai/types";
 import { PEDAGOGICAL_REVIEW_SCHEMA_VERSION } from "@/lib/schemas/pedagogical-review";
 import { MATERIAL_DOCUMENT_SCHEMA_VERSION } from "@/lib/schemas/material-document";
 import { ADAPTATION_PLAN_SCHEMA_VERSION } from "@/lib/schemas/adaptation-plan";
-import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
+import { RECREATION_PLANNER_V3 } from "@prompts/recreation-planner/v3";
+import { RECREATION_APPROACHES, type RecreationApproach } from "@/lib/recreation/input";
 import { RECREATION_ENGINE } from "../recreation/engine";
 
 /**
@@ -73,7 +74,7 @@ export const PipelineVersionsSchema = z
      * `image` is null when no image model is configured (the sheet is then made without illustrations).
      */
     engine: z.literal(RECREATION_ENGINE).optional(),
-    recreation: z.object({ planner: Component, text: ModelFreeze, image: ModelFreeze.nullable() }).optional(),
+    recreation: z.object({ planner: Component, text: ModelFreeze, image: ModelFreeze.nullable(), approach: z.enum(RECREATION_APPROACHES).optional() }).optional(),
   })
   .refine((v) => (v.planner.prompt_version === 3) === (v.rules !== undefined), { message: "el planificador v3 y la huella de sus reglas van juntos", path: ["rules"] })
   .refine((v) => (v.engine !== undefined) === (v.recreation !== undefined), { message: "el motor de recreación y sus versiones van juntos", path: ["recreation"] });
@@ -86,7 +87,7 @@ const frozen = (selection: ModelSelection) => ({ alias: selection.alias, provide
  * `plannerV3` is passed ONLY after the server checked the pilot gate (ADR-046); every other adaptation keeps the current planner.
  * `reviewerV2` (etapa 2.3) is passed only when `REVIEWER_V2_MODE` is not `off`; otherwise the reviewer is v1, byte for byte as before.
  */
-export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: RulesFreeze; reviewerV2?: boolean; recreation?: boolean } = {}): PipelineVersions {
+export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: RulesFreeze; reviewerV2?: boolean; recreation?: boolean; approach?: RecreationApproach } = {}): PipelineVersions {
   const v3 = options.plannerV3;
   const planner = getAdaptationPlanner(v3 ? PLANNER_V3_PILOT.prompt_version : EXPERIMENTAL_PIPELINE.planner);
   const generator = getMaterialGenerator(EXPERIMENTAL_PIPELINE.generator);
@@ -102,7 +103,7 @@ export function resolvePipelineVersions(env: ModelEnv, options: { plannerV3?: Ru
     reviewer: { prompt_version: reviewer.version, schema_version: reviewer.schemaVersion, max_output_tokens: options.reviewerV2 ? REVIEWER_V2.max_output_tokens : PIPELINE_OUTPUT_LIMITS.reviewer, selection: frozen(resolveModel("STANDARD", env)) },
     review_schema: PEDAGOGICAL_REVIEW_SCHEMA_VERSION,
     ...(v3 ? { rules: { version: v3.version, package_sha256: v3.package_sha256 } } : {}),
-    ...(options.recreation ? { engine: RECREATION_ENGINE, recreation: recreationVersions(env) } : {}),
+    ...(options.recreation ? { engine: RECREATION_ENGINE, recreation: { ...recreationVersions(env), approach: options.approach ?? "auto" } } : {}),
   });
 }
 
@@ -115,7 +116,7 @@ function recreationVersions(env: ModelEnv) {
     image = null;
   }
   return {
-    planner: { prompt_version: RECREATION_PLANNER_V2.version, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
+    planner: { prompt_version: RECREATION_PLANNER_V3.version, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
     text: frozen(resolveModel("STANDARD", env)),
     image: image ? frozen(image) : null,
   };

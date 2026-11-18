@@ -4,7 +4,8 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { compileRecreation, type CompiledRecreation } from "./compile";
 import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from "./contract";
-import { recreationInput, type RecreationInput } from "./input";
+import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
+import { salvagePlan, sanitizePlan } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
 import { resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
 
@@ -60,8 +61,8 @@ export type PlannedRecreation =
   | { status: "planned"; plan: RecreationPlan; verification: Verification; runs: AIRunRecord[]; calls: number }
   | Exclude<RecreationOutcome, { status: "ready" }>;
 
-export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope">): Promise<PlannedRecreation> {
-  const input = recreationInput(request.analysis, request.context, request.scope);
+export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope"> & { approach?: RecreationApproach }): Promise<PlannedRecreation> {
+  const input = recreationInput(request.analysis, request.context, request.scope, request.approach ?? "auto");
   const runs: AIRunRecord[] = [];
   let repairOf: PlanIssue[] | undefined;
   let last: PlannedRecreation | null = null;
@@ -79,10 +80,16 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
       repairOf = issues.map((message) => ({ severity: "error", code: "contract", path: "plan", message }));
       continue;
     }
-    const plan = parsed.data;
-    // The scope is the server's, never the plan's.
-    if (plan.scope.type !== request.scope) return { status: "rejected", plan, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
-    const verification = verifyPlan(plan, request.analysis, { needs: request.context.needs.map((n) => n.dimension) });
+    const needs = request.context.needs.map((n) => n.dimension);
+    // The scope is the server's, never the plan's: a curricular plan for a methodological sheet is refused outright.
+    if (parsed.data.scope.type === "curricular" && request.scope !== "curricular") return { status: "rejected", plan: parsed.data, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
+    // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
+    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope);
+    let verification = verifyPlan(plan, request.analysis, { needs });
+    if (!verification.ok) {
+      const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope);
+      if (salvaged) ({ plan, verification } = salvaged);
+    }
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
       repairOf = verification.issues.filter((i) => i.severity === "error");

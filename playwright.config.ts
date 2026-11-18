@@ -57,6 +57,8 @@ export default defineConfig({
             // El E2E recorre el prompt activo (v3). E2E_PROMPT_VERSION=1 recorre material_analyzer@v1 (análisis v2, que se lee como v3).
             AI_ANALYSIS_PROMPT_VERSION: process.env.E2E_PROMPT_VERSION ?? "3",
             MOCK_AI_DELAY_MS: "400",
+            // The E2E suite runs on the mock provider, which the recreation engine refuses (ADR-053): it exercises the earlier engine.
+            HACER_MAGIA_ENGINE: "off",
             CRON_SECRET: "e2e-cron-secret-0123456789",
           },
         },

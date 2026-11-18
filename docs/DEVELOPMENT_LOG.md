@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-18 · «Hacer magia» operativo con el motor de recreación (corrección de `planner_schema`)
+
+- **Causa (ai_runs de producción).** Claude devolvía planes que cumplían el contrato, pero el verificador los rechazaba enteros por fallos mecánicos (referencias, columnas del tablero, operaciones, nivel del objetivo, una línea de la explicación) y la reparación pagada reproducía otros: dos llamadas y `planner_schema`.
+- **Cambios.** `src/lib/recreation/repair.ts`: saneado determinista antes de verificar y rescate que elimina solo las actividades defectuosas si todos los objetivos y operaciones siguen trabajados (sin relajar comprobaciones esenciales, sin llamadas). `recreation_planner` v3 (enfoque automático/lúdico/estructurado, gamificación solo con función, exactitud). Selector «Enfoque de la adaptación». Una ficha incompleta no se entrega; un fallo definitivo devuelve la unidad (migración 038, aplicada). `HACER_MAGIA_ENGINE` por defecto `on`.
+- **Pruebas.** Typecheck, lint, build y las pruebas focalizadas del motor y de cuotas. Sin E2E ni llamadas de pago: la generación real queda por validar con la primera ficha.
+
 ## 2026-11-18 · «Hacer magia» con el motor de recreación
 
 - **Cambios.** Indicador `HACER_MAGIA_ENGINE`; motor fijado al crear; etapas de planificación y generación de la recreación (`src/lib/adaptation/recreation/`); migración 037 local; lector con RLS y pantalla de la ficha recreada en `/app/adaptaciones/[id]`; PDF de materiales (`?documento=materiales`); tarjeta de creación con un solo camino cuando está activo; imágenes de tarjetas en paralelo (3).

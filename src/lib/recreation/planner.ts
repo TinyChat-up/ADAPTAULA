@@ -1,6 +1,7 @@
 import "server-only";
 import { RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/v1";
 import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
+import { RECREATION_PLANNER_V3 } from "@prompts/recreation-planner/v3";
 import { estimateCostUsd, priceFor } from "@/lib/ai/costs";
 import type { AIProvider, AIRunRecord, ModelSelection } from "@/lib/ai/types";
 import { callStructured } from "@/lib/materials/visuals/auto/assistants";
@@ -47,15 +48,19 @@ export function createRecreationPlanner(deps: { provider: AIProvider; selection:
     throw new Error("invalid recreation planner output allowance");
   }
   const promptVersion = deps.promptVersion ?? RECREATION_PLANNER_V1.version;
-  if (promptVersion !== RECREATION_PLANNER_V1.version && promptVersion !== RECREATION_PLANNER_V2.version) {
+  if (promptVersion !== RECREATION_PLANNER_V1.version && promptVersion !== RECREATION_PLANNER_V2.version && promptVersion !== RECREATION_PLANNER_V3.version) {
     throw new Error("unsupported frozen recreation planner prompt version");
   }
-  const prompt = promptVersion === RECREATION_PLANNER_V2.version ? RECREATION_PLANNER_V2 : RECREATION_PLANNER_V1;
+  const prompt = promptVersion === RECREATION_PLANNER_V3.version ? RECREATION_PLANNER_V3 : promptVersion === RECREATION_PLANNER_V2.version ? RECREATION_PLANNER_V2 : RECREATION_PLANNER_V1;
   let spent: number | null = null;
   return async (input, repairOf, previousPlan) => {
-    const parts = promptVersion === RECREATION_PLANNER_V2.version
-      ? RECREATION_PLANNER_V2.buildUserParts(input, repairOf, previousPlan)
-      : RECREATION_PLANNER_V1.buildUserParts(input, repairOf);
+    // Frozen v1/v2 jobs keep the input they were designed for (no `approach`).
+    const legacy = { ...input, context: Object.fromEntries(Object.entries(input.context).filter(([k]) => k !== "approach")) as typeof input.context };
+    const parts = promptVersion === RECREATION_PLANNER_V3.version
+      ? RECREATION_PLANNER_V3.buildUserParts(input, repairOf, previousPlan)
+      : promptVersion === RECREATION_PLANNER_V2.version
+        ? RECREATION_PLANNER_V2.buildUserParts(legacy, repairOf, previousPlan)
+        : RECREATION_PLANNER_V1.buildUserParts(legacy, repairOf);
     const chars = prompt.system.length + parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0);
     spent ??= await deps.budget.spentUsd();
     if (spent + worstCallUsd(deps.selection, chars, maxOutputTokens) > deps.budget.limitUsd + 1e-9) return { draft: null, run: null, stop: "budget_exhausted" };

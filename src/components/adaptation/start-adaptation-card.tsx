@@ -21,6 +21,13 @@ export interface ProfileOption {
 
 export type CreationModeChoice = "automatic" | "review";
 export type SheetTypeChoice = "accessibility" | "methodological";
+export type ApproachChoice = "auto" | "playful" | "structured";
+
+const APPROACHES: Array<{ value: ApproachChoice; label: string; hint: string }> = [
+  { value: "auto", label: "Automático", hint: "Adaptaula decide qué actividades y materiales ayudan más a este alumno." },
+  { value: "playful", label: "Más lúdico", hint: "Prioriza retos, juegos y materiales manipulativos cuando ayudan a aprender." },
+  { value: "structured", label: "Más estructurado", hint: "Prioriza claridad, pasos explícitos y organizadores." },
+];
 
 /**
  * The one entry point that creates an adaptation (reached from the material, from a profile and from the home screen): choose the
@@ -47,7 +54,7 @@ export function StartAdaptationCard({
   plannerPilot?: boolean;
   /** ADR-053: «Hacer magia» of this workspace builds a NEW sheet (server's switch): no type to choose and no second way of adapting. */
   recreation?: boolean;
-  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; adaptationType?: SheetTypeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue }) => Promise<PublicResult<{ adaptationId: string }>>;
+  create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; adaptationType?: SheetTypeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue; approach?: ApproachChoice }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
   const uid = useId();
@@ -60,6 +67,7 @@ export function StartAdaptationCard({
   const [requestKey] = useState(() => crypto.randomUUID());
   const [planner, setPlanner] = useState<PlannerChoiceValue>("current");
   const [sheetType, setSheetType] = useState<SheetTypeChoice>("accessibility");
+  const [approach, setApproach] = useState<ApproachChoice>("auto");
 
   async function start(mode: CreationModeChoice) {
     if (lock.current) return;
@@ -74,7 +82,7 @@ export function StartAdaptationCard({
     setFieldError(undefined);
     try {
       const choice = plannerPilot ? planner : "current";
-      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}:${choice}:${sheetType}`, mode, adaptationType: sheetType, visualSupports: mode === "automatic" && visualSupports, ...(choice === "v22" ? { planner: choice } : {}) });
+      const result = await create({ learnerProfileId: profileId, requestKey: `${requestKey}:${mode}:${visualSupports}:${choice}:${sheetType}:${recreation ? approach : ""}`, mode, ...(recreation ? { approach } : {}), adaptationType: sheetType, visualSupports: mode === "automatic" && visualSupports, ...(choice === "v22" ? { planner: choice } : {}) });
       if (result.ok) {
         router.push(`/app/adaptaciones/${result.data.adaptationId}`);
         return;
@@ -121,6 +129,18 @@ export function StartAdaptationCard({
             </div>
           ) : null}
 
+          {recreation ? (
+            <fieldset className="space-y-2" disabled={pending !== null}>
+              <legend className="text-base font-semibold">Enfoque de la adaptación</legend>
+              {APPROACHES.map((a) => (
+                <label key={a.value} className="flex min-h-11 items-start gap-3 py-1">
+                  <input type="radio" name={`${uid}-approach`} className="mt-1 size-5 accent-primary" checked={approach === a.value} onChange={() => setApproach(a.value)} />
+                  <span><span className="font-medium">{a.label}</span><span className="block text-sm text-muted-foreground">{a.hint}</span></span>
+                </label>
+              ))}
+              <p className="text-sm text-muted-foreground">Nunca reduce lo que se aprende ni contradice las necesidades del perfil.</p>
+            </fieldset>
+          ) : null}
           {recreation ? null : <fieldset className="space-y-2" disabled={pending !== null}>
             <legend className="text-base font-semibold">Tipo de adaptación para esta ficha</legend>
             <label className="flex min-h-11 items-start gap-3 py-1">

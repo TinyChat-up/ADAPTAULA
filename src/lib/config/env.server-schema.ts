@@ -70,11 +70,11 @@ export const ServerEnvSchema = z.object({
   REVIEWER_V2_MODE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["off", "shadow", "on"]).default("off")),
 
   /**
-   * «Hacer magia» con el motor de recreación (ADR-053). off (por defecto): el recorrido de siempre; pilot: solo los workspaces de
+   * «Hacer magia» con el motor de recreación (ADR-053). on (por defecto): el motor de recreación; off: el recorrido anterior; pilot: solo los workspaces de
    * HACER_MAGIA_RECREATION_WORKSPACES; on: todos. Decide con qué motor se CREA una adaptación automática (queda fijado en ella):
    * cambiarlo nunca altera las adaptaciones ya creadas.
    */
-  HACER_MAGIA_ENGINE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["off", "pilot", "on"]).default("off")),
+  HACER_MAGIA_ENGINE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["off", "pilot", "on"]).default("on")),
   /** Identificadores de workspace separados por comas (solo con HACER_MAGIA_ENGINE=pilot). */
   HACER_MAGIA_RECREATION_WORKSPACES: optional(z.string().max(2000)),
 
