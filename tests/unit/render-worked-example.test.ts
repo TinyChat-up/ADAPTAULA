@@ -27,3 +27,17 @@ describe("pagination of a worked example", () => {
     expect(pages(sheet("act_1"))).toEqual([["activity", "worked_example"], ["activity"]]);
   });
 });
+
+it('el vocabulario previo de la siguiente actividad viaja con ella al aplicar el límite', () => {
+  const doc = sheet('act_2');
+  doc.pages[0]!.blocks[1] = { id: 'blk_0003', type: 'vocabulary', items: [{ term: 'Orilla', definition: 'Borde del estanque.' }], trace: { origin: 'support', source_refs: ['act_2'], decision_ids: ['dec_2'] } };
+  expect(pages(doc)).toEqual([['activity'], ['lead:vocabulary', 'activity']]);
+});
+
+it('un vocabulario de otra actividad no se mueve ni pierde su asociación', () => {
+  const doc = sheet('act_1');
+  doc.pages[0]!.blocks[1] = { id: 'blk_0003', type: 'vocabulary', items: [{ term: 'Orilla', definition: 'Borde del estanque.' }], trace: { origin: 'support', source_refs: ['act_1'], decision_ids: ['dec_1'] } };
+  const model = buildRenderModel(doc, { mode: 'student' }).model;
+  expect(model.pages[0]!.nodes[0]).toMatchObject({kind:'activity', supports: [{kind:'vocabulary'}]});
+  expect(model.pages[1]!.nodes).toMatchObject([{kind:'activity', leads: []}]);
+});

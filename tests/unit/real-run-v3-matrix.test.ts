@@ -126,7 +126,7 @@ describe("matriz de las 8 fichas de la prueba real v3 (equivalentes sintéticos)
     const out = html(doc);
     expect(out.match(/<li[^>]*>/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     expect(out).toContain("ms-sequence");
-    expect(readFileSync("src/components/material/material.css", "utf8")).toMatch(/\[data-design="claro"\] \.ms-num\[data-numeric\] \{ white-space: nowrap; \}/);
+    expect(readFileSync("src/components/material/material.css", "utf8")).toMatch(/\[data-design="claro"\] \.ms-num:is\(\[data-numeric\], \[data-part\]\) \{ white-space: nowrap; \}/);
   });
 
   it("05 · las tres oraciones siguen separadas, con campos Sujeto/Predicado, y un glosario que define lo evaluado se detecta", () => {

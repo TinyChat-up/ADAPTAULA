@@ -731,3 +731,12 @@ También reconocen las formas en que el analizador real las escribe: «las letra
 **Persistencia.** La evidencia del localizador añade `marks: { expected, found, measures, legible: true }`. El validador acepta `auto_visuals@v6` y rechaza un localizador guardado cuyas marcas no sean legibles. No hay migración: la columna es JSON y la restricción de confianza (≥ 0,75) no cambia.
 
 **«Hacer magia».** Un recurso recuperado así (elección B) se usa como figura original (`exact_original_visual`), sin llamar al generador de imágenes. Si no se localiza, se mantiene la parada visual con su causa precisa. Nunca se entrega la página entera como sustituto.
+
+
+## Correcciones de preservación y diagnóstico (2026-11-13)
+
+Una referencia explícita desde una actividad prevalece sobre una clasificación contradictoria de decoración: `buildDocument` conserva el bloque y `auto_visuals@v8` lo considera para localizar. No se amplía la aceptación geométrica ni se recuperan fotografías ausentes del análisis. El esquema de evidencias admite v8 y conserva las versiones previas; no se relajan procedencia, SHA, privacidad ni revisión.
+
+El plan persistido de resolución visual añade opcionalmente `illustrationsWithheld` con el código de disponibilidad observado por el servidor. La escena contextual opcional conserva ese motivo al omitirse. `disabled` agrupa consentimiento/flag/piloto, no distingue sus subcausas. Ausencia del campo no prueba que una llamada haya ocurrido. Los rechazos del brief, presupuesto, cuota o revisión conservan su resultado existente; no se añaden llamadas ni se activan proveedores.
+
+[Diagnóstico, recorrido de modelos y evidencias PDF](qa/calidad-visual-pdf/README.md). El motivo de no generar imágenes en el caso real del estanque sigue sin verificar: faltan sus artefactos de ejecución autorizados.

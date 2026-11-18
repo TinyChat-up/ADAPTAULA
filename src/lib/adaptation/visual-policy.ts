@@ -97,7 +97,11 @@ export interface VisualNeedOutcome {
   contract?: VisualContract;
 }
 
+export type IllustrationWithheld = "disabled" | "not_offered" | "plan" | "quota" | "service";
+
 export interface VisualResolutionPlan {
+  /** Availability observed by the server, not evidence of a provider call. No secrets or document text. */
+  illustrationsWithheld?: IllustrationWithheld;
   policy_version: 1 | 2;
   needs: VisualNeedOutcome[];
 }

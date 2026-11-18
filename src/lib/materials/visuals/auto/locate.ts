@@ -40,6 +40,8 @@ export interface VisualTarget {
   activityIds: string[];
   /** The marks its analysis names (only generic figures): its signature, when all are printed on it. */
   marks?: ExpectedMarks | null;
+  /** The names its analysis reads printed on it («Algas; Larvas de insectos…»): they belong to the crop when printed beside it. */
+  labels?: readonly string[];
 }
 
 /** The smallest printed mark still legible on A4 (≈ 5 pt type) and the smallest side of a figure worth printing. */
@@ -308,6 +310,34 @@ function isClean(model: PageModel, lines: readonly TextLine[], crop: Rect): bool
   return !lines.some((l) => !isLabelLine(l.text) && area(intersection(l, crop)) > 0.15 * area(l));
 }
 
+/** How far from a figure the names of its parts may be printed (a caption chip under each picture) and the margin kept around them. */
+const NAMED_LABEL_GAP_MM = 8;
+const NAMED_LABEL_PAD_MM = 1.5;
+
+/**
+ * The names of a figure's parts printed just above or below it («Algas», «Larvas de insectos»… under each picture of a food chain) are
+ * part of it: without them the student sees pictures nobody named (the real pond sheet). Only text made entirely of those names joins,
+ * across the figure and within a few millimetres of it, and only when EVERY name is found there: a heading or running text never does.
+ * It runs after a crop is accepted, so it never changes which region is chosen.
+ */
+export function withNamedLabels(model: PageModel, crop: Rect, labels: readonly string[]): Rect {
+  const names = labels.map(normalize).filter((l) => l.length > 0);
+  if (names.length === 0) return crop;
+  const words = new Set(names.flatMap((n) => n.split(" ")));
+  const reach = px(model, NAMED_LABEL_GAP_MM);
+  const near = model.texts.filter((t) => {
+    const cx = (t.x0 + t.x1) / 2;
+    const vertical = t.y0 >= crop.y1 ? t.y0 - crop.y1 : crop.y0 >= t.y1 ? crop.y0 - t.y1 : 0;
+    const text = normalize(t.text);
+    return cx >= crop.x0 && cx <= crop.x1 && vertical <= reach && text.length > 0 && text.split(" ").every((w) => words.has(w));
+  });
+  const printed = ` ${textLines(near).map((l) => normalize(l.text)).join(" ")} `;
+  if (near.length === 0 || !names.every((n) => printed.includes(` ${n} `))) return crop;
+  const pad = px(model, NAMED_LABEL_PAD_MM);
+  const grown = near.reduce<Rect>((c, t) => union(c, t), crop);
+  return { x0: Math.max(0, Math.min(crop.x0, grown.x0 - pad)), y0: Math.max(0, grown.y0 < crop.y0 ? grown.y0 - pad : crop.y0), x1: Math.min(model.width, Math.max(crop.x1, grown.x1 + pad)), y1: Math.min(model.height, grown.y1 > crop.y1 ? grown.y1 + pad : crop.y1) };
+}
+
 export const toBounds = (model: PageModel, r: Rect): NormalizedBounds => {
   const round = (n: number) => Math.round(n * 1e6) / 1e6;
   let x = r.x0 / model.width;
@@ -415,7 +445,7 @@ export function locateVisuals(model: PageModel, targets: readonly VisualTarget[]
     if (!s.evidence.clean || !s.evidence.placement || !s.evidence.anchor || s.score < ACCEPT) continue;
     if (taken.some((t) => iou(t, s.candidate.crop) > 0.2)) continue;
     taken.push(s.candidate.crop);
-    out.set(s.target.id, { visualId: s.target.id, bounds: toBounds(model, s.candidate.crop), confidence: round3(Math.min(1, s.score)), accepted: true, evidence: { ...s.evidence, reason: "accepted" } });
+    out.set(s.target.id, { visualId: s.target.id, bounds: toBounds(model, withNamedLabels(model, s.candidate.crop, s.target.labels ?? [])), confidence: round3(Math.min(1, s.score)), accepted: true, evidence: { ...s.evidence, reason: "accepted" } });
   }
   for (const target of targets) {
     if (out.has(target.id)) continue;

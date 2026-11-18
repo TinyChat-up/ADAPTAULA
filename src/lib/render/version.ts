@@ -8,4 +8,5 @@
  * the brand navy. Content, answer spaces and pagination are those of v6; stored documents read and print as before.
  * v8 (#64): complete teaching units, balanced task groups and short closing pairs. Original content and answer capacity are preserved.
  */
-export const MATERIAL_RENDERER_VERSION = "material_renderer@v8";
+// v9: proportional crops, referenced vocabulary leads and a compact final activity/checklist.
+export const MATERIAL_RENDERER_VERSION = "material_renderer@v9";

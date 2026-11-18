@@ -81,7 +81,7 @@ export type RenderNode = { key: string } & (
 export interface RenderPage {
   number: number;
   nodes: RenderNode[];
-  /** Two short closing activities may travel together, avoiding a lone short task on the last sheet. */
+  /** A short closing activity pair, or final activity and checklist, travels together. */
   keepLastPair?: boolean;
 }
 
@@ -213,6 +213,11 @@ const LEAD_KINDS = new Set<RenderNode["kind"]>(["paragraph", "math"]);
 /** Rows a figure is allowed to add to a compact activity before it may split (the figure itself never leaves its prompt: CSS). */
 const FIGURE_ALLOWANCE = 6;
 const MM_PER_ROW = 8;
+/** Characters per row of a framed step card (two per row, up to three steps) and of a glossary definition (beside its term), at the base size. */
+const CARD_CHARS = 30;
+const DEFINITION_CHARS = 45;
+/** Four steps or more print one per row (CSS), across the column. */
+const STEP_CHARS = 60;
 /** The tallest a figure prints (CSS: 60 % of the printable height of an A4 page). */
 const MAX_FIGURE_MM = (297 - 2 * 18) * 0.6;
 /** A calculation square is a little smaller than a row of text. */
@@ -221,19 +226,34 @@ function figureRows(n: RenderNode): number {
   if (n.kind === "table") return n.rows.length + 1;
   if (n.kind === "chart") return 8;
   if (n.kind !== "image") return 0;
-  if (n.spec) return n.spec.kind === "number_line" ? 4 : n.spec.kind === "part_whole" ? 6 : 3;
+  if (n.spec) {
+    // A list of steps prints each one as a framed card, two per row: its height grows with its text, not a fixed three rows (the real
+    // pond sheet: five steps took most of a page and pushed the answer lines of 3a onto the next one).
+    if (n.spec.kind === "steps" && n.spec.items.length >= 4) return 1 + n.spec.items.reduce((rows, text) => rows + Math.ceil(text.length / STEP_CHARS), 0);
+    if (n.spec.kind === "steps" || n.spec.kind === "cards") {
+      const items = n.spec.kind === "steps" ? n.spec.items : n.spec.items.map((c) => `${c.term} ${c.hint}`);
+      return 2 + Math.ceil(items.reduce((rows, text) => rows + 1 + Math.ceil(text.length / CARD_CHARS), 0) / 2);
+    }
+    return n.spec.kind === "number_line" ? 4 : n.spec.kind === "part_whole" ? 6 : 3;
+  }
   if (n.heightMm) return Math.ceil(Math.min(n.heightMm, MAX_FIGURE_MM) / MM_PER_ROW) + 1;
   return n.widthMm ? Math.ceil(n.widthMm / 3 / MM_PER_ROW) + 1 : 8;
 }
 function leadRows(n: RenderNode): number {
   if (n.kind === "worked_example") return 2 + n.problem.length + n.steps.length + (n.figures ?? []).reduce((rows, f) => rows + figureRows(f), 0);
   if (n.kind === "paragraph") return n.paragraphs.reduce((r, p) => r + Math.max(1, Math.ceil(p.reduce((c, x) => c + x.text.length, 0) / 90)), 0);
+  // A glossary prints a term beside its definition (a narrow column): each entry takes the rows of its definition.
+  if (n.kind === "vocabulary") return 1 + n.items.reduce((rows, i) => rows + Math.max(1, Math.ceil(i.definition.length / DEFINITION_CHARS)), 0);
+  if (n.kind === "help_box" || n.kind === "list" || n.kind === "checklist" || n.kind === "sentence_starters") return 1 + textsOf(n).reduce((rows, t) => rows + Math.max(1, Math.ceil(t.length / 70)), 0);
+  if (n.kind === "planner") return 1 + n.slots.reduce((rows, slot) => rows + 1 + slot.lines, 0);
   return 2;
 }
 
 /** Printable height of an A4 page (297 − 2 × 18 mm) and what the header, the title and the gaps take on the first one. */
 const PAGE_MM = 297 - 2 * 18;
 const HEADER_MM = 40;
+/** The tallest estimate of an activity unit that is still kept on one sheet (see `keepUnitTogether`). */
+const KEEP_UNIT_MM = PAGE_MM / 2;
 /** The tallest figure repeated for a single activity (a third of the page). */
 const REPEAT_MAX_MM = PAGE_MM / 3;
 /** A rough, deterministic height of a node in mm, only to tell on which sheet of paper it will land (never to lay it out). */
@@ -613,7 +633,9 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
           const id = blockIds.at(-1)!;
           const refs = sources.at(-1) ?? [];
           const figure = FIGURE_KINDS.has(previous.kind) && own.has(id);
-          const lead = !figure && ((LEAD_KINDS.has(previous.kind) && own.has(id)) || (previous.kind === "worked_example" && refs.some((r) => block.trace.source_refs.includes(r))));
+          const linkedLead = (previous.kind === "worked_example" && refs.some((r) => block.trace.source_refs.includes(r))) ||
+            (previous.kind === "vocabulary" && refs.length > 0 && refs.every((r) => block.trace.source_refs.includes(r)));
+          const lead = !figure && ((LEAD_KINDS.has(previous.kind) && own.has(id)) || linkedLead);
           if (!figure && !lead) break;
           current.pop();
           sources.pop();
@@ -718,13 +740,19 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
     header: { subject: options.subjectLabel ?? subjectName(doc.meta.subject), grade: gradeLabel(doc.meta.grade), fields: doc.admin_fields.map((f) => f.label) },
     tokens,
     pages: pages.map((page) => {
+      const scale = Math.max(tokens.answerLineMm / MM_PER_ROW, tokens.fontPt / 12.5);
       const nodes = mapNodes(page.nodes, n => n.kind === "activity" ? {
         ...n,
-        // Oversized units must flow immediately, not be pushed onto a blank page by Chromium before it abandons avoidance.
-        keepUnitTogether: estimatedMm(n) * Math.max(tokens.answerLineMm / MM_PER_ROW, tokens.fontPt / 12.5) <= PAGE_MM,
+        // The same margin for the activity's own box: «compact» counts rows, and a figure, a framed support or a glossary inside it
+        // print taller than their rows (the pond sheet's 3a: 18 rows counted, almost a page printed, pushed whole onto a new sheet).
+        keepTogether: n.keepTogether && estimatedMm(n) * scale <= KEEP_UNIT_MM,
+        // Oversized units must flow immediately, not be pushed onto a blank page by Chromium before it abandons avoidance. The estimate
+        // is rough and errs SHORT (the real pond sheet: 134 mm estimated, a page and a half printed), so only a unit that surely fits
+        // (half a page) is kept whole: a unit kept wrongly costs a near-empty page; one left to flow costs at most a break inside it.
+        keepUnitTogether: estimatedMm(n) * scale <= KEEP_UNIT_MM,
       } : n);
       const pair = nodes.slice(-2);
-      const keepLastPair = pair.length === 2 && pair.every(n => n.kind === "activity") && pair.reduce((mm, n) => mm + estimatedMm(n), 0) <= PAGE_MM / 2;
+      const keepLastPair = pair.length === 2 && (pair.every(n => n.kind === "activity") || (pair[0]?.kind === "activity" && pair[1]?.kind === "checklist" && pair[1].keepTogether)) && pair.reduce((mm, n) => mm + estimatedMm(n), 0) <= PAGE_MM / 2;
       return keepLastPair ? { ...page, nodes, keepLastPair: true } : { ...page, nodes };
     }),
   };

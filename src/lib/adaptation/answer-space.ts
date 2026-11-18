@@ -23,7 +23,7 @@ import { renderTokens } from "@/lib/render/tokens";
  * something else. Bounds only limit what it ADDS; a long area is split by the renderer across pages, never cut.
  */
 
-export const ANSWER_SPACE_VERSION = "answer_space@v2";
+export const ANSWER_SPACE_VERSION = "answer_space@v3";
 
 export type SpaceNeed = "calculation" | "explanation" | "short" | "composition" | "drawing" | "keep";
 
@@ -241,7 +241,9 @@ export function operationsOf(activity: AnalysisActivity): number {
   const operand = String.raw`\d+(?:[.,]\d+)?(?:\s*/\s*\d+)?`;
   const expressions = (text.match(new RegExp(`${operand}(?:\\s*[+\\-−×x·*:÷]\\s*${operand})+`, "g")) ?? []).length;
   const data = activity.type === "problem_solving" ? Math.min(4, (text.match(NUMBER) ?? []).length - 1) : 0;
-  return Math.max(requestedResults(activity), expressions, data) + (activity.difficulty === "high" ? 1 : 0);
+  // Showing the operation already requested is not a second calculation. Only this explicit trailing instruction is ignored for sizing.
+  const demand = { ...activity, instruction: activity.instruction.replace(/(?:^|(?<=[.!?]))\s*Escribe la operaci[oó]n[.!]?\s*$/iu, "") };
+  return Math.max(requestedResults(demand), expressions, data) + (activity.difficulty === "high" ? 1 : 0);
 }
 
 /** Squares for the operations of a calculation: by its operations, what it must show and the profile's need for steps. */

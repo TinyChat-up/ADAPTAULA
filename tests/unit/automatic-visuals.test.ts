@@ -47,7 +47,7 @@ describe("what the locator looks for", () => {
     ]);
     expect(shapeOf({ kind: "decorative", title: null, description: "Estrellas", text: null })).toBe("figure");
     const decorated = structuredClone(analysis);
-    decorated.visuals.push({ ...decorated.visuals[0]!, id: "vis_3", role: "decorative", kind: "decorative" }, { ...decorated.visuals[0]!, id: "vis_4", role: "illustrative" });
+    decorated.visuals.push({ ...decorated.visuals[0]!, id: "vis_3", role: "decorative", kind: "decorative", activity_ids: [] }, { ...decorated.visuals[0]!, id: "vis_4", role: "illustrative", activity_ids: [] });
     expect(autoTargets(decorated).map((t) => t.id)).toEqual(["vis_1", "vis_2"]);
   });
 });

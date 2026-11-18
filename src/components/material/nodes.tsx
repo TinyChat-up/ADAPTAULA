@@ -51,7 +51,7 @@ function Activity({ node, mode, design, selection }: Props<"activity">) {
         onClick={target ? select : undefined}
         onKeyDown={target ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } } : undefined}>
         <div className="ms-activity-head">
-          {node.label ? <span className="ms-num" data-numeric={/^\d{1,2}$/.test(node.label) || undefined}>{guideLabel(node.label, design)}</span> : null}
+          {node.label ? <span className="ms-num" data-numeric={/^\d{1,2}$/.test(node.label) || undefined} data-part={/^\d[a-z]$/i.test(node.label) || undefined}>{guideLabel(node.label, design)}</span> : null}
           <div className="ms-prompt">
             <Paragraphs paragraphs={node.prompt} />
             {node.steps.length > 0 ? (
