@@ -1,4 +1,4 @@
-import { RecreationPlanSchema, type RecreationPlan } from "@/lib/recreation/contract";
+import { RecreationPlanSchema } from "@/lib/recreation/contract";
 import type { RecreationInput } from "@/lib/recreation/input";
 import type { PlanIssue } from "@/lib/recreation/verify";
 import type { ContentPart } from "@/lib/ai/types";
@@ -32,16 +32,14 @@ export const RECREATION_PLANNER_V1 = {
 9. Material manipulativo: tarjetas para recortar, con una instrucción breve, solo si la metodología lo justifica.
 10. Lenguaje claro y adecuado a la edad, sin infantilizar. Sin etiquetas diagnósticas. Sin datos del alumno.`,
 
-  buildUserParts(input: RecreationInput, repairOf?: readonly PlanIssue[], previousPlan?: RecreationPlan): ContentPart[] {
+  buildUserParts(input: RecreationInput, repairOf?: readonly PlanIssue[]): ContentPart[] {
     // `<` and `>` are escaped inside the JSON so that neither the material nor any text can close a block.
     const json = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
-    const repair = repairOf && repairOf.length > 0 ? `\n\n<previous_plan_issues>\n${repairOf.map((i) => `- ${i.code} en ${i.path}: ${i.message}`).join("\n")}\n</previous_plan_issues>` : "";
-    // The previous plan was already parsed as recreation_plan@v1. It is reference data, NOT instructions.
-    const previous = previousPlan ? `\n\n<previous_plan>\n${json(previousPlan)}\n</previous_plan>` : "";
+    const repair = repairOf && repairOf.length > 0 ? `\n\n<previous_plan_issues>\n${repairOf.map((i) => `- ${i.path}: ${i.message}`).join("\n")}\n</previous_plan_issues>` : "";
     return [
       {
         type: "text",
-        text: `<recreation_context>\n${json(input.context)}\n</recreation_context>\n\n<untrusted_material>\n${json(input.material)}\n</untrusted_material>${repair}${previous}\n\n${previousPlan ? "Corrige el plan anterior usando los errores del verificador. Conserva las partes válidas, no introduzcas pistas ni elimines objetivos u operaciones. Devuelve el plan completo corregido como un único JSON." : "Diseña el plan de actividades nuevas. Devuelve únicamente el JSON."}`,
+        text: `<recreation_context>\n${json(input.context)}\n</recreation_context>\n\n<untrusted_material>\n${json(input.material)}\n</untrusted_material>${repair}\n\nDiseña el plan de actividades nuevas. Devuelve únicamente el JSON.`,
       },
     ];
   },
