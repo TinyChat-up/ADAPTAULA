@@ -64,7 +64,10 @@ describe("recorrido completo simulado", () => {
     expect(image).toBeGreaterThan(-1);
     expect(image).toBeLessThan(reading);
     // Every model call is recorded as ai_runs would get it: purpose, prompt and version, model, cost; never the content.
-    expect(runs.map((r) => `${r.purpose}:${r.promptKey}@v${r.promptVersion}`).slice(0, 4)).toEqual(["plan:recreation_planner@v1", "image_brief:image_brief@v1", "image:image_render@v1", "image_review:image_review@v1"]);
+    // Pictures are made concurrently: the plan comes first, then each picture's brief, image and review (in any interleaving).
+    const kinds = runs.map((r) => `${r.purpose}:${r.promptKey}@v${r.promptVersion}`);
+    expect(kinds[0]).toBe("plan:recreation_planner@v1");
+    expect(new Set(kinds.slice(1))).toEqual(new Set(["image_brief:image_brief@v1", "image:image_render@v1", "image_review:image_review@v1"]));
     expect(runs).toHaveLength(1 + 7 * 3);
     expect(JSON.stringify(runs)).not.toMatch(/estanque|larvas|Algas/);
     expect(runs.every((r) => r.estimatedCostUsd === 0)).toBe(true);

@@ -29,6 +29,7 @@ import {
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { serviceDeps } from "@/lib/adaptation/orchestration/server";
 import { CREATION_MODES } from "@/lib/adaptation/orchestration/store";
+import { RECREATION_APPROACHES } from "@/lib/recreation/input";
 
 /**
  * Public application commands for the adaptation pipeline. Every action: resolves the actor on the SERVER (workspace and role never
@@ -76,6 +77,8 @@ const StartInput = z.object({
   visualSupports: z.boolean().optional(),
   /** A request, never an entitlement: the server's pilot gate decides (ADR-046). */
   planner: z.enum(PLANNER_CHOICES).optional(),
+  /** «Hacer magia»'s orientation: a preference, never above the student's needs or the curriculum. */
+  approach: z.enum(RECREATION_APPROACHES).optional(),
 });
 
 /**
@@ -95,6 +98,7 @@ export async function createAdaptationFromMaterialAction(materialId: string, inp
       creationMode: parsed.data.mode,
       visualSupports: parsed.data.visualSupports === true,
       ...(parsed.data.planner ? { planner: parsed.data.planner } : {}),
+      ...(parsed.data.approach ? { approach: parsed.data.approach } : {}),
     }),
   );
 }

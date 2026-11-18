@@ -11,9 +11,14 @@ import { originalOperations } from "./verify";
  * analysis, which travels as untrusted data. The expected answers the analysis may have inferred are left out: the planner must not
  * build activities on answers nobody verified.
  */
+/** The teacher's optional orientation (ADR-053): never above the student's needs or the curriculum. */
+export const RECREATION_APPROACHES = ["auto", "playful", "structured"] as const;
+export type RecreationApproach = (typeof RECREATION_APPROACHES)[number];
+
 export interface RecreationInput {
   context: {
     scope: RecreationScope["type"];
+    approach: RecreationApproach;
     education: { stage: string; grade: string | null; subject: string | null; language: string };
     needs: Array<{ dimension: string; level: string }>;
     limits: { max_instruction_words: number | null; max_visible_tasks: number | null; max_task_minutes: number | null };
@@ -30,10 +35,11 @@ export interface RecreationInput {
   };
 }
 
-export function recreationInput(analysis: MaterialAnalysis, context: AdaptationContext, scope: RecreationScope["type"]): RecreationInput {
+export function recreationInput(analysis: MaterialAnalysis, context: AdaptationContext, scope: RecreationScope["type"], approach: RecreationApproach = "auto"): RecreationInput {
   return {
     context: {
       scope,
+      approach,
       education: { stage: context.education.stage, grade: context.education.grade, subject: context.education.subject, language: context.education.language },
       needs: context.needs.map((n) => ({ dimension: n.dimension, level: n.level })),
       limits: { ...context.limits },

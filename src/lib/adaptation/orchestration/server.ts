@@ -66,7 +66,7 @@ export const orchestratorDeps = (): OrchestratorDeps => {
 };
 
 /** Versions for NEW adaptations: resolved from the environment once, then persisted with the adaptation. */
-export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze; recreation?: boolean } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, { ...options, reviewerV2: serverEnv().REVIEWER_V2_MODE !== "off" });
+export const resolveVersionsFromEnv = (options: { plannerV3?: RulesFreeze; recreation?: boolean; approach?: "auto" | "playful" | "structured" } = {}) => resolvePipelineVersions(serverEnv() as ModelEnv, { ...options, reviewerV2: serverEnv().REVIEWER_V2_MODE !== "off" });
 
 /** The rules package a pilot adaptation is frozen with: the published manifest, offered only where the gate allows it. */
 export const plannerV3PilotRules = (workspaceId: string): RulesFreeze | null => (plannerV3PilotAllowed(workspaceId) ? { version: AGENT_RULES_V22.version, package_sha256: AGENT_RULES_V22.package_sha256 } : null);
