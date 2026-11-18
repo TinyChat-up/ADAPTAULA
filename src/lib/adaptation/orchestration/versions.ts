@@ -5,7 +5,7 @@ import { MODEL_ALIASES, type ModelSelection } from "@/lib/ai/types";
 import { PEDAGOGICAL_REVIEW_SCHEMA_VERSION } from "@/lib/schemas/pedagogical-review";
 import { MATERIAL_DOCUMENT_SCHEMA_VERSION } from "@/lib/schemas/material-document";
 import { ADAPTATION_PLAN_SCHEMA_VERSION } from "@/lib/schemas/adaptation-plan";
-import { RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/v1";
+import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
 import { RECREATION_ENGINE } from "../recreation/engine";
 
 /**
@@ -115,7 +115,7 @@ function recreationVersions(env: ModelEnv) {
     image = null;
   }
   return {
-    planner: { prompt_version: RECREATION_PLANNER_V1.version, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
+    planner: { prompt_version: RECREATION_PLANNER_V2.version, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
     text: frozen(resolveModel("STANDARD", env)),
     image: image ? frozen(image) : null,
   };

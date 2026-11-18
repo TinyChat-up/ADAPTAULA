@@ -1,5 +1,6 @@
 import "server-only";
 import { RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/v1";
+import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
 import { estimateCostUsd, priceFor } from "@/lib/ai/costs";
 import type { AIProvider, AIRunRecord, ModelSelection } from "@/lib/ai/types";
 import { callStructured } from "@/lib/materials/visuals/auto/assistants";
@@ -39,19 +40,26 @@ export function worstCallUsd(selection: ModelSelection, inputChars: number, maxO
   return estimateCostUsd(selection.provider, selection.model, { inputTokens: Math.ceil(inputChars / 3), outputTokens: maxOutputTokens, cachedInputTokens: 0, cacheCreationInputTokens: 0 }) ?? RECREATION_PLANNER_LIMITS.unpricedCallUsd;
 }
 
-export function createRecreationPlanner(deps: { provider: AIProvider; selection: ModelSelection; budget: PlannerBudget; maxOutputTokens?: number; recordAiRun(run: AIRunRecord): Promise<void> }): Planner {
+export function createRecreationPlanner(deps: { provider: AIProvider; selection: ModelSelection; budget: PlannerBudget; maxOutputTokens?: number; promptVersion?: number; recordAiRun(run: AIRunRecord): Promise<void> }): Planner {
   // The output allowance is frozen when the adaptation is created. Older pending jobs must keep their original allowance.
   const maxOutputTokens = deps.maxOutputTokens ?? RECREATION_PLANNER_LIMITS.maxOutputTokens;
   if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > RECREATION_PLANNER_LIMITS.maxOutputTokens) {
     throw new Error("invalid recreation planner output allowance");
   }
+  const promptVersion = deps.promptVersion ?? RECREATION_PLANNER_V1.version;
+  if (promptVersion !== RECREATION_PLANNER_V1.version && promptVersion !== RECREATION_PLANNER_V2.version) {
+    throw new Error("unsupported frozen recreation planner prompt version");
+  }
+  const prompt = promptVersion === RECREATION_PLANNER_V2.version ? RECREATION_PLANNER_V2 : RECREATION_PLANNER_V1;
   let spent: number | null = null;
-  return async (input, repairOf) => {
-    const parts = RECREATION_PLANNER_V1.buildUserParts(input, repairOf);
-    const chars = RECREATION_PLANNER_V1.system.length + parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0);
+  return async (input, repairOf, previousPlan) => {
+    const parts = promptVersion === RECREATION_PLANNER_V2.version
+      ? RECREATION_PLANNER_V2.buildUserParts(input, repairOf, previousPlan)
+      : RECREATION_PLANNER_V1.buildUserParts(input, repairOf);
+    const chars = prompt.system.length + parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0);
     spent ??= await deps.budget.spentUsd();
     if (spent + worstCallUsd(deps.selection, chars, maxOutputTokens) > deps.budget.limitUsd + 1e-9) return { draft: null, run: null, stop: "budget_exhausted" };
-    const { draft, run } = await callStructured(deps.provider, deps.selection, "plan", RECREATION_PLANNER_V1, parts, maxOutputTokens, AbortSignal.timeout(RECREATION_PLANNER_LIMITS.timeoutMs), RECREATION_PLANNER_LIMITS.timeoutMs);
+    const { draft, run } = await callStructured(deps.provider, deps.selection, "plan", prompt, parts, maxOutputTokens, AbortSignal.timeout(RECREATION_PLANNER_LIMITS.timeoutMs), RECREATION_PLANNER_LIMITS.timeoutMs);
     spent += run.estimatedCostUsd ?? worstCallUsd(deps.selection, chars, maxOutputTokens);
     await deps.recordAiRun({ ...run, attempt: repairOf ? 2 : 1 });
     return { draft, run };

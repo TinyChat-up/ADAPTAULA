@@ -6,7 +6,10 @@ import { RECREATION_PLANNER_LIMITS, worstCallUsd } from "@/lib/recreation/planne
 import { resolvePipelineVersions } from "@/lib/adaptation/orchestration/versions";
 import { resolveModel } from "@/lib/ai/registry";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
-import { runMockRecreation } from "../support/recreation-mocks";
+import { mockStack, runMockRecreation } from "../support/recreation-mocks";
+import { planRecreation } from "@/lib/recreation/pilot";
+import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
+import { recreationInput } from "@/lib/recreation/input";
 
 /**
  * Fase 5 · the whole route without spending: simulated Claude (MockProvider with fixtures) → plan → verification → visual request →
@@ -19,6 +22,28 @@ const ready = async (options: Parameters<typeof runMockRecreation>[0] = {}) => {
 };
 
 describe("recorrido completo simulado", () => {
+  it("si el verificador rechaza un plan válido, la reparación recibe ese mismo plan y los errores sin exponerlos en el registro", async () => {
+    const bad = structuredClone(POND_RECREATION_PLAN);
+    bad.activities[6]!.steps = ["Debe darte 12."];
+    const { request } = mockStack();
+    let count = 0;
+    const observed: Array<{ errors: number; previous: unknown }> = [];
+    const outcome = await planRecreation(async (_input, issues, previous) => {
+      observed.push({ errors: issues?.length ?? 0, previous });
+      return { draft: count++ === 0 ? bad : POND_RECREATION_PLAN, run: null };
+    }, request);
+    expect(outcome.status).toBe("planned");
+    expect(observed).toHaveLength(2);
+    expect(observed[0]!.previous).toBeUndefined();
+    expect(observed[1]!.errors).toBeGreaterThan(0);
+    expect(observed[1]!.previous).toEqual(bad);
+    const input = recreationInput(request.analysis, request.context, request.scope);
+    const parts = RECREATION_PLANNER_V2.buildUserParts(input, [{ severity: "error", code: "solution_revealed", path: "activities.ra_7", message: "Error de prueba" }], bad);
+    const body = parts.map((p) => p.type === "text" ? p.text : "").join("");
+    expect(body).toContain("<previous_plan>");
+    expect(body).toContain("solution_revealed");
+    expect(body).toContain("plan completo corregido");
+  });
   it("el nuevo techo de respuesta para el plan queda congelado en cada adaptación nueva", () => {
     const versions = resolvePipelineVersions({}, { recreation: true });
     expect(versions.recreation?.planner.max_output_tokens).toBe(RECREATION_PLANNER_LIMITS.maxOutputTokens);
