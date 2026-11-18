@@ -53,7 +53,10 @@ export const FactSchema = z.discriminatedUnion("kind", [
   z.object({ id: Id("f"), kind: z.literal("membership"), source_ref: SourceRef, quote: Text(300), item: Text(60), category_id: Id("cat") }),
   /** Something that happens: its position in the original's text gives the order of a sequence. */
   z.object({ id: Id("f"), kind: z.literal("event"), source_ref: SourceRef, quote: Text(300), label: Text(120) }),
-  /** A number with its unit, read from the original. */
+  /**
+   * A number with its unit, read from the original. The quote must carry that very number followed by that unit and no other number;
+   * otherwise the server cannot tell which figure is meant and nothing computed from it is «verified».
+   */
   z.object({ id: Id("f"), kind: z.literal("quantity"), source_ref: SourceRef, quote: Text(300), value: z.number().finite(), unit: Text(20), label: Text(80) }),
   /** A statement of the original that supports (or contradicts) an option or a true/false item. */
   z.object({ id: Id("f"), kind: z.literal("statement"), source_ref: SourceRef, quote: Text(300) }),
@@ -62,16 +65,54 @@ export type Fact = z.infer<typeof FactSchema>;
 
 const Category = z.object({ id: Id("cat"), label: Text(40) });
 
+/** What a requested picture is FOR in the activity. Decoration is not a function. */
+export const VISUAL_FUNCTIONS = ["context", "observation", "vocabulary", "process", "comparison"] as const;
+
+export const VisualRequestSchema = z.object({
+  id: Id("vr"),
+  /** The activities that use it (it prints right before the first one) and the objectives they work. */
+  activity_ids: z.array(Id("ra")).min(1).max(3),
+  objective_ids: z.array(ObjectiveRef).min(1).max(3),
+  function: z.enum(VISUAL_FUNCTIONS),
+  purpose: Text(200),
+  concepts: z.array(Text(60)).min(1).max(6),
+  /** What must be recognisable in it (no text, numbers or arrows: those are placed by the renderer). */
+  must_show: z.array(Text(60)).min(1).max(8),
+  /** What must not appear: answers, hints, misleading details. The server always adds text, numbers, labels and arrows. */
+  prohibited: z.array(Text(120)).min(1).max(8),
+  /** Whether the activity depends on exact labels, arrows (relations) or numbers in the picture: then only code may draw it. */
+  needs_exact: z.object({ labels: z.boolean(), arrows: z.boolean(), numbers: z.boolean() }),
+  style: z.enum(["realistic_drawing", "simple_illustration", "schematic"]),
+  detail: z.enum(["minimal", "simple", "moderate"]),
+  alt_text: Text(300),
+  /** Accessibility notes for the drawing (contrast, size of the parts, nothing understood only by colour). */
+  accessibility: Text(200),
+  /** An original picture that already serves (option A), when there is one. */
+  original_ref: z.string().regex(/^vis_[0-9]{1,4}$/).nullable(),
+  /** Without it the activity cannot be done: its absence is reported, never hidden. */
+  essential: z.boolean(),
+});
+export type VisualRequest = z.infer<typeof VisualRequestSchema>;
+
 /**
  * Executors: the response format and how its solution is obtained.
- *  · sequence, compute — DETERMINISTIC: the server derives the solution (order in the text, arithmetic) and prints the items itself.
+ *  · compute — DETERMINISTIC when its quantities are unambiguous: the server does the arithmetic.
+ *  · sequence — DETERMINISTIC only for the order IN THE TEXT, or for a temporal/causal order whose every step is stated by a connector
+ *    of the text (`links`). Order of appearance alone never proves what happened first or what caused what.
  *  · classify, select, true_false — ANCHORED: every item or claimed answer cites a fact and the format is unique by construction;
- *    the meaning (which group, which option) still goes to the teacher's review.
+ *    whether the claim is RIGHT (which group, which option) is not checked by the server: the teacher reviews it.
  *  · short_answer — OPEN: criteria for the teacher, never a model answer presented as the solution.
  */
 export const ExecutorSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("classify"), categories: z.array(Category).min(2).max(4), item_fact_ids: z.array(Id("f")).min(3).max(10) }),
-  z.object({ kind: z.literal("sequence"), event_fact_ids: z.array(Id("f")).min(3).max(8) }),
+  z.object({
+    kind: z.literal("sequence"),
+    /** What the order means: where the events are told (`text_order`), when they happen (`temporal`) or what causes what (`causal`). */
+    basis: z.enum(["text_order", "temporal", "causal"]),
+    event_fact_ids: z.array(Id("f")).min(3).max(8),
+    /** For `temporal`/`causal`: the statement of the text that says each event comes before (or causes) the next. */
+    links: z.array(z.object({ from_fact_id: Id("f"), to_fact_id: Id("f"), evidence_fact_id: Id("f") })).max(7),
+  }),
   z.object({ kind: z.literal("compute"), operation: z.literal("difference"), minuend_fact_id: Id("f"), subtrahend_fact_id: Id("f") }),
   z.object({
     kind: z.literal("select"),
@@ -117,9 +158,16 @@ export const RecreationPlanSchema = z.object({
     .max(12),
   /** Visual resources drawn by our own renderer from data (no image model). `flow`: labelled boxes joined by arrows, from the original. */
   visuals: z.array(z.object({ id: Id("rv"), kind: z.literal("flow"), title: Text(60), items: z.array(Text(40)).min(2).max(6), source_ref: z.string().regex(/^vis_[0-9]{1,4}$/) })).max(4),
-  /** Printable manipulatives: cards to cut out and sort. Structure only in v1; they print in the teacher guide. */
-  materials: z.array(z.object({ id: Id("rm"), kind: z.literal("cut_out_cards"), activity_id: Id("ra"), purpose: Text(160), cards: z.array(Text(40)).min(2).max(12) })).max(4),
-  guide: z.object({ overview: Text(400), per_activity: z.array(z.object({ activity_id: Id("ra"), observe: Text(200) })).max(12) }),
+  /**
+   * Pictures the planner ASKS for. It never decides how they are made: the server reuses a valid original (A), draws an exact scheme
+   * with code (B) or, only when nothing exact is needed and generation is authorised, asks the illustration pipeline (C). Text,
+   * arrows, numbers and labels are never asked of an image model: `needs_exact` sends them to code or to nothing.
+   */
+  visual_requests: z.array(VisualRequestSchema).max(3),
+  /** Printable manipulatives: cards to cut out, printed on their own sheet with cutting lines. */
+  materials: z.array(z.object({ id: Id("rm"), kind: z.literal("cut_out_cards"), activity_id: Id("ra"), purpose: Text(160), instructions: Text(120), cards: z.array(Text(40)).min(2).max(12) })).max(4),
+  /** For the teacher: how to apply the sheet (a few short steps) and what to observe in each activity. */
+  guide: z.object({ overview: Text(400), application: z.array(Text(160)).min(1).max(5), per_activity: z.array(z.object({ activity_id: Id("ra"), observe: Text(200) })).max(12) }),
 });
 export type RecreationPlan = z.infer<typeof RecreationPlanSchema>;
 export type RecreationActivity = RecreationPlan["activities"][number];

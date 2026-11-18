@@ -113,6 +113,15 @@ Los estados siguientes describen código inspeccionado; no implican validación 
 
 ## Trabajo actual y continuidad
 
+**Recreación con Claude + OpenAI (2026-11-18, simulado; ADR-050, [QA](qa/recreacion-pedagogica/README.md)).**
+
+- **Implementado y probado sin gasto:**
+  - verificadores endurecidos;
+  - planificador sobre `src/lib/ai`;
+  - imágenes A/B/C con `illustrate()`;
+  - tarjetas recortables, guía breve y clave aparte.
+- **Siguiente:** evaluación real con autorización (≤ 3 USD) y persistencia propia de las recreaciones.
+
 **Motor de recreación pedagógica (2026-11-18, piloto aislado).** Contrato `recreation_plan@v1` (ADR-049, [diseño](RECREATION.md), [QA y PDF](qa/recreacion-pedagogica/README.md)). La ficha original es una fuente de objetivos y exigencia; el motor diseña actividades nuevas, verifica sus citas y soluciones y las imprime con el renderer de siempre: ficha del alumno con la clave separada y guía docente.
 
 - **Implementado y probado** con un plan escrito a mano (Ciencias de 5.º, el estanque).

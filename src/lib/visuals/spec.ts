@@ -11,7 +11,7 @@ import { z } from "zod";
  */
 
 export const VISUAL_SPEC_VERSION = 1 as const;
-export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow"] as const;
+export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow", "cut_cards"] as const;
 export type VisualSpecKind = (typeof VISUAL_SPEC_KINDS)[number];
 
 const Count = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -54,8 +54,14 @@ export const CardsSpecSchema = z.object({ ...base, kind: z.literal("cards"), tit
  */
 export const FlowSpecSchema = z.object({ ...base, kind: z.literal("flow"), title: SupportText(60).optional(), items: z.array(SupportText(40)).min(2).max(6) });
 
+/**
+ * Cards to cut out and handle (the recreation engine's manipulatives): one short text per card, printed large, two per row, with a
+ * dashed cutting line around each. Nothing on a card says where it goes: the sorting is the student's.
+ */
+export const CutCardsSpecSchema = z.object({ ...base, kind: z.literal("cut_cards"), title: SupportText(60).optional(), items: z.array(SupportText(40)).min(2).max(12) });
+
 export const VisualSpecSchema = z
-  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema])
+  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema, CutCardsSpecSchema])
   .superRefine((spec, ctx) => {
     for (const message of specIssues(spec)) ctx.addIssue({ code: "custom", message });
   });
@@ -137,6 +143,8 @@ export function describeSpec(spec: VisualSpec): string {
       return `${spec.title ? `${spec.title}. ` : ""}${spec.items.map((c) => `${c.term}: ${c.hint}`).join("; ")}.`;
     case "flow":
       return `${spec.title ? `${spec.title}. ` : ""}Esquema de ${spec.items.length} recuadros unidos por flechas, en este orden: ${spec.items.join(" → ")}.`;
+    case "cut_cards":
+      return `${spec.title ? `${spec.title}. ` : ""}${spec.items.length} tarjetas para recortar: ${spec.items.join(", ")}.`;
   }
 }
 

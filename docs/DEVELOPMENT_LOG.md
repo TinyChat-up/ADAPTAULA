@@ -1,5 +1,26 @@
 # Registro de desarrollo
 
+## 2026-11-18 — Recreación: colaboración Claude + OpenAI (simulada) y verificadores honestos
+
+Rama `claude/recreacion-colaboracion` sobre `claude/recreacion-pedagogica` (PR #99). ADR-050.
+
+- **Verificadores:** cifras respaldadas por su cita; secuencias por su base; `anchored` como «sin comprobar»; equivalencia por objetivo con el razonamiento siempre pendiente; pistas cruzadas parafraseadas y relaciones reveladas.
+- **Planificador:** sobre `callStructured`, con tope de gasto y una reparación.
+- **Recursos visuales:** decisión A/B/C con el pipeline existente `illustrate()`.
+- **Materiales:** tarjetas recortables (`cut_cards`) y guía breve + clave y revisión con procedencia.
+- **Recorrido completo simulado** (`MockProvider` con respuestas fijas y `MockImageProvider`).
+
+**Pruebas:** 30 unitarias y 4 PDF nuevas; suites de unidad 2.021, BD 515 y PDF 100, correctas.
+
+**Simulado:** plan, brief, revisión e imagen. **Sin llamadas de pago.**
+
+**Pendiente:**
+- autorización de la evaluación real (peor caso 2,58 $ para 6 recorridos);
+- tabla o fila anfitriona para conectar con `generated_assets`, la cuota y `ai_runs`;
+- revisor semántico sobre la ficha recreada.
+
+[Informe](qa/recreacion-pedagogica/README.md).
+
 ## 2026-11-18 — Motor de recreación pedagógica: diseño y piloto aislado del estanque
 
 Rama `claude/recreacion-pedagogica` desde `main` `ae1ba94`, independiente de las PR #97 y #98.

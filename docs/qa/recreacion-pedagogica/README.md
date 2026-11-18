@@ -1,131 +1,137 @@
-# Piloto del motor de recreación: «Un estanque en equilibrio»
+# Motor de recreación: colaboración Claude + OpenAI (piloto del estanque)
 
-2026-11-18 · rama `claude/recreacion-pedagogica`, desde `main` `ae1ba94`, independiente de las PR #97 y #98. Sin IA de pago, E2E, migraciones, merge ni despliegue. «Hacer magia» no cambia. Diseño: [RECREATION.md](../../RECREATION.md).
+2026-11-18 · rama `claude/recreacion-colaboracion`, sobre `claude/recreacion-pedagogica` (PR #99). Sin IA de pago, E2E, migraciones, merge ni despliegue. «Hacer magia» no cambia. Diseño: [RECREATION.md](../../RECREATION.md) · ADR-049 y ADR-050.
 
-PDF generados con el motor nuevo y el renderer de siempre:
+## Material generado (recorrido completo simulado)
 
-- [Ficha del alumno](estanque-recreado-alumno.pdf), 5 páginas A4.
-- [Guía docente](estanque-recreado-guia-docente.pdf), 4 páginas A4, solo para el profesorado.
-
-## Caso
-
-- **Fuente:** `tests/support/pond-case.ts`, la ficha de prueba del docente ya incluida en el repositorio: 5.º de Primaria, Ciencias, 5 objetivos y 8 actividades.
-- **Perfil:** dificultades de lectura y escritura, solo con necesidades funcionales: decodificación, lectura por partes, longitud del texto, letra e interlineado, instrucciones en pasos, menos escritura, respuesta por selección y apoyo a la expresión.
-- **Alcance:** metodológico.
-- **Plan:** escrito a mano con el contrato que producirá el modelo (ver *Límites*).
-
-## Comparación: original → recreada
-
-| Objetivo (original) | Lo que evaluaba el original | Actividades nuevas | Formato nuevo | Cómo se conoce la solución |
-| --- | --- | --- | --- | --- |
-| obj_1 · Identificar cambios a partir del texto | 1: escribir dos cambios y la información que lo prueba | **2**: marcar los dos cambios entre cuatro (dos distractores no apoyados por el texto) · **3**: copiar las palabras que prueban uno | selección + 2 líneas con inicio de frase | 2: citas del texto (`anchored`) · 3: criterios |
-| obj_2 · Clasificar componentes | 2: tabla vacía de dos columnas | **1**: relacionar cada componente con A/B, con tarjetas recortables opcionales | relacionar | ítems citados, grupo único (`anchored`) |
-| obj_3 · Relaciones alimentarias y consecuencias | 3a, 3b, 4b: explicar flechas, predecir, consecuencia del descenso | **4**: numerar tres hechos encadenados · **5**: qué indica una flecha concreta del esquema · **6**: predecir qué pasa a las ranas y justificarlo con el esquema | ordenar + selección + 3 líneas | 4: orden del texto (`verified`) · 5: cita (`anchored`) · 6: criterios |
-| obj_4 · Calcular una variación con datos | 4a: «¿cuántos centímetros descendió?», con la operación | **7**: buscar los dos datos en la parte 2, escribir la operación y el resultado con su unidad | campos Operación / Resultado / Unidad | aritmética (`verified`: 30 − 18 = 12 cm) |
-| obj_5 · Valorar afirmaciones y proponer una medida | 5: valorar una afirmación con el texto · 6: proponer una medida | **8**: V/F de tres frases con apoyo en el texto · **9**: valorar la idea del original con una prueba · **10**: proponer una medida y a quién ayuda | V/F + 3 + 3 líneas | 8: citas (`anchored`) · 9 y 10: criterios |
-
-Los cinco objetivos se conservan con todas sus operaciones mínimas, comprobado por el servidor y por una prueba. Ningún enunciado nuevo reproduce uno del original (Jaccard < 0,5, también probado). La exigencia que se mantiene a propósito:
-
-- se escribe la **operación**, no solo el resultado;
-- se **justifica** con pruebas del texto en 3, 6 y 9;
-- la **propuesta** es libre.
-
-Lo que cambia es la forma:
-
-- la lectura se presenta en tres partes con título;
-- donde lo evaluado no es escribir, se responde marcando, relacionando u ordenando;
-- las respuestas escritas son breves y llevan inicios de frase neutros.
-
-## Revisión de todas las páginas (no solo los tests)
-
-**Ficha del alumno**
-
-| Pág. | Contenido | Valoración |
+| Documento | Páginas | Para quién |
 | --- | --- | --- |
-| 1 | Cabecera, título, consigna y la lectura **literal** en tres partes con título | Ocupa algo más de la mitad: la actividad 1 se mantiene entera en la página 2. No es una página vacía. |
-| 2 | Actividades 1 a 3 | Relacionar con casillas, cuatro opciones y dos líneas con inicio de frase. |
-| 3 | Actividades 4 y 5, con el esquema Algas → Larvas de insectos → Ranas → Garzas dibujado desde los datos | Esquema completo, sin recortes ni deformación. Los hechos de la 4 se imprimen desordenados. |
-| 4 | Actividades 6 a 8 | La 6 remite al esquema de la actividad 5 (página anterior). |
-| 5 | Actividades 9 y 10 | Última página, unos dos tercios llena. |
+| [Ficha del alumno](estanque-recreado-alumno.pdf) | 5 | alumno: 9 actividades nuevas, lectura por partes, ilustración (simulada) junto a la actividad 1, esquema exacto en la 5 |
+| [Tarjetas recortables](estanque-tarjetas-recortables.pdf) | 1 | alumno: 6 tarjetas grandes con línea de corte y su instrucción |
+| [Guía docente](estanque-guia-docente.pdf) | 2 | docente: estado de la revisión, cómo aplicarla, qué observar |
+| [Clave y revisión](estanque-clave-y-revision.pdf) | 5 | docente, aparte: clave con su estado, equivalencia, imágenes, procedencia |
+| [Ficha sin imágenes autorizadas](estanque-recreado-alumno-sin-imagenes.pdf) | 5 | variante: la ilustración no se genera y la clave explica por qué |
 
-**Guía docente:**
+La ilustración de la ficha es el **dibujo local de `MockImageProvider`** (óvalos esquemáticos). Prueba el recorrido, la colocación y la impresión, no la calidad de una imagen real.
 
-- Objetivos con sus operaciones.
-- Por actividad: objetivo, estrategia, solución, cómo se sabe y qué observar.
-- Tarjetas para recortar.
+## 1. Qué se ha probado realmente
 
-La guía usa letra estándar (es para el docente) y conserva el contraste del perfil.
+**Fase 1 · verificadores** (`src/lib/recreation/verify.ts`, `recreation_verify@v2`), con 22 pruebas de unidad, todas de regresión:
 
-**Comprobado en el PDF** (`tests/pdf/recreation-pilot.test.ts`):
+- **Cantidades.** La cita debe contener la cifra seguida de su unidad.
+  - Si la cifra no está, o va con otra unidad, es **error**: el plan se rechaza, es una solución equivocada.
+  - Si falta la unidad, hay varias cifras o la cita se repite en el original, la solución queda **sin comprobar**, nunca «verificada».
+- **Secuencias.** Cada secuencia declara su base: orden del texto, temporal o causal.
+  - Orden del texto: se verifica solo si el enunciado pregunta por ese orden.
+  - Temporal o causal: se verifica solo si, en cada paso, un conector del tipo correcto («después»/«más tarde», o «por eso»/«porque») está **entre** los dos hechos.
+  - Probado con textos variantes: un «por eso» no prueba un orden temporal, un «después» no prueba una causa, y un eslabón sin conector deja la secuencia sin comprobar.
+  - La secuencia del estanque real queda **sin comprobar**: el texto la cuenta en ese orden, pero no dice que ocurriera así.
+- **Estados honestos.**
+  - Clasificar, seleccionar y V/F son `anchored`, presentados como **«SIN COMPROBAR: apoyada en el texto; revísela antes de corregir»**.
+  - Solo la resta del estanque es `verified`.
+  - `review_required` es verdadero mientras algo esté sin comprobar o pendiente.
+- **Equivalencia pedagógica, por objetivo.** Comprobaciones deterministas:
+  - lo que se producía por escrito (justificar, proponer, predecir, localizar pruebas) sigue siendo respuesta abierta; si pasa a elegir entre opciones, se **rechaza**;
+  - no se clasifican menos elementos que en el original;
+  - se sigue pidiendo escribir la operación.
 
-- La validación de impresión no da avisos.
-- Ninguna página antes de la última tiene menos del 3 % de tinta.
-- El esquema lleva sus cuatro rótulos.
-- La ficha del alumno no contiene ni la operación resuelta, ni los criterios, ni la guía.
-- La guía contiene la solución calculada y las tarjetas.
+  El **razonamiento** queda siempre **pendiente** de la revisión docente; nunca se da por superado.
+- **Pistas cruzadas.** Se detectan y se prueban:
+  - una afirmación verdadera de otra actividad que parafrasea la opción correcta;
+  - un texto que dice la relación que el esquema pide interpretar («las larvas comen algas»);
+  - el resultado, la opción literal o el grupo de un ítem;
+  - una secuencia escrita en orden;
+  - un distractor que dice lo mismo que la cita de la respuesta correcta. Uno que invierte la relación sí se admite: es un distractor legítimo.
 
-### Defectos encontrados al revisar y corregidos antes de entregar
+**Fases 2, 3 y 5 · recorrido completo simulado** (`tests/unit/recreation-pipeline.test.ts`, 8 pruebas; `tests/pdf/recreation-pilot.test.ts`, 4 pruebas):
 
-La primera versión pasaba las pruebas automáticas, pero al leer las páginas aparecieron estos defectos:
+- **Planificador** sobre la fontanería existente:
+  - `createRecreationPlanner` llama al proveedor con `callStructured` (el mismo de los asistentes visuales), prompt versionado `recreation_planner` v1 y salida validada con `recreation_plan@v1`;
+  - cada llamada se registra como `ai_runs`, sin contenido (probado);
+  - antes de cada llamada se comprueba el peor caso de gasto (probado: sin presupuesto, no se llama);
+  - como máximo una reparación con los motivos (probado: un plan con pista se repara; si vuelve a fallar, no se entrega).
+- **Imágenes:** decisión A/B/C y el pipeline real `illustrate()` (brief → reserva de cuota → imagen → revisión → almacenamiento) con dependencias en memoria. Probado:
+  - **Autorizado:** brief, imagen y revisión; ilustración colocada justo antes de su actividad.
+  - **No autorizado:** cero llamadas de imagen; la causa («generación no disponible (disabled)») queda en la clave y la ficha sigue completa porque la imagen no era imprescindible.
+  - **Imprescindible y no producible:** hueco en el documento, aviso «FALTA 1 imagen imprescindible» en la guía, y el renderer **no** da la ficha por imprimible.
+  - **Revisión que rechaza:** un segundo intento y, después, nada en la ficha, con el motivo.
+  - **Brief con rótulos o marcadores:** se rechaza; el texto lo pone el renderer.
+  - **Generabilidad:** no se genera nada que dependa de rótulos, flechas o números, ni nada que los pida dentro de la imagen.
+- **Procedencia:** cada recurso registra qué lo produjo y qué lo comprobó, y se imprime en la clave.
+- **PDF:** las cuatro piezas se imprimen con el motor del producto, sin avisos de validación y sin peticiones de red. Ninguna página antes de la última tiene menos del 3 % de tinta. La ficha no contiene la clave.
 
-1. **Pistas cruzadas entre actividades.** En la actividad 8:
-   - «Cuando bajó el agua…» confirmaba una opción correcta de la 2;
-   - «En junio había más sitios…» quedaba resuelta por un ítem de la 4;
-   - «Las garzas pueden alimentarse de ranas», junto al esquema, revelaba qué indica la flecha (la 5).
+**Revisión visual de todas las páginas.** Tras leerlas se corrigió:
 
-   Se sustituyeron por afirmaciones sobre otras partes del texto. El verificador no detecta este tipo de pista (es semántica); queda documentado como límite.
-2. La actividad 9 decía «elige la frase marcada con F», lo que revelaba cuántas eran falsas. Ahora valora la afirmación del original de forma independiente.
-3. Doble numeración en la actividad 1 (un paso «1.» sobre los ítems «1. Algas…»): el paso pasa al enunciado.
-4. Inicios de frase con «… …»: el renderer ya añade los puntos. El contrato ahora rechaza un inicio que termina en puntos suspensivos.
-5. Guía de 9 páginas con una tabla de soluciones en columnas estrechas: ahora son bloques por actividad (4 páginas).
-6. Título del esquema duplicado (título y pie): ahora solo se imprime el título.
-7. Las cantidades de la actividad 7 se citaban de una tabla del original que el alumno no ve: ahora se citan de la lectura impresa.
+- La guía tenía 7 páginas, con una tabla que repetía el mismo «pendiente» por objetivo. Se separa en guía breve (2 págs.) y clave y revisión (5 págs.).
+- Las tarjetas llevaban la etiqueta automática «Observa» del diseño CLARO; se quita en las tarjetas.
 
-## Pruebas
+**Suites completas:** unidad 2.021, BD 515 y PDF 100, todas correctas. Typecheck correcto; lint con un aviso preexistente; `check:privacy` correcto.
 
-- **Unidad** (`tests/unit/recreation.test.ts`, 15 casos):
-  - el piloto se verifica y compila;
-  - objetivos y operaciones conservados;
-  - novedad de los enunciados;
-  - trazabilidad de cada bloque a sus objetivos y estrategias;
-  - soluciones deterministas (orden y resta);
-  - la clave queda fuera del modelo de impresión del alumno;
-  - entrada mínima y bloque no confiable.
+## 2. Qué es simulado
 
-  Rechazos probados:
-  - una cita inventada;
-  - un objetivo o una operación perdidos;
-  - alcance curricular o de acceso, o un alcance distinto del autorizado;
-  - un enunciado copiado;
-  - cuatro tipos de pista;
-  - una selección sin cita o con un recuento distinto;
-  - un V/F uniforme;
-  - una secuencia ambigua;
-  - una necesidad ajena al contexto;
-  - un contrato mal formado.
-- **PDF** (`tests/pdf/recreation-pilot.test.ts`, 2 casos): ficha y guía impresas con el motor del producto.
-- **Comprobaciones:**
-  - suites de unidad, BD y PDF;
-  - typecheck;
-  - lint;
-  - `check:privacy`.
+- **«Claude»** es `MockProvider` con respuestas fijas (`fixtures`, cambio aditivo):
+  - el plan es el del estanque, escrito a mano con el contrato;
+  - el brief y la revisión son también respuestas fijas.
+- **«OpenAI»** es `MockImageProvider`: un dibujo esquemático local, sin relación con el estanque.
+- **Almacenamiento, cuota y presupuesto de las ilustraciones** están en memoria. En producción, `illustrate()` usa `generated_assets`, `consume_quota('image')` y `ai_runs`, que exigen una fila de `adaptations`; el motor de recreación todavía no tiene la suya (ver punto 4).
+- **La puerta de imágenes** (`FLAG_AI_IMAGES_ENABLED`, piloto de un workspace, plan Max) la decide quien llama. En las pruebas se fija a «autorizado» o «no autorizado».
 
-## Límites (qué es real, qué es simulado y qué falta)
+## 3. Problemas pedagógicos que persisten
 
-- **Simulado:** el plan del estanque lo escribió una persona con el contrato del modelo. No es evidencia de que un modelo lo haga igual de bien. El prompt `recreation_planner` v1 existe, pero **no se ha ejecutado** (sin llamadas de pago). La siguiente prueba sería una evaluación con un presupuesto autorizado.
-- **No verificable aún:**
-  - el sentido de las respuestas `anchored` (grupo, opción o V/F);
-  - las pistas semánticas entre actividades.
+1. **El sentido de las respuestas `anchored`** (qué grupo, qué opción, el orden temporal del estanque) no lo comprueba el sistema. La clave lo dice, pero depende del docente.
+2. **Equivalencia del razonamiento:** pendiente en los cinco objetivos. Por ejemplo, seleccionar los dos cambios (actividad 2) exige reconocer, no localizar ni redactar; la localización se mantiene en la 3, pero que el conjunto equivalga al original es un juicio pedagógico.
+3. **Pistas semánticas** que no comparten palabras con la respuesta (una escena que sugiere la solución, una analogía) siguen fuera del alcance del verificador. La revisión de imagen y el docente son la defensa. El revisor semántico (ADR-048, apagado) no se aplica aún a la ficha recreada.
+4. **La secuencia del estanque** (actividad 4) se ofrece como temporal, pero el texto no la demuestra. Dos opciones:
+   - pedir el orden del texto, que es verificable pero cambia lo que se trabaja;
+   - aceptarla como «sin comprobar».
 
-  Lo revisa el docente con la guía; la siguiente pieza es el revisor semántico aplicado a la ficha recreada.
-- **No conectado:**
-  - persistencia en `adaptation_versions`;
-  - cuota, permisos y `ai_runs`;
-  - interfaz.
+   Decisión del docente o del equipo pedagógico.
+5. **La ilustración** es de contexto (reconocer los componentes antes de clasificarlos). Su utilidad real con alumnado con dificultades de lectura está por validar, y su calidad con un modelo real, por medir.
+6. **Carga:** 9 actividades en 5 páginas para 5 objetivos. Es menos que en la primera entrega (10) y dentro del límite que vigila el verificador (≤ 2 por objetivo), pero la carga adecuada para este perfil la debe valorar el docente.
 
-  El motor produce dos `MaterialDocument`, la misma unidad que ya se guarda, así que la conexión no requiere cambiar el esquema.
-- **Fuera de alcance:**
-  - adaptación curricular (se rechaza);
-  - imágenes generadas;
-  - hoja de recortables con su propio diseño;
-  - otras áreas y etapas.
+## 4. Qué falta para probar Claude y OpenAI reales
+
+1. **Autorización expresa** de la evaluación de pago (abajo) y del presupuesto.
+2. **Claves en el entorno de la evaluación** (no en el repositorio): `ANTHROPIC_API_KEY` y `OPENAI_API_KEY`.
+3. **Modelos por alias:**
+   - `AI_MODEL_STANDARD` para el planificador, el brief y la revisión (Anthropic, Sonnet 5.5 con precio en la tabla);
+   - `AI_MODEL_IMAGE_QUALITY` para la imagen.
+4. **Un guion de evaluación local** (`evals/recreation/`) que:
+   - use los mismos `createRecreationPlanner` e `illustrate()` con los proveedores reales;
+   - guarde en memoria, como las pruebas;
+   - escriba los `ai_runs` y los PDF en una carpeta local;
+   - corte por presupuesto.
+
+   No necesita base de datos ni toca producción. Está **sin escribir a propósito**, hasta la autorización.
+5. **Para el producto** (no para la evaluación):
+   - una fila «anfitriona» o una tabla propia para las recreaciones (una migración), de modo que `generated_assets`, la cuota y `ai_runs` se asocien;
+   - conectar la puerta real `illustrationAvailability()`;
+   - interfaz.
+
+## 5. Coste estimado de la prueba real (propuesta, sin ejecutar)
+
+Precios de `src/lib/ai/costs.ts` (Sonnet 5.5: 2 $/M de entrada y 10 $/M de salida) y peores casos de `ILLUSTRATION_BUDGET` (imagen 0,08 $; brief o revisión 0,03 $).
+
+| Llamada por ficha | Número | Peor caso |
+| --- | --- | --- |
+| Planificador (≈ 4 k tokens de entrada, ≤ 8 k de salida) | 1 + 1 reparación | 2 × 0,09 = 0,18 $ |
+| Brief de la ilustración | 1 | 0,03 $ |
+| Imagen + revisión | 1 + 1 reintento | 2 × (0,08 + 0,03) = 0,22 $ |
+| **Total por ficha** | **4 a 7 llamadas** | **≤ 0,43 $** (esperado ≈ 0,20 $) |
+
+**Propuesta:**
+
+- Fichas: el estanque y dos fichas más de Ciencias o Matemáticas de Primaria ya incluidas en las pruebas (célula, fracciones).
+- **Dos repeticiones** de cada una, para medir la consistencia.
+- En total, **6 recorridos, entre 24 y 42 llamadas**.
+- **Peor caso: 2,58 $**; esperado entre 1,0 y 1,5 $. Dentro del límite de 3 USD ya fijado para evaluaciones, con corte automático por presupuesto.
+- **Criterios de lectura:**
+  - % de planes que pasan la verificación a la primera y tras la reparación;
+  - errores por código;
+  - pistas cruzadas detectadas a mano;
+  - estados de las soluciones;
+  - imágenes aprobadas o rechazadas por la revisión, con revisión visual humana de cada una;
+  - páginas y tinta;
+  - coste real frente al estimado.
+
+**Espera autorización.** No se ha hecho ninguna llamada de pago.

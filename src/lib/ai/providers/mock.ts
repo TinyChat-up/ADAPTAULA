@@ -22,7 +22,12 @@ function containsMarker(parts: readonly ContentPart[], marker: string): boolean 
 export class MockProvider implements AIProvider {
   readonly name = "mock" as const;
 
-  constructor(private readonly options: { delayMs?: number } = {}) {}
+  /**
+   * `fixtures`: scripted answers by output name, for tests and offline demos of pipelines that have no built-in fixture (the
+   * recreation planner, the illustration brief and review). Each receives the request and returns the object the model would write.
+   * Without it, the provider behaves exactly as before.
+   */
+  constructor(private readonly options: { delayMs?: number; fixtures?: Readonly<Record<string, (request: StructuredRequest) => unknown>> } = {}) {}
 
   async generateStructured(request: StructuredRequest): Promise<StructuredResponse> {
     const started = Date.now();
@@ -39,6 +44,8 @@ export class MockProvider implements AIProvider {
     if (containsMarker(parts, MARKERS.truncated)) return { ...base, text: '{"identification":', stopReason: "max_tokens" };
     if (containsMarker(parts, MARKERS.invalid)) return { ...base, text: "esto no es json", stopReason: "complete" };
 
+    const fixture = this.options.fixtures?.[request.output.name];
+    if (fixture) return { ...base, text: JSON.stringify(fixture(request)), stopReason: "complete" };
     if (request.output.name === "material_analysis") return { ...base, text: JSON.stringify(mockAnalysisDraft()), stopReason: "complete" };
     if (request.output.name === "material_analysis_v3") return { ...base, text: JSON.stringify(mockAnalysisDraftV3()), stopReason: "complete" };
     throw new AIError("bad_request", `mock: no fixture for ${request.output.name}`);

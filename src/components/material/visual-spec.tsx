@@ -188,6 +188,20 @@ function Cards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cards" }>; 
   );
 }
 
+/** Cards to cut out: each text in its own large box with a dashed cutting line (same markup on screen and in print). */
+function CutCards({ spec, label }: { spec: Extract<VisualSpec, { kind: "cut_cards" }>; label: string }) {
+  return (
+    <div className="ms-vsupport" data-spec={spec.kind} role="group" aria-label={label}>
+      {spec.title ? <p className="ms-vsupport-title">{spec.title}</p> : null}
+      <ul className="ms-cutcards">
+        {spec.items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: string }) {
   switch (spec.kind) {
     case "fraction_bar":
@@ -206,5 +220,7 @@ export function VisualSpecView({ spec, label }: { spec: VisualSpec; label: strin
       return <Cards spec={spec} label={label} />;
     case "flow":
       return <Flow spec={spec} label={label} />;
+    case "cut_cards":
+      return <CutCards spec={spec} label={label} />;
   }
 }

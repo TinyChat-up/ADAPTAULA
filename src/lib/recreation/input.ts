@@ -4,8 +4,10 @@ import type { RecreationScope } from "./contract";
 import { originalOperations } from "./verify";
 
 /**
- * What the recreation planner may see, and nothing else (docs/PRIVACY.md). From the student: only the functional needs of the
- * context (dimension + level), never a name, alias, tag, observation or declared text of the V3 profile. From the sheet: its
+ * What the recreation planner may see, and nothing else (docs/PRIVACY.md). From the student: only what the server already turned into
+ * structured, non-identifying data — the functional needs (dimension + level), the numeric limits, and for a methodological sheet the
+ * response formats the profile allows (best first) and the original activities the teacher marked as a learning focus (ids only).
+ * Never a name, alias, tag, observation or declared text of the V3 profile. From the sheet: its
  * analysis, which travels as untrusted data. The expected answers the analysis may have inferred are left out: the planner must not
  * build activities on answers nobody verified.
  */
@@ -14,6 +16,9 @@ export interface RecreationInput {
     scope: RecreationScope["type"];
     education: { stage: string; grade: string | null; subject: string | null; language: string };
     needs: Array<{ dimension: string; level: string }>;
+    limits: { max_instruction_words: number | null; max_visible_tasks: number | null; max_task_minutes: number | null };
+    response_formats: string[] | null;
+    focus_activity_ids: string[];
     required_operations: Record<string, string[]>;
   };
   material: {
@@ -31,6 +36,9 @@ export function recreationInput(analysis: MaterialAnalysis, context: AdaptationC
       scope,
       education: { stage: context.education.stage, grade: context.education.grade, subject: context.education.subject, language: context.education.language },
       needs: context.needs.map((n) => ({ dimension: n.dimension, level: n.level })),
+      limits: { ...context.limits },
+      response_formats: context.pedagogy?.response?.available ? [...context.pedagogy.response.available] : null,
+      focus_activity_ids: [...(context.pedagogy?.focus_targets ?? [])],
       required_operations: originalOperations(analysis),
     },
     material: {

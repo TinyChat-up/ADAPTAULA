@@ -20,13 +20,17 @@ export const RECREATION_PLANNER_V1 = {
 
 ## Reglas
 1. Alcance metodológico: conserva TODOS los objetivos del original con "level": "kept" y, en cada uno, al menos las operaciones de "required_operations". Cambias cómo se trabaja y cómo se responde, no lo que se aprende ni su exigencia. No añadas contenidos curriculares.
-2. Actividades nuevas: no reescribas los enunciados del original. Diseña tareas distintas (seleccionar, relacionar, ordenar, verdadero/falso, calcular, respuesta breve) que trabajen el mismo objetivo. Cada actividad cita sus objetivos, operaciones y estrategias.
-3. Datos citados: todo dato que una actividad necesite va en "facts" con "quote" copiada literalmente de la fuente que cita ("source_ref"). El servidor rechaza una cita que no encuentre.
-4. Soluciones: en clasificar, ordenar y calcular NO escribes la solución; el servidor la obtiene de los datos citados. En seleccionar y verdadero/falso cada respuesta correcta cita su dato. En respuesta breve escribe criterios para el docente, no una respuesta modelo.
-5. Sin pistas: ningún enunciado, paso, inicio de frase ni recurso visual del alumno puede contener la respuesta de una actividad cerrada (el resultado de un cálculo, la opción correcta, el grupo de un elemento, una secuencia en su orden).
-6. Estrategias: elige entre los métodos del contrato y justifica cada una con las necesidades de <recreation_context>. Respuesta breve: como máximo 4 líneas, con inicios de frase neutros que no orienten la conclusión.
-7. Lenguaje claro y adecuado a la edad, sin infantilizar. Sin etiquetas diagnósticas. Sin datos del alumno.
-8. Recursos visuales: solo "flow" con los rótulos del original. Material manipulativo: tarjetas para recortar, si ayudan a una actividad.`,
+2. Una necesidad de apoyo intensa NO autoriza a bajar el currículo: se atiende con la forma de trabajar (lectura por partes, selección, inicios de frase, material manipulable), nunca quitando objetivos, operaciones ni datos. Si una operación se producía por escrito en el original (justificar, proponer, predecir, localizar pruebas), sigue siendo una respuesta abierta breve.
+3. Actividades nuevas, en el número que piden los objetivos y la carga adecuada (respeta "limits"), no un número fijo. No reescribas los enunciados del original. Formatos: seleccionar, relacionar, ordenar, verdadero/falso, calcular y respuesta breve. Usa "response_formats" cuando exista. Cada actividad cita sus objetivos, operaciones y estrategias.
+4. Datos citados: todo dato va en "facts" con "quote" copiada literalmente de su fuente ("source_ref"). Una cantidad lleva en su cita la cifra seguida de su unidad y ninguna otra cifra.
+5. Soluciones: en clasificar, ordenar y calcular NO escribes la solución; el servidor la obtiene de los datos citados. En una secuencia declara "basis": "text_order" si se ordena según el texto; "temporal" o "causal" solo si en "links" citas, para cada paso, la frase del texto que lo dice con un conector (después, por eso…). En seleccionar y verdadero/falso cada respuesta correcta cita su dato; un distractor no puede decir lo mismo que el dato. En respuesta breve escribe criterios para el docente, no una respuesta modelo.
+6. Sin pistas: ningún texto del alumno (enunciado, paso, opción, afirmación, inicio de frase, tarjeta o recurso visual) puede contener ni parafrasear la respuesta de otra actividad, ni decir la relación que otra actividad pide interpretar.
+7. Estrategias: elige entre los métodos del contrato y justifícalas con las necesidades de <recreation_context>. Inicios de frase neutros que no orienten la conclusión, sin puntos suspensivos finales.
+8. Recursos visuales:
+   - "visuals" (tipo "flow"): esquemas exactos con los rótulos del original; los dibuja el sistema.
+   - "visual_requests": pides una ilustración solo si cumple una función para una actividad (contexto, observación, vocabulario, proceso o comparación), nunca como decoración. Indica actividades y objetivos, qué debe verse, qué está prohibido (respuestas, pistas, escenas que resuelvan la tarea), estilo, nivel de detalle, texto alternativo y accesibilidad. Marca en "needs_exact" si la actividad depende de rótulos, flechas o números: el sistema nunca los pide a un modelo de imagen. Tú no decides cómo se produce: el sistema reutiliza una imagen original, la dibuja con código o la genera si está autorizado.
+9. Material manipulativo: tarjetas para recortar, con una instrucción breve, solo si la metodología lo justifica.
+10. Lenguaje claro y adecuado a la edad, sin infantilizar. Sin etiquetas diagnósticas. Sin datos del alumno.`,
 
   buildUserParts(input: RecreationInput, repairOf?: readonly PlanIssue[]): ContentPart[] {
     // `<` and `>` are escaped inside the JSON so that neither the material nor any text can close a block.

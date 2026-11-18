@@ -2,6 +2,36 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## ADR-050 — Recreación con Claude y OpenAI: verificación honesta, planificador sobre `src/lib/ai` y recursos visuales A/B/C (2026-11-18)
+
+Evolución de ADR-049, sin cambiar «Hacer magia» ni las adaptaciones guardadas.
+
+- **Verificación (`recreation_verify@v2`).**
+  - Solo es `verified` lo que el servidor demuestra: aritmética sobre cifras cuya cita contiene número y unidad sin ambigüedad, orden del texto cuando se pregunta por él, u orden temporal o causal con un conector del texto entre cada par.
+  - Una cifra o unidad que la cita no respalda es un error.
+  - Clasificar, seleccionar y V/F son `anchored` y se presentan como «sin comprobar».
+  - La equivalencia pedagógica se revisa por objetivo:
+    - **comprobado:** producción escrita conservada, número de ítems, operación escrita;
+    - **pendiente siempre:** el razonamiento.
+  - Se detectan pistas cruzadas parafraseadas y relaciones reveladas.
+- **Planificador.** Proveedor de `src/lib/ai` y `callStructured` (sin agente ni transporte nuevos), prompt versionado y salida validada con el contrato.
+  - Tope de gasto por peor caso antes de cada llamada.
+  - Como máximo una reparación.
+  - `ai_runs` sin contenido.
+  - Del perfil solo viajan necesidades, límites numéricos, formatos de respuesta permitidos y actividades foco (ids).
+- **Recursos visuales.** El plan **pide**; el servidor **decide**:
+  - **A:** original localizado;
+  - **B:** esquema exacto por código;
+  - **C:** el pipeline existente `illustrate()`, con su puerta, cuota, presupuesto y revisión.
+
+  No se genera con IA nada que dependa de rótulos, flechas o números. Un brief con rótulos o marcadores se rechaza. Lo prohibido se añade a la revisión. Una imagen imprescindible que falta se declara y la ficha no se da por imprimible.
+- **Materiales.**
+  - Ficha del alumno, con clave separada en `answer_key`.
+  - Hoja de tarjetas recortables (`VisualSpec` `cut_cards`, aditivo).
+  - Guía breve.
+  - Clave y revisión aparte, con la procedencia de cada recurso.
+- **Simulación.** `MockProvider` admite respuestas fijas por salida (aditivo) para el recorrido completo sin gasto. Una evaluación real necesita autorización expresa ([QA](qa/recreacion-pedagogica/README.md)).
+
 ## ADR-049 — Motor de recreación pedagógica: contrato `recreation_plan@v1` y piloto aislado (2026-11-18)
 
 La ficha original pasa a ser una **fuente** de contenidos, objetivos y exigencia cognitiva, no un formato que conservar. Un plan versionado separa siete partes:
