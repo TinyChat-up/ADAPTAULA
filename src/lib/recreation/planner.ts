@@ -46,8 +46,8 @@ export function createRecreationPlanner(deps: { provider: AIProvider; selection:
     throw new Error("invalid recreation planner output allowance");
   }
   let spent: number | null = null;
-  return async (input, repairOf) => {
-    const parts = RECREATION_PLANNER_V1.buildUserParts(input, repairOf);
+  return async (input, repairOf, previousPlan) => {
+    const parts = RECREATION_PLANNER_V1.buildUserParts(input, repairOf, previousPlan);
     const chars = RECREATION_PLANNER_V1.system.length + parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0);
     spent ??= await deps.budget.spentUsd();
     if (spent + worstCallUsd(deps.selection, chars, maxOutputTokens) > deps.budget.limitUsd + 1e-9) return { draft: null, run: null, stop: "budget_exhausted" };
