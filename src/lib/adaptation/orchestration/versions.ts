@@ -122,6 +122,6 @@ function recreationVersions(env: ModelEnv) {
 }
 
 /** The recreation plan's output budget (src/lib/recreation/planner.ts keeps the same figure for the standalone route). */
-export const RECREATION_PLANNER_MAX_OUTPUT_TOKENS = 8_000;
+export const RECREATION_PLANNER_MAX_OUTPUT_TOKENS = 14_000;
 
 export const modelSelectionOf = (component: PipelineVersions["planner"]): ModelSelection => ({ ...component.selection });

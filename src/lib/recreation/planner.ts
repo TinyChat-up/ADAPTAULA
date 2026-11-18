@@ -17,7 +17,7 @@ import type { Planner } from "./pilot";
  */
 
 export const RECREATION_PLANNER_LIMITS = {
-  maxOutputTokens: 8_000,
+  maxOutputTokens: 14_000,
   /** The plan plus one repair. */
   maxCalls: 2,
   /** Default ceiling for one recreation's planning (USD), when the caller sets none. */
@@ -39,15 +39,20 @@ export function worstCallUsd(selection: ModelSelection, inputChars: number, maxO
   return estimateCostUsd(selection.provider, selection.model, { inputTokens: Math.ceil(inputChars / 3), outputTokens: maxOutputTokens, cachedInputTokens: 0, cacheCreationInputTokens: 0 }) ?? RECREATION_PLANNER_LIMITS.unpricedCallUsd;
 }
 
-export function createRecreationPlanner(deps: { provider: AIProvider; selection: ModelSelection; budget: PlannerBudget; recordAiRun(run: AIRunRecord): Promise<void> }): Planner {
+export function createRecreationPlanner(deps: { provider: AIProvider; selection: ModelSelection; budget: PlannerBudget; maxOutputTokens?: number; recordAiRun(run: AIRunRecord): Promise<void> }): Planner {
+  // The output allowance is frozen when the adaptation is created. Older pending jobs must keep their original allowance.
+  const maxOutputTokens = deps.maxOutputTokens ?? RECREATION_PLANNER_LIMITS.maxOutputTokens;
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > RECREATION_PLANNER_LIMITS.maxOutputTokens) {
+    throw new Error("invalid recreation planner output allowance");
+  }
   let spent: number | null = null;
   return async (input, repairOf) => {
     const parts = RECREATION_PLANNER_V1.buildUserParts(input, repairOf);
     const chars = RECREATION_PLANNER_V1.system.length + parts.reduce((n, p) => n + (p.type === "text" ? p.text.length : 0), 0);
     spent ??= await deps.budget.spentUsd();
-    if (spent + worstCallUsd(deps.selection, chars) > deps.budget.limitUsd + 1e-9) return { draft: null, run: null, stop: "budget_exhausted" };
-    const { draft, run } = await callStructured(deps.provider, deps.selection, "plan", RECREATION_PLANNER_V1, parts, RECREATION_PLANNER_LIMITS.maxOutputTokens, AbortSignal.timeout(RECREATION_PLANNER_LIMITS.timeoutMs), RECREATION_PLANNER_LIMITS.timeoutMs);
-    spent += run.estimatedCostUsd ?? worstCallUsd(deps.selection, chars);
+    if (spent + worstCallUsd(deps.selection, chars, maxOutputTokens) > deps.budget.limitUsd + 1e-9) return { draft: null, run: null, stop: "budget_exhausted" };
+    const { draft, run } = await callStructured(deps.provider, deps.selection, "plan", RECREATION_PLANNER_V1, parts, maxOutputTokens, AbortSignal.timeout(RECREATION_PLANNER_LIMITS.timeoutMs), RECREATION_PLANNER_LIMITS.timeoutMs);
+    spent += run.estimatedCostUsd ?? worstCallUsd(deps.selection, chars, maxOutputTokens);
     await deps.recordAiRun({ ...run, attempt: repairOf ? 2 : 1 });
     return { draft, run };
   };

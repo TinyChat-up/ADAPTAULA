@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { allBlocks } from "@/lib/schemas/material-document";
 import { buildRenderModel } from "@/lib/render/model";
 import { versionOf } from "@/lib/recreation/record";
-import { worstCallUsd } from "@/lib/recreation/planner";
+import { RECREATION_PLANNER_LIMITS, worstCallUsd } from "@/lib/recreation/planner";
+import { resolvePipelineVersions } from "@/lib/adaptation/orchestration/versions";
 import { resolveModel } from "@/lib/ai/registry";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { runMockRecreation } from "../support/recreation-mocks";
@@ -18,6 +19,11 @@ const ready = async (options: Parameters<typeof runMockRecreation>[0] = {}) => {
 };
 
 describe("recorrido completo simulado", () => {
+  it("el nuevo techo de respuesta para el plan queda congelado en cada adaptación nueva", () => {
+    const versions = resolvePipelineVersions({}, { recreation: true });
+    expect(versions.recreation?.planner.max_output_tokens).toBe(RECREATION_PLANNER_LIMITS.maxOutputTokens);
+    expect(RECREATION_PLANNER_LIMITS.maxOutputTokens).toBeGreaterThan(8_000);
+  });
   it("imágenes autorizadas: plan del «Claude» simulado, ilustración del «OpenAI» simulado revisada; la de contexto abre la ficha, antes de la lectura", async () => {
     const { outcome, runs, assets, calls } = await ready({ imagesAuthorized: true });
     // One context illustration + one per card (6): 7 briefs, 7 images, 7 reviews; one plan.
