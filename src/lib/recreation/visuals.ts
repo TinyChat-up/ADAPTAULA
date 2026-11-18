@@ -86,9 +86,8 @@ export function generable(r: VisualRequest): { ok: true } | { ok: false; reason:
 }
 
 export async function resolveVisuals(ctx: VisualContext): Promise<ResolvedVisual[]> {
-  const out: ResolvedVisual[] = [];
-  for (const r of ctx.plan.visual_requests) out.push(await resolveOne(r, ctx));
-  return out;
+  // Independent requests run together (the cap on pictures is taken synchronously, in the plan's order); the result keeps that order.
+  return Promise.all(ctx.plan.visual_requests.map((r) => resolveOne(r, ctx)));
 }
 
 async function resolveOne(r: VisualRequest, ctx: VisualContext): Promise<ResolvedVisual> {
@@ -160,6 +159,23 @@ function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<Illus
   });
 }
 
+/** How many card pictures are made at once (each is a brief, an image and a review). */
+const CARD_CONCURRENCY = 3;
+
+/** `map` with at most `limit` calls in flight; the result keeps the input's order. */
+async function mapPool<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]!, i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 /** Cards: one picture per card, in order. A card without a picture keeps its printed name (the card works without it). */
 async function resolveCards(
   r: VisualRequest,
@@ -171,15 +187,14 @@ async function resolveCards(
 ): Promise<ResolvedVisual> {
   const material = ctx.plan.materials.find((m) => m.id === r.for_cards);
   const items = material?.kind === "cut_out_cards" ? material.cards : [];
-  const cards: NonNullable<ResolvedVisual["cards"]> = [];
-  for (const text of items) {
-    if (!takeImage(ctx)) {
-      cards.push({ text, asset: null, reason: "límite de imágenes" });
-      continue;
-    }
+  // The cap is applied in card order BEFORE anything is asked; the pictures themselves are made a few at a time (a minutes-long
+  // request cannot afford one card after another), and the result keeps the cards' order.
+  const allowed = items.map(() => takeImage(ctx));
+  const cards: NonNullable<ResolvedVisual["cards"]> = await mapPool(items, CARD_CONCURRENCY, async (text, i) => {
+    if (!allowed[i]) return { text, asset: null, reason: "límite de imágenes" };
     const outcome = await illustrateFor(r, ctx, gate, text);
-    cards.push(outcome.ok ? { text, asset: { asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, reason: outcome.cached ? "reutilizada" : "generada y aprobada" } : { text, asset: null, reason: outcome.reason });
-  }
+    return outcome.ok ? { text, asset: { asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, reason: outcome.cached ? "reutilizada" : "generada y aprobada" } : { text, asset: null, reason: outcome.reason };
+  });
   const made = cards.filter((c) => c.asset).length;
   return {
     ...base,

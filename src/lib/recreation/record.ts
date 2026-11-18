@@ -5,7 +5,7 @@ import type { RecreationOutcome } from "./pilot";
 
 /**
  * How a recreation is kept (ADR-051, ADR-052), in the same three parts as the proposed tables
- * (docs/qa/recreacion-plataforma/propuesta-migracion.sql):
+ * (supabase/migrations/20261001003700_recreation_engine.sql):
  *
  *   line      its material, its current version and the idempotency key of the request that created it;
  *   version   ONLY what is shown: the student's sheet and the materials WITHOUT answers (the schema refuses a non-empty

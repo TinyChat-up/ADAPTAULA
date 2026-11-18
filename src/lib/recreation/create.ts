@@ -13,7 +13,7 @@ import { RECREATION_VISUALS_VERSION } from "./visuals";
  *   2. idempotency (the same request key returns the line already created: a double click or a network retry is not a second bill);
  *   3. budget (the ceiling still covers the generation's worst case);
  *   4. reservation of the plan's unit with an idempotent key (`consume_quota` in the product), given back if nothing is stored.
- * In the product, 4 and the store's `addVersion` share a transaction (docs/qa/recreacion-plataforma/propuesta-migracion.sql).
+ * In the product, 4 and the store's `addVersion` share a transaction (supabase/migrations/20261001003700_recreation_engine.sql).
  *
  *   createRecreation       version 1 of a new line.
  *   regenerateRecreation   explicit: asks for confirmation, then version n+1; earlier versions and their pictures stay.

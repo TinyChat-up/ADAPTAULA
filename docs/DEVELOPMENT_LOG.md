@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-18 · «Hacer magia» con el motor de recreación
+
+- **Cambios.** Indicador `HACER_MAGIA_ENGINE`; motor fijado al crear; etapas de planificación y generación de la recreación (`src/lib/adaptation/recreation/`); migración 037 local; lector con RLS y pantalla de la ficha recreada en `/app/adaptaciones/[id]`; PDF de materiales (`?documento=materiales`); tarjeta de creación con un solo camino cuando está activo; imágenes de tarjetas en paralelo (3).
+- **Pruebas.** Solo typecheck; no se ejecutaron suites por indicación. `tests/db/magic-recreation.test.ts` (14 casos) pasó antes de la pantalla.
+- **Riesgos.** Sin validar con modelos reales ni E2E; límite de 300 s por etapa; coste por adaptación hasta ~1,8 $ de tope.
+- **Siguiente.** Aplicar 037 con autorización, ejecutar `pnpm check` y E2E, probar en Preview con `pilot`.
+
 ## 2026-11-18 — PR #101 (cont.): respuestas solo en el servidor, revisión, tarjetas ilustradas, versiones y evaluación real preparada
 
 Sobre la misma rama `claude/recreacion-plataforma`. ADR-052.

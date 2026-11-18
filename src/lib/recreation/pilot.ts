@@ -55,11 +55,16 @@ export type RecreationOutcome =
 
 const MAX_CALLS = 2;
 
-export async function runRecreation(planner: Planner, request: RecreationRequest): Promise<RecreationOutcome> {
+/** The planning half of the route: the verified plan, or why there is none. Nothing paid beyond the planner has happened yet. */
+export type PlannedRecreation =
+  | { status: "planned"; plan: RecreationPlan; verification: Verification; runs: AIRunRecord[]; calls: number }
+  | Exclude<RecreationOutcome, { status: "ready" }>;
+
+export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope">): Promise<PlannedRecreation> {
   const input = recreationInput(request.analysis, request.context, request.scope);
   const runs: AIRunRecord[] = [];
   let repairOf: PlanIssue[] | undefined;
-  let last: RecreationOutcome | null = null;
+  let last: PlannedRecreation | null = null;
   for (let call = 1; call <= MAX_CALLS; call++) {
     const answer = await planner(input, repairOf);
     if (answer.run) runs.push(answer.run);
@@ -80,14 +85,25 @@ export async function runRecreation(planner: Planner, request: RecreationRequest
       repairOf = verification.issues.filter((i) => i.severity === "error");
       continue;
     }
-    const needs = request.context.needs.map((n) => n.dimension);
-    const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 } });
-    const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
-    const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals });
-    const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));
-    return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls: call, plannerLabel: request.plannerLabel, cardAssets };
+    return { status: "planned", plan, verification, runs, calls: call };
   }
   return last!;
+}
+
+/** The second half: the pictures (A original · B code · C illustration pipeline), the documents and the provenance of a verified plan. */
+export async function finishRecreation(planned: Extract<PlannedRecreation, { status: "planned" }>, request: RecreationRequest): Promise<Extract<RecreationOutcome, { status: "ready" }>> {
+  const { plan, verification, runs, calls } = planned;
+  const needs = request.context.needs.map((n) => n.dimension);
+  const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 } });
+  const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
+  const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals });
+  const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));
+  return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls, plannerLabel: request.plannerLabel, cardAssets };
+}
+
+export async function runRecreation(planner: Planner, request: RecreationRequest): Promise<RecreationOutcome> {
+  const planned = await planRecreation(planner, request);
+  return planned.status === "planned" ? finishRecreation(planned, request) : planned;
 }
 
 const STATUS_ES = { verified: "solución comprobada", anchored: "apoyada en el texto, sin comprobar", teacher_review: "abierta: criterios" } as const;

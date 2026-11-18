@@ -36,6 +36,7 @@ export function StartAdaptationCard({
   create,
   visualSupportOffer,
   plannerPilot = false,
+  recreation = false,
 }: {
   profiles: ProfileOption[];
   initialProfileId?: string | undefined;
@@ -44,6 +45,8 @@ export function StartAdaptationCard({
   visualSupportOffer?: { remaining: number; maxPerAdaptation: number } | null;
   /** The V3 pilot's planner choice (ADR-046): computed on the server for the authorised workspace only. */
   plannerPilot?: boolean;
+  /** ADR-053: «Hacer magia» of this workspace builds a NEW sheet (server's switch): no type to choose and no second way of adapting. */
+  recreation?: boolean;
   create: (input: { learnerProfileId: string; requestKey: string; mode: CreationModeChoice; adaptationType?: SheetTypeChoice; visualSupports?: boolean; planner?: PlannerChoiceValue }) => Promise<PublicResult<{ adaptationId: string }>>;
 }) {
   const router = useRouter();
@@ -118,7 +121,7 @@ export function StartAdaptationCard({
             </div>
           ) : null}
 
-          <fieldset className="space-y-2" disabled={pending !== null}>
+          {recreation ? null : <fieldset className="space-y-2" disabled={pending !== null}>
             <legend className="text-base font-semibold">Tipo de adaptación para esta ficha</legend>
             <label className="flex min-h-11 items-start gap-3 py-1">
               <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "accessibility"} onChange={() => setSheetType("accessibility")} />
@@ -128,9 +131,9 @@ export function StartAdaptationCard({
               <input type="radio" name={`${uid}-type`} className="mt-1 size-5 accent-primary" checked={sheetType === "methodological"} onChange={() => setSheetType("methodological")} />
               <span><span className="font-medium">Metodológica</span><span className="block text-sm text-muted-foreground">Mismos objetivos. Además puede cambiar la forma de responder (por ejemplo, menos escritura o respuesta oral) donde no sea lo que se evalúa.</span></span>
             </label>
-          </fieldset>
+          </fieldset>}
 
-          {plannerPilot ? <PlannerChoiceField value={planner} onChange={setPlanner} disabled={pending !== null} /> : null}
+          {plannerPilot && !recreation ? <PlannerChoiceField value={planner} onChange={setPlanner} disabled={pending !== null} /> : null}
 
           <section aria-labelledby={`${uid}-how`} className="space-y-3">
             <h3 id={`${uid}-how`} className="text-base font-semibold">
@@ -138,7 +141,7 @@ export function StartAdaptationCard({
             </h3>
             <div className="grid gap-3">
               <div className="flex flex-col gap-3 border-t border-primary py-4">
-                {visualSupportOffer ? <div className="space-y-2 text-sm">
+                {visualSupportOffer && !recreation ? <div className="space-y-2 text-sm">
                   <label className="flex min-h-11 items-center gap-3 font-medium">
                     <input type="checkbox" className="size-5 accent-primary" checked={visualSupports} onChange={(e) => setVisualSupports(e.target.checked)} disabled={pending !== null || visualSupportOffer.remaining <= 0} aria-describedby={`${uid}-visuals`} />
                     Crear con apoyos visuales
@@ -153,10 +156,10 @@ export function StartAdaptationCard({
                 </Button>
                 <p id={`${uid}-magic`} className="text-sm text-foreground/90">
                   <span className="font-medium">Recomendado. </span>
-                  {CREATION_COPY.automatic.body}
+                  {recreation ? "Crea una ficha nueva con actividades diferentes, ilustraciones y materiales para recortar cuando ayudan. Mantiene lo que se aprende y su exigencia. Revisa el resultado antes de usarlo." : CREATION_COPY.automatic.body}
                 </p>
               </div>
-              <div className="flex flex-col gap-3 border-t border-border py-4">
+              {recreation ? null : <div className="flex flex-col gap-3 border-t border-border py-4">
                 <Button size="lg" variant="secondary" onClick={() => void start("review")} disabled={pending !== null} aria-describedby={`${uid}-review`}>
                   {pending === "review" ? <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" /> : null}
                   {CREATION_COPY.review.label}
@@ -164,7 +167,7 @@ export function StartAdaptationCard({
                 <p id={`${uid}-review`} className="text-sm text-muted-foreground">
                   {CREATION_COPY.review.body}
                 </p>
-              </div>
+              </div>}
             </div>
           </section>
 

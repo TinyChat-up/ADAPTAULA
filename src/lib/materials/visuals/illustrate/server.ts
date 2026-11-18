@@ -60,7 +60,20 @@ export async function visualSupportOffer(workspaceId: string): Promise<{ remaini
   } catch { return null; }
 }
 
-async function availableForWorkspace(ids: { workspaceId: string; adaptationId: string; materialId: string }): Promise<IllustrationAvailability> {
+/**
+ * The illustration gate of a «Hacer magia» adaptation made by the recreation engine (ADR-053). The product's gates are the same ones,
+ * in the same order: the AI-images flag, the isolated image pilot, a plan with `image_generation` and a `monthly_images` allowance
+ * (one unit per approved picture, through `consume_quota('image')`, given back if none is approved) and the per-adaptation budget.
+ * What differs: the sheet's pictures are part of the engine, so the teacher's «con apoyos visuales» request is not needed, and the
+ * engine's own cap (`maxImages`, with its own budget) replaces the original engine's 3 pictures per adaptation. Service role only.
+ */
+export async function recreationIllustrationAvailability(ids: { workspaceId: string; adaptationId: string; materialId: string }, limits: { maxImages: number; budgetUsd: number }): Promise<IllustrationAvailability> {
+  const { data, error } = await createAdminClient().from("adaptations").select("workspace_id").eq("id", ids.adaptationId).maybeSingle();
+  if (error || data?.workspace_id !== ids.workspaceId) return { available: false, reason: "disabled" };
+  return availableForWorkspace(ids, limits);
+}
+
+async function availableForWorkspace(ids: { workspaceId: string; adaptationId: string; materialId: string }, recreation?: { maxImages: number; budgetUsd: number }): Promise<IllustrationAvailability> {
   // Switched off in Adaptaula: true for every plan, so the stop must not suggest changing plans (fichas 06/07 of the real run).
   if (!getFlags().aiImagesEnabled) return { available: false, reason: "disabled" };
   if (!imagePilotAllows(serverEnv(), ids.workspaceId, publicEnv().NEXT_PUBLIC_SUPABASE_URL, process.env.VERCEL_ENV)) return { available: false, reason: "disabled" };
@@ -69,6 +82,10 @@ async function availableForWorkspace(ids: { workspaceId: string; adaptationId: s
   const effective = (plan as { slug?: string; features?: Record<string, unknown>; monthly_images?: number } | null) ?? null;
   if (effective?.slug !== "max" || effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: (await anyPlanOffersIllustrations(admin)) ? "plan" : "not_offered" };
   const planBudget = Number(effective.features?.illustration_budget_usd);
+  if (recreation) {
+    const engineDeps = await illustrationDeps(ids, recreation.budgetUsd, { perAdaptationMax: recreation.maxImages });
+    return engineDeps ? { available: true, deps: engineDeps, perAdaptation: recreation.maxImages } : { available: false, reason: "service" };
+  }
   const deps = await illustrationDeps(ids, Number.isFinite(planBudget) && planBudget > 0 ? planBudget : ILLUSTRATION_BUDGET.perAdaptationUsd);
   const perAdaptation = Number(effective.features?.illustrations_per_adaptation);
   return deps ? { available: true, deps, perAdaptation: Number.isInteger(perAdaptation) && perAdaptation >= 0 ? perAdaptation : null } : { available: false, reason: "service" };
@@ -80,7 +97,8 @@ async function anyPlanOffersIllustrations(admin: ReturnType<typeof createAdminCl
   return !error && (data?.length ?? 0) > 0;
 }
 
-async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number): Promise<IllustrationDeps | null> {
+async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number, options: { perAdaptationMax?: number } = {}): Promise<IllustrationDeps | null> {
+  const perAdaptationMax = options.perAdaptationMax ?? ILLUSTRATION_LIMITS.perAdaptation;
   if (!getFlags().aiImagesEnabled) return null;
   const env = serverEnv() as ModelEnv;
   let imageSelection: ModelSelection;
@@ -134,8 +152,8 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
     },
     quota: {
       async reserve(key) {
-        const { data: approved, error: countError } = await admin.from("generated_assets").select("id").eq("adaptation_id", ids.adaptationId).not("sha256", "is", null).eq("review->>approved", "true").limit(ILLUSTRATION_LIMITS.perAdaptation);
-        if (countError || !approved || approved.length >= ILLUSTRATION_LIMITS.perAdaptation) return false;
+        const { data: approved, error: countError } = await admin.from("generated_assets").select("id").eq("adaptation_id", ids.adaptationId).not("sha256", "is", null).eq("review->>approved", "true").limit(perAdaptationMax);
+        if (countError || !approved || approved.length >= perAdaptationMax) return false;
         const { data, error } = await admin.rpc("consume_quota", { p_workspace: ids.workspaceId, p_kind: "image", p_units: 1, p_user: null, p_job: null, p_key: key });
         return !error && (data as { allowed?: boolean } | null)?.allowed === true;
       },

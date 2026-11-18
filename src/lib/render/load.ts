@@ -39,6 +39,11 @@ export interface RenderLoadOptions {
    * object. The sheet, the image routes and the PDF always verify (the default).
    */
   verify?: boolean;
+  /**
+   * ADR-053: print another document of the SAME delivered version (the recreation's materials to cut out) through the one renderer.
+   * `null` from `read`: that version has none. `generated` are the stored pictures it points to without carrying them in its blocks.
+   */
+  alternate?: { read(): Promise<{ document: unknown; assets: Array<{ assetId: string; sha256: string }> } | null> };
 }
 
 /** The authorised route that streams a verified crop. Never a signed URL: authorisation never depends on knowing a link. */
@@ -68,7 +73,9 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
 
   const versionResult = await getAdaptationVersion(deps, actor, id);
   if (!versionResult.ok || !versionResult.data.delivered) return { kind: "not_ready", status };
-  const parsed = MaterialDocumentSchema.safeParse(versionResult.data.document);
+  const alternate = options.alternate ? await options.alternate.read() : null;
+  if (options.alternate && !alternate) return { kind: "not_ready", status };
+  const parsed = MaterialDocumentSchema.safeParse(alternate ? alternate.document : versionResult.data.document);
   if (!parsed.success) return { kind: "invalid_document", status };
 
   // The deferred decisions of the review this version came from (matched by plan fingerprint); unknown stays unknown.
@@ -136,7 +143,7 @@ export async function loadRenderInputWith(deps: ServiceDeps, actor: Actor, id: s
     resources[r.decisionId] = { src: assetRef({ assetId: state.resourceId, sha256: state.sha256 }) };
   }
   // Approved illustrations: the row of THIS adaptation and the exact bytes the document pins, or the image stays missing.
-  const generatedSources = generatedSourcesOf(parsed.data);
+  const generatedSources = [...new Map([...generatedSourcesOf(parsed.data), ...(alternate?.assets ?? [])].map((g) => [g.assetId, g])).values()];
   const resolvedGenerated = options.generated && generatedSources.length > 0 ? await resolveGenerated(options.generated, id, generatedSources, { withBytes: options.pin, verify: options.verify }) : { ready: new Map<string, { width: number; height: number; purpose?: string }>(), bytes: {} as Record<string, Uint8Array> };
   const generated: Record<string, { src: string; widthMm: number; purpose?: string }> = {};
   for (const g of generatedSources) {

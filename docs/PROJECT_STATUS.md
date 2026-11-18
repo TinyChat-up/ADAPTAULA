@@ -1,5 +1,7 @@
 # Estado compartido de Adaptaula
 
+> **«Hacer magia» con el motor de recreación (2026-11-18):** integrado detrás de `HACER_MAGIA_ENGINE` (apagado por defecto), sobre `main`. Migración 037 solo local; sin despliegue, E2E ni llamadas de pago; pruebas no ejecutadas por indicación (hay una de integración escrita). [Pasos de activación y límites](qa/hacer-magia-recreacion/README.md), ADR-052b.
+
 > **Perfil V3 y Hacer magia, primer recorrido funcional (2026-11-13):** el docente elige adaptación de acceso o metodológica por ficha; el alcance, los formatos de respuesta ejecutables y las actividades que trabajan lo declarado «por reforzar» condicionan el plan y el documento (probado con servicios simulados, [QA](qa/perfil-v3-hacer-magia/README.md)). El texto declarado y el nivel no salen del servidor. **No funciona todavía:** adaptación curricular (se rechaza), unir/completar/ordenar, texto declarado hacia el planificador.
 
 > **Perfil pedagógico V3 (primera entrega):** datos opcionales por área y preferencias docentes, conservando tarjetas y perfiles V1/V2. La información nueva se guarda pero no entra en Hacer magia ni autoriza cambios curriculares. Migración 036 solo local; su despliegue requiere coordinar lectores compatibles y escrituras V3. [Alcance y comprobaciones](qa/perfil-pedagogico-v3/README.md). Sin E2E, IA de pago ni migraciones remotas.
