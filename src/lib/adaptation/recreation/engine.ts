@@ -36,3 +36,6 @@ export const RECREATION_PLANNER_PROMPT_VERSION = 6;
 
 /** ADR-054: the planner version from which «Hacer magia» designs new pictures instead of reusing the original's. */
 export const NEW_IMAGES_FROM = 5;
+
+/** ADR-056/057: the planner version from which the resource tools adapt to Claude's plan (v5 keeps the rules it was created with). */
+export const DESIGNED_FROM = 6;

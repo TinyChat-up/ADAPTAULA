@@ -7,8 +7,9 @@ import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from 
 import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
 import { salvagePlan, sanitizePlan, undesignedResources } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
+import { auditFidelity } from "./fidelity";
 import { toolReport } from "./tools";
-import { RECREATION_VISUAL_LIMITS, resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
+import { RECREATION_VISUAL_LIMITS, legacyBriefIssues, resolveVisuals, type IllustrationGate, type ResolvedVisual, type VisualPolicy } from "./visuals";
 
 /**
  * The isolated recreation route (ADR-049, ADR-050):
@@ -48,7 +49,7 @@ export interface RecreationRequest {
   illustrations?: IllustrationGate;
   locatedOriginals?: ReadonlySet<string>;
   /** ADR-054: `new_images` for adaptations planned with v5 on (no reuse of the original's pictures; no pointer is removed). */
-  visualPolicy?: "reuse_originals" | "new_images";
+  visualPolicy?: VisualPolicy;
 }
 
 export type RecreationOutcome =
@@ -58,6 +59,9 @@ export type RecreationOutcome =
   | { status: "budget_exhausted"; runs: AIRunRecord[]; calls: number };
 
 const MAX_CALLS = 2;
+
+/** v5 and v6+: new pictures; a missing one is never worded away. */
+const policyNew = (policy: VisualPolicy | undefined) => policy === "new_images" || policy === "designed";
 
 /** The planning half of the route: the verified plan, or why there is none. Nothing paid beyond the planner has happened yet. */
 export type PlannedRecreation =
@@ -87,16 +91,17 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // The scope is the server's, never the plan's: a curricular plan for a methodological sheet is refused outright.
     if (parsed.data.scope.type === "curricular" && request.scope !== "curricular") return { status: "rejected", plan: parsed.data, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
     // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
-    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: request.visualPolicy === "new_images" });
+    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: policyNew(request.visualPolicy) });
     let verification = verifyPlan(plan, request.analysis, { needs });
-    const options = { picturesRequired: request.visualPolicy === "new_images" };
+    const options = { picturesRequired: policyNew(request.visualPolicy) };
     if (!verification.ok) {
       const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope, options);
       if (salvaged) ({ plan, verification } = salvaged);
     }
     // ADR-054: what an activity names must be designed by the plan; otherwise Claude is asked to design it (the one repair call).
     // ADR-055: and every picture it orders must be drawable as ordered (checked here, before any provider is called).
-    const undesigned = options.picturesRequired ? [...undesignedResources(plan), ...(verification.ok ? toolReport(plan, verification, needs, RECREATION_VISUAL_LIMITS).errors : [])] : [];
+    // v5 keeps its rigid pre-flight check; v6+ uses the tools' report (ADR-056/057): ideas vs limits of a tool.
+    const undesigned = !options.picturesRequired ? [] : [...undesignedResources(plan), ...(!verification.ok ? [] : request.visualPolicy === "designed" ? toolReport(plan, verification, needs, RECREATION_VISUAL_LIMITS, request.analysis).errors : legacyBriefIssues(plan, verification, needs))];
     if (undesigned.length > 0) verification = { ...verification, ok: false, issues: [...verification.issues, ...undesigned] };
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
@@ -114,7 +119,13 @@ export async function finishRecreation(planned: Extract<PlannedRecreation, { sta
   const needs = request.context.needs.map((n) => n.dimension);
   const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 }, policy: request.visualPolicy ?? "reuse_originals", inflight: new Map() });
   const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
-  const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals, reword: request.visualPolicy !== "new_images" });
+  const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals, reword: !policyNew(request.visualPolicy), designed: request.visualPolicy === "designed" });
+  // ADR-057: nothing Claude designed may be lost on the way to the documents; a loss makes the sheet incomplete (never silently delivered).
+  if (request.visualPolicy === "designed") {
+    const lost = auditFidelity(plan, compiled, visuals);
+    compiled.lost = lost.map((l) => `actividad ${l.activity}: ${l.message}`);
+    for (const l of lost) if (!compiled.unresolved.includes(l.activity)) compiled.unresolved.push(l.activity);
+  }
   const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));
   return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls, plannerLabel: request.plannerLabel, cardAssets };
 }

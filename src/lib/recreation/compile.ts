@@ -27,6 +27,8 @@ export interface CompiledRecreation {
   trace: Array<{ activity_id: string; label: string; block_id: string; objective_ids: string[]; operations: string[]; status: VerifiedActivity["status"] }>;
   /** Activities (by printed label) whose instruction pointed only at something that does not exist: the sheet is not usable as it is. */
   unresolved: string[];
+  /** What was lost between the plan and the documents (ADR-057, designed policy): a named reason per activity. */
+  lost?: string[];
 }
 
 export interface CompileInput {
@@ -37,9 +39,11 @@ export interface CompileInput {
   visuals: readonly ResolvedVisual[];
   /** Whether a sentence that only points at a missing picture may be removed (adaptations before ADR-054). Default: yes. */
   reword?: boolean;
+  /** ADR-057: every relation an activity depends on must be DRAWN in the document (a scheme), and the document is audited against the plan. */
+  designed?: boolean;
 }
 
-export function compileRecreation({ plan, verification, analysis, presentation, visuals, reword = true }: CompileInput): CompiledRecreation {
+export function compileRecreation({ plan, verification, analysis, presentation, visuals, reword = true, designed = false }: CompileInput): CompiledRecreation {
   if (!verification.ok) throw new Error("recreation_plan_not_verified");
   let n = 0;
   const id = () => `blk_r${String(++n).padStart(4, "0")}`;
@@ -126,14 +130,25 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     let hasFlow = plan.visuals.some((x) => a.visual_ids.includes(x.id)) || mine.some((v) => v.source!.kind === "figure" && v.source!.spec.kind === "flow");
     const text = [a.prompt, ...a.steps].join(" ");
     // Arrows or a scheme it names and does not have: drawn by code from the original's own diagram when the analysis has one.
-    if (!hasFlow && (mentions(text, "arrows") || (mentions(text, "scheme") && !hasPicture))) {
-      const preferred = plan.visual_requests.find((r) => r.activity_ids.includes(a.id) && r.original_ref)?.original_ref ?? null;
-      const flow = originalFlow(analysis, preferred);
-      if (flow) {
-        use(`orig:${flow.visual_ref}`, flowBlock({ title: flow.title, items: flow.items, source_ref: flow.visual_ref }));
+    // A request Claude marked as needing exact arrows or labels makes the relation part of the activity (ADR-057), mentioned or not.
+    const exactRelation = designed && plan.visual_requests.some((r) => r.activity_ids.includes(a.id) && (r.needs_exact.arrows || r.needs_exact.labels));
+    if (!hasFlow && (mentions(text, "arrows") || (mentions(text, "scheme") && !hasPicture) || exactRelation)) {
+      // 1) the scheme Claude declared for the sheet, 2) the original's own diagram: both drawn by the renderer from verified labels.
+      const declared = designed ? plan.visuals[0] : undefined;
+      if (declared) {
+        use(`rv:${declared.id}`, flowBlock(declared));
         hasFlow = true;
+      } else {
+        const preferred = plan.visual_requests.find((r) => r.activity_ids.includes(a.id) && r.original_ref)?.original_ref ?? null;
+        const flow = originalFlow(analysis, preferred);
+        if (flow) {
+          use(`orig:${flow.visual_ref}`, flowBlock({ title: flow.title, items: flow.items, source_ref: flow.visual_ref }));
+          hasFlow = true;
+        }
       }
     }
+    // The relation the activity depends on could not be drawn: the sheet cannot be delivered as if it had it.
+    if (exactRelation && !hasFlow) unresolved.push(label);
     const verified = solutions.get(a.id)!;
     const { response, key } = responseOf(a, verified.solution);
     const block = id();

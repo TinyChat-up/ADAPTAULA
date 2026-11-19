@@ -1,7 +1,9 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
+import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { normalizeText } from "@/lib/adaptation/text";
 import { validateBrief, type BriefDraft } from "@/lib/visuals/illustration";
 import type { RecreationPlan, VisualRequest } from "./contract";
+import { mentions } from "./references";
 import { normalize, type PlanIssue, type Verification } from "./verify";
 
 /**
@@ -29,6 +31,7 @@ export const RESOURCE_TOOLS = {
 export const PENDING_CAPABILITIES = {
   counted_group: "un grupo con una cantidad EXACTA de elementos ilustrados (repetir N veces un dibujo)",
   custom_resource: "recursos fuera del catálogo (se registran como demanda; no hay fabricante genérico)",
+  exact_scheme_without_data: "un esquema con flechas o rótulos exactos sin datos verificados de los que dibujarlo (ni en el plan ni en el original)",
 } as const;
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -60,16 +63,86 @@ export interface ResourceDecision {
  * Which tool makes a request. Exact numbers of drawn things need a capability that does not exist yet: that is a GAP, not an invalid
  * idea. Arrows and labels are the renderer's: the activity gets them from its scheme (`visuals`), the picture does not carry them.
  */
-export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals">): ResourceDecision {
+export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals">, analysis?: MaterialAnalysis): ResourceDecision {
   const adapted: string[] = [];
   if (r.needs_exact.numbers) {
     return { route: "gap", adapted, gap: { capability: "counted_group", message: `Pide una cantidad exacta de elementos dibujados (${PENDING_CAPABILITIES.counted_group}), que todavía no se puede fabricar. Alternativas: una ilustración sin cantidad exacta y la cifra en el enunciado, tarjetas (una por elemento) o un esquema con datos del original.` } };
   }
   if (r.needs_exact.arrows || r.needs_exact.labels) {
-    if (plan.visuals.length === 0) adapted.push("flechas o rótulos: los pone el renderizador; sin esquema declarado, la ilustración se hace sin ellos");
-    else adapted.push("flechas o rótulos: los dibuja el renderizador en el esquema de la actividad; la ilustración no los lleva");
+    // Marked exact by Claude: the relation MUST end up drawn by the renderer from verified data, or the request cannot be made.
+    const source = exactSchemeSource(plan, analysis, r.original_ref);
+    if (!source) return { route: "gap", adapted, gap: { capability: "exact_scheme_without_data", message: `Necesita flechas o rótulos exactos, pero no hay datos de los que dibujarlos (${PENDING_CAPABILITIES.exact_scheme_without_data}). Declara en visuals un esquema con rótulos citados del original, o rediseña la actividad sin depender de ellos.` } };
+    adapted.push(source === "plan" ? "flechas o rótulos: los dibuja el renderizador en el esquema declarado en el plan; la ilustración no los lleva" : "flechas o rótulos: los dibuja el renderizador desde el diagrama del original; la ilustración no los lleva");
   }
   return { route: "illustration", adapted };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// A quantity is only translated away when the activity does not need it (ADR-057)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const WORD_VALUE: Record<string, number> = { dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
+const QUANTITY = new RegExp(`\\b(\\d+(?:[.,]\\d+)?|${NUMBER_WORDS})\\s+(?=\\p{L})`, "giu");
+const valueOf = (token: string) => (/^\d/.test(token) ? Number(token.replace(",", ".")) : (WORD_VALUE[token.toLowerCase()] ?? NaN));
+const COUNTING = /\b(cuant[oa]s?|cuenta\w*|contar|total|mas|menos|compara\w*|suma\w*|resta\w*|numero de|diferencia|veces)\b/;
+
+/** What the student reads of an activity: the instruction, its steps and every text of its response format. */
+export function activityTexts(a: RecreationPlan["activities"][number], plan: Pick<RecreationPlan, "facts">): string {
+  const e = a.executor;
+  const facts = new Map(plan.facts.map((f) => [f.id, f]));
+  const extra =
+    e.kind === "classify" ? [...e.categories.map((c) => c.label), ...e.item_fact_ids.map((id) => { const f = facts.get(id); return f?.kind === "membership" ? f.item : ""; })]
+    : e.kind === "select" ? e.options.map((o) => o.text)
+    : e.kind === "true_false" ? e.statements.map((st) => st.text)
+    : e.kind === "short_answer" ? e.starters
+    : [];
+  return [a.prompt, ...a.steps, ...extra].join(" ");
+}
+
+export interface QuantityNeed {
+  token: string;
+  activity: string;
+  why: string;
+}
+
+/**
+ * The quantities of a picture request that the activity NEEDS the picture to carry exactly: the activity asks to count, compare or
+ * calculate from the picture, or the number is part of a verified answer, and the activity's own text does not already state it. Only
+ * then is the quantity pedagogical information that cannot be dropped («tres ranas» → «ranas» would change what the student can do).
+ */
+export function necessaryQuantities(r: VisualRequest, plan: Pick<RecreationPlan, "activities" | "facts">, verification: Verification): QuantityNeed[] {
+  const out: QuantityNeed[] = [];
+  const asked = [...r.must_show, ...r.concepts, r.alt_text, r.purpose].flatMap((t) => [...t.matchAll(QUANTITY)].map((m) => m[1]!));
+  if (asked.length === 0) return out;
+  for (const id of r.activity_ids) {
+    const a = plan.activities.find((x) => x.id === id);
+    if (!a) continue;
+    const text = activityTexts(a, plan);
+    const norm = normalize(text);
+    const statedNumbers = new Set([...norm.matchAll(/\b\d+(?:[.,]\d+)?\b/g)].map((m) => Number(m[0].replace(",", "."))).concat([...norm.matchAll(new RegExp(`\\b(${NUMBER_WORDS})\\b`, "g"))].map((m) => WORD_VALUE[m[1]!]!)));
+    const solution = verification.activities.find((v) => v.id === id)?.solution;
+    const answers = solution?.kind === "number" ? [String(solution.value)] : solution?.kind === "options" ? solution.correct : solution?.kind === "pairs" ? solution.pairs.map((p) => `${p.item} ${p.category}`) : solution?.kind === "order" ? solution.solution : [];
+    const answerNumbers = new Set(answers.flatMap((t) => [...normalize(t).matchAll(/\b\d+(?:[.,]\d+)?\b/g)].map((m) => Number(m[0].replace(",", ".")))));
+    const countsFromPicture = COUNTING.test(norm) && mentions(text, "picture");
+    for (const token of new Set(asked)) {
+      const value = valueOf(token);
+      // «1» is an index or «un/una»: a quantity that matters is two or more.
+      if (Number.isNaN(value) || value < 2 || statedNumbers.has(value)) continue;
+      if (countsFromPicture) out.push({ token, activity: id, why: "la actividad pide contar, comparar o calcular a partir de la imagen" });
+      else if (answerNumbers.has(value)) out.push({ token, activity: id, why: "la cantidad forma parte de la respuesta" });
+    }
+  }
+  return out;
+}
+
+/** Where an exact scheme can come from: a flow Claude declared for the sheet, or the original's own diagram (its labels joined by «→»). */
+export function exactSchemeSource(plan: Pick<RecreationPlan, "visuals">, analysis: MaterialAnalysis | undefined, preferred: string | null): "plan" | "original" | null {
+  if (plan.visuals.length > 0) return "plan";
+  const candidates = [...(analysis?.visuals.filter((v) => v.id === preferred) ?? []), ...(analysis?.visuals ?? [])];
+  return candidates.some((v) => {
+    const labels = (v.text ?? "").split("→").map((l) => l.trim()).filter(Boolean);
+    return (v.text ?? "").includes("→") && labels.length >= 2 && labels.length <= 6 && labels.every((l) => l.length <= 40);
+  }) ? "original" : null;
 }
 
 /** The brief of an illustration, written by the server from the request Claude designed (purpose, concepts, what to show and avoid, accessibility). */
@@ -127,7 +200,7 @@ export interface ToolReport {
 }
 
 /** Everything about the resources of a plan that can be decided before a provider is called. */
-export function toolReport(plan: RecreationPlan, verification: Verification, needs: readonly DimensionKey[], limits: { maxImages: number }): ToolReport {
+export function toolReport(plan: RecreationPlan, verification: Verification, needs: readonly DimensionKey[], limits: { maxImages: number }, analysis?: MaterialAnalysis): ToolReport {
   const errors: PlanIssue[] = [];
   const notes: string[] = [];
   const error = (code: string, path: string, message: string) => errors.push({ severity: "error", code, path, message });
@@ -135,10 +208,14 @@ export function toolReport(plan: RecreationPlan, verification: Verification, nee
   let essentialImages = 0;
   let images = 0;
   for (const r of plan.visual_requests) {
-    const decision = decideResource(r, plan);
+    const decision = decideResource(r, plan, analysis);
     notes.push(...decision.adapted.map((a) => `${r.id}: ${a}`));
+    // A quantity the activity needs the picture to carry is never translated away (ADR-057): no tool draws an exact quantity yet.
+    for (const q of necessaryQuantities(r, plan, verification)) {
+      error("tool_gap", `visual_requests.${r.id}`, `Limitación de herramienta, no de tu idea: la cantidad «${q.token}» de lo que pides dibujar es necesaria en la actividad ${q.activity} (${q.why}) y ninguna herramienta dibuja una cantidad exacta (${PENDING_CAPABILITIES.counted_group}). Alternativas: escribe la cantidad en el enunciado, usa tarjetas (una por elemento) o un esquema con datos del original.`);
+    }
     if (decision.route === "gap") {
-      if (r.essential) error("tool_gap", `visual_requests.${r.id}`, `Limitación de herramienta, no de tu idea: ${decision.gap!.message}`);
+      if (r.essential || decision.gap!.capability === "exact_scheme_without_data") error("tool_gap", `visual_requests.${r.id}`, `Limitación de herramienta, no de tu idea: ${decision.gap!.message}`);
       else notes.push(`${r.id}: sin herramienta (${decision.gap!.capability}); se omite`);
       continue;
     }
