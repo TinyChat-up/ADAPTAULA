@@ -40,6 +40,8 @@ export interface BriefContext {
   signatures: readonly string[];
   /** The sheet attends the reduction of visual distractions or density: never more than «simple» detail. */
   lowDetail: boolean;
+  /** Violation codes that are limits of the image tool and must not stop a brief the server built itself (ADR-056). */
+  ignore?: ReadonlySet<string>;
 }
 
 /** Fixed validation codes only: never persist a provider's explanation or the contents of a rejected illustration. */
@@ -101,7 +103,8 @@ export function validateBrief(draft: BriefDraft | null, ctx: BriefContext): { ok
   if (labels.some((l) => words(l).length > 0 && words(l).every((w) => answerWords.has(w)))) violations.push("label_gives_answer");
   if (leakedSignature([...labels, alt_text].join("\n"), ctx.signatures)) violations.push("answer_leaked");
 
-  if (violations.length > 0) return { ok: false, violations };
+  const remaining = ctx.ignore ? violations.filter((v) => !ctx.ignore!.has(v)) : violations;
+  if (remaining.length > 0) return { ok: false, violations: remaining };
   return {
     ok: true,
     brief: {

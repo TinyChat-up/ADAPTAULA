@@ -171,6 +171,11 @@ export const RecreationPlanSchema = z.object({
   // Up to 5 (ADR-054: comparisons need one scene per situation); the cap on generated pictures stays `RECREATION_VISUAL_LIMITS`.
   visual_requests: z.array(VisualRequestSchema).max(5),
   /**
+   * Resources outside the catalog (ADR-056): anything else Claude thinks the student needs. The system has no generic maker: each one is
+   * recorded as a demand for a reusable component and, when essential, sent back to Claude to solve with the tools that exist.
+   */
+  custom_resources: z.array(z.object({ id: Id("rc"), title: Text(80), purpose: Text(200), activity_ids: z.array(Id("ra")).min(1).max(3), description: Text(300), essential: z.boolean() })).max(4).optional(),
+  /**
    * One illustration style for the whole material (consistency between pictures): drawing technique, palette, level of detail.
    * Never text inside the pictures. Sent to every illustration brief of this material.
    */

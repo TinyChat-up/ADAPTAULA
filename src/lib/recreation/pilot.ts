@@ -7,7 +7,8 @@ import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from 
 import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
 import { salvagePlan, sanitizePlan, undesignedResources } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
-import { briefIssues, resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
+import { toolReport } from "./tools";
+import { RECREATION_VISUAL_LIMITS, resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
 
 /**
  * The isolated recreation route (ADR-049, ADR-050):
@@ -95,7 +96,7 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     }
     // ADR-054: what an activity names must be designed by the plan; otherwise Claude is asked to design it (the one repair call).
     // ADR-055: and every picture it orders must be drawable as ordered (checked here, before any provider is called).
-    const undesigned = options.picturesRequired ? [...undesignedResources(plan), ...(verification.ok ? briefIssues(plan, verification, needs) : [])] : [];
+    const undesigned = options.picturesRequired ? [...undesignedResources(plan), ...(verification.ok ? toolReport(plan, verification, needs, RECREATION_VISUAL_LIMITS).errors : [])] : [];
     if (undesigned.length > 0) verification = { ...verification, ok: false, issues: [...verification.issues, ...undesigned] };
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
@@ -136,6 +137,7 @@ function provenanceOf(plan: RecreationPlan, verification: Verification, visuals:
   for (const v of plan.visuals) out.push({ resource: `Esquema «${v.title}»`, produced_by: `renderer (flow) con los rótulos de ${v.source_ref}`, checked_by: "rótulos citados del original", status: "exacto" });
   for (const v of visuals) out.push({ resource: `Imagen ${v.request_id}`, produced_by: v.provenance.produced_by ?? "ninguno", checked_by: v.provenance.reviewed_by ?? "—", status: v.route === "none" ? (v.essential ? "FALTA (imprescindible)" : "no incluida") : v.route });
   for (const m of plan.materials) out.push({ resource: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} ${m.id}`, produced_by: `${planner}; dibujo: renderer`, checked_by: "ligado a su actividad, sin pistas de la solución", status: "recortable" });
+  for (const c of plan.custom_resources ?? []) out.push({ resource: `Recurso fuera del catálogo «${c.title}»`, produced_by: planner, checked_by: "sin herramienta disponible: demanda registrada", status: c.essential ? "FALTA (imprescindible)" : "no generado" });
   out.push({ resource: "Explicación para el docente", produced_by: planner, checked_by: "sin soluciones ni diagnósticos; cada motivo ligado a una necesidad", status: "en pantalla" });
   return out;
 }
