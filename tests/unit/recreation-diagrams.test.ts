@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RECREATION_PLANNER_V6 } from "@prompts/recreation-planner/v6";
 import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
 import { RecreationPlanLegacySchema, type Diagram, type RecreationPlan } from "@/lib/recreation/contract";
-import { diagramSpecOf, labelSupported } from "@/lib/recreation/diagrams";
+import { diagramSpecOf, labelSupported, relationEvidence } from "@/lib/recreation/diagrams";
 import { auditFidelity } from "@/lib/recreation/fidelity";
 import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
 import { chooseScheme } from "@/lib/recreation/relations";
@@ -135,7 +135,10 @@ describe("Ciencias · la actividad 4 obtiene SU esquema, dibujado por código", 
     expect(stack.calls.image).toBe(withoutDiagram.stack.calls.image);
     expect(outcome.compiled.lost).toEqual([]);
     expect(auditFidelity(outcome.plan, outcome.compiled, outcome.visuals, stack.request.analysis)).toEqual([]);
-    expect(outcome.provenance.some((r) => r.resource === "Esquema nuevo «Quién se alimenta de quién»" && r.status === "exacto")).toBe(true);
+    // Honest provenance: the drawing is exact; what each arrow means is the design's reading, for the teacher to review.
+    expect(outcome.provenance.find((r) => r.resource === "Esquema nuevo «Quién se alimenta de quién»")).toMatchObject({ status: "dibujo exacto; lectura de las flechas: revisión docente" });
+    expect(outcome.verification.review_required).toBe(true);
+    expect(outcome.verification.issues.map((i) => `${i.severity}:${i.code}`)).toContain("warning:diagram_relation_reading_unverified");
   });
 
   it("el PDF (el HTML que se imprime) contiene el esquema realmente pedido junto a la actividad 4", async () => {
@@ -170,6 +173,50 @@ describe("Ciencias · la actividad 4 obtiene SU esquema, dibujado por código", 
       p.diagrams = [{ id: "rd_3", layout: "groups", title: "Componentes", purpose: "Ver los componentes.", activity_ids: ["ra_1"], groups: [{ id: "g_1", label: "Ser vivo" }, { id: "g_2", label: "Elemento no vivo" }], nodes: [{ id: "n_1", label: "Algas", fact_id: "f_1", group_id: "g_1" }, { id: "n_2", label: "Agua", fact_id: "f_2", group_id: "g_2" }], relations: [] }];
     });
     expect(verifyPlan(sorted, analysis, { needs: [] }).issues.filter((i) => i.code === "solution_revealed").length).toBeGreaterThan(0);
+  });
+});
+
+describe("lo que una cita puede probar de una relación, y lo que no", () => {
+  const analysis = mockStack().request.analysis;
+  it("acepta una frase afirmativa que une los dos extremos", () => {
+    expect(relationEvidence("Larvas", "Algas", "Algunas larvas se alimentan de algas")).toEqual({ ok: true });
+    expect(relationEvidence("Ranas", "Larvas", "las ranas comen insectos y sus larvas")).toEqual({ ok: true });
+    expect(relationEvidence("Oración", "Predicado", "La oración tiene dos partes: el sujeto y el predicado")).toEqual({ ok: true });
+    expect(relationEvidence("1/2", "2/4", "1/2 es igual a 2/4")).toEqual({ ok: true });
+  });
+
+  it("rechaza una frase negativa, aunque nombre los dos extremos", () => {
+    expect(relationEvidence("Garzas", "Algas", "Las garzas no comen algas")).toEqual({ ok: false, reason: "negated" });
+    expect(relationEvidence("Ranas", "Algas", "Ni las ranas ni los peces se alimentan de algas")).toEqual({ ok: false, reason: "negated" });
+    expect(relationEvidence("Sujeto", "Verbo", "El sujeto nunca es el verbo")).toEqual({ ok: false, reason: "negated" });
+  });
+
+  it("rechaza una enumeración: nombrar dos elementos no es relacionarlos", () => {
+    expect(relationEvidence("Algas", "Larvas", "En el estanque viven algas, plantas acuáticas, larvas de insectos, ranas y garzas")).toEqual({ ok: false, reason: "list" });
+    expect(relationEvidence("Ranas", "Garzas", "En el estanque viven algas, plantas acuáticas, larvas de insectos, ranas y garzas")).toEqual({ ok: false, reason: "no_link" });
+    expect(relationEvidence("3/4", "0,75", "Escribe 3/4 y 0,75")).toEqual({ ok: false, reason: "no_link" });
+  });
+
+  it("rechaza dos elementos dichos en frases distintas, y una cita que no nombra uno de ellos", () => {
+    expect(relationEvidence("Algas", "Garzas", "Las algas crecen con la luz. Las garzas vuelan sobre el agua.")).toEqual({ ok: false, reason: "separate_clauses" });
+    expect(relationEvidence("Algas", "Peces", "Algunas larvas se alimentan de algas")).toEqual({ ok: false, reason: "missing" });
+  });
+
+  it("no afirma la dirección: una flecha al revés pasa la comprobación de la cita, y por eso queda marcada sin comprobar y para revisión", () => {
+    // «Algunas larvas se alimentan de algas» joins both ends; nothing in it tells a program which way the arrow goes.
+    expect(relationEvidence("Algas", "Larvas", "Algunas larvas se alimentan de algas")).toEqual(relationEvidence("Larvas", "Algas", "Algunas larvas se alimentan de algas"));
+    const reversed = withChain({ ...foodChain(), relations: [{ from: "n_2", to: "n_1", label: null, fact_id: "f_20" }, { from: "n_1", to: "n_3", label: null, fact_id: "f_21" }, { from: "n_3", to: "n_4", label: null, fact_id: "f_22" }] });
+    const v = verifyPlan(reversed, analysis, { needs: [] });
+    expect(v.issues.find((i) => i.code === "diagram_relation_reading_unverified")).toMatchObject({ severity: "warning", path: "diagrams.rd_1" });
+    expect(v.review_required).toBe(true);
+  });
+
+  it("en el plan: una flecha apoyada en una cita negativa o en una enumeración vuelve a Claude con el motivo", () => {
+    const plan = withChain();
+    plan.facts.push({ id: "f_23", kind: "statement", source_ref: "ctt_1", quote: "viven algas, plantas acuáticas, larvas de insectos, ranas y garzas" });
+    plan.diagrams![0]!.relations[0]!.fact_id = "f_23";
+    const issue = verifyPlan(plan, analysis, { needs: [] }).issues.find((i) => i.code === "diagram_relation_unsupported")!;
+    expect(issue.message).toMatch(/solo los enumera/);
   });
 });
 

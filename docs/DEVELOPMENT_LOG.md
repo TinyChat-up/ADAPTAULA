@@ -1,5 +1,22 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Evidencia de relaciones y esquemas impresos en PDF (seguimiento de ADR-059)
+
+- **Evidencia de las relaciones.** Antes bastaba con que la cita nombrara los dos extremos. Ahora tienen que estar en una misma oración afirmativa y unidos por algo más que una enumeración. La dirección y el significado de la flecha no se demuestran: se avisa (`diagram_relation_reading_unverified`), queda pendiente de revisión docente y la procedencia lo dice. El prompt v7 publicado no cambia: el mensaje de reparación explica el motivo exacto.
+- **PDF real.** Una ficha con cadena larga, cadena corta, ciclo, jerarquía y cuatro grupos, impresa con el motor Chromium del producto, sin IA. El PDF destapó cuatro defectos que el HTML no mostraba, ya corregidos:
+  - cajas de grupos partidas entre líneas;
+  - palabras cortadas en columnas estrechas;
+  - flechas → que no apuntaban a la caja siguiente al saltar de línea (ahora en columna, con ↓);
+  - jerarquía con el padre repetido sobre cada hijo (ahora es un árbol).
+- **Pruebas.** 6 unitarias nuevas, entre ellas las negativas: frase negativa, enumeración, oraciones distintas, ausencia y dirección no demostrada. Además, `tests/pdf/diagrams.test.ts` comprueba:
+  - PDF válido y sin red;
+  - cada esquema, entero en una página;
+  - flechas legibles en el texto del PDF;
+  - sin cajas partidas ni desbordes;
+  - cada flecha entre su caja y la siguiente.
+  
+  Suite unitaria completa: solo falla `pdf-preview-route`, que ya fallaba en `main`.
+
 ## 2026-11-19 · Esquemas nuevos diseñados por Claude y dibujados por código (ADR-059)
 
 - **Fallo de referencia.** La adaptación `60ff69f8…` falló en la planificación (`planner_schema`, `scheme_not_designed` en `ra_4`, 2 llamadas). El plan rechazado no se conserva (por diseño), así que se ha reproducido con un caso sintético.
