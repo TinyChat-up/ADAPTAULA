@@ -168,7 +168,8 @@ export const RecreationPlanSchema = z.object({
    * with code (B) or, only when nothing exact is needed and generation is authorised, asks the illustration pipeline (C). Text,
    * arrows, numbers and labels are never asked of an image model: `needs_exact` sends them to code or to nothing.
    */
-  visual_requests: z.array(VisualRequestSchema).max(3),
+  // Up to 5 (ADR-054: comparisons need one scene per situation); the cap on generated pictures stays `RECREATION_VISUAL_LIMITS`.
+  visual_requests: z.array(VisualRequestSchema).max(5),
   /**
    * One illustration style for the whole material (consistency between pictures): drawing technique, palette, level of detail.
    * Never text inside the pictures. Sent to every illustration brief of this material.

@@ -729,3 +729,10 @@ La decisión del fundador permite `production-pilot` en Vercel Production para u
 - **Reutilización.** La recreación es una adaptación: mismos estados, trabajos, cuota, versiones, `ai_runs` y PDF. Solo cambian las etapas (`src/lib/adaptation/recreation/`).
 - **Datos.** Migración 037 (solo local): `recreation_versions` (legible, sin respuestas), `recreation_internals` y `recreation_plans` (solo servidor).
 - **Consecuencias.** Un solo camino en la tarjeta con el indicador encendido; alcance metodológico fijado por el servidor; sin edición de la ficha recreada. Pasos de activación: [QA](qa/hacer-magia-recreacion/README.md).
+
+## ADR-054 — «Hacer magia» diseña imágenes nuevas; no reutiliza las del original (2026-11-19)
+
+- **Decisión.** En la recreación de «Hacer magia» el original es la fuente de lo que se aprende (contenidos, objetivos, relaciones verificadas), no de su diseño. Desde `recreation_planner` v5: no se ejecuta el localizador de imágenes del original ni se reutilizan sus recortes (opción A desactivada, sin llamadas de visión para ello); Claude diseña cada apoyo visual nuevo (objetivo, actividades, conceptos, qué mostrar y evitar, accesibilidad, estilo común); OpenAI lo ilustra; Claude lo revisa (`image_review` v2); el renderizador dibuja lo exacto (flechas, números, rótulos, tablas) con datos verificados.
+- **Funcionalidad.** Una petición que una actividad pide observar es imprescindible: si no se puede crear, la ficha no se entrega (no se quita la instrucción); un esquema exacto del original es la alternativa equivalente cuando existe. Lo que una actividad nombra y el plan no diseña vuelve a Claude en la llamada de reparación.
+- **Gasto.** Una misma imagen sirve a varias actividades; peticiones idénticas comparten una sola generación; nada exacto se pide a OpenAI; se mantienen el tope de imágenes, cuotas y presupuestos.
+- **Compatibilidad.** La política se deduce de la versión del planificador congelada en cada adaptación: las creadas con v1–v4 conservan su comportamiento. El localizador sigue disponible para el resto de Adaptaula.

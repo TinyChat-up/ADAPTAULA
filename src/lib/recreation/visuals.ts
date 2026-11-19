@@ -60,7 +60,17 @@ export interface VisualContext {
   planner: string;
   /** Pictures already asked for in this recreation (shared by every request: the cap is per recreation). */
   imagesUsed: { count: number };
+  /**
+   * ADR-054: `new_images` (planner v5 on) never reuses the original's pictures: the original is the source of WHAT is learnt, and
+   * every picture is a new one designed for this student and this activity (OpenAI), or an exact scheme drawn by code from verified
+   * data. `reuse_originals` (absent) keeps the behaviour adaptations created before it were frozen with.
+   */
+  policy?: "reuse_originals" | "new_images";
+  /** The same picture asked twice in one recreation is made once (requests run concurrently). */
+  inflight?: Map<string, Promise<unknown>>;
 }
+
+const FUNCTION_ES: Record<VisualRequest["function"], string> = { context: "situar y reconocer lo que nombra el texto", observation: "observar y localizar elementos", vocabulary: "reconocer el vocabulario", process: "comprender un proceso", comparison: "comparar situaciones" };
 
 const EXACT_WORDS = /\b(flecha|flechas|etiqueta|etiquetas|rotulo|rotulos|numero|numeros|cifra|cifras|texto escrito|letra|letras|grafica|tabla)\b|\d/;
 const ALWAYS_PROHIBITED = ["texto, letras, números o rótulos dentro de la imagen", "flechas, líneas o símbolos que indiquen relaciones"];
@@ -110,9 +120,10 @@ async function resolveOne(r: VisualRequest, ctx: VisualContext): Promise<Resolve
   const base = { request_id: r.id, activity_ids: r.activity_ids, essential: r.essential, alt: r.alt_text };
   const provenance = (produced_by: string | null, reviewed_by: string | null) => ({ requested_by: ctx.planner, decided_by: RECREATION_VISUALS_VERSION, produced_by, reviewed_by });
 
-  // A · a located original.
-  if (r.original_ref && ctx.locatedOriginals.has(r.original_ref)) return { ...base, route: "A_original", source: { kind: "original", visual_ref: r.original_ref }, attempts: ["A: original localizado"], provenance: provenance(`original ${r.original_ref}`, "localizador automático") };
-  attempts.push(r.original_ref ? `A: ${r.original_ref} no está localizado` : "A: no hay original que sirva");
+  // A · a located original (only for adaptations frozen before ADR-054).
+  if (ctx.policy === "new_images") attempts.push("A: no se reutilizan imágenes del original: se diseña una nueva");
+  else if (r.original_ref && ctx.locatedOriginals.has(r.original_ref)) return { ...base, route: "A_original", source: { kind: "original", visual_ref: r.original_ref }, attempts: ["A: original localizado"], provenance: provenance(`original ${r.original_ref}`, "localizador automático") };
+  else attempts.push(r.original_ref ? `A: ${r.original_ref} no está localizado` : "A: no hay original que sirva");
 
   // B · an exact scheme from code, when the original's labels allow it.
   const scheme = exactSchemeFor(r, ctx.analysis);
@@ -154,10 +165,15 @@ function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<Illus
   const prohibited = [...ALWAYS_PROHIBITED, ...r.prohibited];
   const show = card ? [`solo esto: ${card}`, ...r.must_show] : r.must_show;
   const asked = { show, style: ctx.plan.visual_style, kind: r.style, detail: r.detail, prohibited, purpose: r.purpose };
-  return illustrate(withoutText(gate.deps, prohibited), {
+  const needKey = `recreation:${r.id}:${fingerprint(asked).slice(0, 16)}`;
+  // One generation per distinct picture of this recreation: the same request (same content, style and card) shares one call.
+  const shared = fingerprint(asked);
+  const known = ctx.inflight?.get(shared) as ReturnType<typeof illustrate> | undefined;
+  if (known) return known;
+  const made = illustrate(withoutText(gate.deps, prohibited), {
     workspaceId: gate.workspaceId,
     adaptationId: gate.recreationId,
-    needKey: `recreation:${r.id}:${fingerprint(asked).slice(0, 16)}`,
+    needKey,
     stage: ctx.analysis.identification.stage.value,
     grade: ctx.analysis.identification.grade.value,
     subject: ctx.analysis.identification.subject.value,
@@ -165,13 +181,15 @@ function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<Illus
     objective: objectives.join("; ") || null,
     // The prompt of the brief (image_brief v1) is reused as published: what must be shown and avoided travels in its «missing» field.
     // The material's one style goes into every brief, so its pictures look like one set.
-    missing: `${card ? `Ilustración para una tarjeta recortable: ${card}. ` : ""}Debe verse: ${show.join(", ")}. Estilo común del material: ${ctx.plan.visual_style} Tipo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`.slice(0, 1400),
+    missing: `${card ? `Ilustración para una tarjeta recortable: ${card}. ` : ""}Función en la actividad: ${FUNCTION_ES[r.function]}. Conceptos que ayuda a comprender: ${r.concepts.join(", ")}. Debe verse: ${show.join(", ")}. Estilo común del material: ${ctx.plan.visual_style} Tipo: ${r.style}; detalle: ${r.detail}. Accesibilidad: ${r.accessibility} Prohibido: ${prohibited.join("; ")}.`.slice(0, 1400),
     purpose: card ? `${r.purpose} (tarjeta: ${card})` : r.purpose,
     supports: ctx.needs.slice(0, 8),
     expectedAnswer: null,
     signatures,
     lowDetail: r.detail !== "moderate" || ctx.needs.some((n) => LOW_DETAIL.includes(n)),
   });
+  ctx.inflight?.set(shared, made);
+  return made;
 }
 
 /** How many card pictures are made at once (each is a brief, an image and a review). */

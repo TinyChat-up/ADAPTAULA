@@ -21,7 +21,7 @@ import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, s
 
 const uniq = <T>(xs: readonly T[]) => [...new Set(xs)];
 
-export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"]): RecreationPlan {
+export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean } = {}): RecreationPlan {
   const plan: RecreationPlan = structuredClone(input);
   const required = originalOperations(analysis);
   const needSet = new Set(needs);
@@ -94,6 +94,12 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
       if (r && (mentions(text, "picture") || a.visual_ids.length === 0)) r.activity_ids.push(a.id);
     }
   }
+  // ADR-054: a picture an activity asks the student to look at is part of the activity: if it cannot be made, the sheet is not delivered.
+  if (options.picturesRequired) {
+    for (const r of plan.visual_requests) {
+      if (r.activity_ids.some((id) => { const a = activities.get(id); return a ? mentions([a.prompt, ...a.steps].join(" "), "picture") : false; })) r.essential = true;
+    }
+  }
   plan.guide.per_activity = plan.guide.per_activity.filter((g) => activities.has(g.activity_id));
   plan.explanation.why = plan.explanation.why.map((w) => ({ ...w, needs: w.needs.filter((n) => needSet.has(n)) })).filter((w) => w.needs.length > 0);
   return plan;
@@ -116,7 +122,7 @@ function scrubExplanation(plan: RecreationPlan, verification: Verification, need
 const activityOf = (path: string) => /^activities\.(ra_[0-9]+)$/.exec(path)?.[1] ?? null;
 
 /** Removes the failing activities (and what only they used) when nothing essential is lost. Null: the plan cannot be saved this way. */
-export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"]): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
+export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean } = {}): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
   const needSet = new Set(needs);
   let current = plan;
   let checked = verification;
@@ -139,8 +145,25 @@ export function salvagePlan(plan: RecreationPlan, verification: Verification, an
     const used = new Set(next.activities.flatMap((a) => JSON.stringify(a.executor).match(/f_[0-9]+/g) ?? []));
     next.facts = next.facts.filter((f) => used.has(f.id) && !badFacts.has(f.id));
     removed.push(...failing);
-    current = sanitizePlan(next, analysis, needs, scope);
+    current = sanitizePlan(next, analysis, needs, scope, options);
     checked = verifyPlan(current, analysis, { needs });
   }
   return checked.ok ? { plan: current, verification: checked, removed } : null;
+}
+
+/**
+ * ADR-054: an activity that names a picture or a scheme the plan does not design is sent back to Claude (the repair call), so the
+ * missing picture is designed, not the instruction removed. Scheme words are satisfied by a drawn scheme or a requested picture.
+ */
+export function undesignedResources(plan: RecreationPlan): Array<{ severity: "error"; code: string; path: string; message: string }> {
+  return plan.activities.flatMap((a) => {
+    const text = [a.prompt, ...a.steps].join(" ");
+    const requested = plan.visual_requests.some((r) => r.activity_ids.includes(a.id));
+    const drawn = a.visual_ids.length > 0;
+    const out: Array<{ severity: "error"; code: string; path: string; message: string }> = [];
+    if (mentions(text, "picture") && !requested) out.push({ severity: "error", code: "picture_not_designed", path: `activities.${a.id}`, message: "La actividad pide mirar una imagen que el plan no diseña: añade su petición en visual_requests (essential: true) o reformula sin cambiar lo que se aprende." });
+    if ((mentions(text, "arrows") || mentions(text, "scheme")) && !drawn && !requested) out.push({ severity: "error", code: "scheme_not_designed", path: `activities.${a.id}`, message: "La actividad nombra un esquema o flechas que el plan no dibuja: decláralo en visuals con los rótulos del original." });
+    if (mentions(text, "cards") && !plan.materials.some((m) => m.activity_id === a.id)) out.push({ severity: "error", code: "material_not_designed", path: `activities.${a.id}`, message: "La actividad usa tarjetas o un tablero que no están en materials." });
+    return out;
+  });
 }
