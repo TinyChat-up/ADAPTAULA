@@ -114,7 +114,8 @@ export function mockStack(options: MockOptions = {}) {
     store: {
       find: async (_adaptation, needKey) => stored.get(needKey) ?? null,
       async put({ request, png, sha256, width, height }) {
-        const id = `00000000-0000-4000-8000-${String(stored.size + 1).padStart(12, "0")}`;
+        // Derived from the need, not from arrival order: pictures are made concurrently, and ids must not depend on who finishes first.
+        const id = `00000000-0000-4000-8000-${createHash("sha256").update(request.needKey).digest("hex").slice(0, 12)}`;
         const asset = { id, sha256, width, height, alt: "Ilustración de la actividad" };
         stored.set(request.needKey, asset);
         assets.set(id, { sha256, bytes: png, width, height });

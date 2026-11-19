@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · `/demo/recreacion` ya no hace que Turbopack rastree el proyecto
+
+- **Causa.** La página construía rutas con `process.cwd()` y una variable de entorno y leía ficheros con `fs`: Turbopack no podía acotar qué ficheros usa y trazaba todo el repositorio para el paquete de producción.
+- **Cambios.** Sin `fs` ni rutas en tiempo de ejecución: los datos de la demostración (`src/app/demo/recreacion/data/`: línea, versión sin respuestas e imágenes en base64) se importan de forma estática y solo en desarrollo con `ADAPTAULA_DEMO=1` (`NODE_ENV` se resuelve al compilar: el paquete de producción ni los incluye). `ADAPTAULA_DEMO_DIR` se sustituye por `pnpm demo:recreacion <carpeta de evals/results/recreation>`, que copia esa ejecución a los datos estáticos.
+- **Comprobaciones.** `pnpm build` sin avisos; sin los datos de la demostración en los paquetes de producción; registro de demostración regenerado y su prueba estable (los identificadores del almacén simulado ya no dependen del orden de llegada de las imágenes concurrentes). Sin llamadas de IA ni cambios en el motor, Claude, OpenAI ni el PDF.
+
 ## 2026-11-19 · Causa del fallo de «Hacer magia» v5 y coordinación del motor (ADR-055)
 
 - **Causa demostrada.** `generated_assets.need_key` solo admite `(vis|dec|act)_N`: todas las imágenes aprobadas por la recreación se perdían al guardarse (3 PNG en Storage, 0 filas); el error se reintentaba pagando de nuevo y el brief redundante de Claude terminó fallando su esquema.
