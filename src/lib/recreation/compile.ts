@@ -4,6 +4,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
+import { stripUnresolved } from "./references";
 import type { ResolvedVisual } from "./visuals";
 
 /**
@@ -24,6 +25,8 @@ export interface CompiledRecreation {
   materials: MaterialDocument | null;
   /** One row per activity: its printed label, the block it became and what it is traced to. */
   trace: Array<{ activity_id: string; label: string; block_id: string; objective_ids: string[]; operations: string[]; status: VerifiedActivity["status"] }>;
+  /** Activities (by printed label) whose instruction pointed only at something that does not exist: the sheet is not usable as it is. */
+  unresolved: string[];
 }
 
 export interface CompileInput {
@@ -70,6 +73,8 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const a = plan.activities.find((x) => x.id === v.activity_ids[0]);
     if (a) blocks.push(imageBlock(v, a));
   }
+  // The sheet says where its cut-out materials are: «recorta las tarjetas» must always lead somewhere.
+  if (plan.materials.length > 0) blocks.push({ id: id(), type: "instruction", text: "Esta ficha usa materiales para recortar. Imprime también el documento «Materiales para recortar».", trace: { origin: "structure", source_refs: [], decision_ids: [] } });
   if (plan.reading) {
     const source = analysis.texts.find((t) => t.id === plan.reading!.source_ref)!;
     const paragraphs = source.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -87,6 +92,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
 
   const answerKey: MaterialDocument["answer_key"] = [];
   const trace: CompiledRecreation["trace"] = [];
+  const unresolved: string[] = [];
   plan.activities.forEach((a, index) => {
     const label = String(index + 1);
     const t = { origin: "adapted" as const, source_refs: [...a.objective_ids, ...factRefs(a)].slice(0, 12), decision_ids: decisions(a.strategy_ids) };
@@ -105,7 +111,17 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const verified = solutions.get(a.id)!;
     const { response, key } = responseOf(a, verified.solution);
     const block = id();
-    blocks.push({ id: block, type: "activity", label, prompt: a.prompt, ...(a.steps.length ? { steps: a.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
+    // What the instruction may point at is what this sheet really has (one document: a scheme printed for one activity serves another).
+    const available = {
+      picture: visuals.some((v) => v.source && v.source.kind !== "missing"),
+      scheme: plan.visuals.length > 0 || visuals.some((v) => v.source && v.source.kind !== "missing"),
+      arrows: plan.visuals.length > 0 || visuals.some((v) => v.source?.kind === "figure" && v.source.spec.kind === "flow"),
+      cards: plan.materials.length > 0,
+    };
+    const clean = stripUnresolved(a, available);
+    if (clean.removed > 0 && clean.empty) unresolved.push(label);
+    const shown = clean.removed > 0 && !clean.empty ? clean : { prompt: a.prompt, steps: a.steps as string[] };
+    blocks.push({ id: block, type: "activity", label, prompt: shown.prompt, ...(shown.steps.length ? { steps: shown.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
     if (a.executor.kind === "short_answer" && a.executor.starters.length > 0) blocks.push({ id: id(), type: "sentence_starters", items: a.executor.starters, trace: { origin: "support", source_refs: a.objective_ids, decision_ids: decisions(a.strategy_ids) } });
     answerKey.push({ block_id: block, basis: "new_item", ...key });
     trace.push({ activity_id: a.id, label, block_id: block, objective_ids: a.objective_ids, operations: a.operations, status: verified.status });
@@ -119,7 +135,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     pages: [{ blocks }],
     answer_key: answerKey,
   });
-  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace };
+  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace, unresolved };
 }
 
 /** The manipulatives on their own sheet, by activity: what to do, then the cards (large, with cutting lines) and the board. */

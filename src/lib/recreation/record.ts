@@ -153,9 +153,11 @@ export function versionOf(
   const missing = visuals.filter((v) => v.route === "none" && v.essential);
   const review = compiled.trace.filter((t) => t.status === "anchored").map((t) => t.label);
   const list = (labels: string[]) => (labels.length === 1 ? `la actividad ${labels[0]}` : `las actividades ${labels.slice(0, -1).join(", ")} y ${labels.at(-1)}`);
-  const state: RecreationVersion["state"] = missing.length ? "incomplete" : review.length ? "review" : "ready";
+  const state: RecreationVersion["state"] = missing.length || compiled.unresolved.length ? "incomplete" : review.length ? "review" : "ready";
   const state_message =
-    state === "incomplete"
+    state === "incomplete" && missing.length === 0
+      ? "Una actividad se apoyaba en un recurso que no se ha podido crear. No se ha entregado la ficha."
+      : state === "incomplete"
       ? `Falta una imagen necesaria para ${list(missing.map((m) => label(m.activity_ids[0]!)))}. No uses la ficha hasta tenerla: puedes regenerarla.`
       : state === "review"
         ? `Antes de usarla, revisa ${list(review)}: comprueba con el texto que cada pregunta tiene una sola respuesta correcta.`

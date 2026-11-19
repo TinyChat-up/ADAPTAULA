@@ -20,7 +20,7 @@ import { methodNotes, type MethodNote } from "../v22/notes";
 import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
-import type { RecreationApproach } from "@/lib/recreation/input";
+import type { RecreationApproach } from "../recreation/engine";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,

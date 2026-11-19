@@ -26,3 +26,10 @@ export function recreationAllowed(config: MagicEngineConfig, workspaceId: string
 }
 
 export const usesRecreation = (versions: { engine?: string | undefined } | null | undefined): boolean => versions?.engine === RECREATION_ENGINE;
+
+/** The teacher's optional orientation (client-safe: no server module). Never above the student's needs or the curriculum. */
+export const RECREATION_APPROACHES = ["auto", "playful", "structured"] as const;
+export type RecreationApproach = (typeof RECREATION_APPROACHES)[number];
+
+/** The recreation planner's prompt version for NEW adaptations (frozen in each one; older versions stay published). */
+export const RECREATION_PLANNER_PROMPT_VERSION = 4;

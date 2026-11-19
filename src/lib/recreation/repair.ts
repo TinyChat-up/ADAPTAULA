@@ -1,6 +1,7 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { RecreationPlan, RecreationScope } from "./contract";
+import { stripUnresolved } from "./references";
 import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, sourceText, verifyPlan, type Verification } from "./verify";
 
 /**
@@ -82,6 +83,13 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
       for_cards: target && target.kind === "cut_out_cards" && ids.includes(target.activity_id) ? r.for_cards : null,
     }];
   });
+  // Instructions point only at what the sheet has: a picture (a request or a scheme), arrows (a scheme) and cards or a board (a material).
+  // The sheet is one document: a scheme printed for one activity can be named by another.
+  const declared = { picture: plan.visual_requests.length > 0, scheme: plan.visuals.length > 0 || plan.visual_requests.length > 0, arrows: plan.visuals.length > 0, cards: plan.materials.length > 0 };
+  for (const a of plan.activities) {
+    const clean = stripUnresolved(a, declared);
+    if (clean.removed > 0 && !clean.empty) Object.assign(a, { prompt: clean.prompt, steps: clean.steps });
+  }
   plan.guide.per_activity = plan.guide.per_activity.filter((g) => activities.has(g.activity_id));
   plan.explanation.why = plan.explanation.why.map((w) => ({ ...w, needs: w.needs.filter((n) => needSet.has(n)) })).filter((w) => w.needs.length > 0);
   return plan;

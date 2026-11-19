@@ -73,7 +73,7 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
 
   it("no se produce ninguna clave ni informe para imprimir: solo la ficha y los materiales", async () => {
     const { compiled } = await ready(authorized);
-    expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace"]);
+    expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace", "unresolved"]);
   });
 
   it("sin imágenes autorizadas: la ficha se imprime sin la ilustración y la guía dice por qué", async () => {

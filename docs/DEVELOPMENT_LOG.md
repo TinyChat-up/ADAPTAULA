@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Auditoría de «Hacer magia» y correcciones P0
+
+- **Hallazgo.** OpenAI sí se llama (2 renders reales); la revisión las rechazó con un criterio excesivo y la ficha se entregó citando una imagen, flechas y tarjetas que no tenía. [Auditoría](qa/auditoria-recreacion/README.md).
+- **Cambios.** `references.ts` (referencias a recursos inexistentes), `image_review` v2, `recreation_planner` v4, aviso a los materiales, arreglo de fronteras cliente/servidor. Sin migraciones ni despliegue.
+- **Pendiente.** Opción A (originales localizados), esquema de flechas con el análisis real, validación con proveedores reales.
+
 ## 2026-11-18 · «Hacer magia» operativo con el motor de recreación (corrección de `planner_schema`)
 
 - **Causa (ai_runs de producción).** Claude devolvía planes que cumplían el contrato, pero el verificador los rechazaba enteros por fallos mecánicos (referencias, columnas del tablero, operaciones, nivel del objetivo, una línea de la explicación) y la reparación pagada reproducía otros: dos llamadas y `planner_schema`.
