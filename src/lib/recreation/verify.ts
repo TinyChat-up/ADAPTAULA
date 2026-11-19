@@ -291,7 +291,8 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   for (const e of equivalence) for (const c of e.checks) if (c.status === "failed") error(`equivalence_${c.code}`, `objectives.${e.objective_id}`, c.note);
 
   const ok = !issues.some((i) => i.severity === "error");
-  const review_required = verified.some((v) => v.status !== "verified") || equivalence.some((e) => e.checks.some((c) => c.status !== "passed"));
+  // A new scheme's arrows are anchored, not proven (ADR-059): their reading always goes through the teacher.
+  const review_required = verified.some((v) => v.status !== "verified") || equivalence.some((e) => e.checks.some((c) => c.status !== "passed")) || (plan.diagrams ?? []).some((d) => d.relations.length > 0);
   return { ok, issues, activities: verified, required, equivalence, review_required, version: RECREATION_VERIFIER_VERSION };
 }
 
