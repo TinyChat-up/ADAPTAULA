@@ -7,7 +7,7 @@ import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from 
 import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
 import { salvagePlan, sanitizePlan, undesignedResources } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
-import { resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
+import { briefIssues, resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
 
 /**
  * The isolated recreation route (ADR-049, ADR-050):
@@ -94,7 +94,8 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
       if (salvaged) ({ plan, verification } = salvaged);
     }
     // ADR-054: what an activity names must be designed by the plan; otherwise Claude is asked to design it (the one repair call).
-    const undesigned = options.picturesRequired ? undesignedResources(plan) : [];
+    // ADR-055: and every picture it orders must be drawable as ordered (checked here, before any provider is called).
+    const undesigned = options.picturesRequired ? [...undesignedResources(plan), ...(verification.ok ? briefIssues(plan, verification, needs) : [])] : [];
     if (undesigned.length > 0) verification = { ...verification, ok: false, issues: [...verification.issues, ...undesigned] };
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
