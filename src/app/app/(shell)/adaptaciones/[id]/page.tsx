@@ -11,7 +11,7 @@ import { requireWorkspace } from "@/lib/auth/workspace";
 import { getSupabase } from "@/lib/auth/session";
 import { RecreationScreen } from "@/components/recreation/recreation-screen";
 import { loadRecreationScreen } from "@/lib/adaptation/recreation/reader";
-import { generatedSrc } from "@/lib/render/load";
+import { generatedSrc, visualSrc } from "@/lib/render/load";
 import { MethodNotes } from "@/components/adaptation/method-notes";
 import {
   cancelAdaptationAction,
@@ -38,6 +38,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
     const view = await loadRecreationScreen(await getSupabase(), id, Number.isInteger(raw) && raw > 0 ? raw : undefined);
     if (view) {
       const imageSrc = Object.fromEntries(view.assets.map((a) => [a.asset_id, generatedSrc(id, a.asset_id)]));
+      const originals = Object.fromEntries(view.student.pages.flatMap((p) => p.blocks).flatMap((b) => (b.type === "image" && b.source.kind === "original" ? [[b.source.visual_ref, visualSrc(id, b.source.visual_ref)]] : [])));
       return (
         <div className="space-y-8">
           <Link href={`/app/materiales/${data.context.materialId}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-2 hover:underline">
@@ -47,6 +48,7 @@ export default async function AdaptationPage({ params, searchParams }: PageProps
           <RecreationScreen
             view={view}
             imageSrc={imageSrc}
+            originals={originals}
             subjectLabel={[data.context.subject, data.context.grade].filter(Boolean).join(" · ") || "Ficha"}
             downloads={{ sheet: `/api/adaptations/${id}/pdf`, ...(view.materials ? { materials: `/api/adaptations/${id}/pdf?documento=materiales` } : {}) }}
             versionHref={(n) => `/app/adaptaciones/${id}?version=${n}`}

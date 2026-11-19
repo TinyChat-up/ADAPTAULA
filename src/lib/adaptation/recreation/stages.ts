@@ -222,7 +222,11 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     // The pictures are the paid part: a call whose outcome is unknown is never repeated by itself, and approved pictures are
     // reused (the same need, brief and style) if this stage is run again.
     await store.markProviderCall(job.id, job.attempts);
-    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate });
+    // Option A first: the original's own pictures that the plan points at, when located and trusted (never blocks the sheet).
+    const services = deps.recreation as RecreationServices;
+    const originals = [...new Set(plan.visual_requests.flatMap((r) => (r.original_ref ? [r.original_ref] : [])))];
+    const locatedOriginals = originals.length > 0 && services.locatedOriginals ? await services.locatedOriginals({ ids, analysis: loaded.analysis, analysisFingerprint: snapshot.adaptation.analysis_fingerprint ?? "", visualIds: originals }).catch(() => new Set<string>()) : new Set<string>();
+    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate, locatedOriginals });
     await store.clearProviderCall(job.id, job.attempts);
 
     current = await stageKit.advance(store, adaptationId, current, "reviewing_deterministic");

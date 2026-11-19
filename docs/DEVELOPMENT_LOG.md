@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Recursos por actividad y orden de recuperación (PR #105)
+
+- **Cambios.** Cada actividad apunta solo a SUS recursos; recuperación en orden original → OpenAI → esquema por código → reformulación mínima (solo frases que señalan) → incompleta. Opción A conectada en producción. Aviso de materiales por actividad. Originales visibles en pantalla.
+- **Pruebas.** Solo typecheck y lint, por indicación; el registro de demostración queda por regenerar.
+- **Siguiente.** Validar con una ficha real y, después, el estudio de costes.
+
 ## 2026-11-19 · Auditoría de «Hacer magia» y correcciones P0
 
 - **Hallazgo.** OpenAI sí se llama (2 renders reales); la revisión las rechazó con un criterio excesivo y la ficha se entregó citando una imagen, flechas y tarjetas que no tenía. [Auditoría](qa/auditoria-recreacion/README.md).

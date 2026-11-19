@@ -56,3 +56,16 @@ PDF → análisis → contexto del perfil → [planning] Claude (recreation_plan
 1. Previsualizar la rama; con `HACER_MAGIA_ENGINE=on` y el piloto de imágenes de tu workspace.
 2. Pulsar «Hacer magia» con la ficha del estanque (coste esperado 0,6–1,2 $).
 3. Comprobar: ninguna actividad habla de una imagen, flechas o tarjetas ausentes; los materiales existen; y en `ai_runs` hay `image_review` con `prompt_version = 2` y, si se aprueba, filas en `generated_assets`.
+
+## Correcciones finales (antes del merge)
+
+- **Recursos por actividad.** Cada actividad se relaciona con SUS recursos: las imágenes de las peticiones que la incluyen, sus esquemas (`visual_ids`) y sus materiales (`materials.activity_id`). Un recurso se imprime una vez y las demás actividades lo referencian (el renderizador lo repite si quedó en una hoja anterior). El saneado vincula a la actividad el esquema o la imagen que el plan ya declaraba para otra, en lugar de borrar la mención.
+- **Orden de recuperación** de lo que una actividad menciona: 1) imagen del original localizada y fiable (opción A, ahora conectada: `recreationReadyOriginals`, el mismo localizador de «Hacer magia»); 2) ilustración de OpenAI con `image_review` v2; 3) esquema exacto por código a partir del diagrama del original (`originalFlow`, solo con rótulos unidos por «→»); 4) reformulación mínima: solo se quita una frase que únicamente señala («Observa la ilustración.»), nunca la tarea, su respuesta ni su solución; 5) si la tarea depende de lo que falta, la ficha es incompleta: no se entrega y la unidad se devuelve.
+- **Materiales.** Cada actividad con tarjetas o tablero dice «Para esta actividad usa las tarjetas y el tablero del documento «Materiales para recortar»»; la pantalla ofrece las dos descargas.
+- **Pantalla.** Las imágenes recuperadas del original también se ven en pantalla (ruta autorizada de recortes), no solo en el PDF.
+- **Imagen aprobada → composición** (revisado en el código): `illustrate` → `store.put` (Storage privado + `generated_assets` de la adaptación) → bloque `generated` en la ficha (o `pictures` de las tarjetas) → `version.assets` → pantalla (`/api/adaptations/[id]/generated/[assetId]`, verifica sha-256) y PDF (bytes fijados). No se ha ejecutado con proveedores reales.
+- **Sin pruebas nuevas en esta fase** (por indicación): solo typecheck y lint. `tests/unit/recreation-references.test.ts` se actualizó a la nueva API sin ejecutarse, y el registro de demostración (`src/lib/recreation/demo/`) **no se regeneró**: su prueba puede fallar en CI hasta regenerarlo (`WRITE_DEMO_RECORD=1`).
+
+## Fase posterior: costes (no implementada)
+
+Con una adaptación satisfactoria y datos reales de `ai_runs`: coste de Claude por planificación y generación, de OpenAI por imagen, total por ficha con intentos fallidos; 2–3 alternativas en un proceso compartido reutilizando imágenes; límites por usuario y plan; márgenes y precios. No se han tocado límites, planes ni facturación.

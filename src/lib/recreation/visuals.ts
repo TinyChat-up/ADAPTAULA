@@ -78,6 +78,21 @@ function exactSchemeFor(r: VisualRequest, analysis: MaterialAnalysis): VisualSpe
   return { spec_version: VISUAL_SPEC_VERSION, kind: "flow", ...(visual.title ? { title: visual.title.slice(0, 60) } : {}), items: labels.map(sentence) };
 }
 
+/**
+ * The original's own diagram as an exact scheme drawn by code (option B for an activity that names arrows or a scheme it was not
+ * given): the preferred visual first, then the first one of the analysis whose labels are joined by «→» (2–6 labels). Never invented.
+ */
+export function originalFlow(analysis: MaterialAnalysis, preferred: string | null): { visual_ref: string; title: string; items: string[] } | null {
+  const candidates = [...analysis.visuals.filter((v) => v.id === preferred), ...analysis.visuals.filter((v) => v.id !== preferred)];
+  for (const visual of candidates) {
+    const labels = (visual.text ?? "").split("→").map((l) => l.trim()).filter(Boolean);
+    if (!(visual.text ?? "").includes("→") || labels.length < 2 || labels.length > 6 || labels.some((l) => l.length > 40)) continue;
+    const sentence = (l: string) => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase();
+    return { visual_ref: visual.id, title: (visual.title ?? "Esquema").slice(0, 60), items: labels.map(sentence) };
+  }
+  return null;
+}
+
 /** Whether the request can go to an image model at all: nothing exact needed, and nothing exact named in what must be shown. */
 export function generable(r: VisualRequest): { ok: true } | { ok: false; reason: string } {
   if (r.needs_exact.labels || r.needs_exact.arrows || r.needs_exact.numbers) return { ok: false, reason: "la actividad depende de rótulos, flechas o números exactos" };

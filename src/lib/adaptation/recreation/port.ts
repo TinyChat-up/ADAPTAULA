@@ -9,4 +9,5 @@ import type { PipelineVersions } from "../orchestration/versions";
 export interface RecreationServicesPort {
   planner(input: { versions: PipelineVersions; ids: { workspaceId: string; adaptationId: string; materialId: string }; spentUsd(): Promise<number>; record(run: AIRunRecord): Promise<void> }): (...args: never[]) => Promise<unknown>;
   illustrations(input: { versions: PipelineVersions; ids: { workspaceId: string; adaptationId: string; materialId: string } }): Promise<unknown>;
+  locatedOriginals?(input: never): Promise<ReadonlySet<string>>;
 }

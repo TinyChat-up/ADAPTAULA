@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { missingReferences, stripUnresolved } from "@/lib/recreation/references";
+import { missingReferences, resolveReferences } from "@/lib/recreation/references";
 import { sanitizePlan } from "@/lib/recreation/repair";
 import { runMockRecreation } from "../support/recreation-mocks";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
@@ -20,20 +20,22 @@ describe("referencias a recursos que no existen", () => {
     expect(missingReferences("Lee el texto y responde.", none)).toEqual([]);
   });
 
-  it("quita solo la frase que apunta a lo que falta; sin nada que hacer, lo dice", () => {
-    expect(stripUnresolved({ prompt: "Observa la ilustración. Elige las opciones correctas.", steps: ["Mira el dibujo.", "Marca dos opciones."] }, none)).toMatchObject({ prompt: "Elige las opciones correctas.", steps: ["Marca dos opciones."], empty: false });
-    expect(stripUnresolved({ prompt: "Observa la ilustración.", steps: [] }, none).empty).toBe(true);
+  it("quita solo una frase que únicamente señala; si lo que falta es la tarea, la actividad queda sin resolver", () => {
+    expect(resolveReferences({ prompt: "Observa la ilustración. Elige las opciones correctas.", steps: ["Mira el dibujo.", "Marca dos opciones."] }, none)).toMatchObject({ prompt: "Elige las opciones correctas.", steps: ["Marca dos opciones."], unresolved: [] });
+    expect(resolveReferences({ prompt: "Explica qué indican las flechas.", steps: [] }, none).unresolved).toEqual(["arrows"]);
+    expect(resolveReferences({ prompt: "¿Qué ves en la imagen?", steps: [] }, none).unresolved).toEqual(["picture"]);
+    expect(resolveReferences({ prompt: "Observa la ilustración.", steps: [] }, none).unresolved).toEqual(["picture"]);
   });
 
-  it("el saneado del plan retira lo que el propio plan no declara", () => {
+  it("el saneado vincula a la actividad el esquema que el plan ya declara, sin quitar nada", () => {
     const plan = structuredClone(POND_RECREATION_PLAN);
-    plan.visual_requests = [];
-    plan.materials = [];
-    for (const a of plan.activities) a.visual_ids = [];
-    plan.activities[0]!.prompt = "Observa la ilustración del estanque. ¿Qué componente es un ser vivo? Recorta las tarjetas.";
+    const target = plan.activities.find((a) => a.visual_ids.length === 0)!;
+    target.prompt = `${target.prompt} Explica tu idea con el esquema.`;
     const context = buildAdaptationContext({ profile: POND_PILOT_PROFILE, education: { stage: null, grade: null, subject: null }, analysis: pondAnalysis(), adaptationType: "methodological" }).context;
     const clean = sanitizePlan(plan, pondAnalysis(), context.needs.map((n) => n.dimension), "methodological");
-    expect(clean.activities[0]!.prompt).toBe("¿Qué componente es un ser vivo?");
+    const after = clean.activities.find((a) => a.id === target.id)!;
+    expect(after.prompt).toBe(target.prompt);
+    expect(after.visual_ids).toEqual([plan.visuals[0]!.id]);
   });
 });
 
@@ -47,7 +49,7 @@ describe("estanque: la ilustración se rechaza y la ficha no la menciona", () =>
     expect(outcome.visuals.some((v) => v.route === "none")).toBe(true);
     const sheet = text(outcome.compiled.student);
     expect(sheet).not.toMatch(/ilustraci[oó]n del estanque/i);
-    expect(sheet).toMatch(/Imprime también el documento «Materiales para recortar»/);
+    expect(sheet).toMatch(/del documento «Materiales para recortar»/);
     expect(outcome.compiled.unresolved).toEqual([]);
     expect(outcome.compiled.materials).not.toBeNull();
   });
