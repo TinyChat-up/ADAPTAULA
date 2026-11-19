@@ -36,7 +36,9 @@ describe("recorrido completo simulado", () => {
     expect(observed).toHaveLength(2);
     expect(observed[0]!.previous).toBeUndefined();
     expect(observed[1]!.errors).toBeGreaterThan(0);
-    expect(observed[1]!.previous).toEqual(bad);
+    // The server only LINKS the scheme the plan already declared to the activity that names it (never rewrites the rest).
+    const unlinked = (plan: typeof bad) => ({ ...plan, activities: plan.activities.map((a) => ({ ...a, visual_ids: [] })) });
+    expect(unlinked(observed[1]!.previous as typeof bad)).toEqual(unlinked(bad));
     const input = recreationInput(request.analysis, request.context, request.scope);
     const parts = RECREATION_PLANNER_V2.buildUserParts(input, [{ severity: "error", code: "solution_revealed", path: "activities.ra_7", message: "Error de prueba" }], bad);
     const body = parts.map((p) => p.type === "text" ? p.text : "").join("");
