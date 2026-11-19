@@ -227,6 +227,14 @@ ul.ms-list { list-style: disc; }
 .ms-vflow > li { display: flex; align-items: center; gap: .35em; break-inside: avoid; }
 .ms-vflow-box { border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .4em .7em; text-align: center; }
 .ms-vflow-arrow { font-weight: 600; }
+.ms-vdiagram-arrow { display: inline-flex; flex-direction: column; align-items: center; font-weight: 600; line-height: 1.1; }
+.ms-vdiagram-relation { font-size: .8em; font-weight: 400; font-style: italic; }
+.ms-vdiagram-tree { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: .5em; }
+.ms-vdiagram-tree > li { display: flex; flex-wrap: wrap; justify-content: center; gap: .8em; break-inside: avoid; }
+.ms-vdiagram-node { display: inline-flex; flex-direction: column; align-items: center; gap: .2em; }
+.ms-vdiagram-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: .6em; }
+.ms-vdiagram-groups > li { border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .4em; break-inside: avoid; }
+.ms-vdiagram-groups ul { list-style: none; margin: .4em 0 0; padding: 0; display: flex; flex-direction: column; gap: .3em; align-items: center; }
 .ms-vsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5em; }
 .ms-vsteps > li { flex: 1 1 9em; display: flex; gap: .45em; align-items: flex-start; border: 1px solid var(--ms-rule-soft); border-radius: 2mm; padding: .45em .6em; }
 .ms-vstep-n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; border-radius: 50%; border: 1.5px solid var(--ms-accent); color: var(--ms-accent); font-weight: 700; font-size: .85em; }

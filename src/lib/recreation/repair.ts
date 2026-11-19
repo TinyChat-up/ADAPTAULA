@@ -2,6 +2,7 @@ import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { RecreationPlan, RecreationScope } from "./contract";
 import { mentions } from "./references";
+import { declaredSchemes } from "./diagrams";
 import { chooseScheme } from "./relations";
 import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, sourceText, verifyPlan, type Verification } from "./verify";
 
@@ -22,7 +23,16 @@ import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, s
 
 const uniq = <T>(xs: readonly T[]) => [...new Set(xs)];
 
-export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean; preciseRelations?: boolean } = {}): RecreationPlan {
+export interface SanitizeOptions {
+  /** ADR-054: an activity's picture is part of it (v5+). */
+  picturesRequired?: boolean;
+  /** ADR-058: only the scheme that corresponds to an activity is linked (v6+). */
+  preciseRelations?: boolean;
+  /** ADR-059: Claude may design new schemes (`diagrams`, v7+). Older plans never carry any; a design is never dropped in silence. */
+  diagrams?: boolean;
+}
+
+export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: SanitizeOptions = {}): RecreationPlan {
   const plan: RecreationPlan = structuredClone(input);
   const required = originalOperations(analysis);
   const needSet = new Set(needs);
@@ -41,10 +51,14 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
 
   plan.strategies = plan.strategies.map((s) => ({ ...s, needs: s.needs.filter((n) => needSet.has(n)) })).filter((s) => s.needs.length > 0);
   const strategies = new Set(plan.strategies.map((s) => s.id));
+  // An original's scheme whose labels are not in that picture is dropped... unless (v7+) an activity relies on it: then the verifier
+  // says exactly why it cannot be drawn and Claude repairs THAT, instead of being told the scheme was never designed.
+  const referenced = new Set(plan.activities.flatMap((a) => a.visual_ids));
   plan.visuals = plan.visuals.filter((v) => {
     const source = sourceText(analysis, v.source_ref);
-    return source !== null && v.items.every((item) => normalize(source).includes(normalize(item)));
+    return (source !== null && v.items.every((item) => normalize(source).includes(normalize(item)))) || (options.diagrams === true && referenced.has(v.id));
   });
+  if (!options.diagrams) delete plan.diagrams;
   const visuals = new Set(plan.visuals.map((v) => v.id));
 
   for (const a of plan.activities) {
@@ -57,6 +71,7 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
     a.visual_ids = a.visual_ids.filter((id) => visuals.has(id));
   }
   const activities = new Map(plan.activities.map((a) => [a.id, a]));
+  if (plan.diagrams) plan.diagrams = plan.diagrams.map((d) => ({ ...d, activity_ids: uniq(d.activity_ids.filter((id) => activities.has(id))) })).filter((d) => d.activity_ids.length > 0);
 
   plan.materials = plan.materials.flatMap((m): RecreationPlan["materials"] => {
     const target = activities.get(m.activity_id)?.executor;
@@ -88,12 +103,17 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
   // linked to this one too (the renderer prints it once and repeats it if it was on an earlier sheet). Nothing is removed here.
   for (const a of plan.activities) {
     const text = [a.prompt, ...a.steps].join(" ");
-    if ((mentions(text, "scheme") || mentions(text, "arrows")) && a.visual_ids.length === 0 && plan.visuals.length > 0) {
-      if (!options.preciseRelations) a.visual_ids = [plan.visuals[0]!.id];
-      else {
-        // ADR-058: only the scheme that corresponds to THIS activity is linked; with none or several candidates nothing is guessed.
+    if ((mentions(text, "scheme") || mentions(text, "arrows")) && declaredSchemes(plan, a).length === 0 && (plan.visuals.length > 0 || (plan.diagrams?.length ?? 0) > 0)) {
+      if (!options.preciseRelations) {
+        if (plan.visuals.length > 0) a.visual_ids = [plan.visuals[0]!.id];
+      } else {
+        // ADR-058/059: only the scheme that corresponds to THIS activity is linked, by explicit evidence; with none or several nothing is guessed.
         const choice = chooseScheme(a, plan, analysis);
         if (choice.ok && choice.flow.origin === "plan") a.visual_ids = [choice.flow.key.slice(3)];
+        if (choice.ok && choice.flow.origin === "diagram") {
+          const d = plan.diagrams!.find((x) => `rd:${x.id}` === choice.flow.key)!;
+          if (d.activity_ids.length < 3) d.activity_ids.push(a.id);
+        }
       }
     }
     // ADR-058: with precise relations a request is never attached to an activity just because it is free; Claude assigns the activities of each
@@ -133,7 +153,7 @@ function scrubExplanation(plan: RecreationPlan, verification: Verification, need
 const activityOf = (path: string) => /^activities\.(ra_[0-9]+)$/.exec(path)?.[1] ?? null;
 
 /** Removes the failing activities (and what only they used) when nothing essential is lost. Null: the plan cannot be saved this way. */
-export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean; preciseRelations?: boolean } = {}): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
+export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: SanitizeOptions = {}): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
   const needSet = new Set(needs);
   let current = plan;
   let checked = verification;
@@ -166,14 +186,19 @@ export function salvagePlan(plan: RecreationPlan, verification: Verification, an
  * ADR-054: an activity that names a picture or a scheme the plan does not design is sent back to Claude (the repair call), so the
  * missing picture is designed, not the instruction removed. Scheme words are satisfied by a drawn scheme or a requested picture.
  */
-export function undesignedResources(plan: RecreationPlan): Array<{ severity: "error"; code: string; path: string; message: string }> {
+export function undesignedResources(plan: RecreationPlan, options: Pick<SanitizeOptions, "diagrams"> = {}): Array<{ severity: "error"; code: string; path: string; message: string }> {
   return plan.activities.flatMap((a) => {
     const text = [a.prompt, ...a.steps].join(" ");
     const requested = plan.visual_requests.some((r) => r.activity_ids.includes(a.id));
-    const drawn = a.visual_ids.length > 0;
+    const drawn = declaredSchemes(plan, a).length > 0;
     const out: Array<{ severity: "error"; code: string; path: string; message: string }> = [];
     if (mentions(text, "picture") && !requested) out.push({ severity: "error", code: "picture_not_designed", path: `activities.${a.id}`, message: "La actividad pide mirar una imagen que el plan no diseña: añade su petición en visual_requests (essential: true) o reformula sin cambiar lo que se aprende." });
-    if ((mentions(text, "arrows") || mentions(text, "scheme")) && !drawn && !requested) out.push({ severity: "error", code: "scheme_not_designed", path: `activities.${a.id}`, message: "La actividad nombra un esquema o flechas que el plan no dibuja: decláralo en visuals con los rótulos del original." });
+    if ((mentions(text, "arrows") || mentions(text, "scheme")) && !drawn && !requested) {
+      const message = options.diagrams
+        ? `La actividad nombra un esquema o flechas, pero ningún esquema la incluye. Si el original ya lo dibuja, decláralo en visuals (con sus rótulos) y enlázalo en visual_ids; si es un esquema NUEVO, decláralo en diagrams con sus nodos, sus relaciones, el hecho citado de cada una y "${a.id}" en activity_ids.${(plan.diagrams?.length ?? 0) > 0 ? ` Esquemas declarados: ${plan.diagrams!.map((d) => `${d.id} (${d.activity_ids.join(", ")})`).join("; ")}.` : ""}`
+        : "La actividad nombra un esquema o flechas que el plan no dibuja: decláralo en visuals con los rótulos del original.";
+      out.push({ severity: "error", code: "scheme_not_designed", path: `activities.${a.id}`, message });
+    }
     if (mentions(text, "cards") && !plan.materials.some((m) => m.activity_id === a.id)) out.push({ severity: "error", code: "material_not_designed", path: `activities.${a.id}`, message: "La actividad usa tarjetas o un tablero que no están en materials." });
     return out;
   });

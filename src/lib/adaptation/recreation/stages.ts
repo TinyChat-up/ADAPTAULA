@@ -19,7 +19,7 @@ import { NO_ENTITLEMENTS } from "../orchestration/entitlements";
 import type { PipelineVersions } from "../orchestration/versions";
 import type { RecreationServices } from "./services";
 import type { VisualPolicy } from "@/lib/recreation/visuals";
-import { DESIGNED_FROM, NEW_IMAGES_FROM, usesRecreation } from "./engine";
+import { DESIGNED_FROM, DIAGRAMS_FROM, NEW_IMAGES_FROM, usesRecreation } from "./engine";
 
 /**
  * The two stages of «Hacer magia» when the adaptation was created with the recreation engine (ADR-053). They reuse the adaptation's
@@ -45,6 +45,9 @@ export const visualPolicyOf = (versions: PipelineVersions): VisualPolicy => {
   const v = versions.recreation?.planner.prompt_version ?? 1;
   return v >= DESIGNED_FROM ? "designed" : v >= NEW_IMAGES_FROM ? "new_images" : "reuse_originals";
 };
+
+/** ADR-059: whether this adaptation's planner may design new schemes (read from the frozen prompt version, like the visual policy). */
+export const diagramsOf = (versions: PipelineVersions): boolean => (versions.recreation?.planner.prompt_version ?? 1) >= DIAGRAMS_FROM;
 
 const statusOf = async (store: AdaptationStore, id: string) => ((await store.getPipeline(id))?.adaptation.status ?? "failed") as AdaptationStatus;
 const runIds = (job: NonNullable<Awaited<ReturnType<AdaptationStore["claimStage"]>>>): StageRun["ids"] => ({ workspaceId: job.workspace_id, adaptationId: job.adaptation_id, materialId: job.material_id, jobId: job.id, jobAttempt: job.attempts });
@@ -154,7 +157,7 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     const planner = (deps.recreation as RecreationServices).planner({ versions: loaded.versions, ids, spentUsd: () => plannerSpent(store, adaptationId), record: recorder(store, ids) });
     // A call whose outcome is unknown (the process dies in the middle) is never repeated by itself: the next attempt stops as ambiguous.
     await store.markProviderCall(job.id, job.attempts);
-    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto", visualPolicy: visualPolicyOf(loaded.versions) });
+    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto", visualPolicy: visualPolicyOf(loaded.versions), diagrams: diagramsOf(loaded.versions) });
     await store.clearProviderCall(job.id, job.attempts);
     if (planned.status !== "planned") {
       // Content-free diagnostics: codes and schema paths only, never plans, quotes, answers or student data.

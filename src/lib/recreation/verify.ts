@@ -66,6 +66,8 @@ export interface Verification {
   version: typeof RECREATION_VERIFIER_VERSION;
 }
 
+import { diagramPlanIssues, diagramTexts, diagramsFor } from "./diagrams";
+
 export const normalize = (s: string) =>
   s
     .normalize("NFD")
@@ -228,6 +230,9 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
     if (source === null) error("visual_source_unknown", `visuals.${v.id}`, `${v.source_ref} no existe.`);
     else for (const item of v.items) if (!normalize(source).includes(normalize(item))) error("visual_label_not_in_source", `visuals.${v.id}`, `«${item}» no está en ${v.source_ref}.`);
   }
+  // 5b · New schemes (ADR-059): every node and relation anchored to a quoted fact; a shape that can be drawn as declared.
+  const factsById = new Map(plan.facts.map((f) => [f.id, f]));
+  for (const d of plan.diagrams ?? []) for (const issue of diagramPlanIssues(plan, d, factsById)) issues.push(issue);
   const ids = new Set(plan.activities.map((a) => a.id));
   for (const r of plan.visual_requests) {
     for (const id of r.activity_ids) if (!ids.has(id)) error("visual_request_activity_unknown", `visual_requests.${r.id}`, `${id} no existe.`);
@@ -436,7 +441,7 @@ export function containment(answer: string, text: string): number {
 
 /** Everything the student reads in each activity: prompt, steps, starters, the visuals it shows and its printed items and options. */
 function studentTexts(plan: RecreationPlan, a: RecreationActivity, verified: ReadonlyMap<string, VerifiedActivity>): string[] {
-  const visuals = plan.visuals.filter((v) => a.visual_ids.includes(v.id)).map((v) => v.items.join(" → "));
+  const visuals = [...plan.visuals.filter((v) => a.visual_ids.includes(v.id)).map((v) => v.items.join(" → ")), ...diagramsFor(plan, a.id).flatMap(diagramTexts)];
   const e = a.executor;
   const solution = verified.get(a.id)?.solution;
   const printed =
@@ -488,6 +493,10 @@ function leaks(plan: RecreationPlan, verifiedList: readonly VerifiedActivity[]):
         if (asserted.some((t) => t.owner !== v.id && containment(s.solution[i]!, t.raw) >= 0.6 && containment(s.solution[i + 1]!, t.raw) >= 0.6)) out.push({ path, message: `Otra actividad afirma que «${s.solution[i]}» va unido a «${s.solution[i + 1]}».` });
       }
     }
+  }
+  // A new scheme cannot name the relation an activity asks the student to interpret (ADR-059): its arrows go unlabelled there.
+  for (const a of plan.activities.filter((x) => x.operations.includes("interpret_relation"))) {
+    for (const d of diagramsFor(plan, a.id)) if (d.relations.some((r) => r.label)) out.push({ path: `activities.${a.id}`, message: `El esquema «${d.title}» rotula sus flechas y la actividad pide interpretar esa relación: deja «label» a null.` });
   }
   // A scheme whose arrows an activity asks to interpret: no other text may state the relation between two joined boxes.
   for (const a of plan.activities.filter((x) => x.operations.includes("interpret_relation"))) {

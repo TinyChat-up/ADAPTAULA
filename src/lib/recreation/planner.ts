@@ -5,6 +5,7 @@ import { RECREATION_PLANNER_V3 } from "@prompts/recreation-planner/v3";
 import { RECREATION_PLANNER_V4 } from "@prompts/recreation-planner/v4";
 import { RECREATION_PLANNER_V5 } from "@prompts/recreation-planner/v5";
 import { RECREATION_PLANNER_V6 } from "@prompts/recreation-planner/v6";
+import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
 import { estimateCostUsd, priceFor } from "@/lib/ai/costs";
 import type { AIProvider, AIRunRecord, ModelSelection } from "@/lib/ai/types";
 import { callStructured } from "@/lib/materials/visuals/auto/assistants";
@@ -51,15 +52,17 @@ export function createRecreationPlanner(deps: { provider: AIProvider; selection:
     throw new Error("invalid recreation planner output allowance");
   }
   const promptVersion = deps.promptVersion ?? RECREATION_PLANNER_V1.version;
-  if (promptVersion !== RECREATION_PLANNER_V1.version && promptVersion !== RECREATION_PLANNER_V2.version && promptVersion !== RECREATION_PLANNER_V3.version && promptVersion !== RECREATION_PLANNER_V4.version && promptVersion !== RECREATION_PLANNER_V5.version && promptVersion !== RECREATION_PLANNER_V6.version) {
+  if (promptVersion !== RECREATION_PLANNER_V1.version && promptVersion !== RECREATION_PLANNER_V2.version && promptVersion !== RECREATION_PLANNER_V3.version && promptVersion !== RECREATION_PLANNER_V4.version && promptVersion !== RECREATION_PLANNER_V5.version && promptVersion !== RECREATION_PLANNER_V6.version && promptVersion !== RECREATION_PLANNER_V7.version) {
     throw new Error("unsupported frozen recreation planner prompt version");
   }
-  const prompt = promptVersion === RECREATION_PLANNER_V6.version ? RECREATION_PLANNER_V6 : promptVersion === RECREATION_PLANNER_V5.version ? RECREATION_PLANNER_V5 : promptVersion === RECREATION_PLANNER_V4.version ? RECREATION_PLANNER_V4 : promptVersion === RECREATION_PLANNER_V3.version ? RECREATION_PLANNER_V3 : promptVersion === RECREATION_PLANNER_V2.version ? RECREATION_PLANNER_V2 : RECREATION_PLANNER_V1;
+  const prompt = promptVersion === RECREATION_PLANNER_V7.version ? RECREATION_PLANNER_V7 : promptVersion === RECREATION_PLANNER_V6.version ? RECREATION_PLANNER_V6 : promptVersion === RECREATION_PLANNER_V5.version ? RECREATION_PLANNER_V5 : promptVersion === RECREATION_PLANNER_V4.version ? RECREATION_PLANNER_V4 : promptVersion === RECREATION_PLANNER_V3.version ? RECREATION_PLANNER_V3 : promptVersion === RECREATION_PLANNER_V2.version ? RECREATION_PLANNER_V2 : RECREATION_PLANNER_V1;
   let spent: number | null = null;
   return async (input, repairOf, previousPlan) => {
     // Frozen v1/v2 jobs keep the input they were designed for (no `approach`).
     const legacy = { ...input, context: Object.fromEntries(Object.entries(input.context).filter(([k]) => k !== "approach")) as typeof input.context };
-    const parts = promptVersion === RECREATION_PLANNER_V6.version
+    const parts = promptVersion === RECREATION_PLANNER_V7.version
+      ? RECREATION_PLANNER_V7.buildUserParts(input, repairOf, previousPlan)
+      : promptVersion === RECREATION_PLANNER_V6.version
       ? RECREATION_PLANNER_V6.buildUserParts(input, repairOf, previousPlan)
       : promptVersion === RECREATION_PLANNER_V5.version
       ? RECREATION_PLANNER_V5.buildUserParts(input, repairOf, previousPlan)

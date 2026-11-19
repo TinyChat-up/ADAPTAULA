@@ -1,5 +1,5 @@
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
-import type { RecreationActivity, RecreationPlan } from "./contract";
+import type { Diagram, RecreationActivity, RecreationPlan } from "./contract";
 import { normalize } from "./verify";
 
 /**
@@ -13,9 +13,11 @@ import { normalize } from "./verify";
  */
 
 export interface Flow {
-  /** Stable key of the resource in the document: `rv:<plan scheme id>` or `orig:<original visual id>`. */
+  /** Stable key of the resource in the document: `rv:<plan scheme id>`, `orig:<original visual id>` or `rd:<new scheme id>` (ADR-059). */
   key: string;
-  origin: "plan" | "original";
+  origin: "plan" | "original" | "diagram";
+  /** For a new scheme: the design itself (drawn with code from it). */
+  diagram?: Diagram;
   title: string;
   items: string[];
   source_ref: string;
@@ -54,13 +56,22 @@ export function originalFlowOf(visual: MaterialAnalysis["visuals"][number]): Flo
   return { key: `orig:${visual.id}`, origin: "original", title: (visual.title ?? "Esquema").slice(0, 60), items: labels.map(sentence), source_ref: visual.id };
 }
 
+/** A new scheme as a candidate: its labels stand for its items; it has no picture of the original behind it. */
+export const diagramFlow = (d: Diagram): Flow => ({ key: `rd:${d.id}`, origin: "diagram", title: d.title, items: d.nodes.map((n) => n.label), source_ref: "", diagram: d });
+
+/** The facts an activity's executor relies on (by id). */
+const factIdsOf = (a: RecreationActivity) => new Set(JSON.stringify(a.executor).match(/f_[0-9]+/g) ?? []);
+
 export const planFlow = (v: RecreationPlan["visuals"][number]): Flow => ({ key: `rv:${v.id}`, origin: "plan", title: v.title, items: v.items, source_ref: v.source_ref });
 
-export function chooseScheme(a: RecreationActivity, plan: Pick<RecreationPlan, "visuals" | "visual_requests" | "facts">, analysis?: MaterialAnalysis): SchemeChoice {
+export function chooseScheme(a: RecreationActivity, plan: Pick<RecreationPlan, "visuals" | "visual_requests" | "facts" | "diagrams">, analysis?: MaterialAnalysis): SchemeChoice {
   const refs = activityRefs(a, plan);
   const text = normalize(activityTexts(a, plan));
   const named = (items: readonly string[]) => items.filter((i) => text.includes(normalize(i))).length;
-  const fromPlan = plan.visuals.filter((v) => refs.has(v.source_ref) || named(v.items) >= 2).map(planFlow);
+  // A new scheme (ADR-059) by explicit evidence: it relies on a fact the activity's own answer uses, or the activity names two of its labels.
+  const used = factIdsOf(a);
+  const sharesFact = (d: Diagram) => [...d.nodes, ...d.relations].some((x) => used.has(x.fact_id));
+  const fromPlan = [...plan.visuals.filter((v) => refs.has(v.source_ref) || named(v.items) >= 2).map(planFlow), ...(plan.diagrams ?? []).filter((d) => sharesFact(d) || named(d.nodes.map((n) => n.label)) >= 2).map(diagramFlow)];
   if (fromPlan.length === 1) return { ok: true, flow: fromPlan[0]! };
   if (fromPlan.length > 1) return { ok: false, reason: "ambiguous", candidates: fromPlan.map((f) => f.key) };
   const fromOriginal = (analysis?.visuals ?? []).filter((v) => refs.has(v.id)).map(originalFlowOf).filter((f): f is Flow => f !== null);

@@ -5,6 +5,9 @@ import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
 import { mentions, resolveReferences } from "./references";
+import { diagramSpecOf, diagramsFor } from "./diagrams";
+import { describeDiagram } from "@/lib/visuals/diagram";
+import type { Diagram } from "./contract";
 import { chooseScheme, type Flow } from "./relations";
 import { originalFlow, type ResolvedVisual } from "./visuals";
 
@@ -136,8 +139,16 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     // ITS exact schemes, drawn by code from the original's labels.
     const flowBlock = (v: Pick<Flow, "title" | "items" | "source_ref">) => (): Block => ({ id: id(), type: "image", alt_text: `${v.title}: ${v.items.join(", ")}, unidos por flechas.`, source: { kind: "figure", spec: { kind: "flow", spec_version: VISUAL_SPEC_VERSION, title: v.title, items: v.items }, provenance: "reconstruction", visual_ref: v.source_ref }, trace: { origin: "original", source_refs: [v.source_ref], decision_ids: decisions(a.strategy_ids) } });
     for (const v of plan.visuals.filter((x) => a.visual_ids.includes(x.id))) use(`rv:${v.id}`, flowBlock(v));
+    // ITS new schemes (ADR-059): the ones that declare it, drawn by code from their nodes and relations (no picture of the original behind them).
+    const diagramBlock = (d: Diagram) => (): Block => {
+      const spec = diagramSpecOf(d);
+      const refs = [...new Set(plan.facts.filter((f) => [...d.nodes, ...d.relations].some((x) => x.fact_id === f.id)).map((f) => f.source_ref))];
+      return { id: id(), type: "image", alt_text: describeDiagram(spec).slice(0, 300), source: { kind: "figure", spec, provenance: "generated", decision_id: decisions(a.strategy_ids)[0] ?? "dec_1" }, trace: { origin: "support", source_refs: [...a.objective_ids, ...refs].slice(0, 12), decision_ids: decisions(a.strategy_ids) } };
+    };
+    const ownDiagrams = diagramsFor(plan, a.id);
+    for (const d of ownDiagrams) use(`rd:${d.id}`, diagramBlock(d));
     const hasPicture = mine.some((v) => v.source!.kind !== "missing");
-    let hasFlow = plan.visuals.some((x) => a.visual_ids.includes(x.id)) || mine.some((v) => v.source!.kind === "figure" && v.source!.spec.kind === "flow");
+    let hasFlow = plan.visuals.some((x) => a.visual_ids.includes(x.id)) || ownDiagrams.length > 0 || mine.some((v) => v.source!.kind === "figure" && v.source!.spec.kind === "flow");
     const text = [a.prompt, ...a.steps].join(" ");
     // Arrows or a scheme it names and does not have: drawn by code from the original's own diagram when the analysis has one.
     // A request Claude marked as needing exact arrows or labels makes the relation part of the activity (ADR-057), mentioned or not.
@@ -147,7 +158,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
         // The scheme that CORRESPONDS to this activity (never the first of the plan): see relations.ts. Ambiguous or absent: not guessed.
         const choice = chooseScheme(a, plan, analysis);
         if (choice.ok) {
-          use(choice.flow.key, flowBlock(choice.flow));
+          use(choice.flow.key, choice.flow.diagram ? diagramBlock(choice.flow.diagram) : flowBlock(choice.flow));
           hasFlow = true;
         } else lost.push(`actividad ${label}: ${choice.reason === "ambiguous" ? `varios esquemas posibles (${choice.candidates.join(", ")}) y ninguno enlazado` : "ningún esquema corresponde"}`);
       } else {

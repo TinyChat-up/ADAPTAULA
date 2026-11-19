@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { DiagramView } from "./diagram-spec";
 import { COMPARISON, LINE, barGeometry, comparisonGeometry, numberLineGeometry, type Fraction, type VisualSpec } from "@/lib/visuals/spec";
 
 /**
@@ -246,5 +247,7 @@ export function VisualSpecView({ spec, label, pictures }: { spec: VisualSpec; la
       return <CutCards spec={spec} label={label} {...(pictures ? { pictures } : {})} />;
     case "sort_board":
       return <SortBoard spec={spec} label={label} />;
+    case "diagram":
+      return <DiagramView spec={spec} label={label} />;
   }
 }

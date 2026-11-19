@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DimensionKeySchema } from "@/lib/schemas/functional-profile";
+import { DIAGRAM_LAYOUTS } from "@/lib/visuals/diagram";
 
 /**
  * recreation_plan@v1: the contract of the pedagogical recreation engine (ADR-049, docs/RECREATION.md). The original sheet is a SOURCE
@@ -135,7 +136,27 @@ export const ExecutorSchema = z.discriminatedUnion("kind", [
 ]);
 export type Executor = z.infer<typeof ExecutorSchema>;
 
-export const RecreationPlanSchema = z.object({
+/**
+ * A NEW exact scheme Claude designs (ADR-059, planner v7+), not tied to any picture of the original: the nodes, the relations between
+ * them, the evidence of each, and the activities that use it. Adaptaula draws it with code (`visuals/diagram.ts`); no image model is
+ * asked for text or arrows. Evidence is a FACT of the plan (quoted word for word from the original): every node's label is in its
+ * fact's quote and every relation's two ends are in the quote of the relation's fact, so no relation is invented. Group titles
+ * and relation labels are words of the design (checked like any student text: they never give an answer away).
+ */
+export const DiagramSchema = z.object({
+  id: Id("rd"),
+  layout: z.enum(DIAGRAM_LAYOUTS),
+  title: Text(60),
+  /** What the student does with it (observe the relation, follow the order, compare): one sentence. */
+  purpose: Text(200),
+  activity_ids: z.array(Id("ra")).min(1).max(3),
+  groups: z.array(z.object({ id: Id("g"), label: Text(30) })).max(4),
+  nodes: z.array(z.object({ id: Id("n"), label: Text(40), fact_id: Id("f"), group_id: Id("g").nullable() })).min(2).max(8),
+  relations: z.array(z.object({ from: Id("n"), to: Id("n"), label: Text(30).nullable(), fact_id: Id("f") })).max(10),
+});
+export type Diagram = z.infer<typeof DiagramSchema>;
+
+const RecreationPlanBase = z.object({
   contract: z.literal(RECREATION_CONTRACT),
   scope: RecreationScopeSchema,
   title: Text(120),
@@ -205,5 +226,14 @@ export const RecreationPlanSchema = z.object({
   /** What to watch in each activity while the student works (one short sentence each; shown with «Cómo utilizar»). */
   guide: z.object({ per_activity: z.array(z.object({ activity_id: Id("ra"), observe: Text(200) })).max(12) }),
 });
+
+/** What planners v1–v6 are asked for (their prompt is frozen, so their schema is too): no new schemes. */
+export const RecreationPlanLegacySchema = RecreationPlanBase;
+
+/** Every stored or new plan. `diagrams` only from planner v7 (ADR-059); older plans simply have none. */
+export const RecreationPlanSchema = RecreationPlanBase.extend({ diagrams: z.array(DiagramSchema).max(4).optional() });
+
+/** What planner v7+ is asked for: the same plan, with its new schemes. */
+export const RecreationPlanV7Schema = RecreationPlanSchema;
 export type RecreationPlan = z.infer<typeof RecreationPlanSchema>;
 export type RecreationActivity = RecreationPlan["activities"][number];
