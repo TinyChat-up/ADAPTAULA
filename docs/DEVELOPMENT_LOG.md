@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Causa del fallo de «Hacer magia» v5 y coordinación del motor (ADR-055)
+
+- **Causa demostrada.** `generated_assets.need_key` solo admite `(vis|dec|act)_N`: todas las imágenes aprobadas por la recreación se perdían al guardarse (3 PNG en Storage, 0 filas); el error se reintentaba pagando de nuevo y el brief redundante de Claude terminó fallando su esquema.
+- **Cambios.** Clave conforme; brief construido desde el plan (sin llamada); comprobación previa de encargos y del tope de imágenes; `store_failed` explícito; causa técnica en el error y en el registro.
+- **Pruebas.** Typecheck y lint; sin llamadas de pago.
+
 ## 2026-11-19 · Imágenes nuevas como apoyo pedagógico (ADR-054)
 
 - **Cambios.** Planificador v5; sin reutilización de imágenes del original ni localizador en la recreación; peticiones imprescindibles si la actividad pide observarlas; sin reformular una imagen ausente (ficha incompleta); recursos no diseñados devueltos a Claude; deduplicación de peticiones idénticas; función y conceptos en el brief; hasta 5 peticiones por plan (tope de imágenes sin cambios).

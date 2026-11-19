@@ -94,6 +94,11 @@ export interface IllustrationRequest {
   lowDetail: boolean;
   /** When the illustration must be finished by (epoch ms: the stage's lease minus what follows it). None: no limit (tests, evals). */
   deadline?: number | null;
+  /**
+   * ADR-055: the brief already designed by Claude in the plan (recreation), built by the server. No second text call re-interprets
+   * it; it is validated exactly like a model's brief.
+   */
+  brief?: BriefDraft;
 }
 
 /** The adaptation's illustration spending so far and its ceiling (USD). Absent: no money ceiling (tests that do not test it). */
@@ -130,7 +135,7 @@ export interface IllustrationDeps {
 
 export type IllustrationOutcome =
   | { ok: true; asset: StoredIllustration; cached: boolean; attempts: number }
-  | { ok: false; reason: "brief_rejected" | "quota_exhausted" | "budget_exhausted" | "image_failed" | "review_rejected"; detail: string[] };
+  | { ok: false; reason: "brief_rejected" | "quota_exhausted" | "budget_exhausted" | "image_failed" | "review_rejected" | "store_failed"; detail: string[] };
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -166,9 +171,15 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
   if (deps.budget) spent = await deps.budget.spentUsd();
   // The whole first attempt must fit before anything is paid: brief, one image, one review.
   if (!fits(2 * ILLUSTRATION_BUDGET.textUsd + ILLUSTRATION_BUDGET.imageUsd)) return { ok: false, reason: "budget_exhausted", detail: [] };
-  const { draft, run: briefRun } = await deps.brief({ stage: request.stage, grade: request.grade, subject: request.subject, activity: request.activity, objective: request.objective, missing: request.missing, purpose: request.purpose, supports: request.supports, timeoutMs: budget(ILLUSTRATION_TIMING.maxTextMs, ILLUSTRATION_TIMING.attemptMs) });
-  await record(briefRun);
-  if (!draft && isTransientAIError(briefRun.errorCode)) throw new IllustrationDeferred();
+  let draft: BriefDraft | null;
+  if (request.brief) {
+    draft = request.brief;
+  } else {
+    const asked = await deps.brief({ stage: request.stage, grade: request.grade, subject: request.subject, activity: request.activity, objective: request.objective, missing: request.missing, purpose: request.purpose, supports: request.supports, timeoutMs: budget(ILLUSTRATION_TIMING.maxTextMs, ILLUSTRATION_TIMING.attemptMs) });
+    await record(asked.run);
+    if (!asked.draft && isTransientAIError(asked.run.errorCode)) throw new IllustrationDeferred();
+    draft = asked.draft;
+  }
   const validated = validateBrief(draft, { activity: request.activity, expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail });
   if (!validated.ok) return { ok: false, reason: "brief_rejected", detail: validated.violations };
   const brief = validated.brief;
@@ -213,7 +224,15 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
     reviewed = true;
     const verdict = acceptReview(review, brief);
     if (verdict.ok) {
-      const asset = await deps.store.put({ request, brief, briefFingerprint, prompt, png: image.data, sha256: deps.sha256(image.data), width: size.width, height: size.height, attempts: attempt, review: { approved: true, attempts: attempt, elements: review!.elements.map((e) => ({ name: e.name, present: e.present, marker_ok: e.marker_ok, label_ok: e.label_ok })) } });
+      // An approved, paid picture that cannot be stored is a precise, final cause (never an «unexpected» error that reruns the job
+      // and pays everything again).
+      let asset: StoredIllustration;
+      try {
+        asset = await deps.store.put({ request, brief, briefFingerprint, prompt, png: image.data, sha256: deps.sha256(image.data), width: size.width, height: size.height, attempts: attempt, review: { approved: true, attempts: attempt, elements: review!.elements.map((e) => ({ name: e.name, present: e.present, marker_ok: e.marker_ok, label_ok: e.label_ok })) } });
+      } catch (error) {
+        await deps.quota.refund(quotaKey);
+        return { ok: false, reason: "store_failed", detail: [error instanceof Error ? error.message.slice(0, 60) : "store_failed"] };
+      }
       return { ok: true, asset, cached: false, attempts: attempt };
     }
     detail.push(...verdict.issues);

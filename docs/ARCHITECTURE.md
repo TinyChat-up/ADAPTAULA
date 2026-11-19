@@ -736,3 +736,15 @@ La decisión del fundador permite `production-pilot` en Vercel Production para u
 - **Funcionalidad.** Una petición que una actividad pide observar es imprescindible: si no se puede crear, la ficha no se entrega (no se quita la instrucción); un esquema exacto del original es la alternativa equivalente cuando existe. Lo que una actividad nombra y el plan no diseña vuelve a Claude en la llamada de reparación.
 - **Gasto.** Una misma imagen sirve a varias actividades; peticiones idénticas comparten una sola generación; nada exacto se pide a OpenAI; se mantienen el tope de imágenes, cuotas y presupuestos.
 - **Compatibilidad.** La política se deduce de la versión del planificador congelada en cada adaptación: las creadas con v1–v4 conservan su comportamiento. El localizador sigue disponible para el resto de Adaptaula.
+
+## ADR-055 — Coordinación Claude → OpenAI → composición sin pasos redundantes ni contratos incompatibles (2026-11-19)
+
+- **Fallo real (adaptación `6d3176db`, planificador v5).** La revisión v2 aprobó las 3 imágenes y se subieron a Storage, pero `generated_assets` rechazó cada fila: su CHECK exige `need_key ~ '^(vis|dec|act)_[0-9]{1,4}$'` y el motor usaba `recreation:vr_N:<huella>`. La excepción era «inesperada» (reintentable): el trabajo de generación se repitió 3 veces, pagando de nuevo briefs e imágenes; en el último intento el brief de Claude (una segunda llamada que reinterpretaba la petición del plan) devolvió un JSON fuera de su contrato, faltó una imagen imprescindible y la ficha no se entregó. Ninguna imagen del motor de recreación se había podido guardar nunca; las pruebas usaban un almacén en memoria.
+- **Decisiones.**
+  1. La clave de cada imagen cumple el contrato de la base de datos (`act_N`, una por petición y tarjeta). Sin migración.
+  2. El brief es lo que Claude diseñó en el plan, convertido por el servidor (`briefOf`): se elimina la llamada de texto por imagen y su modo de fallo. Se valida con las mismas reglas.
+  3. Antes de llamar a OpenAI, la planificación comprueba que cada encargo se puede dibujar y que el total cabe en el tope de imágenes (`briefIssues`); lo que no, vuelve a Claude en la única reparación que ya existía.
+  4. Una imagen aprobada que no se puede guardar es un resultado explícito (`store_failed`), no una excepción: no hay reintentos de pago encadenados. Una imagen aprobada sí guardada se reutiliza en cualquier reintento.
+  5. Si falta un recurso imprescindible, la causa técnica precisa (petición y código) queda en el error del trabajo y en el registro.
+- **Coste.** Por imagen: una llamada de imagen y una revisión (antes: brief + imagen + revisión, y repeticiones). Sin cambios en presupuestos ni topes. Pendiente de estudio: revisar varias imágenes en una sola llamada.
+- **Compatibilidad.** Solo para adaptaciones con la política de imágenes nuevas (planificador v5); las anteriores conservan su comportamiento.

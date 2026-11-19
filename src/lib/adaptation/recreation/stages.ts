@@ -242,7 +242,12 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     const made = versionOf(outcome, { id: randomUUID(), lineId: adaptationId, version: 1, workspaceId: ids.workspaceId, now: new Date().toISOString() }, [], { contract: RECREATION_CONTRACT, verifier: RECREATION_VERIFIER_VERSION, visuals: RECREATION_VISUALS_VERSION, planner: plannerLabel });
     if (!made) throw new AdaptationError("generator_validation", "la recreación no produjo una versión");
     // A sheet that lacks something essential (a picture an activity needs) is never delivered as final.
-    if (made.version.state === "incomplete") throw new AdaptationError("generator_validation", "falta un recurso imprescindible");
+    if (made.version.state === "incomplete") {
+      // The precise technical cause, by request: route and reason codes only (never the material, the plan or a model's words).
+      const causes = outcome.visuals.filter((v) => v.route === "none" && v.essential).map((v) => `${v.request_id}:${(v.attempts.at(-1) ?? "").split(/[ (:]/).filter(Boolean).slice(0, 3).join("_")}`);
+      deps.log?.warn("recreation_incomplete", { adaptationId, missing: causes.join(","), unresolved: outcome.compiled.unresolved.join(",") });
+      throw new AdaptationError("generator_validation", `falta un recurso imprescindible (${causes.join(", ") || `actividades ${outcome.compiled.unresolved.join(", ")}`})`.slice(0, 200));
+    }
     // The sheet that is stored in the adaptation's version carries NO answers (`versionOf` emptied the key and kept it in `internal`).
     const version = await store.persistVersion(adaptationId, run.lease, made.version.student, { plan: stored.plan_fingerprint, review: stored.plan_fingerprint, generation: genFp });
     await store.putRecreationVersion(

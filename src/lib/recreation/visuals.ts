@@ -2,6 +2,7 @@ import "server-only";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { illustrate, type IllustrationDeps } from "@/lib/materials/visuals/illustrate/service";
+import { validateBrief, type BriefDraft } from "@/lib/visuals/illustration";
 import { VISUAL_SPEC_VERSION, type VisualSpec } from "@/lib/visuals/spec";
 import type { RecreationPlan, VisualRequest } from "./contract";
 import { normalize, type Verification } from "./verify";
@@ -153,19 +154,72 @@ function takeImage(ctx: VisualContext): boolean {
   return true;
 }
 
+const KIND: Record<VisualRequest["function"], NonNullable<BriefDraft["kind"]>> = { context: "context_picture", observation: "everyday_scene", vocabulary: "vocabulary_support", process: "process_sequence", comparison: "everyday_scene" };
+const cut = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+
+/**
+ * ADR-055: the illustration brief IS what Claude designed in the plan (purpose, concepts, what to show and avoid, accessibility, the
+ * material's style), turned into the brief contract by the server. No second text call re-interprets it (it cost a call per picture and
+ * failed its own, narrower schema), and it is validated with the same rules BEFORE anything is paid. Text never goes in the picture.
+ */
+export function briefOf(r: VisualRequest, plan: Pick<RecreationPlan, "visual_style">, card: string | null): BriefDraft {
+  const seen = new Set<string>();
+  const elements = [...(card ? [card] : []), ...r.must_show].map((t) => cut(t.trim(), 60)).filter((t) => t && !seen.has(normalize(t)) && seen.add(normalize(t)));
+  return {
+    feasible: true,
+    kind: card ? "vocabulary_support" : KIND[r.function],
+    concept: cut(r.concepts.join(", "), 200),
+    pedagogical_purpose: cut(card ? `${r.purpose} (tarjeta: ${card})` : r.purpose, 300),
+    required_elements: elements.slice(0, 10).map((name) => ({ name, marker: null, label: null })),
+    prohibited_elements: [...ALWAYS_PROHIBITED, ...r.prohibited].map((t) => cut(t, 120)).slice(0, 10),
+    composition: cut(`${card ? `Solo «${card}», centrado, sobre fondo claro; mismo encuadre y escala que las demás tarjetas.` : FUNCTION_ES[r.function]}. Estilo común: ${plan.visual_style}`, 300),
+    detail_level: r.detail,
+    conceptual_constraints: [cut(r.accessibility, 160)],
+    alt_text: cut(card ? `${card}.` : r.alt_text, 300),
+  };
+}
+
+/**
+ * The stored key of a picture of this recreation: within the database's own contract for `generated_assets.need_key`
+ * (`act_N`), one per request and card (request position × 100 + card). Recreation keys used to be rejected by that CHECK: every
+ * approved picture was lost.
+ */
+export const needKeyOf = (plan: Pick<RecreationPlan, "visual_requests">, r: VisualRequest, cardIndex: number | null) => `act_${(plan.visual_requests.findIndex((x) => x.id === r.id) + 1) * 100 + (cardIndex === null ? 0 : cardIndex + 1)}`;
+
+/** Every brief this plan will send, checked before any provider is called: what cannot be drawn goes back to Claude with the plan. */
+export function briefIssues(plan: RecreationPlan, verification: Verification, needs: readonly DimensionKey[]): Array<{ severity: "error"; code: string; path: string; message: string }> {
+  const out: Array<{ severity: "error"; code: string; path: string; message: string }> = [];
+  for (const r of plan.visual_requests) {
+    if (!generable(r).ok) continue;
+    const material = plan.materials.find((m) => m.id === r.for_cards);
+    const cards = material?.kind === "cut_out_cards" ? material.cards : [null];
+    const activity = plan.activities.filter((a) => r.activity_ids.includes(a.id)).map((a) => a.prompt).join(" ");
+    const signatures = answersOf({ verification } as VisualContext, r.activity_ids);
+    const lowDetail = r.detail !== "moderate" || needs.some((n) => LOW_DETAIL.includes(n));
+    for (const card of cards) {
+      const checked = validateBrief(briefOf(r, plan, card), { activity, expectedAnswer: null, signatures, lowDetail });
+      if (!checked.ok) out.push({ severity: "error", code: "illustration_not_drawable", path: `visual_requests.${r.id}`, message: `La ilustración no se puede encargar así (${checked.violations.join(", ")}): sin cantidades, rótulos ni respuestas en lo que debe verse.` });
+    }
+  }
+  const images = plan.visual_requests.filter((r) => generable(r).ok).reduce((n, r) => n + (plan.materials.find((m) => m.id === r.for_cards && m.kind === "cut_out_cards")?.kind === "cut_out_cards" ? (plan.materials.find((m) => m.id === r.for_cards) as { cards: string[] }).cards.length : 1), 0);
+  if (images > RECREATION_VISUAL_LIMITS.maxImages) out.push({ severity: "error", code: "too_many_illustrations", path: "visual_requests", message: `El plan pide ${images} ilustraciones y el máximo es ${RECREATION_VISUAL_LIMITS.maxImages}: comparte imágenes entre actividades o reduce las tarjetas ilustradas.` });
+  return out;
+}
+
 /**
  * One call of the existing illustration pipeline for a request (or for one card of it). The need key carries a fingerprint of
  * what is asked: the same request in a later version REUSES the approved picture (no call); a different one makes a new picture
  * and never overwrites the old (generated_assets rows are inserted, not replaced).
  */
-function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<IllustrationGate, { available: true }>, card: string | null) {
+function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<IllustrationGate, { available: true }>, card: string | null, cardIndex: number | null = null) {
   const signatures = answersOf(ctx, r.activity_ids);
   const activities = ctx.plan.activities.filter((a) => r.activity_ids.includes(a.id));
   const objectives = ctx.analysis.pedagogical_intent.objectives.filter((o) => r.objective_ids.includes(o.id)).map((o) => o.text);
   const prohibited = [...ALWAYS_PROHIBITED, ...r.prohibited];
   const show = card ? [`solo esto: ${card}`, ...r.must_show] : r.must_show;
   const asked = { show, style: ctx.plan.visual_style, kind: r.style, detail: r.detail, prohibited, purpose: r.purpose };
-  const needKey = `recreation:${r.id}:${fingerprint(asked).slice(0, 16)}`;
+  // From ADR-054 on the key follows the database's contract; older adaptations keep theirs (it never stored, see `needKeyOf`).
+  const needKey = ctx.policy === "new_images" ? needKeyOf(ctx.plan, r, cardIndex) : `recreation:${r.id}:${fingerprint(asked).slice(0, 16)}`;
   // One generation per distinct picture of this recreation: the same request (same content, style and card) shares one call.
   const shared = fingerprint(asked);
   const known = ctx.inflight?.get(shared) as ReturnType<typeof illustrate> | undefined;
@@ -187,6 +241,7 @@ function illustrateFor(r: VisualRequest, ctx: VisualContext, gate: Extract<Illus
     expectedAnswer: null,
     signatures,
     lowDetail: r.detail !== "moderate" || ctx.needs.some((n) => LOW_DETAIL.includes(n)),
+    ...(ctx.policy === "new_images" ? { brief: briefOf(r, ctx.plan, card) } : {}),
   });
   ctx.inflight?.set(shared, made);
   return made;
@@ -225,7 +280,7 @@ async function resolveCards(
   const allowed = items.map(() => takeImage(ctx));
   const cards: NonNullable<ResolvedVisual["cards"]> = await mapPool(items, CARD_CONCURRENCY, async (text, i) => {
     if (!allowed[i]) return { text, asset: null, reason: "límite de imágenes" };
-    const outcome = await illustrateFor(r, ctx, gate, text);
+    const outcome = await illustrateFor(r, ctx, gate, text, i);
     return outcome.ok ? { text, asset: { asset_id: outcome.asset.id, sha256: outcome.asset.sha256, width: outcome.asset.width, height: outcome.asset.height }, reason: outcome.cached ? "reutilizada" : "generada y aprobada" } : { text, asset: null, reason: outcome.reason };
   });
   const made = cards.filter((c) => c.asset).length;
