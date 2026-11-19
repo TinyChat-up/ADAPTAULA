@@ -18,7 +18,7 @@ import type { AdaptationStatus } from "../orchestration/state-machine";
 import { NO_ENTITLEMENTS } from "../orchestration/entitlements";
 import type { PipelineVersions } from "../orchestration/versions";
 import type { RecreationServices } from "./services";
-import { usesRecreation } from "./engine";
+import { NEW_IMAGES_FROM, usesRecreation } from "./engine";
 
 /**
  * The two stages of «Hacer magia» when the adaptation was created with the recreation engine (ADR-053). They reuse the adaptation's
@@ -35,6 +35,12 @@ import { usesRecreation } from "./engine";
  */
 
 const SCOPE = "methodological" as const;
+
+/**
+ * ADR-054: from planner v5 on, «Hacer magia» designs NEW pictures (no reuse of the original's, no vision call to locate them) and
+ * never words away a missing one. Read from the frozen prompt version: an adaptation created before keeps what it was created with.
+ */
+export const visualPolicyOf = (versions: PipelineVersions): "reuse_originals" | "new_images" => ((versions.recreation?.planner.prompt_version ?? 1) >= NEW_IMAGES_FROM ? "new_images" : "reuse_originals");
 
 const statusOf = async (store: AdaptationStore, id: string) => ((await store.getPipeline(id))?.adaptation.status ?? "failed") as AdaptationStatus;
 const runIds = (job: NonNullable<Awaited<ReturnType<AdaptationStore["claimStage"]>>>): StageRun["ids"] => ({ workspaceId: job.workspace_id, adaptationId: job.adaptation_id, materialId: job.material_id, jobId: job.id, jobAttempt: job.attempts });
@@ -144,7 +150,7 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     const planner = (deps.recreation as RecreationServices).planner({ versions: loaded.versions, ids, spentUsd: () => plannerSpent(store, adaptationId), record: recorder(store, ids) });
     // A call whose outcome is unknown (the process dies in the middle) is never repeated by itself: the next attempt stops as ambiguous.
     await store.markProviderCall(job.id, job.attempts);
-    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto" });
+    const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto", visualPolicy: visualPolicyOf(loaded.versions) });
     await store.clearProviderCall(job.id, job.attempts);
     if (planned.status !== "planned") {
       // Content-free diagnostics: codes and schema paths only, never plans, quotes, answers or student data.
@@ -225,8 +231,9 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     // Option A first: the original's own pictures that the plan points at, when located and trusted (never blocks the sheet).
     const services = deps.recreation as RecreationServices;
     const originals = [...new Set(plan.visual_requests.flatMap((r) => (r.original_ref ? [r.original_ref] : [])))];
-    const locatedOriginals = originals.length > 0 && services.locatedOriginals ? await services.locatedOriginals({ ids, analysis: loaded.analysis, analysisFingerprint: snapshot.adaptation.analysis_fingerprint ?? "", visualIds: originals }).catch(() => new Set<string>()) : new Set<string>();
-    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate, locatedOriginals });
+    const visualPolicy = visualPolicyOf(loaded.versions);
+    const locatedOriginals = visualPolicy === "reuse_originals" && originals.length > 0 && services.locatedOriginals ? await services.locatedOriginals({ ids, analysis: loaded.analysis, analysisFingerprint: snapshot.adaptation.analysis_fingerprint ?? "", visualIds: originals }).catch(() => new Set<string>()) : new Set<string>();
+    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate, locatedOriginals, visualPolicy });
     await store.clearProviderCall(job.id, job.attempts);
 
     current = await stageKit.advance(store, adaptationId, current, "reviewing_deterministic");

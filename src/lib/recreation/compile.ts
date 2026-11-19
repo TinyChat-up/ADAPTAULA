@@ -35,9 +35,11 @@ export interface CompileInput {
   analysis: MaterialAnalysis;
   presentation: Presentation;
   visuals: readonly ResolvedVisual[];
+  /** Whether a sentence that only points at a missing picture may be removed (adaptations before ADR-054). Default: yes. */
+  reword?: boolean;
 }
 
-export function compileRecreation({ plan, verification, analysis, presentation, visuals }: CompileInput): CompiledRecreation {
+export function compileRecreation({ plan, verification, analysis, presentation, visuals, reword = true }: CompileInput): CompiledRecreation {
   if (!verification.ok) throw new Error("recreation_plan_not_verified");
   let n = 0;
   const id = () => `blk_r${String(++n).padStart(4, "0")}`;
@@ -137,7 +139,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const block = id();
     // What THIS activity may point at is what THIS activity has.
     const available = { picture: hasPicture, scheme: hasPicture || hasFlow, arrows: hasFlow, cards: cards.length > 0 };
-    const resolution = resolveReferences(a, available);
+    const resolution = resolveReferences(a, available, { reword });
     if (resolution.unresolved.length > 0) unresolved.push(label);
     const shown = resolution.unresolved.length === 0 ? resolution : { prompt: a.prompt, steps: a.steps as string[] };
     blocks.push({ id: block, type: "activity", label, prompt: shown.prompt, ...(shown.steps.length ? { steps: shown.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });

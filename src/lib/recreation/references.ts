@@ -51,13 +51,15 @@ export interface ReferenceResolution {
   unresolved: ResourceKind[];
 }
 
-export function resolveReferences(activity: { prompt: string; steps: readonly string[] }, available: Available): ReferenceResolution {
+export function resolveReferences(activity: { prompt: string; steps: readonly string[] }, available: Available, options: { reword?: boolean } = {}): ReferenceResolution {
+  // ADR-054: with new pictures, a missing one is never worded away: the sheet waits (incomplete) instead.
+  const reword = options.reword !== false;
   const unresolved = new Set<ResourceKind>();
   let removed = 0;
   const keep = (s: string) => {
     const missing = missingReferences(s, available);
     if (missing.length === 0) return true;
-    if (merelyPoints(s)) {
+    if (reword && merelyPoints(s)) {
       removed++;
       return false;
     }

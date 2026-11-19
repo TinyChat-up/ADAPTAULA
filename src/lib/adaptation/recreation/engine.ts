@@ -32,4 +32,7 @@ export const RECREATION_APPROACHES = ["auto", "playful", "structured"] as const;
 export type RecreationApproach = (typeof RECREATION_APPROACHES)[number];
 
 /** The recreation planner's prompt version for NEW adaptations (frozen in each one; older versions stay published). */
-export const RECREATION_PLANNER_PROMPT_VERSION = 4;
+export const RECREATION_PLANNER_PROMPT_VERSION = 5;
+
+/** ADR-054: the planner version from which «Hacer magia» designs new pictures instead of reusing the original's. */
+export const NEW_IMAGES_FROM = 5;

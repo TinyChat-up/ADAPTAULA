@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Imágenes nuevas como apoyo pedagógico (ADR-054)
+
+- **Cambios.** Planificador v5; sin reutilización de imágenes del original ni localizador en la recreación; peticiones imprescindibles si la actividad pide observarlas; sin reformular una imagen ausente (ficha incompleta); recursos no diseñados devueltos a Claude; deduplicación de peticiones idénticas; función y conceptos en el brief; hasta 5 peticiones por plan (tope de imágenes sin cambios).
+- **Pruebas.** Sin ejecutar (por indicación): typecheck y lint.
+- **Pendiente.** Validar con proveedores reales; regenerar el registro de demostración.
+
 ## 2026-11-19 · Recursos por actividad y orden de recuperación (PR #105)
 
 - **Cambios.** Cada actividad apunta solo a SUS recursos; recuperación en orden original → OpenAI → esquema por código → reformulación mínima (solo frases que señalan) → incompleta. Opción A conectada en producción. Aviso de materiales por actividad. Originales visibles en pantalla.

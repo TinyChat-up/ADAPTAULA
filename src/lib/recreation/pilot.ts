@@ -5,7 +5,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { compileRecreation, type CompiledRecreation } from "./compile";
 import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from "./contract";
 import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
-import { salvagePlan, sanitizePlan } from "./repair";
+import { salvagePlan, sanitizePlan, undesignedResources } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
 import { resolveVisuals, type IllustrationGate, type ResolvedVisual } from "./visuals";
 
@@ -46,6 +46,8 @@ export interface RecreationRequest {
   plannerLabel: string;
   illustrations?: IllustrationGate;
   locatedOriginals?: ReadonlySet<string>;
+  /** ADR-054: `new_images` for adaptations planned with v5 on (no reuse of the original's pictures; no pointer is removed). */
+  visualPolicy?: "reuse_originals" | "new_images";
 }
 
 export type RecreationOutcome =
@@ -61,7 +63,7 @@ export type PlannedRecreation =
   | { status: "planned"; plan: RecreationPlan; verification: Verification; runs: AIRunRecord[]; calls: number }
   | Exclude<RecreationOutcome, { status: "ready" }>;
 
-export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope"> & { approach?: RecreationApproach }): Promise<PlannedRecreation> {
+export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope" | "visualPolicy"> & { approach?: RecreationApproach }): Promise<PlannedRecreation> {
   const input = recreationInput(request.analysis, request.context, request.scope, request.approach ?? "auto");
   const runs: AIRunRecord[] = [];
   let repairOf: PlanIssue[] | undefined;
@@ -84,12 +86,16 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // The scope is the server's, never the plan's: a curricular plan for a methodological sheet is refused outright.
     if (parsed.data.scope.type === "curricular" && request.scope !== "curricular") return { status: "rejected", plan: parsed.data, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
     // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
-    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope);
+    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: request.visualPolicy === "new_images" });
     let verification = verifyPlan(plan, request.analysis, { needs });
+    const options = { picturesRequired: request.visualPolicy === "new_images" };
     if (!verification.ok) {
-      const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope);
+      const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope, options);
       if (salvaged) ({ plan, verification } = salvaged);
     }
+    // ADR-054: what an activity names must be designed by the plan; otherwise Claude is asked to design it (the one repair call).
+    const undesigned = options.picturesRequired ? undesignedResources(plan) : [];
+    if (undesigned.length > 0) verification = { ...verification, ok: false, issues: [...verification.issues, ...undesigned] };
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
       repairOf = verification.issues.filter((i) => i.severity === "error");
@@ -104,9 +110,9 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
 export async function finishRecreation(planned: Extract<PlannedRecreation, { status: "planned" }>, request: RecreationRequest): Promise<Extract<RecreationOutcome, { status: "ready" }>> {
   const { plan, verification, runs, calls } = planned;
   const needs = request.context.needs.map((n) => n.dimension);
-  const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 } });
+  const visuals = await resolveVisuals({ plan, verification, analysis: request.analysis, needs, locatedOriginals: request.locatedOriginals ?? new Set(), illustrations: request.illustrations ?? { available: false, reason: "disabled" }, planner: request.plannerLabel, imagesUsed: { count: 0 }, policy: request.visualPolicy ?? "reuse_originals", inflight: new Map() });
   const provenance = provenanceOf(plan, verification, visuals, request.plannerLabel);
-  const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals });
+  const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals, reword: request.visualPolicy !== "new_images" });
   const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));
   return { status: "ready", plan, verification, visuals, compiled, provenance, runs, calls, plannerLabel: request.plannerLabel, cardAssets };
 }
