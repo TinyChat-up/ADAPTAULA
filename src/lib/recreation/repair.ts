@@ -2,6 +2,7 @@ import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { RecreationPlan, RecreationScope } from "./contract";
 import { mentions } from "./references";
+import { chooseScheme } from "./relations";
 import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, sourceText, verifyPlan, type Verification } from "./verify";
 
 /**
@@ -21,7 +22,7 @@ import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, s
 
 const uniq = <T>(xs: readonly T[]) => [...new Set(xs)];
 
-export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean } = {}): RecreationPlan {
+export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean; preciseRelations?: boolean } = {}): RecreationPlan {
   const plan: RecreationPlan = structuredClone(input);
   const required = originalOperations(analysis);
   const needSet = new Set(needs);
@@ -87,8 +88,17 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
   // linked to this one too (the renderer prints it once and repeats it if it was on an earlier sheet). Nothing is removed here.
   for (const a of plan.activities) {
     const text = [a.prompt, ...a.steps].join(" ");
-    if ((mentions(text, "scheme") || mentions(text, "arrows")) && a.visual_ids.length === 0 && plan.visuals.length > 0) a.visual_ids = [plan.visuals[0]!.id];
-    if ((mentions(text, "picture") || mentions(text, "scheme")) && !plan.visual_requests.some((r) => r.activity_ids.includes(a.id))) {
+    if ((mentions(text, "scheme") || mentions(text, "arrows")) && a.visual_ids.length === 0 && plan.visuals.length > 0) {
+      if (!options.preciseRelations) a.visual_ids = [plan.visuals[0]!.id];
+      else {
+        // ADR-058: only the scheme that corresponds to THIS activity is linked; with none or several candidates nothing is guessed.
+        const choice = chooseScheme(a, plan, analysis);
+        if (choice.ok && choice.flow.origin === "plan") a.visual_ids = [choice.flow.key.slice(3)];
+      }
+    }
+    // ADR-058: with precise relations a request is never attached to an activity just because it is free; Claude assigns the activities of each
+    // request, and an activity that names a picture nobody designed goes back to Claude (`picture_not_designed`).
+    if (!options.preciseRelations && (mentions(text, "picture") || mentions(text, "scheme")) && !plan.visual_requests.some((r) => r.activity_ids.includes(a.id))) {
       const open = plan.visual_requests.filter((r) => !r.for_cards && r.activity_ids.length < 3);
       const r = open.find((x) => x.objective_ids.some((o) => a.objective_ids.includes(o))) ?? open[0];
       if (r && (mentions(text, "picture") || a.visual_ids.length === 0)) r.activity_ids.push(a.id);
@@ -123,7 +133,7 @@ function scrubExplanation(plan: RecreationPlan, verification: Verification, need
 const activityOf = (path: string) => /^activities\.(ra_[0-9]+)$/.exec(path)?.[1] ?? null;
 
 /** Removes the failing activities (and what only they used) when nothing essential is lost. Null: the plan cannot be saved this way. */
-export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean } = {}): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
+export function salvagePlan(plan: RecreationPlan, verification: Verification, analysis: MaterialAnalysis, needs: readonly DimensionKey[], scope: RecreationScope["type"], options: { picturesRequired?: boolean; preciseRelations?: boolean } = {}): { plan: RecreationPlan; verification: Verification; removed: string[] } | null {
   const needSet = new Set(needs);
   let current = plan;
   let checked = verification;
