@@ -149,3 +149,25 @@ function productionVision(workspaceId: string): VisionLocator | null {
     return null;
   }
 }
+
+/**
+ * The original pictures of a material that the recreation engine may reuse as they are (ADR-053, option A): the same locator «Hacer
+ * magia» already runs (cached per material version) and the same trust rule (a person's crop, or one THIS engine accepted).
+ * Service role, after the adaptation authorised its material. Any failure answers «none»: the next options take over.
+ */
+export async function recreationReadyOriginals(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string }, visualIds: readonly string[]): Promise<Set<string>> {
+  if (visualIds.length === 0) return new Set();
+  try {
+    const summary = await prepareAdaptationVisuals(input);
+    const admin = createAdminClient();
+    const { data: material } = await admin.from("materials").select("workspace_id, content_hash").eq("id", input.materialId).maybeSingle();
+    if (!material || material.workspace_id !== input.workspaceId) return new Set();
+    const accepted = "result" in summary && summary.result ? summary.result.visuals : {};
+    const resolved = await resolveVisuals(visualDeps(admin), { materialId: input.materialId, analysisFingerprint: input.analysisFingerprint, sourceSha256: material.content_hash, visualIds: [...visualIds] });
+    const trusted = (id: string) => resolved.states[id]?.provenance?.method === "human" || ["B", "C"].includes(accepted[id]?.choice ?? "");
+    return new Set(visualIds.filter((id) => resolved.states[id]?.status === "ready" && trusted(id)));
+  } catch (error) {
+    logger.warn("recreation_originals_unavailable", { adaptationId: input.adaptationId, reason: error instanceof Error ? error.name : "unknown" });
+    return new Set();
+  }
+}

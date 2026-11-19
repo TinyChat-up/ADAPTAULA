@@ -4,7 +4,8 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
-import type { ResolvedVisual } from "./visuals";
+import { mentions, resolveReferences } from "./references";
+import { originalFlow, type ResolvedVisual } from "./visuals";
 
 /**
  * A verified recreation plan → the student's material, as existing `MaterialDocument`s printed by the one renderer we have:
@@ -24,6 +25,8 @@ export interface CompiledRecreation {
   materials: MaterialDocument | null;
   /** One row per activity: its printed label, the block it became and what it is traced to. */
   trace: Array<{ activity_id: string; label: string; block_id: string; objective_ids: string[]; operations: string[]; status: VerifiedActivity["status"] }>;
+  /** Activities (by printed label) whose instruction pointed only at something that does not exist: the sheet is not usable as it is. */
+  unresolved: string[];
 }
 
 export interface CompileInput {
@@ -66,9 +69,14 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
   };
   // A CONTEXT picture is looked at before reading (to recognise what the text names): it opens the sheet, before the reading.
   const isContext = (v: ResolvedVisual) => plan.visual_requests.find((r) => r.id === v.request_id)?.function === "context" && plan.reading !== null;
+  // Each resource is printed ONCE; every activity that uses it points at that block (the renderer repeats it on a later sheet).
+  const printed = new Map<string, string>();
   for (const v of visuals.filter((x) => x.source && isContext(x))) {
     const a = plan.activities.find((x) => x.id === v.activity_ids[0]);
-    if (a) blocks.push(imageBlock(v, a));
+    if (!a) continue;
+    const block = imageBlock(v, a);
+    printed.set(`vr:${v.request_id}`, block.id);
+    blocks.push(block);
   }
   if (plan.reading) {
     const source = analysis.texts.find((t) => t.id === plan.reading!.source_ref)!;
@@ -87,25 +95,52 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
 
   const answerKey: MaterialDocument["answer_key"] = [];
   const trace: CompiledRecreation["trace"] = [];
+  const unresolved: string[] = [];
   plan.activities.forEach((a, index) => {
     const label = String(index + 1);
     const t = { origin: "adapted" as const, source_refs: [...a.objective_ids, ...factRefs(a)].slice(0, 12), decision_ids: decisions(a.strategy_ids) };
     const resources: string[] = [];
-    // The other pictures this activity is the first to use, right before it.
-    for (const v of visuals.filter((x) => x.activity_ids[0] === a.id && x.source && !isContext(x))) {
-      const block = imageBlock(v, a);
-      resources.push(block.id);
-      blocks.push(block);
+    const cards = plan.materials.filter((m) => m.activity_id === a.id);
+    // Its cut-out materials are in another document: the activity says so where it is done (before its figures, which travel with it).
+    if (cards.length > 0) {
+      const what = [cards.some((m) => m.kind === "cut_out_cards") ? "las tarjetas" : null, cards.some((m) => m.kind === "sorting_board") ? "el tablero" : null].filter(Boolean).join(" y ");
+      blocks.push({ id: id(), type: "instruction", text: `Para esta actividad usa ${what} del documento «Materiales para recortar».`, trace: { origin: "structure", source_refs: [], decision_ids: [] } });
     }
-    for (const v of plan.visuals.filter((x) => a.visual_ids.includes(x.id))) {
-      const block = id();
-      resources.push(block);
-      blocks.push({ id: block, type: "image", alt_text: `${v.title}: ${v.items.join(", ")}, unidos por flechas.`, source: { kind: "figure", spec: { kind: "flow", spec_version: VISUAL_SPEC_VERSION, title: v.title, items: v.items }, provenance: "reconstruction", visual_ref: v.source_ref }, trace: { origin: "original", source_refs: [v.source_ref], decision_ids: decisions(a.strategy_ids) } });
+    const use = (key: string, make: () => Block) => {
+      const known = printed.get(key);
+      if (known) return void resources.push(known);
+      const made = make();
+      printed.set(key, made.id);
+      resources.push(made.id);
+      blocks.push(made);
+    };
+    // ITS pictures (the requests that list it; a missing essential one prints as a visible gap where it is first used).
+    const mine = visuals.filter((x) => x.source && x.activity_ids.includes(a.id) && (x.source.kind !== "missing" || x.activity_ids[0] === a.id));
+    for (const v of mine) use(`vr:${v.request_id}`, () => imageBlock(v, a));
+    // ITS exact schemes, drawn by code from the original's labels.
+    const flowBlock = (v: { title: string; items: string[]; source_ref: string }) => (): Block => ({ id: id(), type: "image", alt_text: `${v.title}: ${v.items.join(", ")}, unidos por flechas.`, source: { kind: "figure", spec: { kind: "flow", spec_version: VISUAL_SPEC_VERSION, title: v.title, items: v.items }, provenance: "reconstruction", visual_ref: v.source_ref }, trace: { origin: "original", source_refs: [v.source_ref], decision_ids: decisions(a.strategy_ids) } });
+    for (const v of plan.visuals.filter((x) => a.visual_ids.includes(x.id))) use(`rv:${v.id}`, flowBlock(v));
+    const hasPicture = mine.some((v) => v.source!.kind !== "missing");
+    let hasFlow = plan.visuals.some((x) => a.visual_ids.includes(x.id)) || mine.some((v) => v.source!.kind === "figure" && v.source!.spec.kind === "flow");
+    const text = [a.prompt, ...a.steps].join(" ");
+    // Arrows or a scheme it names and does not have: drawn by code from the original's own diagram when the analysis has one.
+    if (!hasFlow && (mentions(text, "arrows") || (mentions(text, "scheme") && !hasPicture))) {
+      const preferred = plan.visual_requests.find((r) => r.activity_ids.includes(a.id) && r.original_ref)?.original_ref ?? null;
+      const flow = originalFlow(analysis, preferred);
+      if (flow) {
+        use(`orig:${flow.visual_ref}`, flowBlock({ title: flow.title, items: flow.items, source_ref: flow.visual_ref }));
+        hasFlow = true;
+      }
     }
     const verified = solutions.get(a.id)!;
     const { response, key } = responseOf(a, verified.solution);
     const block = id();
-    blocks.push({ id: block, type: "activity", label, prompt: a.prompt, ...(a.steps.length ? { steps: a.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
+    // What THIS activity may point at is what THIS activity has.
+    const available = { picture: hasPicture, scheme: hasPicture || hasFlow, arrows: hasFlow, cards: cards.length > 0 };
+    const resolution = resolveReferences(a, available);
+    if (resolution.unresolved.length > 0) unresolved.push(label);
+    const shown = resolution.unresolved.length === 0 ? resolution : { prompt: a.prompt, steps: a.steps as string[] };
+    blocks.push({ id: block, type: "activity", label, prompt: shown.prompt, ...(shown.steps.length ? { steps: shown.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
     if (a.executor.kind === "short_answer" && a.executor.starters.length > 0) blocks.push({ id: id(), type: "sentence_starters", items: a.executor.starters, trace: { origin: "support", source_refs: a.objective_ids, decision_ids: decisions(a.strategy_ids) } });
     answerKey.push({ block_id: block, basis: "new_item", ...key });
     trace.push({ activity_id: a.id, label, block_id: block, objective_ids: a.objective_ids, operations: a.operations, status: verified.status });
@@ -119,7 +154,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     pages: [{ blocks }],
     answer_key: answerKey,
   });
-  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace };
+  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace, unresolved };
 }
 
 /** The manipulatives on their own sheet, by activity: what to do, then the cards (large, with cutting lines) and the board. */

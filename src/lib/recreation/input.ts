@@ -11,9 +11,8 @@ import { originalOperations } from "./verify";
  * analysis, which travels as untrusted data. The expected answers the analysis may have inferred are left out: the planner must not
  * build activities on answers nobody verified.
  */
-/** The teacher's optional orientation (ADR-053): never above the student's needs or the curriculum. */
-export const RECREATION_APPROACHES = ["auto", "playful", "structured"] as const;
-export type RecreationApproach = (typeof RECREATION_APPROACHES)[number];
+import { RECREATION_APPROACHES, type RecreationApproach } from "@/lib/adaptation/recreation/engine";
+export { RECREATION_APPROACHES, type RecreationApproach };
 
 export interface RecreationInput {
   context: {

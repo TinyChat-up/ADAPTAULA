@@ -167,7 +167,7 @@ describe("recorrido completo: planificar, generar y entregar", () => {
 });
 
 describe("un plan que no supera las comprobaciones esenciales no se entrega ni se cobra", () => {
-  it("falla la planificación: no hay versión ni plan guardado, ninguna imagen y la unidad sigue reservada", async () => {
+  it("falla la planificación: no hay versión ni plan guardado, ninguna imagen y la unidad se devuelve", async () => {
     const bad = structuredClone(POND_RECREATION_PLAN);
     bad.activities[4]!.steps = ["Debe darte 12."];
     const t = await teacher({ plans: { plans: [bad, bad] } });
@@ -178,7 +178,8 @@ describe("un plan que no supera las comprobaciones esenciales no se entrega ni s
     expect(await q("select 1 from public.adaptation_versions where adaptation_id = $1", [id])).toHaveLength(0);
     expect(await q("select 1 from public.recreation_plans where adaptation_id = $1", [id])).toHaveLength(0);
     expect(t.stack.calls.image ?? 0).toBe(0);
-    expect(await entitlement(id)).toBe("reserved");
+    // A failed «Hacer magia» never costs a unit: it goes back (migration 038).
+    expect(await entitlement(id)).toBe("released");
   });
 });
 

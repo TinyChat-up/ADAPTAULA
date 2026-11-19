@@ -5,9 +5,7 @@ import { MODEL_ALIASES, type ModelSelection } from "@/lib/ai/types";
 import { PEDAGOGICAL_REVIEW_SCHEMA_VERSION } from "@/lib/schemas/pedagogical-review";
 import { MATERIAL_DOCUMENT_SCHEMA_VERSION } from "@/lib/schemas/material-document";
 import { ADAPTATION_PLAN_SCHEMA_VERSION } from "@/lib/schemas/adaptation-plan";
-import { RECREATION_PLANNER_V3 } from "@prompts/recreation-planner/v3";
-import { RECREATION_APPROACHES, type RecreationApproach } from "@/lib/recreation/input";
-import { RECREATION_ENGINE } from "../recreation/engine";
+import { RECREATION_APPROACHES, RECREATION_ENGINE, RECREATION_PLANNER_PROMPT_VERSION, type RecreationApproach } from "../recreation/engine";
 
 /**
  * Versions are resolved ONCE, when an adaptation is created, and persisted with it (`adaptations.pipeline_versions`). Every
@@ -116,7 +114,7 @@ function recreationVersions(env: ModelEnv) {
     image = null;
   }
   return {
-    planner: { prompt_version: RECREATION_PLANNER_V3.version, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
+    planner: { prompt_version: RECREATION_PLANNER_PROMPT_VERSION, schema_version: 1, max_output_tokens: RECREATION_PLANNER_MAX_OUTPUT_TOKENS, selection: frozen(resolveModel("STANDARD", env)) },
     text: frozen(resolveModel("STANDARD", env)),
     image: image ? frozen(image) : null,
   };

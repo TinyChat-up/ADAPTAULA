@@ -17,6 +17,7 @@ import { FailureBudgetError, InvalidStateError, LeaseLostError, NotFoundError, t
 import type { AdaptationStatus } from "../orchestration/state-machine";
 import { NO_ENTITLEMENTS } from "../orchestration/entitlements";
 import type { PipelineVersions } from "../orchestration/versions";
+import type { RecreationServices } from "./services";
 import { usesRecreation } from "./engine";
 
 /**
@@ -140,7 +141,7 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
     if ((await statusOf(store, adaptationId)) === "queued") await store.transition(adaptationId, "queued", "planning");
     if (!deps.recreation) throw new AIError("not_configured", "the recreation engine is not configured");
     await store.setStep(job.id, job.attempts, "planning", 30);
-    const planner = deps.recreation.planner({ versions: loaded.versions, ids, spentUsd: () => plannerSpent(store, adaptationId), record: recorder(store, ids) });
+    const planner = (deps.recreation as RecreationServices).planner({ versions: loaded.versions, ids, spentUsd: () => plannerSpent(store, adaptationId), record: recorder(store, ids) });
     // A call whose outcome is unknown (the process dies in the middle) is never repeated by itself: the next attempt stops as ambiguous.
     await store.markProviderCall(job.id, job.attempts);
     const planned = await planRecreation(planner, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, approach: loaded.versions.recreation?.approach ?? "auto" });
@@ -216,12 +217,16 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     let current = await statusOf(store, adaptationId);
     current = await stageKit.advance(store, adaptationId, current, "generating");
     await store.setStep(job.id, job.attempts, "generating", 30);
-    const gate = await deps.recreation.illustrations({ versions: loaded.versions, ids });
+    const gate = await (deps.recreation as RecreationServices).illustrations({ versions: loaded.versions, ids });
     const plannerLabel = `recreation_planner v${recreation.planner.prompt_version} · ${recreation.planner.selection.model}`;
     // The pictures are the paid part: a call whose outcome is unknown is never repeated by itself, and approved pictures are
     // reused (the same need, brief and style) if this stage is run again.
     await store.markProviderCall(job.id, job.attempts);
-    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate });
+    // Option A first: the original's own pictures that the plan points at, when located and trusted (never blocks the sheet).
+    const services = deps.recreation as RecreationServices;
+    const originals = [...new Set(plan.visual_requests.flatMap((r) => (r.original_ref ? [r.original_ref] : [])))];
+    const locatedOriginals = originals.length > 0 && services.locatedOriginals ? await services.locatedOriginals({ ids, analysis: loaded.analysis, analysisFingerprint: snapshot.adaptation.analysis_fingerprint ?? "", visualIds: originals }).catch(() => new Set<string>()) : new Set<string>();
+    const outcome = await finishRecreation({ status: "planned", plan, verification, runs: [], calls: 0 }, { analysis: loaded.analysis, context: loaded.context, scope: SCOPE, plannerLabel, illustrations: gate, locatedOriginals });
     await store.clearProviderCall(job.id, job.attempts);
 
     current = await stageKit.advance(store, adaptationId, current, "reviewing_deterministic");

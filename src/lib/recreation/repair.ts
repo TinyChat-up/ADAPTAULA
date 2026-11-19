@@ -1,6 +1,7 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { RecreationPlan, RecreationScope } from "./contract";
+import { mentions } from "./references";
 import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, sourceText, verifyPlan, type Verification } from "./verify";
 
 /**
@@ -82,6 +83,17 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
       for_cards: target && target.kind === "cut_out_cards" && ids.includes(target.activity_id) ? r.for_cards : null,
     }];
   });
+  // Each activity is tied to the resources it mentions (ADR-053): a scheme or a picture the plan declared for another activity is
+  // linked to this one too (the renderer prints it once and repeats it if it was on an earlier sheet). Nothing is removed here.
+  for (const a of plan.activities) {
+    const text = [a.prompt, ...a.steps].join(" ");
+    if ((mentions(text, "scheme") || mentions(text, "arrows")) && a.visual_ids.length === 0 && plan.visuals.length > 0) a.visual_ids = [plan.visuals[0]!.id];
+    if ((mentions(text, "picture") || mentions(text, "scheme")) && !plan.visual_requests.some((r) => r.activity_ids.includes(a.id))) {
+      const open = plan.visual_requests.filter((r) => !r.for_cards && r.activity_ids.length < 3);
+      const r = open.find((x) => x.objective_ids.some((o) => a.objective_ids.includes(o))) ?? open[0];
+      if (r && (mentions(text, "picture") || a.visual_ids.length === 0)) r.activity_ids.push(a.id);
+    }
+  }
   plan.guide.per_activity = plan.guide.per_activity.filter((g) => activities.has(g.activity_id));
   plan.explanation.why = plan.explanation.why.map((w) => ({ ...w, needs: w.needs.filter((n) => needSet.has(n)) })).filter((w) => w.needs.length > 0);
   return plan;

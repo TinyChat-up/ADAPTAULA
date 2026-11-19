@@ -29,7 +29,7 @@ import {
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { serviceDeps } from "@/lib/adaptation/orchestration/server";
 import { CREATION_MODES } from "@/lib/adaptation/orchestration/store";
-import { RECREATION_APPROACHES } from "@/lib/recreation/input";
+import { RECREATION_APPROACHES } from "@/lib/adaptation/recreation/engine";
 
 /**
  * Public application commands for the adaptation pipeline. Every action: resolves the actor on the SERVER (workspace and role never

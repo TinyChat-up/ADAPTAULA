@@ -71,7 +71,7 @@
       },
       "source": {
        "kind": "generated",
-       "asset_id": "00000000-0000-4000-8000-000000000001",
+       "asset_id": "00000000-0000-4000-8000-000000000004",
        "sha256": "28874001b3f6462fc495c356d09892f937b40899d2f796e5072334605d02f945",
        "decision_id": "dec_3"
       },
@@ -85,10 +85,20 @@
        "source_refs": [],
        "decision_ids": []
       },
-      "text": "Lee el texto por partes. Después, haz las actividades."
+      "text": "Esta ficha usa materiales para recortar. Imprime también el documento «Materiales para recortar»."
      },
      {
       "id": "blk_r0004",
+      "type": "instruction",
+      "trace": {
+       "origin": "structure",
+       "source_refs": [],
+       "decision_ids": []
+      },
+      "text": "Lee el texto por partes. Después, haz las actividades."
+     },
+     {
+      "id": "blk_r0005",
       "type": "reading_text",
       "trace": {
        "origin": "original",
@@ -112,7 +122,7 @@
       ]
      },
      {
-      "id": "blk_r0005",
+      "id": "blk_r0006",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -168,7 +178,7 @@
       }
      },
      {
-      "id": "blk_r0006",
+      "id": "blk_r0007",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -188,7 +198,7 @@
       }
      },
      {
-      "id": "blk_r0007",
+      "id": "blk_r0008",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -206,7 +216,7 @@
       ]
      },
      {
-      "id": "blk_r0008",
+      "id": "blk_r0009",
       "type": "image",
       "trace": {
        "origin": "original",
@@ -237,7 +247,7 @@
       "alt_text": "Esquema del estanque: Algas, Larvas de insectos, Ranas, Garzas, unidos por flechas."
      },
      {
-      "id": "blk_r0009",
+      "id": "blk_r0010",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -253,7 +263,7 @@
       "label": "3",
       "prompt": "Mira el esquema. ¿Qué indica la flecha que va de las algas a las larvas de insectos? Marca una respuesta.",
       "resource_block_ids": [
-       "blk_r0008"
+       "blk_r0009"
       ],
       "response": {
        "kind": "choice",
@@ -279,7 +289,7 @@
       }
      },
      {
-      "id": "blk_r0010",
+      "id": "blk_r0011",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -298,7 +308,7 @@
       }
      },
      {
-      "id": "blk_r0011",
+      "id": "blk_r0012",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -315,7 +325,7 @@
       ]
      },
      {
-      "id": "blk_r0012",
+      "id": "blk_r0013",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -351,7 +361,7 @@
       }
      },
      {
-      "id": "blk_r0013",
+      "id": "blk_r0014",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -370,7 +380,7 @@
       }
      },
      {
-      "id": "blk_r0014",
+      "id": "blk_r0015",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -387,7 +397,7 @@
       ]
      },
      {
-      "id": "blk_r0015",
+      "id": "blk_r0016",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -406,7 +416,7 @@
       }
      },
      {
-      "id": "blk_r0016",
+      "id": "blk_r0017",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -513,9 +523,9 @@
          "Temperatura"
         ],
         "pictures": [
+         "00000000-0000-4000-8000-000000000001",
          "00000000-0000-4000-8000-000000000002",
          "00000000-0000-4000-8000-000000000003",
-         "00000000-0000-4000-8000-000000000004",
          "00000000-0000-4000-8000-000000000005",
          "00000000-0000-4000-8000-000000000006",
          "00000000-0000-4000-8000-000000000007"
@@ -638,25 +648,25 @@
  },
  "assets": [
   {
-   "asset_id": "00000000-0000-4000-8000-000000000001",
+   "asset_id": "00000000-0000-4000-8000-000000000004",
    "sha256": "28874001b3f6462fc495c356d09892f937b40899d2f796e5072334605d02f945",
    "width": 1536,
    "height": 1024
   },
   {
-   "asset_id": "00000000-0000-4000-8000-000000000002",
+   "asset_id": "00000000-0000-4000-8000-000000000001",
    "sha256": "db0815ad7fdcdff6ec30a7944f1d6e4542e4d9fcf375fd79d4e4cd452e4ad4da",
    "width": 1024,
    "height": 1024
   },
   {
-   "asset_id": "00000000-0000-4000-8000-000000000003",
+   "asset_id": "00000000-0000-4000-8000-000000000002",
    "sha256": "fad708b506047cf004a0161239b0e5348a869e5b42d5b760046484919660203e",
    "width": 1024,
    "height": 1024
   },
   {
-   "asset_id": "00000000-0000-4000-8000-000000000004",
+   "asset_id": "00000000-0000-4000-8000-000000000003",
    "sha256": "ac64b7ff6cc02161b3f322da38e3396d897e3fedd0697c9e8cad4d858bd141d1",
    "width": 1024,
    "height": 1024

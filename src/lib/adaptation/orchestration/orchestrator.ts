@@ -39,7 +39,7 @@ import { buildReviewScoped, withSemanticChecks } from "../reviewer";
 import { SEMANTIC_POLICY_VERSION, buildSemanticScope, effectiveReviewerMode, judgeSupports, restrictionFor, semanticChecks, semanticFlags, summarize, type ReviewerV2Mode, type SemanticRecord, type SemanticRecordSet } from "../support-semantic";
 import { preservationRefs, withOriginals } from "../restoration";
 import { RejectedStageOutput, type AdaptationPlanner, type MaterialGenerator, type PedagogicalReviewer, type StageRunRecord } from "../services";
-import type { RecreationServices } from "../recreation/services";
+import type { RecreationServicesPort } from "../recreation/port";
 import { NO_ENTITLEMENTS, type AdaptationEntitlements } from "./entitlements";
 import { AdaptationError, FAILURE_KIND, classifyAIFailure, type AdaptationErrorCode, type Stage } from "./errors";
 import { EntitlementError, FailureBudgetError, GenerationLimitError, InvalidStateError, LeaseLostError, NotFoundError, type AdaptationStore, type AiRunRow, type ClaimedStage, type CreationMode, type PipelineSnapshot } from "./store";
@@ -107,7 +107,7 @@ export interface OrchestratorDeps {
    */
   reviewerV2?: ReviewerV2Mode;
   /** ADR-053: the recreation engine's services (models and illustration gate). Absent: an adaptation created with that engine cannot run. */
-  recreation?: RecreationServices;
+  recreation?: RecreationServicesPort;
   visuals?: { resolve(input: { workspaceId: string; materialId: string; adaptationId: string; analysis: MaterialAnalysis; analysisFingerprint: string; document: MaterialDocument; requiredVisuals: readonly string[]; stage: string | null; grade: string | null; subject: string | null; functionalNeeds: readonly string[]; visualSupports?: boolean; deadline?: number | null }): Promise<VisualResolutionPlan> };
 }
 

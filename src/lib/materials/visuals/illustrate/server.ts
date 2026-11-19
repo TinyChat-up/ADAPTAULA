@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { IMAGE_BRIEF_V1 } from "@prompts/image-brief/v1";
 import { IMAGE_RENDER_V1 } from "@prompts/image-render/v1";
 import { IMAGE_REVIEW_V1 } from "@prompts/image-review/v1";
+import { IMAGE_REVIEW_V2 } from "@prompts/image-review/v2";
 import { estimateImageCostUsd } from "@/lib/ai/costs";
 import { toAIError } from "@/lib/ai/errors";
 import { resolveModel, type ModelEnv } from "@/lib/ai/registry";
@@ -83,7 +84,7 @@ async function availableForWorkspace(ids: { workspaceId: string; adaptationId: s
   if (effective?.slug !== "max" || effective?.features?.image_generation !== true || !(Number(effective.monthly_images) > 0)) return { available: false, reason: (await anyPlanOffersIllustrations(admin)) ? "plan" : "not_offered" };
   const planBudget = Number(effective.features?.illustration_budget_usd);
   if (recreation) {
-    const engineDeps = await illustrationDeps(ids, recreation.budgetUsd, { perAdaptationMax: recreation.maxImages });
+    const engineDeps = await illustrationDeps(ids, recreation.budgetUsd, { perAdaptationMax: recreation.maxImages, reviewV2: true });
     return engineDeps ? { available: true, deps: engineDeps, perAdaptation: recreation.maxImages } : { available: false, reason: "service" };
   }
   const deps = await illustrationDeps(ids, Number.isFinite(planBudget) && planBudget > 0 ? planBudget : ILLUSTRATION_BUDGET.perAdaptationUsd);
@@ -97,7 +98,8 @@ async function anyPlanOffersIllustrations(admin: ReturnType<typeof createAdminCl
   return !error && (data?.length ?? 0) > 0;
 }
 
-async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number, options: { perAdaptationMax?: number } = {}): Promise<IllustrationDeps | null> {
+async function illustrationDeps(ids: { workspaceId: string; adaptationId: string; materialId: string }, budgetUsd: number, options: { perAdaptationMax?: number; reviewV2?: boolean } = {}): Promise<IllustrationDeps | null> {
+  const reviewPrompt = options.reviewV2 ? IMAGE_REVIEW_V2 : IMAGE_REVIEW_V1;
   const perAdaptationMax = options.perAdaptationMax ?? ILLUSTRATION_LIMITS.perAdaptation;
   if (!getFlags().aiImagesEnabled) return null;
   const env = serverEnv() as ModelEnv;
@@ -129,7 +131,7 @@ async function illustrationDeps(ids: { workspaceId: string; adaptationId: string
       }
     },
     review: ({ png, stage, activity, brief, timeoutMs }) =>
-      callStructured(textProvider, textSelection, "image_review", IMAGE_REVIEW_V1, [{ type: "image", mediaType: "image/png", data: png }, { type: "text", text: IMAGE_REVIEW_V1.buildUserText({ stage, activity, brief }) }], 1500, AbortSignal.timeout(timeoutMs)),
+      callStructured(textProvider, textSelection, "image_review", reviewPrompt, [{ type: "image", mediaType: "image/png", data: png }, { type: "text", text: reviewPrompt.buildUserText({ stage, activity, brief }) }], 1500, AbortSignal.timeout(timeoutMs)),
     store: {
       async find(adaptationId, needKey) {
         // The illustration already approved for this need (a resumed job, a correction cycle): reused, never paid twice.

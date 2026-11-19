@@ -2,6 +2,7 @@ import "server-only";
 import { AIError } from "@/lib/ai/errors";
 import { providerFor } from "@/lib/ai/runtime";
 import { recreationIllustrationAvailability } from "@/lib/materials/visuals/illustrate/server";
+import { recreationReadyOriginals } from "@/lib/materials/visuals/auto/server";
 import { createRecreationPlanner, RECREATION_PLANNER_LIMITS } from "@/lib/recreation/planner";
 import { RECREATION_VISUAL_LIMITS } from "@/lib/recreation/visuals";
 import { modelSelectionOf } from "../orchestration/versions";
@@ -37,4 +38,5 @@ export const productionRecreation = (): RecreationServices => ({
     if (!availability.available) return { available: false, reason: availability.reason };
     return { available: true, deps: availability.deps, workspaceId: ids.workspaceId, recreationId: ids.adaptationId, producer: "recreation_visuals v1 · illustrate (OpenAI)" };
   },
+  locatedOriginals: ({ ids, analysis, analysisFingerprint, visualIds }) => recreationReadyOriginals({ ...ids, analysis, analysisFingerprint }, visualIds),
 });

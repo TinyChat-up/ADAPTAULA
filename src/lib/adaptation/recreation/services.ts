@@ -1,6 +1,7 @@
 import type { AIRunRecord } from "@/lib/ai/types";
 import type { Planner } from "@/lib/recreation/pilot";
 import type { IllustrationGate } from "@/lib/recreation/visuals";
+import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { PipelineVersions } from "../orchestration/versions";
 
 /**
@@ -19,4 +20,6 @@ export interface RecreationServices {
   planner(input: { versions: PipelineVersions; ids: RecreationRunIds; spentUsd(): Promise<number>; record(run: AIRunRecord): Promise<void> }): Planner;
   /** The illustration gate (flag, image pilot, plan, monthly quota, budget): unavailable means a sheet without generated pictures. */
   illustrations(input: { versions: PipelineVersions; ids: RecreationRunIds }): Promise<IllustrationGate>;
+  /** Option A: which of these original pictures are located and trusted, to be reused as they are. Absent: none. */
+  locatedOriginals?(input: { ids: RecreationRunIds; analysis: MaterialAnalysis; analysisFingerprint: string; visualIds: readonly string[] }): Promise<ReadonlySet<string>>;
 }

@@ -18,6 +18,8 @@ export interface RecreationScreenProps {
   view: RecreationView;
   /** Where each stored picture is read from (a signed URL of the private asset, or the pinned bytes): never generated again. */
   imageSrc: Readonly<Record<string, string>>;
+  /** The original's own pictures reused as they are (option A), by visual id: the authorised crop route. */
+  originals?: Readonly<Record<string, string>>;
   subjectLabel: string;
   /** Optional actions; absent ones are not shown. */
   downloads?: { sheet?: string; materials?: string };
@@ -28,10 +30,11 @@ export interface RecreationScreenProps {
   restore?: (version: number) => ReactNode;
 }
 
-export function RecreationScreen({ view, imageSrc, subjectLabel, downloads, regenerate, versionHref, restore }: RecreationScreenProps) {
+export function RecreationScreen({ view, imageSrc, originals = {}, subjectLabel, downloads, regenerate, versionHref, restore }: RecreationScreenProps) {
   const generated = Object.fromEntries(view.assets.map((a) => [a.asset_id, { src: imageSrc[a.asset_id] ?? "", widthMm: generatedWidthMm(a.width, a.height) }]));
   // The same projection as the viewer, the editor and the PDF (one renderer for screen and print).
-  const student = sheetModel({ document: view.student, subjectName: null, generated, deferred: [] }, "student").model;
+  const assets = Object.fromEntries(Object.entries(originals).map(([visualId, src]) => [visualId, { src }]));
+  const student = sheetModel({ document: view.student, subjectName: null, generated, assets, deferred: [] }, "student").model;
   const materials = view.materials ? sheetModel({ document: view.materials, subjectName: null, deferred: [], generated }, "student").model : null;
   const activities = view.explanation.observe.length;
 
