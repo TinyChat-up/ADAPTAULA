@@ -67,6 +67,8 @@ export interface MockOptions {
   review?: "approve" | "reject";
   budgetUsd?: number;
   brief?: unknown;
+  /** The frozen planner prompt version (v1 by default): v7 asks for, and keeps, new schemes (`diagrams`). */
+  promptVersion?: number;
 }
 
 export interface MockRun {
@@ -97,7 +99,7 @@ export function mockStack(options: MockOptions = {}) {
   const provider = new MockProvider({ fixtures });
   const runs: AIRunRecord[] = [];
   const record = async (run: AIRunRecord) => void runs.push(run);
-  const planner = createRecreationPlanner({ provider, selection: MOCK_TEXT, budget: { limitUsd: options.budgetUsd ?? 0.6, spentUsd: async () => 0 }, recordAiRun: record });
+  const planner = createRecreationPlanner({ provider, selection: MOCK_TEXT, budget: { limitUsd: options.budgetUsd ?? 0.6, spentUsd: async () => 0 }, recordAiRun: record, ...(options.promptVersion ? { promptVersion: options.promptVersion } : {}) });
 
   const assets = new Map<string, { sha256: string; bytes: Uint8Array; width: number; height: number }>();
   const stored = new Map<string, StoredIllustration>();

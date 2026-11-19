@@ -44,6 +44,7 @@ Código: `src/lib/recreation/{contract,verify,planner,visuals,compile,input,pilo
 | `MaterialDocument` y su clave separada | La ficha nueva es un documento normal. Las soluciones cerradas van en `answer_key`, que la vista del alumno nunca imprime. | Ninguno |
 | Formatos de respuesta `match`, `sequence`, `choice`, `true_false`, `fields`, `lines` y `sentence_starters` | Se rellenan con los ejecutores. | Ninguno |
 | `VisualSpec` `flow` | Esquema del original redibujado con sus rótulos. Sin modelo de imagen. | Ninguno |
+| `VisualSpec` `diagram` | Esquema NUEVO diseñado por Claude (v7, ADR-059): cadena, ciclo, jerarquía o grupos; cada rótulo y relación respaldados por un hecho citado. Sin modelo de imagen. | Ninguno |
 | Renderer CLARO, paginación, motor Chromium y validación PDF | Ficha y guía se imprimen igual que cualquier adaptación. | Ninguno |
 | Revisión semántica (`pedagogical_reviewer@v2`) | **No** se usa aún. Lo semántico (por ejemplo, pistas cruzadas entre actividades) queda para la guía y el docente. | Pendiente |
 | Almacenamiento, permisos, cuotas, versiones y `ai_runs` | **No** se conectan en el piloto (sin rutas ni tablas nuevas). La salida son dos `MaterialDocument`, la misma unidad que ya persiste `adaptation_versions`. | Siguiente entrega |
@@ -59,7 +60,7 @@ Siete partes separadas:
 3. **Estrategias metodológicas** (`strategies`): método y necesidades del contexto que lo justifican. Una necesidad que no está en el contexto se rechaza.
 4. **Actividades nuevas** (`activities`): cada una cita sus objetivos, operaciones y estrategias. Si su enunciado se parece demasiado a uno del original (Jaccard ≥ 0,5), se rechaza por no ser nueva.
 5. **Formatos y soluciones** (`executor` + `facts`): ver la tabla siguiente.
-6. **Materiales** (`visuals`, `materials`): `flow` con los rótulos del original, comprobados; tarjetas para recortar (por ahora como estructura, se imprimen en la guía).
+6. **Materiales** (`visuals`, `diagrams`, `materials`): `flow` con los rótulos del original, comprobados; desde v7, esquemas nuevos (`diagrams`) anclados a hechos citados (ADR-059); tarjetas para recortar (por ahora como estructura, se imprimen en la guía).
 7. **Docente** (`guide`): visión general y qué observar en cada actividad.
 
 ### Ejecutores y cómo se conoce la solución

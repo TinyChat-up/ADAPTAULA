@@ -1,8 +1,10 @@
 import type { Block } from "@/lib/schemas/material-document";
+import type { DiagramSpec } from "@/lib/visuals/diagram";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { CompiledRecreation } from "./compile";
 import type { RecreationPlan } from "./contract";
-import { chooseScheme, originalFlowOf, planFlow, type Flow } from "./relations";
+import { declaredSchemes, diagramSpecOf } from "./diagrams";
+import { chooseScheme, diagramFlow, originalFlowOf, planFlow, type Flow } from "./relations";
 import { normalize } from "./verify";
 import type { ResolvedVisual } from "./visuals";
 
@@ -25,6 +27,12 @@ export interface FidelityIssue {
 const has = (haystack: string, text: string) => normalize(haystack).includes(normalize(text));
 const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((t, i) => normalize(t) === normalize(b[i]!));
 
+/** Two drawings of a new scheme are the same when every node, relation and group is, in the same order (key order does not matter). */
+const sameDiagram = (x: DiagramSpec, y: DiagramSpec) =>
+  x.layout === y.layout && (x.title ?? "") === (y.title ?? "") && same(x.groups, y.groups) &&
+  x.nodes.length === y.nodes.length && x.nodes.every((n, i) => n.id === y.nodes[i]!.id && n.label === y.nodes[i]!.label && (n.group ?? null) === (y.nodes[i]!.group ?? null)) &&
+  x.edges.length === y.edges.length && x.edges.every((e, i) => e.from === y.edges[i]!.from && e.to === y.edges[i]!.to && (e.label ?? null) === (y.edges[i]!.label ?? null));
+
 type ImageBlock = Extract<Block, { type: "image" }>;
 const isImage = (b: Block | undefined): b is ImageBlock => b?.type === "image";
 
@@ -42,6 +50,10 @@ export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation
 
   /** The resource the plan assigns to a key, from the plan alone (independent of how the blocks were assembled). */
   const expectedScheme = (key: string): Flow | null => {
+    if (key.startsWith("rd:")) {
+      const d = plan.diagrams?.find((x) => x.id === key.slice(3));
+      return d ? diagramFlow(d) : null;
+    }
     if (key.startsWith("rv:")) {
       const v = plan.visuals.find((x) => x.id === key.slice(3));
       return v ? planFlow(v) : null;
@@ -94,7 +106,7 @@ export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation
     }
 
     // Its schemes: those it lists, and the one that corresponds to the relation it depends on.
-    const wanted = new Set(a.visual_ids.map((id) => `rv:${id}`));
+    const wanted = new Set(declaredSchemes(plan, a));
     const needsRelation = plan.visual_requests.some((r) => r.activity_ids.includes(a.id) && (r.needs_exact.arrows || r.needs_exact.labels));
     if (needsRelation && wanted.size === 0) {
       const choice = chooseScheme(a, plan, analysis);
@@ -105,12 +117,18 @@ export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation
       const b = blockOf(key);
       if (!expected) { lose(`el esquema «${key}» no existe en el plan`); continue; }
       if (!b || !isImage(b) || !used.includes(key) || !linked.has(b.id)) { lose(`el esquema «${key.slice(key.indexOf(":") + 1)}» no está ligado a la actividad`); continue; }
+      if (expected.diagram) {
+        // A new scheme: the drawing is exactly its design (nodes, relations with their labels, groups), nothing swapped or reordered.
+        const ok = b.source.kind === "figure" && b.source.spec.kind === "diagram" && sameDiagram(b.source.spec, diagramSpecOf(expected.diagram));
+        if (!ok) lose(`el esquema ligado no es «${key.slice(3)}»: sus nodos o sus relaciones no coinciden con el diseño`);
+        continue;
+      }
       const drawn = flowOf(b);
       if (!drawn || !same(drawn.items, expected.items) || drawn.ref !== expected.source_ref) lose(`el esquema ligado no es «${key.slice(key.indexOf(":") + 1)}»: sus rótulos o su origen no coinciden con el plan`);
     }
     // Nothing else of the plan's schemes may be linked in its place (a scheme the activity does not use).
     for (const key of used) {
-      if (!key.startsWith("rv:") && !key.startsWith("orig:")) continue;
+      if (!key.startsWith("rv:") && !key.startsWith("orig:") && !key.startsWith("rd:")) continue;
       if (!wanted.has(key)) lose(`tiene ligado el esquema «${key.slice(key.indexOf(":") + 1)}», que no le corresponde`);
     }
   });

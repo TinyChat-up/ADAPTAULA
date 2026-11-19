@@ -32,10 +32,13 @@ export const RECREATION_APPROACHES = ["auto", "playful", "structured"] as const;
 export type RecreationApproach = (typeof RECREATION_APPROACHES)[number];
 
 /** The recreation planner's prompt version for NEW adaptations (frozen in each one; older versions stay published). */
-export const RECREATION_PLANNER_PROMPT_VERSION = 6;
+export const RECREATION_PLANNER_PROMPT_VERSION = 7;
 
 /** ADR-054: the planner version from which «Hacer magia» designs new pictures instead of reusing the original's. */
 export const NEW_IMAGES_FROM = 5;
 
 /** ADR-056/057: the planner version from which the resource tools adapt to Claude's plan (v5 keeps the rules it was created with). */
 export const DESIGNED_FROM = 6;
+
+/** ADR-059: the planner version from which Claude may design NEW exact schemes (`diagrams`), drawn by code. v1–v6 have none. */
+export const DIAGRAMS_FROM = 7;

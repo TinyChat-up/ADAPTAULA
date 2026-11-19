@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DiagramSpecSchema, describeDiagram, diagramIssues } from "./diagram";
 
 /**
  * VisualSpec v1: a simple mathematical figure as DATA, drawn by our own deterministic SVG renderer (never a diffusion model,
@@ -11,7 +12,7 @@ import { z } from "zod";
  */
 
 export const VISUAL_SPEC_VERSION = 1 as const;
-export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow", "cut_cards", "sort_board"] as const;
+export const VISUAL_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "steps", "cards", "flow", "cut_cards", "sort_board", "diagram"] as const;
 export type VisualSpecKind = (typeof VISUAL_SPEC_KINDS)[number];
 
 const Count = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -71,7 +72,7 @@ export const CutCardsSpecSchema = z.object({
 export const SortBoardSpecSchema = z.object({ ...base, kind: z.literal("sort_board"), columns: z.array(SupportText(30)).min(2).max(4) });
 
 export const VisualSpecSchema = z
-  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema, CutCardsSpecSchema, SortBoardSpecSchema])
+  .discriminatedUnion("kind", [FractionBarSpecSchema, NumberLineSpecSchema, PartWholeSpecSchema, ComparisonSpecSchema, GridSpecSchema, StepsSpecSchema, CardsSpecSchema, FlowSpecSchema, CutCardsSpecSchema, SortBoardSpecSchema, DiagramSpecSchema])
   .superRefine((spec, ctx) => {
     for (const message of specIssues(spec)) ctx.addIssue({ code: "custom", message });
   });
@@ -82,7 +83,7 @@ export type PartWholeSpec = z.infer<typeof PartWholeSpecSchema>;
 export type ComparisonSpec = z.infer<typeof ComparisonSpecSchema>;
 export type GridSpec = z.infer<typeof GridSpecSchema>;
 /** Kinds that redraw an original's exact content (verified), as opposed to new supports (`steps`, `cards`). */
-export const EXACT_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "flow"] as const;
+export const EXACT_SPEC_KINDS = ["fraction_bar", "number_line", "part_whole", "comparison", "grid", "flow", "diagram"] as const;
 
 const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
 export const sameValue = (a: Fraction, b: Fraction) => a.n * b.d === b.n * a.d;
@@ -113,6 +114,7 @@ export function specIssues(spec: { kind: string } & Record<string, unknown>): st
     if (new Set(s.shaded).size !== s.shaded.length) issues.push("partes sombreadas repetidas");
     if (s.shaded.some((i) => i >= s.parts)) issues.push("una parte sombreada no existe");
   }
+  if (s.kind === "diagram") issues.push(...diagramIssues(s));
   if (s.kind === "cut_cards" && s.pictures && s.pictures.length !== s.items.length) issues.push("una ilustración por tarjeta");
   if (s.kind === "grid") {
     if (new Set(s.shaded).size !== s.shaded.length) issues.push("celdas sombreadas repetidas");
@@ -156,6 +158,8 @@ export function describeSpec(spec: VisualSpec): string {
       return `${spec.title ? `${spec.title}. ` : ""}Esquema de ${spec.items.length} recuadros unidos por flechas, en este orden: ${spec.items.join(" → ")}.`;
     case "cut_cards":
       return `${spec.title ? `${spec.title}. ` : ""}${spec.items.length} tarjetas para recortar: ${spec.items.join(", ")}.`;
+    case "diagram":
+      return describeDiagram(spec);
     case "sort_board":
       return `Tablero de clasificación con ${spec.columns.length} columnas vacías: ${spec.columns.join(", ")}.`;
   }

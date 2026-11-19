@@ -1,5 +1,23 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Esquemas nuevos diseñados por Claude y dibujados por código (ADR-059)
+
+- **Fallo de referencia.** La adaptación `60ff69f8…` falló en la planificación (`planner_schema`, `scheme_not_designed` en `ra_4`, 2 llamadas). El plan rechazado no se conserva (por diseño), así que se ha reproducido con un caso sintético.
+- **Causa raíz.** El contrato v6 solo admitía esquemas copiados de una imagen del original. Además, el saneado borraba en silencio el esquema que no cumplía y la reparación pedía algo imposible.
+- **Cambios.**
+  - Contrato `diagrams` y planificador v7, usado en las adaptaciones nuevas.
+  - Herramienta de dibujo `diagram` (cadena, ciclo, jerarquía y grupos).
+  - Verificación por evidencia citada, asociación por identificadores y saneado sin descartes silenciosos en v7.
+  - Compilador, auditoría de fidelidad y procedencia.
+  - v1–v6 sin cambios.
+- **Pruebas locales sin API.** `tests/unit/recreation-diagrams.test.ts` (15):
+  - el fallo de v6 reproducido y su resolución en v7, en una sola llamada;
+  - la actividad 4 con SU esquema dibujado por código y presente en el HTML que se imprime;
+  - relaciones inventadas, formas inválidas y pistas, rechazadas;
+  - asociación sin adivinar e intercambio de esquemas detectado;
+  - ejemplos de Lengua (jerarquía) y Matemáticas (fracciones equivalentes).
+- **Pendiente de validar en producción.** Ninguna generación real con v7.
+
 ## 2026-11-19 · Selección de recursos por correspondencia y auditoría por identidad (ADR-058)
 
 - **Cambios.** `relations.ts` (esquema que corresponde a cada actividad, sin adivinar); `compile.ts` expone `links`; `fidelity.ts` verifica identidad de imágenes, esquemas y materiales; saneado v6+ sin adjuntar peticiones libres.

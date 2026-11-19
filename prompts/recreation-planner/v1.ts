@@ -1,4 +1,4 @@
-import { RecreationPlanSchema } from "@/lib/recreation/contract";
+import { RecreationPlanLegacySchema } from "@/lib/recreation/contract";
 import type { RecreationInput } from "@/lib/recreation/input";
 import type { PlanIssue } from "@/lib/recreation/verify";
 import type { ContentPart } from "@/lib/ai/types";
@@ -44,5 +44,5 @@ export const RECREATION_PLANNER_V1 = {
     ];
   },
 
-  output: { name: "recreation_plan", schema: RecreationPlanSchema, delivery: "prompted" as const },
+  output: { name: "recreation_plan", schema: RecreationPlanLegacySchema, delivery: "prompted" as const },
 } as const;

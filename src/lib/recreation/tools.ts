@@ -4,6 +4,7 @@ import { normalizeText } from "@/lib/adaptation/text";
 import { validateBrief, type BriefDraft } from "@/lib/visuals/illustration";
 import type { RecreationPlan, VisualRequest } from "./contract";
 import { mentions } from "./references";
+import { declaredSchemes } from "./diagrams";
 import { activityTexts, chooseScheme } from "./relations";
 import { normalize, type PlanIssue, type Verification } from "./verify";
 
@@ -19,6 +20,8 @@ export const RESOURCE_TOOLS = {
   openai_illustration: { does: "escenas, animales, objetos y conceptos nuevos; una ilustración por tarjeta", limits: "sin texto, números, flechas ni cantidades exactas dentro de la imagen" },
   /** The renderer, from verified data (the original's labels and relations). */
   code_scheme: { does: "flechas, relaciones, rótulos, cifras y diagramas exactos (esquemas de flujo)", limits: "necesita rótulos citados del original" },
+  /** ADR-059: new schemes Claude designs (chain, cycle, hierarchy, groups), drawn by code; every label and relation anchored to a quoted fact. */
+  code_diagram: { does: "esquemas NUEVOS: cadenas, ciclos, jerarquías y columnas comparadas", limits: "cada rótulo y cada relación en la cita de un hecho del original" },
   /** Cards and boards the student cuts out and sorts. */
   materials: { does: "tarjetas recortables (con ilustración por tarjeta) y tableros de clasificación", limits: "ligados a una actividad de clasificar" },
   /** An illustration and an exact scheme of the same activity: both printed with it. */
@@ -64,7 +67,7 @@ export interface ResourceDecision {
  * Which tool makes a request. Exact numbers of drawn things need a capability that does not exist yet: that is a GAP, not an invalid
  * idea. Arrows and labels are the renderer's: the activity gets them from its scheme (`visuals`), the picture does not carry them.
  */
-export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals" | "activities" | "facts" | "visual_requests">, analysis?: MaterialAnalysis): ResourceDecision {
+export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals" | "activities" | "facts" | "visual_requests" | "diagrams">, analysis?: MaterialAnalysis): ResourceDecision {
   const adapted: string[] = [];
   if (r.needs_exact.numbers) {
     return { route: "gap", adapted, gap: { capability: "counted_group", message: `Pide una cantidad exacta de elementos dibujados (${PENDING_CAPABILITIES.counted_group}), que todavía no se puede fabricar. Alternativas: una ilustración sin cantidad exacta y la cifra en el enunciado, tarjetas (una por elemento) o un esquema con datos del original.` } };
@@ -75,11 +78,11 @@ export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "vis
     const missing: string[] = [];
     for (const id of r.activity_ids) {
       const a = plan.activities.find((x) => x.id === id);
-      if (!a || a.visual_ids.length > 0) continue;
+      if (!a || declaredSchemes(plan, a).length > 0) continue;
       const choice = chooseScheme(a, plan, analysis);
       if (!choice.ok) missing.push(`${id} (${choice.reason === "ambiguous" ? `varios esquemas posibles: ${choice.candidates.join(", ")}` : "ninguno corresponde"})`);
     }
-    if (missing.length > 0) return { route: "gap", adapted, gap: { capability: "exact_scheme_without_data", message: `Necesita flechas o rótulos exactos, pero no se puede saber qué esquema corresponde a ${missing.join("; ")} (${PENDING_CAPABILITIES.exact_scheme_without_data}). Enlaza en visual_ids de cada actividad el esquema que necesita, o rediseña la actividad sin depender de él.` } };
+    if (missing.length > 0) return { route: "gap", adapted, gap: { capability: "exact_scheme_without_data", message: `Necesita flechas o rótulos exactos, pero no se puede saber qué esquema corresponde a ${missing.join("; ")} (${PENDING_CAPABILITIES.exact_scheme_without_data}). Enlaza en visual_ids de cada actividad el esquema que necesita (o, si es nuevo, ponla en activity_ids de su esquema en diagrams), o rediseña la actividad sin depender de él.` } };
     adapted.push("flechas o rótulos: los dibuja el renderizador en el esquema que corresponde a cada actividad; la ilustración no los lleva");
   }
   return { route: "illustration", adapted };

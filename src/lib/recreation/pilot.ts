@@ -50,6 +50,8 @@ export interface RecreationRequest {
   locatedOriginals?: ReadonlySet<string>;
   /** ADR-054: `new_images` for adaptations planned with v5 on (no reuse of the original's pictures; no pointer is removed). */
   visualPolicy?: VisualPolicy;
+  /** ADR-059: planner v7+ may design new exact schemes (`diagrams`). Older adaptations keep their frozen contract. */
+  diagrams?: boolean;
 }
 
 export type RecreationOutcome =
@@ -68,7 +70,7 @@ export type PlannedRecreation =
   | { status: "planned"; plan: RecreationPlan; verification: Verification; runs: AIRunRecord[]; calls: number }
   | Exclude<RecreationOutcome, { status: "ready" }>;
 
-export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope" | "visualPolicy"> & { approach?: RecreationApproach }): Promise<PlannedRecreation> {
+export async function planRecreation(planner: Planner, request: Pick<RecreationRequest, "analysis" | "context" | "scope" | "visualPolicy" | "diagrams"> & { approach?: RecreationApproach }): Promise<PlannedRecreation> {
   const input = recreationInput(request.analysis, request.context, request.scope, request.approach ?? "auto");
   const runs: AIRunRecord[] = [];
   let repairOf: PlanIssue[] | undefined;
@@ -91,9 +93,9 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // The scope is the server's, never the plan's: a curricular plan for a methodological sheet is refused outright.
     if (parsed.data.scope.type === "curricular" && request.scope !== "curricular") return { status: "rejected", plan: parsed.data, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
     // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
-    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed" });
+    const options = { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed", diagrams: request.visualPolicy === "designed" && request.diagrams === true };
+    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, options);
     let verification = verifyPlan(plan, request.analysis, { needs });
-    const options = { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed" };
     if (!verification.ok) {
       const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope, options);
       if (salvaged) ({ plan, verification } = salvaged);
@@ -101,7 +103,7 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // ADR-054: what an activity names must be designed by the plan; otherwise Claude is asked to design it (the one repair call).
     // ADR-055: and every picture it orders must be drawable as ordered (checked here, before any provider is called).
     // v5 keeps its rigid pre-flight check; v6+ uses the tools' report (ADR-056/057): ideas vs limits of a tool.
-    const undesigned = !options.picturesRequired ? [] : [...undesignedResources(plan), ...(!verification.ok ? [] : request.visualPolicy === "designed" ? toolReport(plan, verification, needs, RECREATION_VISUAL_LIMITS, request.analysis).errors : legacyBriefIssues(plan, verification, needs))];
+    const undesigned = !options.picturesRequired ? [] : [...undesignedResources(plan, options), ...(!verification.ok ? [] : request.visualPolicy === "designed" ? toolReport(plan, verification, needs, RECREATION_VISUAL_LIMITS, request.analysis).errors : legacyBriefIssues(plan, verification, needs))];
     if (undesigned.length > 0) verification = { ...verification, ok: false, issues: [...verification.issues, ...undesigned] };
     if (!verification.ok) {
       last = { status: "rejected", plan, issues: verification.issues, runs, calls: call };
@@ -146,6 +148,7 @@ function provenanceOf(plan: RecreationPlan, verification: Verification, visuals:
     out.push({ resource: `Actividad ${i + 1}`, produced_by: planner, checked_by: v?.basis ?? "sin verificar", status: v ? STATUS_ES[v.status] : "sin verificar" });
   });
   for (const v of plan.visuals) out.push({ resource: `Esquema «${v.title}»`, produced_by: `renderer (flow) con los rótulos de ${v.source_ref}`, checked_by: "rótulos citados del original", status: "exacto" });
+  for (const d of plan.diagrams ?? []) out.push({ resource: `Esquema nuevo «${d.title}»`, produced_by: `${planner}; dibujo: renderer (${d.layout})`, checked_by: "cada rótulo y cada relación, en la cita de su hecho", status: "exacto" });
   for (const v of visuals) out.push({ resource: `Imagen ${v.request_id}`, produced_by: v.provenance.produced_by ?? "ninguno", checked_by: v.provenance.reviewed_by ?? "—", status: v.route === "none" ? (v.essential ? "FALTA (imprescindible)" : "no incluida") : v.route });
   for (const m of plan.materials) out.push({ resource: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} ${m.id}`, produced_by: `${planner}; dibujo: renderer`, checked_by: "ligado a su actividad, sin pistas de la solución", status: "recortable" });
   for (const c of plan.custom_resources ?? []) out.push({ resource: `Recurso fuera del catálogo «${c.title}»`, produced_by: planner, checked_by: "sin herramienta disponible: demanda registrada", status: c.essential ? "FALTA (imprescindible)" : "no generado" });
