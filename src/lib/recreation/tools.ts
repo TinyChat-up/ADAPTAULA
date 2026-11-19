@@ -4,6 +4,7 @@ import { normalizeText } from "@/lib/adaptation/text";
 import { validateBrief, type BriefDraft } from "@/lib/visuals/illustration";
 import type { RecreationPlan, VisualRequest } from "./contract";
 import { mentions } from "./references";
+import { activityTexts, chooseScheme } from "./relations";
 import { normalize, type PlanIssue, type Verification } from "./verify";
 
 /**
@@ -63,16 +64,23 @@ export interface ResourceDecision {
  * Which tool makes a request. Exact numbers of drawn things need a capability that does not exist yet: that is a GAP, not an invalid
  * idea. Arrows and labels are the renderer's: the activity gets them from its scheme (`visuals`), the picture does not carry them.
  */
-export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals">, analysis?: MaterialAnalysis): ResourceDecision {
+export function decideResource(r: VisualRequest, plan: Pick<RecreationPlan, "visuals" | "activities" | "facts" | "visual_requests">, analysis?: MaterialAnalysis): ResourceDecision {
   const adapted: string[] = [];
   if (r.needs_exact.numbers) {
     return { route: "gap", adapted, gap: { capability: "counted_group", message: `Pide una cantidad exacta de elementos dibujados (${PENDING_CAPABILITIES.counted_group}), que todavía no se puede fabricar. Alternativas: una ilustración sin cantidad exacta y la cifra en el enunciado, tarjetas (una por elemento) o un esquema con datos del original.` } };
   }
   if (r.needs_exact.arrows || r.needs_exact.labels) {
-    // Marked exact by Claude: the relation MUST end up drawn by the renderer from verified data, or the request cannot be made.
-    const source = exactSchemeSource(plan, analysis, r.original_ref);
-    if (!source) return { route: "gap", adapted, gap: { capability: "exact_scheme_without_data", message: `Necesita flechas o rótulos exactos, pero no hay datos de los que dibujarlos (${PENDING_CAPABILITIES.exact_scheme_without_data}). Declara en visuals un esquema con rótulos citados del original, o rediseña la actividad sin depender de ellos.` } };
-    adapted.push(source === "plan" ? "flechas o rótulos: los dibuja el renderizador en el esquema declarado en el plan; la ilustración no los lleva" : "flechas o rótulos: los dibuja el renderizador desde el diagrama del original; la ilustración no los lleva");
+    // Marked exact by Claude: EACH activity of the request must get the scheme that corresponds to it (its own, or the one its facts and
+    // words point at), never "any scheme of the plan". Otherwise it cannot be made faithfully.
+    const missing: string[] = [];
+    for (const id of r.activity_ids) {
+      const a = plan.activities.find((x) => x.id === id);
+      if (!a || a.visual_ids.length > 0) continue;
+      const choice = chooseScheme(a, plan, analysis);
+      if (!choice.ok) missing.push(`${id} (${choice.reason === "ambiguous" ? `varios esquemas posibles: ${choice.candidates.join(", ")}` : "ninguno corresponde"})`);
+    }
+    if (missing.length > 0) return { route: "gap", adapted, gap: { capability: "exact_scheme_without_data", message: `Necesita flechas o rótulos exactos, pero no se puede saber qué esquema corresponde a ${missing.join("; ")} (${PENDING_CAPABILITIES.exact_scheme_without_data}). Enlaza en visual_ids de cada actividad el esquema que necesita, o rediseña la actividad sin depender de él.` } };
+    adapted.push("flechas o rótulos: los dibuja el renderizador en el esquema que corresponde a cada actividad; la ilustración no los lleva");
   }
   return { route: "illustration", adapted };
 }
@@ -85,19 +93,6 @@ const WORD_VALUE: Record<string, number> = { dos: 2, tres: 3, cuatro: 4, cinco: 
 const QUANTITY = new RegExp(`\\b(\\d+(?:[.,]\\d+)?|${NUMBER_WORDS})\\s+(?=\\p{L})`, "giu");
 const valueOf = (token: string) => (/^\d/.test(token) ? Number(token.replace(",", ".")) : (WORD_VALUE[token.toLowerCase()] ?? NaN));
 const COUNTING = /\b(cuant[oa]s?|cuenta\w*|contar|total|mas|menos|compara\w*|suma\w*|resta\w*|numero de|diferencia|veces)\b/;
-
-/** What the student reads of an activity: the instruction, its steps and every text of its response format. */
-export function activityTexts(a: RecreationPlan["activities"][number], plan: Pick<RecreationPlan, "facts">): string {
-  const e = a.executor;
-  const facts = new Map(plan.facts.map((f) => [f.id, f]));
-  const extra =
-    e.kind === "classify" ? [...e.categories.map((c) => c.label), ...e.item_fact_ids.map((id) => { const f = facts.get(id); return f?.kind === "membership" ? f.item : ""; })]
-    : e.kind === "select" ? e.options.map((o) => o.text)
-    : e.kind === "true_false" ? e.statements.map((st) => st.text)
-    : e.kind === "short_answer" ? e.starters
-    : [];
-  return [a.prompt, ...a.steps, ...extra].join(" ");
-}
 
 export interface QuantityNeed {
   token: string;
@@ -133,16 +128,6 @@ export function necessaryQuantities(r: VisualRequest, plan: Pick<RecreationPlan,
     }
   }
   return out;
-}
-
-/** Where an exact scheme can come from: a flow Claude declared for the sheet, or the original's own diagram (its labels joined by «→»). */
-export function exactSchemeSource(plan: Pick<RecreationPlan, "visuals">, analysis: MaterialAnalysis | undefined, preferred: string | null): "plan" | "original" | null {
-  if (plan.visuals.length > 0) return "plan";
-  const candidates = [...(analysis?.visuals.filter((v) => v.id === preferred) ?? []), ...(analysis?.visuals ?? [])];
-  return candidates.some((v) => {
-    const labels = (v.text ?? "").split("→").map((l) => l.trim()).filter(Boolean);
-    return (v.text ?? "").includes("→") && labels.length >= 2 && labels.length <= 6 && labels.every((l) => l.length <= 40);
-  }) ? "original" : null;
 }
 
 /** The brief of an illustration, written by the server from the request Claude designed (purpose, concepts, what to show and avoid, accessibility). */

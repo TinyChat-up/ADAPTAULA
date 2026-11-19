@@ -5,6 +5,7 @@ import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
 import { mentions, resolveReferences } from "./references";
+import { chooseScheme, type Flow } from "./relations";
 import { originalFlow, type ResolvedVisual } from "./visuals";
 
 /**
@@ -29,6 +30,11 @@ export interface CompiledRecreation {
   unresolved: string[];
   /** What was lost between the plan and the documents (ADR-057, designed policy): a named reason per activity. */
   lost?: string[];
+  /**
+   * The specific resources behind each block (ADR-058), for the fidelity audit: which block printed each request (`vr:<id>`) and scheme
+   * (`rv:<id>` of the plan, `orig:<id>` of the original), which of them each activity uses, and the image block of each material.
+   */
+  links?: { printed: Record<string, string>; activities: Record<string, string[]>; materials: Record<string, string> };
 }
 
 export interface CompileInput {
@@ -102,10 +108,13 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
   const answerKey: MaterialDocument["answer_key"] = [];
   const trace: CompiledRecreation["trace"] = [];
   const unresolved: string[] = [];
+  const lost: string[] = [];
+  const usedBy: Record<string, string[]> = {};
   plan.activities.forEach((a, index) => {
     const label = String(index + 1);
     const t = { origin: "adapted" as const, source_refs: [...a.objective_ids, ...factRefs(a)].slice(0, 12), decision_ids: decisions(a.strategy_ids) };
     const resources: string[] = [];
+    const used: string[] = (usedBy[a.id] = []);
     const cards = plan.materials.filter((m) => m.activity_id === a.id);
     // Its cut-out materials are in another document: the activity says so where it is done (before its figures, which travel with it).
     if (cards.length > 0) {
@@ -113,6 +122,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
       blocks.push({ id: id(), type: "instruction", text: `Para esta actividad usa ${what} del documento «Materiales para recortar».`, trace: { origin: "structure", source_refs: [], decision_ids: [] } });
     }
     const use = (key: string, make: () => Block) => {
+      used.push(key);
       const known = printed.get(key);
       if (known) return void resources.push(known);
       const made = make();
@@ -124,7 +134,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const mine = visuals.filter((x) => x.source && x.activity_ids.includes(a.id) && (x.source.kind !== "missing" || x.activity_ids[0] === a.id));
     for (const v of mine) use(`vr:${v.request_id}`, () => imageBlock(v, a));
     // ITS exact schemes, drawn by code from the original's labels.
-    const flowBlock = (v: { title: string; items: string[]; source_ref: string }) => (): Block => ({ id: id(), type: "image", alt_text: `${v.title}: ${v.items.join(", ")}, unidos por flechas.`, source: { kind: "figure", spec: { kind: "flow", spec_version: VISUAL_SPEC_VERSION, title: v.title, items: v.items }, provenance: "reconstruction", visual_ref: v.source_ref }, trace: { origin: "original", source_refs: [v.source_ref], decision_ids: decisions(a.strategy_ids) } });
+    const flowBlock = (v: Pick<Flow, "title" | "items" | "source_ref">) => (): Block => ({ id: id(), type: "image", alt_text: `${v.title}: ${v.items.join(", ")}, unidos por flechas.`, source: { kind: "figure", spec: { kind: "flow", spec_version: VISUAL_SPEC_VERSION, title: v.title, items: v.items }, provenance: "reconstruction", visual_ref: v.source_ref }, trace: { origin: "original", source_refs: [v.source_ref], decision_ids: decisions(a.strategy_ids) } });
     for (const v of plan.visuals.filter((x) => a.visual_ids.includes(x.id))) use(`rv:${v.id}`, flowBlock(v));
     const hasPicture = mine.some((v) => v.source!.kind !== "missing");
     let hasFlow = plan.visuals.some((x) => a.visual_ids.includes(x.id)) || mine.some((v) => v.source!.kind === "figure" && v.source!.spec.kind === "flow");
@@ -133,11 +143,13 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     // A request Claude marked as needing exact arrows or labels makes the relation part of the activity (ADR-057), mentioned or not.
     const exactRelation = designed && plan.visual_requests.some((r) => r.activity_ids.includes(a.id) && (r.needs_exact.arrows || r.needs_exact.labels));
     if (!hasFlow && (mentions(text, "arrows") || (mentions(text, "scheme") && !hasPicture) || exactRelation)) {
-      // 1) the scheme Claude declared for the sheet, 2) the original's own diagram: both drawn by the renderer from verified labels.
-      const declared = designed ? plan.visuals[0] : undefined;
-      if (declared) {
-        use(`rv:${declared.id}`, flowBlock(declared));
-        hasFlow = true;
+      if (designed) {
+        // The scheme that CORRESPONDS to this activity (never the first of the plan): see relations.ts. Ambiguous or absent: not guessed.
+        const choice = chooseScheme(a, plan, analysis);
+        if (choice.ok) {
+          use(choice.flow.key, flowBlock(choice.flow));
+          hasFlow = true;
+        } else lost.push(`actividad ${label}: ${choice.reason === "ambiguous" ? `varios esquemas posibles (${choice.candidates.join(", ")}) y ninguno enlazado` : "ningún esquema corresponde"}`);
       } else {
         const preferred = plan.visual_requests.find((r) => r.activity_ids.includes(a.id) && r.original_ref)?.original_ref ?? null;
         const flow = originalFlow(analysis, preferred);
@@ -171,12 +183,14 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     pages: [{ blocks }],
     answer_key: answerKey,
   });
-  return { student, materials: compileMaterials(plan, presentation, meta, trace, decisionOf, visuals), trace, unresolved };
+  const materials = compileMaterials(plan, presentation, meta, trace, decisionOf, visuals);
+  return { student, materials: materials.doc, trace, unresolved, ...(designed ? { lost, links: { printed: Object.fromEntries(printed), activities: usedBy, materials: materials.blocks } } : {}) };
 }
 
 /** The manipulatives on their own sheet, by activity: what to do, then the cards (large, with cutting lines) and the board. */
-function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"], decisionOf: ReadonlyMap<string, string>, visuals: readonly ResolvedVisual[]): MaterialDocument | null {
-  if (plan.materials.length === 0) return null;
+function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta: MaterialDocument["meta"], trace: CompiledRecreation["trace"], decisionOf: ReadonlyMap<string, string>, visuals: readonly ResolvedVisual[]): { doc: MaterialDocument | null; blocks: Record<string, string> } {
+  const imageOf: Record<string, string> = {};
+  if (plan.materials.length === 0) return { doc: null, blocks: imageOf };
   let n = 0;
   const id = () => `blk_c${String(++n).padStart(4, "0")}`;
   const structure = { origin: "structure" as const, source_refs: [], decision_ids: [] };
@@ -196,11 +210,11 @@ function compileMaterials(plan: RecreationPlan, presentation: Presentation, meta
     blocks.push(
       { id: id(), type: "heading", level: 2, text: `${m.kind === "cut_out_cards" ? "Tarjetas" : "Tablero"} · actividad ${label}`, trace: structure },
       { id: id(), type: "instruction", text: m.instructions, trace: t },
-      { id: id(), type: "image", alt_text: alt, source: { kind: "figure", spec, provenance: "generated", decision_id: dec }, trace: t },
+      { id: (imageOf[m.id] = id()), type: "image", alt_text: alt, source: { kind: "figure", spec, provenance: "generated", decision_id: dec }, trace: t },
     );
     pages.push({ blocks });
   }
-  return MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Materiales: ${meta.title}` }, presentation: { ...presentation, max_tasks_per_page: null }, admin_fields: [], pages, answer_key: [] });
+  return { doc: MaterialDocumentSchema.parse({ schema_version: 1, meta: { ...meta, title: `Materiales: ${meta.title}` }, presentation: { ...presentation, max_tasks_per_page: null }, admin_fields: [], pages, answer_key: [] }), blocks: imageOf };
 }
 
 function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpec; key: Omit<MaterialDocument["answer_key"][number], "block_id" | "basis"> } {

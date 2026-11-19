@@ -91,9 +91,9 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // The scope is the server's, never the plan's: a curricular plan for a methodological sheet is refused outright.
     if (parsed.data.scope.type === "curricular" && request.scope !== "curricular") return { status: "rejected", plan: parsed.data, issues: [{ severity: "error", code: "scope_mismatch", path: "scope", message: "El alcance del plan no es el autorizado para esta ficha." }], runs, calls: call };
     // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
-    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: policyNew(request.visualPolicy) });
+    let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed" });
     let verification = verifyPlan(plan, request.analysis, { needs });
-    const options = { picturesRequired: policyNew(request.visualPolicy) };
+    const options = { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed" };
     if (!verification.ok) {
       const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope, options);
       if (salvaged) ({ plan, verification } = salvaged);
@@ -122,8 +122,8 @@ export async function finishRecreation(planned: Extract<PlannedRecreation, { sta
   const compiled = compileRecreation({ plan, verification, analysis: request.analysis, presentation: request.context.presentation, visuals, reword: !policyNew(request.visualPolicy), designed: request.visualPolicy === "designed" });
   // ADR-057: nothing Claude designed may be lost on the way to the documents; a loss makes the sheet incomplete (never silently delivered).
   if (request.visualPolicy === "designed") {
-    const lost = auditFidelity(plan, compiled, visuals);
-    compiled.lost = lost.map((l) => `actividad ${l.activity}: ${l.message}`);
+    const lost = auditFidelity(plan, compiled, visuals, request.analysis);
+    compiled.lost = [...(compiled.lost ?? []), ...lost.map((l) => `actividad ${l.activity}: ${l.message}`)];
     for (const l of lost) if (!compiled.unresolved.includes(l.activity)) compiled.unresolved.push(l.activity);
   }
   const cardAssets = visuals.flatMap((v) => (v.cards ?? []).flatMap((c) => (c.asset ? [c.asset] : [])));

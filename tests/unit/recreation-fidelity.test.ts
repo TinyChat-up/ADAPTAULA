@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildAdaptationContext } from "@/lib/adaptation/context";
+import { compileRecreation } from "@/lib/recreation/compile";
 import { auditFidelity } from "@/lib/recreation/fidelity";
 import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
+import { chooseScheme } from "@/lib/recreation/relations";
 import { briefOf, decideResource, necessaryQuantities, toolReport } from "@/lib/recreation/tools";
 import { verifyPlan } from "@/lib/recreation/verify";
 import { POND_PILOT_PROFILE, POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
@@ -96,13 +98,16 @@ describe("cada relación necesaria termina dibujada en el documento", () => {
     expect(decideResource(plan.visual_requests[0]!, plan, bare)).toMatchObject({ route: "gap", gap: { capability: "exact_scheme_without_data" } });
     const errors = toolReport(plan, verified, needs, LIMITS, bare).errors;
     expect(errors.map((e) => e.code)).toContain("tool_gap");
-    expect(errors[0]!.message).toMatch(/Declara en visuals un esquema/);
+    expect(errors[0]!.message).toMatch(/Enlaza en visual_ids de cada actividad el esquema que necesita/);
   });
 
   it("con el diagrama del original (rótulos unidos por «→»), el renderizador lo dibuja: no hace falta que Claude lo declare", () => {
     const plan = clone((p) => { p.visuals = []; p.activities.forEach((a) => (a.visual_ids = [])); p.visual_requests[0]!.needs_exact = { labels: false, arrows: true, numbers: false }; });
     const withFlow = structuredClone(analysis);
     withFlow.visuals[1]!.text = "Algas → Larvas de insectos → Ranas → Garzas";
+    // Only when the request points at THAT original picture (or the activity's facts cite it): never "any diagram of the analysis".
+    expect(decideResource(plan.visual_requests[0]!, plan, withFlow).route).toBe("gap");
+    plan.visual_requests[0]!.original_ref = withFlow.visuals[1]!.id;
     expect(decideResource(plan.visual_requests[0]!, plan, withFlow).route).toBe("illustration");
   });
 });
@@ -154,5 +159,116 @@ describe("auditoría de fidelidad: lo diseñado llega al documento", () => {
     const lost = auditFidelity(outcome.plan, broken, outcome.visuals).map((l) => l.message);
     expect(lost.join(" | ")).toMatch(/falta «Ser vivo» en la respuesta/);
     expect(lost.join(" | ")).toMatch(/faltan los materiales/);
+  });
+});
+
+describe("dos esquemas distintos y actividades que necesitan recursos diferentes (ADR-058)", () => {
+  /** ra_4 depends on the food chain (rv_1); ra_5 on the water level table (rv_2). Neither is linked by Claude: evidence decides. */
+  const twoSchemes = () => clone((p) => {
+    p.visuals = [
+      { id: "rv_1", kind: "flow", title: "Esquema del estanque", items: ["Algas", "Larvas de insectos", "Ranas", "Garzas"], source_ref: "vis_2" },
+      { id: "rv_2", kind: "flow", title: "Nivel del agua", items: ["MAYO", "JUNIO"], source_ref: "vis_3" },
+    ];
+    p.activities.find((a) => a.id === "ra_3")!.visual_ids = ["rv_1"];
+    p.activities.find((a) => a.id === "ra_5")!.prompt = "Mira el esquema del nivel del agua en mayo y en junio. Calcula cuántos centímetros bajó.";
+  });
+  const run = async (plan: ReturnType<typeof twoSchemes>) => {
+    const stack = mockStack({ imagesAuthorized: true, plans: [plan] });
+    const outcome = await runRecreation(stack.planner, { ...stack.request, visualPolicy: "designed" });
+    if (outcome.status !== "ready") throw new Error(`${outcome.status}`);
+    return outcome;
+  };
+
+  it("cada actividad recibe SU esquema, no el primero de la lista", async () => {
+    const plan = twoSchemes();
+    const ra4 = plan.activities.find((a) => a.id === "ra_4")!;
+    const ra5 = plan.activities.find((a) => a.id === "ra_5")!;
+    expect(chooseScheme(ra4, plan, analysis)).toMatchObject({ ok: true, flow: { key: "rv:rv_1" } });
+    expect(chooseScheme(ra5, plan, analysis)).toMatchObject({ ok: true, flow: { key: "rv:rv_2" } });
+    const outcome = await run(plan);
+    expect(outcome.compiled.links!.activities.ra_4).toContain("rv:rv_1");
+    expect(outcome.compiled.links!.activities.ra_4).not.toContain("rv:rv_2");
+    expect(outcome.compiled.links!.activities.ra_5).toEqual(["rv:rv_2"]);
+    expect(outcome.compiled.lost).toEqual([]);
+    expect(auditFidelity(outcome.plan, outcome.compiled, outcome.visuals, analysis)).toEqual([]);
+  });
+
+  it("sin evidencia, o con varios candidatos, NO se adivina: la actividad queda sin esquema y la ficha incompleta", () => {
+    const ambiguous = twoSchemes();
+    ambiguous.activities.find((a) => a.id === "ra_5")!.prompt = "Mira el esquema. Compara mayo y junio con las larvas de insectos y las ranas.";
+    expect(chooseScheme(ambiguous.activities.find((a) => a.id === "ra_5")!, ambiguous, analysis)).toMatchObject({ ok: false, reason: "ambiguous" });
+    const none = twoSchemes();
+    none.activities.find((a) => a.id === "ra_5")!.prompt = "Mira el esquema y calcula cuántos centímetros bajó el agua.";
+    expect(chooseScheme(none.activities.find((a) => a.id === "ra_5")!, none, analysis)).toMatchObject({ ok: false, reason: "none" });
+  });
+
+  it("una actividad que nombra un esquema sin ninguno que le corresponda vuelve a Claude ANTES de generar nada", async () => {
+    const plan = twoSchemes();
+    plan.activities.find((a) => a.id === "ra_5")!.prompt = "Mira el esquema y calcula cuántos centímetros bajó el agua.";
+    const stack = mockStack({ imagesAuthorized: true, plans: [plan, plan] });
+    const planned = await planRecreation(stack.planner, { analysis: stack.request.analysis, context: stack.request.context, scope: "methodological", visualPolicy: "designed" });
+    expect(planned.status).toBe("rejected");
+    if (planned.status === "rejected") expect(planned.issues.find((i) => i.code === "scheme_not_designed")?.path).toBe("activities.ra_5");
+    expect(stack.calls.image ?? 0).toBe(0);
+  });
+
+  it("y si llegara al compilador (defensa en profundidad), la ficha queda incompleta y no se adivina otro esquema", async () => {
+    const stack = mockStack({ imagesAuthorized: true, plans: [twoSchemes()] });
+    const outcome = await run(twoSchemes());
+    const broken = structuredClone(outcome.plan);
+    const ra5 = broken.activities.find((a) => a.id === "ra_5")!;
+    ra5.prompt = "Mira el esquema y calcula cuántos centímetros bajó el agua.";
+    ra5.visual_ids = []; // the sanitised plan had linked rv_2 by evidence; here nothing links it
+    const compiled = compileRecreation({ plan: broken, verification: outcome.verification, analysis, presentation: stack.request.context.presentation, visuals: outcome.visuals, reword: false, designed: true });
+    expect(compiled.unresolved).toContain("5");
+    expect(compiled.lost!.join(" ")).toMatch(/actividad 5: ningún esquema corresponde/);
+    expect(compiled.links!.activities.ra_5).toEqual([]);
+  });
+
+  it("un esquema intercambiado entre actividades se detecta como error", async () => {
+    const outcome = await run(twoSchemes());
+    const tampered = structuredClone(outcome.compiled);
+    const blocks = tampered.student.pages[0]!.blocks;
+    const act = (label: string) => blocks.find((b) => b.type === "activity" && b.label === label) as Extract<(typeof blocks)[number], { type: "activity" }>;
+    // ra_4 and ra_5 exchange their resource blocks.
+    const [r4, r5] = [act("4").resource_block_ids, act("5").resource_block_ids];
+    act("4").resource_block_ids = r5;
+    act("5").resource_block_ids = r4;
+    const lost = auditFidelity(outcome.plan, tampered, outcome.visuals, analysis).map((l) => `${l.activity}: ${l.message}`);
+    expect(lost.some((m) => m.startsWith("4:") && /no está ligado/.test(m))).toBe(true);
+    expect(lost.some((m) => m.startsWith("5:") && /no está ligado/.test(m))).toBe(true);
+  });
+
+  it("un bloque con los rótulos de OTRO esquema también se detecta aunque esté ligado a la actividad", async () => {
+    const outcome = await run(twoSchemes());
+    const tampered = structuredClone(outcome.compiled);
+    const images = tampered.student.pages[0]!.blocks.filter((b) => b.type === "image" && b.source.kind === "figure" && b.source.spec.kind === "flow");
+    const [x, y] = images as Array<{ source: { spec: { items: string[] }; visual_ref?: string } }>;
+    [x!.source.spec.items, y!.source.spec.items] = [y!.source.spec.items, x!.source.spec.items];
+    const lost = auditFidelity(outcome.plan, tampered, outcome.visuals, analysis).map((l) => l.message);
+    expect(lost.join(" | ")).toMatch(/el esquema ligado no es «rv_[12]»/);
+  });
+
+  it("materiales: tarjetas, ilustraciones por tarjeta, tablero y actividad se comprueban por identidad", async () => {
+    const outcome = await run(twoSchemes());
+    expect(outcome.compiled.links!.materials).toMatchObject({ rm_1: expect.any(String), rm_2: expect.any(String) });
+    const swapped = structuredClone(outcome.compiled);
+    const imgs = swapped.materials!.pages.flatMap((p) => p.blocks).filter((b) => b.type === "image") as Array<{ source: { spec: unknown } }>;
+    [imgs[0]!.source.spec, imgs[1]!.source.spec] = [imgs[1]!.source.spec, imgs[0]!.source.spec];
+    const lost = auditFidelity(outcome.plan, swapped, outcome.visuals, analysis).map((l) => l.message).join(" | ");
+    expect(lost).toMatch(/las tarjetas del material «rm_1» no son las diseñadas/);
+    expect(lost).toMatch(/las columnas del tablero «rm_2» no son las diseñadas/);
+
+    const pictures = structuredClone(outcome.compiled);
+    const cards = pictures.materials!.pages.flatMap((p) => p.blocks).find((b) => b.type === "image" && b.source.kind === "figure" && b.source.spec.kind === "cut_cards") as { source: { spec: { pictures?: Array<string | null> } } };
+    expect(cards.source.spec.pictures?.length).toBeGreaterThan(1);
+    const pics = cards.source.spec.pictures!;
+    [pics[0], pics[1]] = [pics[1] ?? null, pics[0] ?? null];
+    expect(auditFidelity(outcome.plan, pictures, outcome.visuals, analysis).map((l) => l.message).join(" | ")).toMatch(/la ilustración de la tarjeta .* no es la que se le asignó/);
+
+    const rehomed = structuredClone(outcome.compiled);
+    const heading = rehomed.materials!.pages.flatMap((p) => p.blocks).find((b) => b.type === "heading" && b.level === 2) as { text: string };
+    heading.text = "Tarjetas · actividad 5";
+    expect(auditFidelity(outcome.plan, rehomed, outcome.visuals, analysis).map((l) => l.message).join(" | ")).toMatch(/no está bajo la actividad 1/);
   });
 });

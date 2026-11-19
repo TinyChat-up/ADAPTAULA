@@ -1,5 +1,10 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Selección de recursos por correspondencia y auditoría por identidad (ADR-058)
+
+- **Cambios.** `relations.ts` (esquema que corresponde a cada actividad, sin adivinar); `compile.ts` expone `links`; `fidelity.ts` verifica identidad de imágenes, esquemas y materiales; saneado v6+ sin adjuntar peticiones libres.
+- **Pruebas locales sin API.** 7 nuevas con dos esquemas y actividades con recursos distintos (selección, ambigüedad, recurso intercambiado, rótulos de otro esquema, materiales intercambiados); área completa: 126.
+
 ## 2026-11-19 · Fidelidad entre el plan de Claude y el PDF (ADR-057)
 
 - **Cambios.** Cantidades necesarias conservadas o declaradas como limitación; relaciones exactas siempre dibujadas o fallo previo; políticas congeladas por versión (v5 intacta); auditoría de fidelidad plan↔documentos; notas de traducción persistidas en el registro de la imagen.

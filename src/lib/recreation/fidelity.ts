@@ -1,14 +1,20 @@
 import type { Block } from "@/lib/schemas/material-document";
+import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { CompiledRecreation } from "./compile";
 import type { RecreationPlan } from "./contract";
+import { chooseScheme, originalFlowOf, planFlow, type Flow } from "./relations";
 import { normalize } from "./verify";
 import type { ResolvedVisual } from "./visuals";
 
 /**
- * Fidelity audit (ADR-057): what Claude designed against what the documents received. Deterministic, no model: every activity keeps
- * its instruction, its steps and every text of its response format; every picture, scheme and material the plan ties to an activity is
- * in the document and linked to that activity. A loss is named («actividad 2: falta «Algas» en la respuesta»): the sheet is then
- * incomplete and is not delivered, instead of reaching the PDF with less than was designed.
+ * Fidelity audit (ADR-057, ADR-058): what Claude designed against what the documents received. Deterministic, no model.
+ *
+ * Every activity keeps its instruction, its steps and every text of its response format. Every picture, scheme and material is checked
+ * BY IDENTITY, not by presence: the block an activity is linked to must be the resource the plan assigns to it —
+ *   · a request's picture: the very asset (or original, or scheme) that was resolved for that request;
+ *   · a scheme: the labels and the source of THAT scheme of the plan (or of the original diagram its facts and words point at);
+ *   · a material: its own cards in order, its own pictures card by card, its own columns, under its own activity's heading.
+ * A resource swapped for another is a loss like any other: the sheet is then incomplete and is not delivered.
  */
 
 export interface FidelityIssue {
@@ -17,13 +23,33 @@ export interface FidelityIssue {
 }
 
 const has = (haystack: string, text: string) => normalize(haystack).includes(normalize(text));
+const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((t, i) => normalize(t) === normalize(b[i]!));
 
-export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation, visuals: readonly ResolvedVisual[]): FidelityIssue[] {
+type ImageBlock = Extract<Block, { type: "image" }>;
+const isImage = (b: Block | undefined): b is ImageBlock => b?.type === "image";
+
+/** The scheme a block draws, if it is one. */
+const flowOf = (b: ImageBlock): { items: readonly string[]; ref: string } | null =>
+  b.source.kind === "figure" && b.source.spec.kind === "flow" ? { items: b.source.spec.items, ref: b.source.visual_ref ?? "" } : null;
+
+export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation, visuals: readonly ResolvedVisual[], analysis?: MaterialAnalysis): FidelityIssue[] {
   const issues: FidelityIssue[] = [];
   const blocks = compiled.student.pages.flatMap((p) => p.blocks);
   const activities = blocks.filter((b): b is Extract<Block, { type: "activity" }> => b.type === "activity");
   const byId = new Map(blocks.map((b) => [b.id, b]));
   const facts = new Map(plan.facts.map((f) => [f.id, f]));
+  const links = compiled.links;
+
+  /** The resource the plan assigns to a key, from the plan alone (independent of how the blocks were assembled). */
+  const expectedScheme = (key: string): Flow | null => {
+    if (key.startsWith("rv:")) {
+      const v = plan.visuals.find((x) => x.id === key.slice(3));
+      return v ? planFlow(v) : null;
+    }
+    const original = analysis?.visuals.find((x) => x.id === key.slice(5));
+    return original ? originalFlowOf(original) : null;
+  };
+
   plan.activities.forEach((a, i) => {
     const label = String(i + 1);
     const block = activities[i];
@@ -46,20 +72,72 @@ export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation
       const starters = blocks.slice(blocks.indexOf(block) + 1).find((b) => b.type === "sentence_starters");
       for (const st of e.starters) if (!starters || starters.type !== "sentence_starters" || !starters.items.includes(st)) lose(`falta el inicio de frase «${st.slice(0, 30)}»`);
     }
-    // Every picture and scheme tied to the activity is printed and linked to it.
+
+    // ---- Resources, by identity -----------------------------------------------------------------------------------------------
     const linked = new Set(block.resource_block_ids ?? []);
-    for (const v of visuals.filter((x) => x.activity_ids.includes(a.id) && x.source && x.source.kind !== "missing" && !x.cards)) {
-      if (![...linked].some((id) => byId.get(id)?.type === "image")) lose(`la imagen «${v.request_id}» no está ligada a la actividad`);
+    const used = links?.activities[a.id] ?? [];
+    const blockOf = (key: string) => (links ? byId.get(links.printed[key] ?? "") : undefined);
+
+    // Its pictures: the block printed for EACH request that lists it, linked to this activity and showing what was resolved for it.
+    for (const v of visuals.filter((x) => x.activity_ids.includes(a.id) && x.source && !x.cards)) {
+      const key = `vr:${v.request_id}`;
+      const b = blockOf(key);
+      if (!b || !isImage(b)) { lose(`la imagen «${v.request_id}» no está en el documento`); continue; }
+      if (!linked.has(b.id)) { lose(`la imagen «${v.request_id}» no está ligada a la actividad`); continue; }
+      const src = v.source!;
+      const ok =
+        src.kind === "generated" ? b.source.kind === "generated" && b.source.asset_id === src.asset_id
+        : src.kind === "original" ? b.source.kind === "original" && b.source.visual_ref === src.visual_ref
+        : src.kind === "figure" ? flowOf(b) !== null && same(flowOf(b)!.items, src.spec.kind === "flow" ? src.spec.items : []) && flowOf(b)!.ref === src.visual_ref
+        : b.source.kind === "requested";
+      if (!ok) lose(`la imagen ligada a «${v.request_id}» no es la que se le asignó`);
     }
-    for (const id of a.visual_ids) if (![...linked].some((l) => byId.get(l)?.type === "image")) lose(`el esquema «${id}» no está en la actividad`);
+
+    // Its schemes: those it lists, and the one that corresponds to the relation it depends on.
+    const wanted = new Set(a.visual_ids.map((id) => `rv:${id}`));
+    const needsRelation = plan.visual_requests.some((r) => r.activity_ids.includes(a.id) && (r.needs_exact.arrows || r.needs_exact.labels));
+    if (needsRelation && wanted.size === 0) {
+      const choice = chooseScheme(a, plan, analysis);
+      if (choice.ok) wanted.add(choice.flow.key);
+    }
+    for (const key of wanted) {
+      const expected = expectedScheme(key);
+      const b = blockOf(key);
+      if (!expected) { lose(`el esquema «${key}» no existe en el plan`); continue; }
+      if (!b || !isImage(b) || !used.includes(key) || !linked.has(b.id)) { lose(`el esquema «${key.slice(key.indexOf(":") + 1)}» no está ligado a la actividad`); continue; }
+      const drawn = flowOf(b);
+      if (!drawn || !same(drawn.items, expected.items) || drawn.ref !== expected.source_ref) lose(`el esquema ligado no es «${key.slice(key.indexOf(":") + 1)}»: sus rótulos o su origen no coinciden con el plan`);
+    }
+    // Nothing else of the plan's schemes may be linked in its place (a scheme the activity does not use).
+    for (const key of used) {
+      if (!key.startsWith("rv:") && !key.startsWith("orig:")) continue;
+      if (!wanted.has(key)) lose(`tiene ligado el esquema «${key.slice(key.indexOf(":") + 1)}», que no le corresponde`);
+    }
   });
-  // Materials: every card and every column is in the materials document.
-  const materialsText = compiled.materials ? JSON.stringify(compiled.materials.pages) : "";
+
+  // ---- Materials, by identity ----------------------------------------------------------------------------------------------
+  const materialBlocks = compiled.materials?.pages.flatMap((p) => p.blocks) ?? [];
   for (const m of plan.materials) {
-    const items = m.kind === "cut_out_cards" ? m.cards : m.columns;
-    const label = String(plan.activities.findIndex((a) => a.id === m.activity_id) + 1);
-    if (!compiled.materials) issues.push({ activity: label, message: `faltan los materiales (${m.kind === "cut_out_cards" ? "tarjetas" : "tablero"})` });
-    else for (const t of items) if (!has(materialsText, t)) issues.push({ activity: label, message: `falta «${t.slice(0, 30)}» en los materiales` });
+    const index = plan.activities.findIndex((a) => a.id === m.activity_id);
+    const label = String(index + 1);
+    const lose = (message: string) => issues.push({ activity: label, message });
+    if (!compiled.materials) { lose(`faltan los materiales (${m.kind === "cut_out_cards" ? "tarjetas" : "tablero"})`); continue; }
+    const block = materialBlocks.find((b) => b.id === (compiled.links?.materials[m.id] ?? ""));
+    if (!isImage(block)) { lose(`el material «${m.id}» no está en el documento de materiales`); continue; }
+    // Under the heading of ITS activity.
+    const heading = materialBlocks.slice(0, materialBlocks.indexOf(block)).reverse().find((b) => b.type === "heading" && b.level === 2);
+    if (!heading || heading.type !== "heading" || !heading.text.endsWith(`actividad ${label}`)) lose(`el material «${m.id}» no está bajo la actividad ${label}`);
+    const spec = block.source.kind === "figure" ? block.source.spec : null;
+    if (m.kind === "cut_out_cards") {
+      if (spec?.kind !== "cut_cards" || !same(spec.items, m.cards)) { lose(`las tarjetas del material «${m.id}» no son las diseñadas`); continue; }
+      // Each card's picture is the one resolved for THAT card.
+      const resolved = visuals.find((v) => plan.visual_requests.find((r) => r.id === v.request_id)?.for_cards === m.id)?.cards;
+      m.cards.forEach((card, k) => {
+        const expected = resolved?.find((c) => c.text === card)?.asset?.asset_id ?? null;
+        const got = spec.pictures?.[k] ?? null;
+        if (got !== expected) lose(`la ilustración de la tarjeta «${card.slice(0, 30)}» no es la que se le asignó`);
+      });
+    } else if (spec?.kind !== "sort_board" || !same(spec.columns, m.columns)) lose(`las columnas del tablero «${m.id}» no son las diseñadas`);
   }
   return issues;
 }
