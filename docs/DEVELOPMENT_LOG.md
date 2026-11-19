@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Agente de adaptación: herramientas que se adaptan al plan (ADR-056)
+
+- **Cambios.** Registro y enrutado de herramientas (`tools.ts`); traducción del encargo a OpenAI; validador que distingue idea inválida de límite de herramienta; `custom_resources`; planificador v6; firmas de respuesta normalizadas en la comprobación de pistas.
+- **Pruebas locales sin API.** `tests/unit/recreation-tools.test.ts` (11) y las del área, fronteras, entorno y base de datos.
+- **Pendiente.** Componentes reutilizables: grupo con cantidad exacta, formatos de respuesta adicionales con solucionador, fabricantes de recursos personalizados.
+
 ## 2026-11-19 · `/demo/recreacion` ya no hace que Turbopack rastree el proyecto
 
 - **Causa.** La página construía rutas con `process.cwd()` y una variable de entorno y leía ficheros con `fs`: Turbopack no podía acotar qué ficheros usa y trazaba todo el repositorio para el paquete de producción.

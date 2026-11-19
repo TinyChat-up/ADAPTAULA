@@ -150,6 +150,9 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } | 
   return width >= 256 && height >= 256 && width <= 4096 && height <= 4096 ? { width, height } : null;
 }
 
+/** Violations that are limits of the image tool, not of the idea (the same set as `TOOL_LIMIT_VIOLATIONS` in the recreation's tools). */
+const PLANNED_BRIEF_TOLERANCE: ReadonlySet<string> = new Set(["exact_data", "markers_do_not_match_activity", "letter_markers_do_not_match_activity", "markers_not_consecutive", "duplicate_markers", "marker_with_name", "too_many_labels", "duplicate_elements"]);
+
 const sizeFor = (kind: IllustrationBrief["kind"]): ImageSize => (kind === "vocabulary_support" ? "1024x1024" : "1536x1024");
 
 export async function illustrate(deps: IllustrationDeps, request: IllustrationRequest): Promise<IllustrationOutcome> {
@@ -180,7 +183,11 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
     if (!asked.draft && isTransientAIError(asked.run.errorCode)) throw new IllustrationDeferred();
     draft = asked.draft;
   }
-  const validated = validateBrief(draft, { activity: request.activity, expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail });
+  // A brief the server built from Claude's plan carries no markers, labels or exact data: the numbering of the activity belongs to the
+  // renderer, and the limits of the image tool were already adapted for (ADR-056). Real problems (an answer given away) still stop it.
+  const validated = validateBrief(draft, request.brief
+    ? { activity: "", expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail, ignore: PLANNED_BRIEF_TOLERANCE }
+    : { activity: request.activity, expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail });
   if (!validated.ok) return { ok: false, reason: "brief_rejected", detail: validated.violations };
   const brief = validated.brief;
   const briefFingerprint = fingerprint({ brief, render: `${IMAGE_RENDER_V1.key}@v${IMAGE_RENDER_V1.version}`, stage: request.stage });

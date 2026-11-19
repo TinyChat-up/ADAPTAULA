@@ -277,6 +277,7 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
     }
   }
   for (const issue of explanationIssues(plan, verified, needs)) error(issue.code, "explanation", issue.message);
+  for (const c of plan.custom_resources ?? []) for (const id of c.activity_ids) if (!ids.has(id)) error("custom_resource_activity_unknown", `custom_resources.${c.id}`, `${id} no existe.`);
   for (const g of plan.guide.per_activity) if (!ids.has(g.activity_id)) error("guide_activity_unknown", "guide", `${g.activity_id} no existe.`);
   for (const a of plan.activities) if (!plan.guide.per_activity.some((g) => g.activity_id === a.id)) warning("guide_missing", `activities.${a.id}`, "Sin indicación para el docente.");
 

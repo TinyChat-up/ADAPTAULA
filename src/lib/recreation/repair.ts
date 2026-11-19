@@ -100,6 +100,7 @@ export function sanitizePlan(input: RecreationPlan, analysis: MaterialAnalysis, 
       if (r.activity_ids.some((id) => { const a = activities.get(id); return a ? mentions([a.prompt, ...a.steps].join(" "), "picture") : false; })) r.essential = true;
     }
   }
+  if (plan.custom_resources) plan.custom_resources = plan.custom_resources.map((c) => ({ ...c, activity_ids: c.activity_ids.filter((id) => activities.has(id)) })).filter((c) => c.activity_ids.length > 0);
   plan.guide.per_activity = plan.guide.per_activity.filter((g) => activities.has(g.activity_id));
   plan.explanation.why = plan.explanation.why.map((w) => ({ ...w, needs: w.needs.filter((n) => needSet.has(n)) })).filter((w) => w.needs.length > 0);
   return plan;
