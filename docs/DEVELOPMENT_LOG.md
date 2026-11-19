@@ -1,5 +1,10 @@
 # Registro de desarrollo
 
+## 2026-11-19 · Fidelidad entre el plan de Claude y el PDF (ADR-057)
+
+- **Cambios.** Cantidades necesarias conservadas o declaradas como limitación; relaciones exactas siempre dibujadas o fallo previo; políticas congeladas por versión (v5 intacta); auditoría de fidelidad plan↔documentos; notas de traducción persistidas en el registro de la imagen.
+- **Pruebas locales sin API.** `tests/unit/recreation-fidelity.test.ts` (11) y el área completa (118), fronteras, entorno y base de datos.
+
 ## 2026-11-19 · Agente de adaptación: herramientas que se adaptan al plan (ADR-056)
 
 - **Cambios.** Registro y enrutado de herramientas (`tools.ts`); traducción del encargo a OpenAI; validador que distingue idea inválida de límite de herramienta; `custom_resources`; planificador v6; firmas de respuesta normalizadas en la comprobación de pistas.

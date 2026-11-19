@@ -99,6 +99,8 @@ export interface IllustrationRequest {
    * it; it is validated exactly like a model's brief.
    */
   brief?: BriefDraft;
+  /** The brief was built for the recreation's tools (ADR-056): its numbering is the renderer's and the image tool's limits were already adapted for. */
+  tolerant?: boolean;
 }
 
 /** The adaptation's illustration spending so far and its ceiling (USD). Absent: no money ceiling (tests that do not test it). */
@@ -185,7 +187,7 @@ export async function illustrate(deps: IllustrationDeps, request: IllustrationRe
   }
   // A brief the server built from Claude's plan carries no markers, labels or exact data: the numbering of the activity belongs to the
   // renderer, and the limits of the image tool were already adapted for (ADR-056). Real problems (an answer given away) still stop it.
-  const validated = validateBrief(draft, request.brief
+  const validated = validateBrief(draft, request.brief && request.tolerant
     ? { activity: "", expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail, ignore: PLANNED_BRIEF_TOLERANCE }
     : { activity: request.activity, expectedAnswer: request.expectedAnswer, signatures: request.signatures, lowDetail: request.lowDetail });
   if (!validated.ok) return { ok: false, reason: "brief_rejected", detail: validated.violations };

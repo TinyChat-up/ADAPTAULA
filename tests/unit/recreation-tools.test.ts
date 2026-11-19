@@ -119,7 +119,7 @@ describe("recorrido: una petición con límites de herramienta llega a OpenAI en
   it("la planificación acepta el plan y la ilustración se genera con el brief traducido", async () => {
     const plan = planWith(richRequests);
     const stack = mockStack({ imagesAuthorized: true, plans: [plan] });
-    const planned = await planRecreation(stack.planner, { analysis: stack.request.analysis, context: stack.request.context, scope: "methodological", visualPolicy: "new_images" });
+    const planned = await planRecreation(stack.planner, { analysis: stack.request.analysis, context: stack.request.context, scope: "methodological", visualPolicy: "designed" });
     expect(planned.status).toBe("planned");
     expect(stack.calls.recreation_plan).toBe(1);
   });

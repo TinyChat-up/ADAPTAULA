@@ -18,7 +18,8 @@ import type { AdaptationStatus } from "../orchestration/state-machine";
 import { NO_ENTITLEMENTS } from "../orchestration/entitlements";
 import type { PipelineVersions } from "../orchestration/versions";
 import type { RecreationServices } from "./services";
-import { NEW_IMAGES_FROM, usesRecreation } from "./engine";
+import type { VisualPolicy } from "@/lib/recreation/visuals";
+import { DESIGNED_FROM, NEW_IMAGES_FROM, usesRecreation } from "./engine";
 
 /**
  * The two stages of «Hacer magia» when the adaptation was created with the recreation engine (ADR-053). They reuse the adaptation's
@@ -40,7 +41,10 @@ const SCOPE = "methodological" as const;
  * ADR-054: from planner v5 on, «Hacer magia» designs NEW pictures (no reuse of the original's, no vision call to locate them) and
  * never words away a missing one. Read from the frozen prompt version: an adaptation created before keeps what it was created with.
  */
-export const visualPolicyOf = (versions: PipelineVersions): "reuse_originals" | "new_images" => ((versions.recreation?.planner.prompt_version ?? 1) >= NEW_IMAGES_FROM ? "new_images" : "reuse_originals");
+export const visualPolicyOf = (versions: PipelineVersions): VisualPolicy => {
+  const v = versions.recreation?.planner.prompt_version ?? 1;
+  return v >= DESIGNED_FROM ? "designed" : v >= NEW_IMAGES_FROM ? "new_images" : "reuse_originals";
+};
 
 const statusOf = async (store: AdaptationStore, id: string) => ((await store.getPipeline(id))?.adaptation.status ?? "failed") as AdaptationStatus;
 const runIds = (job: NonNullable<Awaited<ReturnType<AdaptationStore["claimStage"]>>>): StageRun["ids"] => ({ workspaceId: job.workspace_id, adaptationId: job.adaptation_id, materialId: job.material_id, jobId: job.id, jobAttempt: job.attempts });
@@ -246,7 +250,8 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
       // The precise technical cause, by request: route and reason codes only (never the material, the plan or a model's words).
       const causes = outcome.visuals.filter((v) => v.route === "none" && v.essential).map((v) => `${v.request_id}:${(v.attempts.at(-1) ?? "").split(/[ (:]/).filter(Boolean).slice(0, 3).join("_")}`);
       deps.log?.warn("recreation_incomplete", { adaptationId, missing: causes.join(","), unresolved: outcome.compiled.unresolved.join(",") });
-      throw new AdaptationError("generator_validation", `falta un recurso imprescindible (${causes.join(", ") || `actividades ${outcome.compiled.unresolved.join(", ")}`})`.slice(0, 200));
+      const lost = (outcome.compiled.lost ?? []).slice(0, 3).join("; ");
+      throw new AdaptationError("generator_validation", `falta un recurso imprescindible (${causes.join(", ") || `actividades ${outcome.compiled.unresolved.join(", ")}`}${lost ? `; ${lost}` : ""})`.slice(0, 240));
     }
     // The sheet that is stored in the adaptation's version carries NO answers (`versionOf` emptied the key and kept it in `internal`).
     const version = await store.persistVersion(adaptationId, run.lease, made.version.student, { plan: stored.plan_fingerprint, review: stored.plan_fingerprint, generation: genFp });
