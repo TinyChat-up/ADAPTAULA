@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRecreation, regenerateRecreation, restoreVersion, type GenerationDeps } from "@/lib/recreation/create";
 import { MemoryRecreationStore, RecreationVersionSchema } from "@/lib/recreation/record";
 import { loadRecreationView } from "@/lib/recreation/view";
+import { demo } from "@/app/demo/recreacion/data";
 import { sheetModel } from "@/lib/render/sheet-model";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { mockStack } from "../support/recreation-mocks";
@@ -74,8 +75,8 @@ describe("estado del material: lista, revisión o incompleta, sin dar respuestas
     const s = setup();
     const r = await created(s);
     expect(r.version.state).toBe("review");
-    expect(r.version.review_activities).toEqual(["1", "3"]);
-    expect(r.version.state_message).toBe("Antes de usarla, revisa las actividades 1 y 3: comprueba con el texto que cada pregunta tiene una sola respuesta correcta.");
+    expect(r.version.review_activities).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    expect(r.version.state_message).toContain("Contrasta las respuestas propuestas con la fuente citada.");
     expect(r.version.state_message).not.toMatch(/Ser vivo|alimentan|algas/i);
   });
 });
@@ -133,6 +134,15 @@ describe("idempotencia, cupo y presupuesto antes de cualquier llamada", () => {
 });
 
 describe("versiones: regenerar crea otra, recuperar una anterior no llama a nada", () => {
+  it("abrir la versión histórica publicada muestra sus documentos y su revisión guardada", async () => {
+    const view = await loadRecreationView({
+      getLine: async () => demo.line, getVersion: async () => demo.version, listVersions: async () => [demo.version],
+    }, demo.line.id, 1);
+    expect(view?.state).toEqual({ kind: "review", message: demo.version.state_message, activities: ["1", "3"] });
+    expect(view?.student).toEqual(demo.version.student);
+    expect(view?.materials).toEqual(demo.version.materials);
+  });
+
   it("regenerar pide confirmación; confirmado crea la versión 2 y la 1 sigue intacta", async () => {
     const s = setup();
     const r = await created(s);

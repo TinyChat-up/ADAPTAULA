@@ -127,9 +127,15 @@ describe("recorrido completo: planificar, generar y entregar", () => {
     expect(version.document.answer_key).toEqual([]);
     expect(JSON.stringify(version.document)).not.toContain(SECRET);
     expect(version.review.verdict).toBe("approved_with_warnings");
+    const dto = await t.status(id);
+    expect(dto.recreationState).toBe("review");
+    expect(dto.review?.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ check: "objectives_preserved", detail: "Compara con el original el razonamiento que debe hacer el alumno." }),
+      expect.objectContaining({ check: "answers_not_leaked", detail: "Comprueba si alguna pista permite deducir una respuesta cerrada." }),
+    ]));
     const visible = (await q<{ state: string; state_message: string; review_activities: string[]; materials_document: { answer_key: unknown[] }; explanation: { adapted: string[] }; assets: unknown[] }>("select * from public.recreation_versions where adaptation_version_id = $1", [version.id]))[0]!;
-    expect(visible).toMatchObject({ state: "review", review_activities: ["1", "3"] });
-    expect(visible.state_message).toMatch(/^Antes de usarla, revisa las actividades 1 y 3/);
+    expect(visible).toMatchObject({ state: "review", review_activities: ["1", "2", "3", "4", "5", "6", "7"] });
+    expect(visible.state_message).toContain("Contrasta las respuestas propuestas con la fuente citada.");
     expect(visible.materials_document.answer_key).toEqual([]);
     expect(visible.explanation.adapted.length).toBeGreaterThan(0);
     expect(visible.assets.length).toBeGreaterThan(0);
@@ -138,6 +144,21 @@ describe("recorrido completo: planificar, generar y entregar", () => {
     const internal = (await q<{ answer_key: { student: unknown[] } }>("select answer_key from public.recreation_internals where adaptation_version_id = $1", [version.id]))[0]!;
     expect(internal.answer_key.student.length).toBe(7);
     expect(JSON.stringify(internal)).toContain(SECRET);
+  });
+
+  it("conserva la revisión histórica sin publicar texto libre de advertencias", async () => {
+    const t = await teacher();
+    const id = await created(t);
+    await t.runAll(id);
+    const [version] = await q<{ id: string }>("update public.adaptation_versions set review = jsonb_set(review, '{checks,0,detail}', to_jsonb($2::text)) where adaptation_id = $1 returning id", [id, SECRET]);
+    if (!version) throw new Error("No se guardó la versión");
+    const versionId = version.id;
+    const original = await q("select state, state_message from public.recreation_versions where adaptation_version_id = $1", [versionId]);
+    const dto = await t.status(id);
+    expect(dto.recreationState).toBe("review");
+    expect(dto.review?.warnings[0]?.detail).toBe("Queda una comprobación pedagógica pendiente en esta versión.");
+    expect(JSON.stringify(dto)).not.toContain(SECRET);
+    expect(await q("select state, state_message from public.recreation_versions where adaptation_version_id = $1", [versionId])).toEqual(original);
   });
 
   it("abrir, recargar o volver a pedir lo pendiente no llama a ningún modelo ni consume nada", async () => {

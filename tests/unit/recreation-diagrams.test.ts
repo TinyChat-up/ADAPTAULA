@@ -7,7 +7,7 @@ import { auditFidelity } from "@/lib/recreation/fidelity";
 import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
 import { chooseScheme } from "@/lib/recreation/relations";
 import { sanitizePlan, undesignedResources } from "@/lib/recreation/repair";
-import { verifyPlan } from "@/lib/recreation/verify";
+import { pendingMaterialChecks, verifyPlan } from "@/lib/recreation/verify";
 import { buildRenderModel } from "@/lib/render/model";
 import { renderPrintHtml } from "@/lib/render/print/html";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
@@ -137,6 +137,8 @@ describe("Ciencias · la actividad 4 obtiene SU esquema, dibujado por código", 
     expect(auditFidelity(outcome.plan, outcome.compiled, outcome.visuals, stack.request.analysis)).toEqual([]);
     // Honest provenance: the drawing is exact; what each arrow means is the design's reading, for the teacher to review.
     expect(outcome.provenance.find((r) => r.resource === "Esquema nuevo «Quién se alimenta de quién»")).toMatchObject({ status: "dibujo exacto; lectura de las flechas: revisión docente" });
+    expect(pendingMaterialChecks(outcome.plan, outcome.verification.activities, outcome.verification.equivalence))
+      .toContainEqual({ check: "visual_references_resolved", activityIds: ["ra_4"], detail: expect.stringContaining("flechas") });
     expect(outcome.verification.review_required).toBe(true);
     expect(outcome.verification.issues.map((i) => `${i.severity}:${i.code}`)).toContain("warning:diagram_relation_reading_unverified");
   });

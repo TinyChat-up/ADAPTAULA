@@ -7,8 +7,9 @@ import { RECREATION_CONTRACT } from "@/lib/recreation/contract";
 import { finishRecreation, planRecreation, type PlannedRecreation } from "@/lib/recreation/pilot";
 import { RECREATION_PLANNER_LIMITS } from "@/lib/recreation/planner";
 import { RecreationPlanSchema } from "@/lib/recreation/contract";
+import type { CompiledRecreation } from "@/lib/recreation/compile";
 import { versionOf } from "@/lib/recreation/record";
-import { RECREATION_VERIFIER_VERSION, type Verification } from "@/lib/recreation/verify";
+import type { Verification } from "@/lib/recreation/verify";
 import { RECREATION_VISUALS_VERSION } from "@/lib/recreation/visuals";
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { stageKit, type OrchestratorDeps, type StageOutcome, type StageRun } from "../orchestration/orchestrator";
@@ -177,18 +178,18 @@ export async function runRecreationPlanning(deps: OrchestratorDeps, adaptationId
 }
 
 /** The honest, short review the delivery is recorded with: only what the engine really verified, in the original review's own format. */
-export function reviewOf(input: { documentFingerprint: string; planFingerprint: string; state: "ready" | "review" | "incomplete"; reviewActivities: readonly string[]; visualsMissing: number }): PedagogicalReview {
-  const checks: PedagogicalReview["checks"] = [
-    { check: "objectives_preserved", method: "deterministic", status: "PASS", targets: [], detail: "El verificador comprobó que se conservan todos los objetivos y sus operaciones." },
-    { check: "answers_not_leaked", method: "deterministic", status: "PASS", targets: [], detail: "Ninguna pista ni apoyo revela una respuesta; las respuestas no están en el documento visible." },
-    input.reviewActivities.length > 0
-      ? { check: "traceability_complete", method: "deterministic", status: "WARN", targets: [], detail: `Respuesta apoyada en el texto pero no demostrada: actividades ${input.reviewActivities.join(", ")}. Revisión docente.` }
-      : { check: "traceability_complete", method: "deterministic", status: "PASS", targets: [], detail: "Cada respuesta cerrada está demostrada o es una respuesta abierta con criterios." },
-    input.visualsMissing > 0
-      ? { check: "visual_references_resolved", method: "deterministic", status: "WARN", targets: [], detail: `Falta ${input.visualsMissing === 1 ? "una imagen necesaria" : `${input.visualsMissing} imágenes necesarias`}.` }
-      : { check: "visual_references_resolved", method: "deterministic", status: "PASS", targets: [], detail: "Las imágenes que necesitan las actividades están en la ficha." },
-  ];
-  return { schema_version: 1, document_fingerprint: input.documentFingerprint, plan_fingerprint: input.planFingerprint, checks, verdict: input.state === "ready" ? "approved" : "approved_with_warnings", blocks_to_revise: [] };
+function reviewOf(made: NonNullable<ReturnType<typeof versionOf>>, trace: CompiledRecreation["trace"], planFingerprint: string): PedagogicalReview {
+  const checks: PedagogicalReview["checks"] = made.pending.map((p) => ({
+    check: p.check, method: "deterministic", status: "WARN", needs_semantic_review: true,
+    targets: trace.filter((t) => p.activityIds.includes(t.activity_id)).map((t) => t.block_id), detail: p.detail,
+  }));
+  if (!checks.some((c) => c.check === "answers_not_leaked")) {
+    checks.push({ check: "answers_not_leaked", method: "deterministic", status: "SKIPPED", targets: [], detail: "Las respuestas abiertas tienen criterios de corrección. No se ha comprobado semánticamente si el enunciado anticipa una respuesta." });
+  }
+  if (!checks.some((c) => c.check === "visual_references_resolved")) {
+    checks.push({ check: "visual_references_resolved", method: "deterministic", status: "PASS", targets: [], detail: "La composición ha resuelto las referencias a recursos imprescindibles." });
+  }
+  return { schema_version: 1, document_fingerprint: fingerprint(made.version.student), plan_fingerprint: planFingerprint, checks, verdict: made.version.state === "review" || checks.some((c) => c.status !== "PASS") ? "approved_with_warnings" : "approved", blocks_to_revise: [] };
 }
 
 export async function runRecreationGeneration(deps: OrchestratorDeps, adaptationId: string): Promise<StageOutcome & { delivered?: boolean; version?: number }> {
@@ -246,7 +247,7 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
     current = await stageKit.advance(store, adaptationId, current, "reviewing_deterministic");
     await store.setStep(job.id, job.attempts, "reviewing", 60);
     await stageKit.advance(store, adaptationId, current, "reviewing_ai");
-    const made = versionOf(outcome, { id: randomUUID(), lineId: adaptationId, version: 1, workspaceId: ids.workspaceId, now: new Date().toISOString() }, [], { contract: RECREATION_CONTRACT, verifier: RECREATION_VERIFIER_VERSION, visuals: RECREATION_VISUALS_VERSION, planner: plannerLabel });
+    const made = versionOf(outcome, { id: randomUUID(), lineId: adaptationId, version: 1, workspaceId: ids.workspaceId, now: new Date().toISOString() }, [], { contract: RECREATION_CONTRACT, verifier: verification.version, visuals: RECREATION_VISUALS_VERSION, planner: plannerLabel });
     if (!made) throw new AdaptationError("generator_validation", "la recreación no produjo una versión");
     // A sheet that lacks something essential (a picture an activity needs) is never delivered as final.
     if (made.version.state === "incomplete") {
@@ -265,7 +266,7 @@ export async function runRecreationGeneration(deps: OrchestratorDeps, adaptation
       { state: made.version.state, state_message: made.version.state_message, review_activities: made.version.review_activities, materials_document: made.version.materials, explanation: made.version.explanation, assets: made.version.assets },
       { ...made.internal, version_id: version.id },
     );
-    const review = reviewOf({ documentFingerprint: fingerprint(made.version.student), planFingerprint: stored.plan_fingerprint, state: made.version.state, reviewActivities: made.version.review_activities, visualsMissing: outcome.visuals.filter((v) => v.route === "none" && v.essential).length });
+    const review = reviewOf(made, outcome.compiled.trace, stored.plan_fingerprint);
     await store.finalize(adaptationId, run.lease, version.id, review, "ready");
     if (!(await store.completeStage(job.id, job.attempts))) throw new LeaseLostError();
     await (deps.entitlements ?? NO_ENTITLEMENTS).consume({ id: adaptationId, workspaceId: ids.workspaceId }).catch(() => deps.log?.warn("entitlement_consume_failed", { adaptationId }));

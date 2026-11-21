@@ -11,6 +11,7 @@ import { PdfDownload } from "@/components/material/pdf-download";
 import type { AdaptationStatusDto } from "@/lib/adaptation/orchestration/status";
 import { AUTOMATIC_STOP_COPY, DEFERRED_NOTE, STATUS_COPY } from "@/lib/adaptation/presentation/copy";
 import { diagnosisLines, failureView, readyTitle, stageStates, warningLines, workingCopy } from "@/lib/adaptation/presentation/view-model";
+import { RECREATION_PENDING_TITLE } from "@/lib/recreation/quality";
 import { formatDateTime } from "@/lib/format/date";
 import { cn } from "@/lib/utils/cn";
 
@@ -132,7 +133,9 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
   const version = info?.version ?? dto.currentVersion;
   // Delivered, but the printed sheet still waits for an image: the next step is to complete it on the sheet, not a new adaptation.
   const pending = info?.visualsPending ?? 0;
-  const printable = info?.printable ?? true;
+  const incomplete = dto.recreationState === "incomplete";
+  const qualityPending = dto.recreationState === "review" || dto.recreationState === "unknown";
+  const printable = !incomplete && (info?.printable ?? true);
   return (
     <Card className="space-y-4">
       {pending > 0 ? (
@@ -146,12 +149,14 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
             <p>{pending === 1 ? "Falta una imagen para poder imprimirla." : `Faltan ${pending} imágenes para poder imprimirla.`} Complétala en la ficha: no hace falta crear otra adaptación.</p>
           </Alert>
         )
+      ) : incomplete ? (
+        <Alert tone="warning" title={copy.title}><p>{copy.body}</p></Alert>
       ) : !printable ? (
         <Alert tone="warning" title="La ficha no se puede mostrar completa todavía">
           <p>Revisa la ficha para ver qué falta.</p>
         </Alert>
       ) : (
-        <Alert tone={lines.length > 0 ? "warning" : "success"} title={copy.title}>
+        <Alert tone={qualityPending || lines.length > 0 ? "warning" : "success"} title={copy.title}>
           <p>{copy.body}</p>
         </Alert>
       )}
@@ -161,7 +166,7 @@ export function ReadyPanel({ dto, materialId, info }: { dto: AdaptationStatusDto
       </p>
       {lines.length > 0 ? (
         <div className="space-y-2">
-          <h3 className="font-semibold">Observaciones (no impiden usar la ficha)</h3>
+          <h3 className="font-semibold">{qualityPending ? RECREATION_PENDING_TITLE : dto.recreationState ? "Observaciones" : "Observaciones (no impiden usar la ficha)"}</h3>
           <WarningsList lines={lines} />
         </div>
       ) : null}

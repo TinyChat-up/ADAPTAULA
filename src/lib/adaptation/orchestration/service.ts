@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import type { RecreationState } from "@/lib/recreation/quality";
 import { FunctionalProfileSchema } from "@/lib/schemas/functional-profile";
-import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import { PedagogicalReviewSchema, type PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { logger } from "@/lib/logger";
 import { visualSupportResult } from "../presentation/visual-support-result";
 import { AdaptationError } from "./errors";
@@ -20,7 +21,7 @@ import { methodNotes, type MethodNote } from "../v22/notes";
 import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
-import type { RecreationApproach } from "../recreation/engine";
+import { usesRecreation, type RecreationApproach } from "../recreation/engine";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,
@@ -43,6 +44,8 @@ export interface AdaptationReader {
   getLearnerProfile(id: string): Promise<{ id: string; workspace_id: string; stage_slug: string | null; grade_slug: string | null; functional_profile: unknown } | null>;
   getAdaptation(id: string): Promise<{ id: string; workspace_id: string; material_id: string; status: string; current_version: number; delivered_at: string | null } | null>;
   getVersion(adaptationId: string, version: number | null): Promise<{ id: string; version: number; document: unknown; review: unknown; source: string; created_at: string } | null>;
+  /** Public metadata of the exact version, using the member’s RLS permissions. */
+  getRecreationState?(versionId: string): Promise<RecreationState | null>;
   /** Latest artifact of each requested kind (member-readable under RLS). */
   getArtifacts(adaptationId: string, kinds: readonly ArtifactKind[]): Promise<ArtifactRow[]>;
   /** Display name of a subject of the public catalogue (the sheet's header). Optional: without it the key is shown. */
@@ -399,11 +402,18 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const merged = latest("pedagogical_review") as { review?: PedagogicalReview; pending?: string[] } | undefined;
   const deterministic = latest("deterministic_review") as { review?: PedagogicalReview } | undefined;
   const version = await deps.reader.getVersion(adaptationId, snapshot.adaptation.current_version || null);
+  // Recreation finalizes the review on the version itself; it has no classic review artifact.
+  const recreated = isDelivered(snapshot.adaptation) && usesRecreation(snapshot.adaptation.pipeline_versions);
+  const recreationState = recreated
+    ? (version ? await deps.reader.getRecreationState?.(version.id) : null) ?? "unknown"
+    : undefined;
+  const versionReview = recreated && version ? PedagogicalReviewSchema.safeParse(version.review).data : undefined;
   const extra: StatusArtifacts = {
     planValidation: validation?.classification ? { counts: validation.classification.counts } : null,
     execution: execution?.execution ?? null,
-    review: merged?.review ?? deterministic?.review ?? null,
-    pending: merged?.pending ?? [],
+    recreationState,
+    review: recreated ? versionReview ?? null : merged?.review ?? deterministic?.review ?? null,
+    pending: recreated ? [] : merged?.pending ?? [],
     hasPlan: artifacts.some((a) => a.kind === "plan"),
     hasPlanReview: artifacts.some((a) => a.kind === "plan_review"),
     hasVersion: version !== null,

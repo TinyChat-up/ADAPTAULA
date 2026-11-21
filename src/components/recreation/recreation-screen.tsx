@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/feedback";
 import { Card } from "@/components/ui/layout";
 import { generatedWidthMm } from "@/lib/render/generated";
 import { sheetModel } from "@/lib/render/sheet-model";
+import { RECREATION_PENDING_TITLE, RECREATION_QUALITY_COPY } from "@/lib/recreation/quality";
 import type { RecreationView } from "@/lib/recreation/view";
 
 /**
@@ -49,7 +50,7 @@ export function RecreationScreen({ view, imageSrc, originals = {}, subjectLabel,
               Una ficha nueva con {activities} actividades{materials ? " y materiales para recortar" : ""}, preparada para este alumno.
             </p>
           </div>
-          {downloads?.sheet || downloads?.materials ? (
+          {view.state.kind !== "incomplete" && (downloads?.sheet || downloads?.materials) ? (
             <div className="flex shrink-0 flex-wrap gap-2">
               {downloads.sheet ? <a className="inline-flex min-h-11 items-center gap-2 rounded-control border border-control-border bg-surface px-4 text-sm font-medium hover:border-primary hover:bg-primary-soft" href={downloads.sheet}>Descargar ficha</a> : null}
               {downloads.materials ? <a className="inline-flex min-h-11 items-center gap-2 rounded-control border border-control-border bg-surface px-4 text-sm font-medium hover:border-primary hover:bg-primary-soft" href={downloads.materials}>Descargar materiales</a> : null}
@@ -57,9 +58,9 @@ export function RecreationScreen({ view, imageSrc, originals = {}, subjectLabel,
           ) : null}
         </div>
         {view.version !== view.currentVersion ? <Alert tone="info" title={`Estás viendo la versión ${view.version}`}>La versión que se usa ahora es la {view.currentVersion}.</Alert> : null}
-        {/* Never hidden to simplify the screen: an incomplete material, or one that needs a look before use, says so in one line. */}
         {view.state.kind === "incomplete" ? <Alert tone="warning" title="Falta algo antes de usarla">{view.state.message}</Alert> : null}
-        {view.state.kind === "review" ? <Alert tone="info" title="Revísala antes de usarla">{view.state.message}</Alert> : null}
+        {view.state.kind === "review" ? <Alert tone="warning" title={RECREATION_PENDING_TITLE}>{view.state.message || RECREATION_QUALITY_COPY.review.body}</Alert> : null}
+        {view.state.kind === "ready" ? <Alert tone="success" title={RECREATION_QUALITY_COPY.ready.title} /> : null}
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">

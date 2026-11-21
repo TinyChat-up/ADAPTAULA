@@ -1,3 +1,4 @@
+import { RECREATION_PENDING_TITLE, type RecreationState } from "@/lib/recreation/quality";
 import { Alert } from "@/components/ui/feedback";
 import type { RenderValidation } from "@/lib/render/model";
 import { MATERIAL_RENDERER_VERSION } from "@/lib/render/version";
@@ -12,7 +13,8 @@ const STATUS_COPY = {
  * Teacher-only layer, OUTSIDE the sheet (hidden in print, never in the student's view): the version, what the presentation
  * could not do and which pedagogical observations the review left. No prompts, reasoning, profile or inferred answers.
  */
-export function TeacherPanel({ validation, version, observations }: { validation: RenderValidation; version: number; observations: string[] }) {
+export function TeacherPanel({ validation, version, observations, recreationState }: { validation: RenderValidation; version: number; observations: string[]; recreationState?: RecreationState | "unknown" }) {
+  const qualityPending = recreationState === "review" || recreationState === "unknown";
   const attention = validation.issues.filter((i) => i.severity !== "info");
   const notes = validation.issues.filter((i) => i.severity === "info");
   return (
@@ -32,14 +34,15 @@ export function TeacherPanel({ validation, version, observations }: { validation
           </ul>
         </section>
       ) : null}
-      {observations.length > 0 ? (
+      {observations.length > 0 || qualityPending ? (
         <section className="space-y-1">
-          <h2 className="text-sm font-semibold">Observaciones de la revisión (no impiden usar la ficha)</h2>
-          <ul className="list-disc space-y-1 pl-5 text-sm">
+          <h2 className="text-sm font-semibold">{qualityPending ? RECREATION_PENDING_TITLE : recreationState ? "Observaciones de la revisión" : "Observaciones de la revisión (no impiden usar la ficha)"}</h2>
+          {observations.length === 0 ? <p className="text-sm">La verificación pedagógica de esta versión está sin confirmar.</p> : null}
+          {observations.length > 0 ? <ul className="list-disc space-y-1 pl-5 text-sm">
             {observations.map((o) => (
               <li key={o}>{o}</li>
             ))}
-          </ul>
+          </ul> : null}
         </section>
       ) : null}
       {notes.length > 0 ? (

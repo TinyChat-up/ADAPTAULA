@@ -21,6 +21,7 @@ import { productionRecreation } from "../recreation/server";
 import { dbEntitlements } from "./entitlements-db";
 import { isMockPipeline, mockPipelineServices } from "./mock-services";
 import type { OrchestratorDeps, PipelineServices } from "./orchestrator";
+import { RECREATION_STATES } from "@/lib/recreation/quality";
 import type { AdaptationReader, ServiceDeps } from "./service";
 import { AdaptationStore, ARTIFACT_KINDS, type RpcClient } from "./store";
 import { modelSelectionOf, resolvePipelineVersions, type PipelineVersions, type RulesFreeze } from "./versions";
@@ -91,6 +92,10 @@ export function supabaseReader(supabase: SupabaseClient): AdaptationReader {
       query = version === null ? query.order("version", { ascending: false }) : query.eq("version", version);
       const { data } = await query.limit(1);
       return data?.[0] ?? null;
+    },
+    async getRecreationState(versionId) {
+      const { data } = await supabase.from("recreation_versions").select("state").eq("adaptation_version_id", versionId).maybeSingle();
+      return RECREATION_STATES.find((state) => state === data?.state) ?? null;
     },
     async getSubjectName(slug) {
       const { data } = await supabase.from("subjects").select("name").eq("slug", slug).maybeSingle();

@@ -5,7 +5,7 @@ import { RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/v1";
 import { RecreationPlanSchema, type RecreationPlan } from "@/lib/recreation/contract";
 import { recreationInput } from "@/lib/recreation/input";
 import { fixedPlanner, runRecreation, type RecreationOutcome } from "@/lib/recreation/pilot";
-import { NOT_NEW_SIMILARITY, originalOperations, quantityEvidence, similarity, verifyPlan } from "@/lib/recreation/verify";
+import { NOT_NEW_SIMILARITY, originalOperations, pendingMaterialChecks, quantityEvidence, similarity, verifyPlan } from "@/lib/recreation/verify";
 import { generable } from "@/lib/recreation/visuals";
 import { MaterialAnalysisDraftSchema } from "@/lib/schemas/material-analysis";
 import { allBlocks } from "@/lib/schemas/material-document";
@@ -29,6 +29,17 @@ const status = (p: RecreationPlan, id: string, a = analysis) => verify(p, a).act
 const activity = (p: RecreationPlan, id: string) => p.activities.find((a) => a.id === id)!;
 
 describe("recreation_plan@v1 · piloto del estanque", () => {
+  it("la corrección futura de una respuesta abierta no cuenta como revisión del diseño", async () => {
+    const { verification, plan } = await ready();
+    const open = verification.activities.filter((a) => a.status === "teacher_review");
+    expect(open.length).toBeGreaterThan(0);
+    expect(pendingMaterialChecks(plan, open, [])).toEqual([]);
+    const reasoning = verification.equivalence.filter((e) => e.objective_id === "obj_5");
+    expect(pendingMaterialChecks(plan, open, reasoning)).toMatchObject([
+      { check: "objectives_preserved", activityIds: ["ra_6", "ra_7"] },
+    ]);
+  });
+
   it("cumple el contrato, se verifica y produce la ficha y los materiales (sin clave ni informe)", async () => {
     expect(RecreationPlanSchema.safeParse(POND_RECREATION_PLAN).success).toBe(true);
     const { compiled, verification } = await ready();

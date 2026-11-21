@@ -73,7 +73,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
           </LinkButton>
         </nav>
         {/* The PDF is always the student's sheet; a sheet the student view cannot show is not offered for download. */}
-        {readiness.printable ? <div className="space-y-3"><PdfPreview adaptationId={id} baseVersion={loaded.version.version} editHref={canWrite ? `/app/adaptaciones/${id}/editar` : undefined} /><PdfDownload adaptationId={id} /></div> : null}
+        {readiness.printable && loaded.status.recreationState !== "incomplete" ? <div className="space-y-3"><PdfPreview adaptationId={id} baseVersion={loaded.version.version} editHref={canWrite ? `/app/adaptaciones/${id}/editar` : undefined} /><PdfDownload adaptationId={id} /></div> : null}
       </div>
 
       {student ? null : <VisualNeedsPanel needs={needs} adaptationId={id} canWrite={canWrite} locateHref={locateHref} manual={manual} editHref={`${here}?editar=1`} />}
@@ -93,6 +93,7 @@ export default async function SheetPage({ params, searchParams }: PageProps<"/ap
           validation={validation}
           version={loaded.version.version}
           observations={warningLines(loaded.status)}
+          recreationState={loaded.status.recreationState}
         />
       )}
     </div>

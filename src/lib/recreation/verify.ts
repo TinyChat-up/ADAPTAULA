@@ -1,5 +1,6 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import { RECREATION_CHECK_COPY } from "./quality";
 import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type RecreationActivity, type RecreationPlan } from "./contract";
 
 /**
@@ -21,7 +22,7 @@ import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type Recreati
  * person or a semantic reviewer confirms it. It is never reported as passed by default.
  */
 
-export const RECREATION_VERIFIER_VERSION = "recreation_verify@v2";
+export const RECREATION_VERIFIER_VERSION = "recreation_verify@v3";
 
 export type VerificationStatus = "verified" | "anchored" | "teacher_review";
 
@@ -64,6 +65,37 @@ export interface Verification {
   /** Whether a person must review something before the sheet is used. Always true while anything is anchored or pending. */
   review_required: boolean;
   version: typeof RECREATION_VERIFIER_VERSION;
+}
+
+/** Evidence still needed before using the material. An open answer's marking criteria concern the pupil's future work. */
+export function pendingMaterialChecks(plan: RecreationPlan, activities: VerifiedActivity[], equivalence: EquivalenceEntry[]) {
+  const pending: Array<{
+    check: "objectives_preserved" | "traceability_complete" | "visual_references_resolved" | "answers_not_leaked";
+    activityIds: string[];
+    detail: string;
+  }> = [];
+  const objectives = new Set(equivalence.filter((e) => e.checks.some((c) => c.status !== "passed")).map((e) => e.objective_id));
+  if (objectives.size) pending.push({
+    check: "objectives_preserved",
+    activityIds: plan.activities.filter((a) => a.objective_ids.some((id) => objectives.has(id))).map((a) => a.id),
+    detail: RECREATION_CHECK_COPY.objectives_preserved,
+  });
+  const anchored = activities.filter((a) => a.status === "anchored");
+  if (anchored.length) pending.push({
+    check: "traceability_complete", activityIds: anchored.map((a) => a.id),
+    detail: RECREATION_CHECK_COPY.traceability_complete,
+  });
+  const arrows = (plan.diagrams ?? []).filter((d) => d.relations.length);
+  if (arrows.length) pending.push({
+    check: "visual_references_resolved", activityIds: [...new Set(arrows.flatMap((d) => d.activity_ids))],
+    detail: RECREATION_CHECK_COPY.visual_references_resolved,
+  });
+  const closed = activities.filter((a) => a.status !== "teacher_review");
+  if (closed.length) pending.push({
+    check: "answers_not_leaked", activityIds: closed.map((a) => a.id),
+    detail: RECREATION_CHECK_COPY.answers_not_leaked,
+  });
+  return pending;
 }
 
 import { diagramPlanIssues, diagramTexts, diagramsFor } from "./diagrams";
@@ -291,8 +323,7 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   for (const e of equivalence) for (const c of e.checks) if (c.status === "failed") error(`equivalence_${c.code}`, `objectives.${e.objective_id}`, c.note);
 
   const ok = !issues.some((i) => i.severity === "error");
-  // A new scheme's arrows are anchored, not proven (ADR-059): their reading always goes through the teacher.
-  const review_required = verified.some((v) => v.status !== "verified") || equivalence.some((e) => e.checks.some((c) => c.status !== "passed")) || (plan.diagrams ?? []).some((d) => d.relations.length > 0);
+  const review_required = pendingMaterialChecks(plan, verified, equivalence).length > 0;
   return { ok, issues, activities: verified, required, equivalence, review_required, version: RECREATION_VERIFIER_VERSION };
 }
 
