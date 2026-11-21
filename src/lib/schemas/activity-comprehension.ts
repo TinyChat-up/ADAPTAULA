@@ -71,7 +71,7 @@ export const MaterialAnalysisV4DraftSchema = MaterialAnalysisDraftSchema.extend(
 });
 export type MaterialAnalysisV4Draft = z.infer<typeof MaterialAnalysisV4DraftSchema>;
 
-const ActivityComprehensionSchema = z.object({
+export const ActivityComprehensionSchema = z.object({
   activity_id: ActivityId,
   objectives: z.array(z.object({ objective_ref: ObjectiveId, basis: z.enum(["explicit", "interpreted"]), evidence: StoredEvidence }).strict()).max(6),
   ...Claims(StoredEvidence),
@@ -90,4 +90,5 @@ export const ActivityComprehensionDocumentSchema = z.object({
 
 export type ActivityComprehension = z.infer<typeof ActivityComprehensionSchema>;
 export type ActivityComprehensionDocument = z.infer<typeof ActivityComprehensionDocumentSchema>;
+export { StoredEvidence as ActivityEvidenceSchema };
 export type ActivityEvidence = z.infer<typeof StoredEvidence>;

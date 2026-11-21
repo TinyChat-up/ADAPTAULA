@@ -2,6 +2,10 @@
 
 Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → coste → escalabilidad realista.
 
+## Dirección pedagógica por actividad · Motor pedagógico 2.0, Fase 3A (2026-11-21)
+
+El director genera restricciones y decisiones vinculadas al análisis v4 y al original. El planificador de recreación sigue siendo el encargado de proponer actividades y recursos fabricables. Se conserva un único planificador y la revisión de equivalencia se aplica a la actividad que se fabrique. El director se entrega como módulo interno, con pruebas sintéticas. [Contrato y conexión prevista](RECREATION.md#director-pedagógico--fase-3a).
+
 ## ADR-052 — Recreación: respuestas solo en el servidor, estado de revisión, tarjetas ilustradas, versiones y evaluación real preparada (2026-11-18)
 
 - **Respuestas.** El registro y la propuesta de tablas se separan en tres partes: línea, versión visible e interno.
