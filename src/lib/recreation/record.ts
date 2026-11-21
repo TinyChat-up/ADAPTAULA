@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
+import { pendingMaterialChecks } from "./verify";
 import type { RecreationOutcome } from "./pilot";
 
 /**
@@ -30,8 +31,8 @@ const AnswerlessDocument = MaterialDocumentSchema.refine((d) => d.answer_key.len
 
 /**
  * What the teacher is told about the material, in plain words and never with an answer:
- *   ready       every closed answer was proven by the server (or the activity is open, judged with criteria);
- *   review      some activities' answers rest on the text but their meaning was not proven: they need the teacher's look first;
+ *   ready       the verifier reported no outstanding material checks and the composition is complete;
+ *   review      a check on the design, answers or resources needs the teacher’s judgment before use;
  *   incomplete  something essential is missing (a picture an activity needs).
  * A plan that fails an essential check is never stored (there is nothing to show).
  */
@@ -146,23 +147,27 @@ export function versionOf(
   ids: { id: string; lineId: string; version: number; workspaceId: string; now: string },
   runs: readonly AIRunRecord[],
   pipeline: RecreationInternal["pipeline"],
-): { version: RecreationVersion; internal: RecreationInternal } | null {
+): { version: RecreationVersion; internal: RecreationInternal; pending: ReturnType<typeof pendingMaterialChecks> } | null {
   if (outcome.status !== "ready") return null;
   const { plan, compiled, visuals, verification } = outcome;
   const label = (activityId: string) => compiled.trace.find((t) => t.activity_id === activityId)?.label ?? "?";
   const missing = visuals.filter((v) => v.route === "none" && v.essential);
-  const review = compiled.trace.filter((t) => t.status === "anchored").map((t) => t.label);
+  const pending = pendingMaterialChecks(plan, verification.activities, verification.equivalence);
+  const affected = new Set(pending.flatMap((p) => p.activityIds));
+  const review = compiled.trace.filter((t) => affected.has(t.activity_id)).map((t) => t.label);
   const list = (labels: string[]) => (labels.length === 1 ? `la actividad ${labels[0]}` : `las actividades ${labels.slice(0, -1).join(", ")} y ${labels.at(-1)}`);
-  const state: RecreationVersion["state"] = missing.length || compiled.unresolved.length ? "incomplete" : review.length ? "review" : "ready";
+  const needsReview = verification.review_required || pending.length > 0;
+  const state: RecreationVersion["state"] = missing.length || compiled.unresolved.length ? "incomplete" : needsReview ? "review" : "ready";
   const state_message =
     state === "incomplete" && missing.length === 0
       ? "Una actividad se apoyaba en un recurso que no se ha podido crear. No se ha entregado la ficha."
       : state === "incomplete"
       ? `Falta una imagen necesaria para ${list(missing.map((m) => label(m.activity_ids[0]!)))}. No uses la ficha hasta tenerla: puedes regenerarla.`
       : state === "review"
-        ? `Antes de usarla, revisa ${list(review)}: comprueba con el texto que cada pregunta tiene una sola respuesta correcta.`
+        ? [review.length ? `Antes de usarla, revisa ${list(review)}.` : "Queda una comprobación del material pendiente.", ...pending.map((p) => p.detail)].join(" ")
         : null;
   return {
+    pending,
     version: RecreationVersionSchema.parse({
       record_version: RECREATION_RECORD_VERSION,
       id: ids.id,

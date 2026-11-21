@@ -7,7 +7,7 @@ import { resolvePipelineVersions } from "@/lib/adaptation/orchestration/versions
 import { resolveModel } from "@/lib/ai/registry";
 import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { mockStack, runMockRecreation } from "../support/recreation-mocks";
-import { planRecreation } from "@/lib/recreation/pilot";
+import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
 import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
 import { recreationInput } from "@/lib/recreation/input";
 
@@ -22,6 +22,25 @@ const ready = async (options: Parameters<typeof runMockRecreation>[0] = {}) => {
 };
 
 describe("recorrido completo simulado", () => {
+  it("una resta comprobada conserva la revisión pendiente de su exigencia pedagógica", async () => {
+    const plan = structuredClone(POND_RECREATION_PLAN);
+    plan.activities = plan.activities.filter((a) => a.id === "ra_5");
+    plan.objectives = plan.objectives.filter((o) => o.objective_id === "obj_4");
+    plan.guide.per_activity = plan.guide.per_activity.filter((g) => g.activity_id === "ra_5");
+    plan.materials = [];
+    plan.visual_requests = [];
+    const { request, planner } = mockStack({ plans: [plan] });
+    const analysis = structuredClone(request.analysis);
+    analysis.pedagogical_intent.objectives = analysis.pedagogical_intent.objectives.filter((o) => o.id === "obj_4");
+    analysis.activities = analysis.activities.filter((a) => a.objective_ids.includes("obj_4"));
+    const outcome = await runRecreation(planner, { ...request, analysis });
+    if (outcome.status !== "ready") throw new Error(outcome.status);
+    expect(outcome.verification.activities.map((a) => a.status)).toEqual(["verified"]);
+    expect(outcome.verification.review_required).toBe(true);
+    const stored = versionOf(outcome, { id: "33333333-3333-4333-8333-333333333333", lineId: "77777777-7777-4777-8777-777777777777", version: 1, workspaceId: "11111111-1111-4111-8111-111111111111", now: "2026-11-18T10:00:00Z" }, [], { contract: "c", verifier: "v", visuals: "x", planner: "p" });
+    expect(stored?.version).toMatchObject({ state: "review", review_activities: ["1"], state_message: expect.stringMatching(/razonamiento/) });
+  });
+
   it("si el verificador rechaza un plan válido, la reparación recibe ese mismo plan y los errores sin exponerlos en el registro", async () => {
     const bad = structuredClone(POND_RECREATION_PLAN);
     bad.activities[6]!.steps = ["Debe darte 12."];

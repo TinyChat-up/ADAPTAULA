@@ -21,7 +21,7 @@ import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type Recreati
  * person or a semantic reviewer confirms it. It is never reported as passed by default.
  */
 
-export const RECREATION_VERIFIER_VERSION = "recreation_verify@v2";
+export const RECREATION_VERIFIER_VERSION = "recreation_verify@v3";
 
 export type VerificationStatus = "verified" | "anchored" | "teacher_review";
 
@@ -64,6 +64,37 @@ export interface Verification {
   /** Whether a person must review something before the sheet is used. Always true while anything is anchored or pending. */
   review_required: boolean;
   version: typeof RECREATION_VERIFIER_VERSION;
+}
+
+/** Evidence still needed before using the material. An open answer's marking criteria concern the pupil's future work. */
+export function pendingMaterialChecks(plan: RecreationPlan, activities: VerifiedActivity[], equivalence: EquivalenceEntry[]) {
+  const pending: Array<{
+    check: "objectives_preserved" | "traceability_complete" | "visual_references_resolved" | "answers_not_leaked";
+    activityIds: string[];
+    detail: string;
+  }> = [];
+  const objectives = new Set(equivalence.filter((e) => e.checks.some((c) => c.status !== "passed")).map((e) => e.objective_id));
+  if (objectives.size) pending.push({
+    check: "objectives_preserved",
+    activityIds: plan.activities.filter((a) => a.objective_ids.some((id) => objectives.has(id))).map((a) => a.id),
+    detail: "Compara con el original el razonamiento que debe hacer el alumno.",
+  });
+  const anchored = activities.filter((a) => a.status === "anchored");
+  if (anchored.length) pending.push({
+    check: "traceability_complete", activityIds: anchored.map((a) => a.id),
+    detail: "Contrasta las respuestas propuestas con la fuente citada.",
+  });
+  const arrows = (plan.diagrams ?? []).filter((d) => d.relations.length);
+  if (arrows.length) pending.push({
+    check: "visual_references_resolved", activityIds: [...new Set(arrows.flatMap((d) => d.activity_ids))],
+    detail: "Comprueba el sentido de las flechas del esquema.",
+  });
+  const closed = activities.filter((a) => a.status !== "teacher_review");
+  if (closed.length) pending.push({
+    check: "answers_not_leaked", activityIds: closed.map((a) => a.id),
+    detail: "Comprueba si alguna pista permite deducir una respuesta cerrada.",
+  });
+  return pending;
 }
 
 import { diagramPlanIssues, diagramTexts, diagramsFor } from "./diagrams";
@@ -291,8 +322,7 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   for (const e of equivalence) for (const c of e.checks) if (c.status === "failed") error(`equivalence_${c.code}`, `objectives.${e.objective_id}`, c.note);
 
   const ok = !issues.some((i) => i.severity === "error");
-  // A new scheme's arrows are anchored, not proven (ADR-059): their reading always goes through the teacher.
-  const review_required = verified.some((v) => v.status !== "verified") || equivalence.some((e) => e.checks.some((c) => c.status !== "passed")) || (plan.diagrams ?? []).some((d) => d.relations.length > 0);
+  const review_required = pendingMaterialChecks(plan, verified, equivalence).length > 0;
   return { ok, issues, activities: verified, required, equivalence, review_required, version: RECREATION_VERIFIER_VERSION };
 }
 

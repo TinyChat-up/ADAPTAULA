@@ -127,9 +127,10 @@ describe("recorrido completo: planificar, generar y entregar", () => {
     expect(version.document.answer_key).toEqual([]);
     expect(JSON.stringify(version.document)).not.toContain(SECRET);
     expect(version.review.verdict).toBe("approved_with_warnings");
+    expect((await t.status(id)).review?.warnings.map((c) => c.check)).toEqual(expect.arrayContaining(["objectives_preserved", "answers_not_leaked"]));
     const visible = (await q<{ state: string; state_message: string; review_activities: string[]; materials_document: { answer_key: unknown[] }; explanation: { adapted: string[] }; assets: unknown[] }>("select * from public.recreation_versions where adaptation_version_id = $1", [version.id]))[0]!;
-    expect(visible).toMatchObject({ state: "review", review_activities: ["1", "3"] });
-    expect(visible.state_message).toMatch(/^Antes de usarla, revisa las actividades 1 y 3/);
+    expect(visible).toMatchObject({ state: "review", review_activities: ["1", "2", "3", "4", "5", "6", "7"] });
+    expect(visible.state_message).toContain("Contrasta las respuestas propuestas con la fuente citada.");
     expect(visible.materials_document.answer_key).toEqual([]);
     expect(visible.explanation.adapted.length).toBeGreaterThan(0);
     expect(visible.assets.length).toBeGreaterThan(0);

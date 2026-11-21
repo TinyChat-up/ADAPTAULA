@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FunctionalProfileSchema } from "@/lib/schemas/functional-profile";
-import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
+import { PedagogicalReviewSchema, type PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { logger } from "@/lib/logger";
 import { visualSupportResult } from "../presentation/visual-support-result";
 import { AdaptationError } from "./errors";
@@ -20,7 +20,7 @@ import { methodNotes, type MethodNote } from "../v22/notes";
 import { AdaptationContextSchema } from "@/lib/schemas/adaptation-context";
 import { AdaptationPlanSchema, type PlanValidation } from "@/lib/schemas/adaptation-plan";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
-import type { RecreationApproach } from "../recreation/engine";
+import { usesRecreation, type RecreationApproach } from "../recreation/engine";
 
 /**
  * Application layer of the pipeline: what a Server Action / Route Handler calls (createAdaptation, startPlanning,
@@ -399,10 +399,13 @@ export async function getAdaptationStatus(deps: ServiceDeps, actor: Actor, adapt
   const merged = latest("pedagogical_review") as { review?: PedagogicalReview; pending?: string[] } | undefined;
   const deterministic = latest("deterministic_review") as { review?: PedagogicalReview } | undefined;
   const version = await deps.reader.getVersion(adaptationId, snapshot.adaptation.current_version || null);
+  // Recreation finalizes the review on the version itself; it has no classic review artifact.
+  const versionReview = version && isDelivered(snapshot.adaptation) && usesRecreation(snapshot.adaptation.pipeline_versions)
+    ? PedagogicalReviewSchema.safeParse(version.review).data : undefined;
   const extra: StatusArtifacts = {
     planValidation: validation?.classification ? { counts: validation.classification.counts } : null,
     execution: execution?.execution ?? null,
-    review: merged?.review ?? deterministic?.review ?? null,
+    review: versionReview ?? merged?.review ?? deterministic?.review ?? null,
     pending: merged?.pending ?? [],
     hasPlan: artifacts.some((a) => a.kind === "plan"),
     hasPlanReview: artifacts.some((a) => a.kind === "plan_review"),
