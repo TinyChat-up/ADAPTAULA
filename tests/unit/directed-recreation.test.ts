@@ -7,11 +7,15 @@ import { printDirectedRecreation } from "@/lib/recreation/directed-print";
 import type { DirectedPlan } from "@/lib/recreation/directed-plan";
 import { candidateFor, completeOriginal, directorFixture, echoPlan, PRIVATE_STATEMENT, readPlannerRequest, replacementPlan, shortOriginal } from "../support/directed-recreation";
 import { pedagogicalOriginalDraft } from "../support/pedagogical-original";
+import { emphasise, explicitRequirements } from "@/lib/recreation/directed-supports";
 
 function resultOf(result: DirectedPilotResult) {
   if (result.status === "blocked") throw new Error(JSON.stringify({ issues: result.issues, direction: result.direction?.activities.filter((row) => row.issues.length).map(({ activity_id, issues, uncertainties }) => ({ activity_id, issues, uncertainties })) }));
   return result;
 }
+
+/** The fragments printed in bold (`**…**`). */
+const bolded = (prompt: string) => [...prompt.matchAll(/\*\*([^*]+)\*\*/gu)].map((m) => m[1]!);
 
 function activity(result: ReturnType<typeof resultOf>, originalId: string) {
   const id = result.trace.find(({ original_id }) => original_id === originalId)?.block_id;
@@ -38,11 +42,14 @@ describe("dirección conectada al planificador y fabricada", () => {
     const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: fixture, candidate: { version: 1, activities: keep } }));
     expect(fixture).toHaveBeenCalledTimes(1);
     expect(output.document.meta.stage).toBe("eso");
-    expect(activity(output, "act_1")).toMatchObject({ prompt: expect.stringContaining("orden.\n\nJustifica"), response: { kind: "lines", lines: 5 } });
-    expect(activity(output, "act_1").prompt).toContain("Se han reservado 75 por la mañana y 32 por la tarde");
+    // Fase 4.1: the explicit requirement of how to answer is emphasised; the data stay exactly as the original prints them.
+    expect(activity(output, "act_1")).toMatchObject({ prompt: expect.stringContaining("orden.\n\n**Justifica el procedimiento**."), response: { kind: "lines", lines: 5 } });
+    expect(activity(output, "act_1").prompt).toContain("Hay 150 plazas. Se han reservado 75 por la mañana y 32 por la tarde");
+    expect(bolded(activity(output, "act_1").prompt)).toEqual(["Justifica el procedimiento"]);
     expect(activity(output, "act_3")).toMatchObject({ trace: { origin: "original" }, prompt: expect.stringContaining("con dos argumentos") });
+    // No generic «Orientación» box anywhere: a support says something specific to its activity or is not printed.
+    expect(allBlocks(output.document).some((b) => b.type === "help_box" && b.title === "Orientación")).toBe(false);
     expect(allBlocks(output.document)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "help_box", title: "Orientación", trace: expect.objectContaining({ source_refs: ["act_2"] }) }),
       expect.objectContaining({ type: "chart", categories: ["Marzo", "Abril"], series: [{ label: null, values: [12, 20] }] }),
       expect.objectContaining({ type: "reading_text", literal: true }),
     ]));
@@ -51,6 +58,80 @@ describe("dirección conectada al planificador y fabricada", () => {
     );
     expect(output.provenance.document).toBe(fingerprint(output.document));
     expect(output.checks).toMatchObject({ fabrication: "passed", pdf: "pending", semantic: "pending" });
+  });
+
+  it("Fase 4.1 · un texto argumentativo recibe espacio suficiente, su condición resaltada y una comprobación final literal", async () => {
+    const { input, original } = await directorFixture();
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const argued = activity(output, "act_3");
+    expect(argued.prompt).toContain("**con dos argumentos**");
+    expect(argued.response).toMatchObject({ kind: "lines", lines: 8 });
+    // A short written answer keeps its own space plus two lines; it is not stretched to the extended minimum.
+    expect(activity(output, "act_1").response).toMatchObject({ kind: "lines", lines: 5 });
+    const checks = allBlocks(output.document).filter((b): b is Extract<Block, { type: "checklist" }> => b.type === "checklist");
+    expect(checks.map(({ title, items, trace }) => ({ title, items, refs: trace.source_refs }))).toEqual([
+      { title: "Antes de entregar, comprueba", items: ["Con dos argumentos"], refs: ["act_3"] },
+    ]);
+  });
+
+  it("Fase 4.1 · no resalta ni lista datos ni lo que el alumno debe seleccionar o inferir", async () => {
+    const draft = completeOriginal();
+    // A form requirement that is also where the student selects the evidence: pointing at it would say what to look for.
+    draft.activities[1]!.comprehension.conditions.push({ kind: "response_length", evidence: { source_ref: "a2", quote: "con una frase del texto" } });
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    for (const id of ["act_1", "act_2", "act_5"]) {
+      for (const fragment of bolded(activity(output, id).prompt)) expect(fragment).not.toMatch(/\d|frase del texto|tendencia/u);
+    }
+    expect(activity(output, "act_2").prompt).not.toContain("**");
+    const listed = allBlocks(output.document).flatMap((b) => (b.type === "checklist" ? b.items : [])).join(" ");
+    expect(listed).not.toMatch(/150|75|32|frase del texto|exploradora|Marzo|Abril/u);
+  });
+
+  it("Fase 4.1 · declara la orientación visual que no puede fabricarse sin añadir información, en lugar de darla por aplicada", async () => {
+    const { input, original } = await directorFixture();
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const row = output.direction.activities.find(({ activity_id }) => activity_id === "act_2")!;
+    expect(row.changes.map(({ kind }) => kind)).toContain("visual_navigation");
+    // act_2 has no requirement of form to point at (the student infers and selects): nothing generic is printed in its place.
+    expect(output.trace.find(({ original_id }) => original_id === "act_2")).toMatchObject({ emphasised: [], unfabricated: ["visual_navigation"] });
+    expect(output.trace.find(({ original_id }) => original_id === "act_3")).toMatchObject({ unfabricated: [] });
+    expect(allBlocks(output.document).some((b) => (b.type === "help_box" || b.type === "checklist") && b.trace.source_refs.includes("act_2"))).toBe(false);
+    expect(output.checks.supports).toBe("partial");
+  });
+
+  it("Fase 4.1 · conserva literalmente la negrita del original al resaltar y al verificar", async () => {
+    const draft = completeOriginal();
+    const argued = draft.activities[2]!;
+    // The original prints «clase» in bold: the transcription and every quote of it carry the marks.
+    argued.instruction = argued.instruction.replace("tu clase", "tu **clase**");
+    argued.comprehension = JSON.parse(JSON.stringify(argued.comprehension).replaceAll("tu clase", "tu **clase**"));
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const prompt = activity(output, "act_3").prompt;
+    expect(prompt).toContain("tu **clase**");
+    expect(prompt).toContain("**con dos argumentos**");
+    // A requirement inside or touching the original's bold is left as the original prints it: no added or lost mark.
+    const own = { obligations: [{ ref: "condition_1", kind: "condition" as const, value: "reasoning", evidence: { source_ref: "act_9", page: 1, quote: "con dos argumentos" } }] };
+    const marked = "Defiende tu postura **con dos argumentos**.";
+    expect(explicitRequirements(marked, own, { id: "act_9", expected_answer: { basis: "not_inferable", value: null } })).toEqual([]);
+    expect(emphasise(marked, [])).toBe(marked);
+    expect(explicitRequirements("Usa **dos** ejemplos con dos argumentos", own, { id: "act_9", expected_answer: { basis: "not_inferable", value: null } })).toEqual(["con dos argumentos"]);
+  });
+
+  it("Fase 4.1 · una condición citada con negrita original se verifica sin perder esa negrita", async () => {
+    const draft = completeOriginal();
+    const argued = draft.activities[2]!;
+    // The original prints the very condition that is quoted in bold; the sheet must keep it and still recognise the quote.
+    argued.instruction = argued.instruction.replace("con dos argumentos", "**con dos argumentos**");
+    argued.comprehension = JSON.parse(JSON.stringify(argued.comprehension).replaceAll("con dos argumentos", "**con dos argumentos**"));
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const prompt = activity(output, "act_3").prompt;
+    expect(prompt).toContain("Defiende tu postura **con dos argumentos**.");
+    expect(prompt).not.toContain("****");
+    expect(output.trace.find(({ original_id }) => original_id === "act_3")?.emphasised).toEqual([]);
+    expect(output.checks.fabrication).toBe("passed");
   });
 
   it("conserva toda la ficha sin pedir un plan si no hay cambios justificados", async () => {

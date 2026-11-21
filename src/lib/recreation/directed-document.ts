@@ -12,13 +12,18 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { DirectorActivity } from "@/lib/schemas/pedagogical-direction";
 import type { DirectedPlan } from "./directed-plan";
 import { checkResource, type DirectedIssue } from "./directed-checks";
+import { emphasise, explicitRequirements, extendedWriting, finalChecklist, withoutAddedEmphasis, workspaceLines } from "./directed-supports";
 import type { CompiledRecreation } from "./compile";
 
 type ActivityBlock = Extract<Block, { type: "activity" }>;
 const isActivity = (b: Block): b is ActivityBlock => b.type === "activity";
 const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
 
-export type DirectedTrace = { original_id: string; result_id: string; block_id: string; obligations: string[] };
+/**
+ * `emphasised`: the requirements Adaptaula put in bold (removed again, exactly, by the literal checks). `unfabricated`: a support the
+ * director asked for that could not be made without adding information (declared, never claimed as applied).
+ */
+export type DirectedTrace = { original_id: string; result_id: string; block_id: string; obligations: string[]; emphasised: string[]; unfabricated: Array<"visual_navigation"> };
 type Fabrication = { ok: true; document: MaterialDocument; trace: DirectedTrace[] } | { ok: false; issues: DirectedIssue[] };
 
 export function fabricateDirectedDocument(input: {
@@ -80,9 +85,13 @@ export function fabricateDirectedDocument(input: {
         if (!activity.prompt.startsWith(original.instruction)) return issue("literal_segmentation_unavailable", original_id);
         activity.prompt = original.instruction.split(/(?<=[.!?])\s+(?=\S)/u).join("\n\n") + activity.prompt.slice(original.instruction.length);
       }
+      // Requirements of how to answer, emphasised where the prompt already states them (never data: see directed-supports.ts).
+      const requirements = changes.has("segment_instruction") || changes.has("visual_navigation") ? explicitRequirements(activity.prompt, row, original) : [];
+      if (requirements.length > 0) activity.prompt = emphasise(activity.prompt, requirements);
+      const extended = extendedWriting(row);
       if (changes.has("blank_workspace")) {
         const response = activity.response;
-        if (response.kind === "lines" && response.lines <= 38) activity.response = { ...response, lines: response.lines + 2 };
+        if (response.kind === "lines" && response.lines <= 38) activity.response = { ...response, lines: workspaceLines(response.lines, extended) };
         else if (response.kind === "grid") {
           const rows = "rows" in response ? response.rows : undefined;
           if (rows === undefined || rows > 58) return issue("unlabelled_workspace_unavailable", original_id);
@@ -91,17 +100,19 @@ export function fabricateDirectedDocument(input: {
         else return issue("unlabelled_workspace_unavailable", original_id);
       }
       if (changes.has("oral_response")) activity.response = responseForDecision(original, "oral_or_alternative");
-      if (!replacement && compact(activity.prompt) !== compact(block.prompt)) return issue("source_text_changed", original_id);
-      if (changes.size > 0) activity = { ...activity, trace: { ...activity.trace, origin: "adapted" } };
+      if (!replacement && compact(withoutAddedEmphasis(activity.prompt, requirements)) !== compact(block.prompt)) return issue("source_text_changed", original_id);
+      // Navigation is made by the emphasised requirements (and their final check). Without any, nothing safe is left to print:
+      // the support is declared as not fabricated rather than replaced by a generic box.
+      const unfabricated: DirectedTrace["unfabricated"] = changes.has("visual_navigation") && requirements.length === 0 ? ["visual_navigation"] : [];
+      if (changes.size > unfabricated.length) activity = { ...activity, trace: { ...activity.trace, origin: "adapted" } };
       pageBlocks.push(activity);
-      if (changes.has("visual_navigation")) {
-        pageBlocks.push({ id: newBlockId(), type: "help_box", variant: "strategy", title: "Orientación",
-          text: original.resource_ids.length > 0 || original.context
-            ? "Localiza la consigna, el material de la actividad y el espacio de respuesta."
-            : "Localiza la consigna y el espacio de respuesta.",
+      // The navigation support is the activity's own requirements to check before handing it in, or nothing: never a generic box.
+      const checklist = changes.has("visual_navigation") ? finalChecklist(requirements, extended) : null;
+      if (checklist) {
+        pageBlocks.push({ id: newBlockId(), type: "checklist", title: "Antes de entregar, comprueba", items: checklist,
           trace: { origin: "support", source_refs: [original_id], decision_ids: [] } });
       }
-      trace.push({ original_id, result_id, block_id: activity.id, obligations: row.retains });
+      trace.push({ original_id, result_id, block_id: activity.id, obligations: row.retains, emphasised: requirements, unfabricated });
     }
     pages.push({ blocks: pageBlocks });
   }
@@ -141,7 +152,7 @@ function reviewDirectedDocument(
     const literal = originalBlocks.get(block.id);
     const replacement = link && replacements.get(link.result_id);
     const expected = replacement || (literal?.type === "activity" ? literal : undefined);
-    if (!expected || compact(expected.prompt) !== compact(block.prompt)) issues.push({ code: "fabricated_prompt_changed", original_id });
+    if (!expected || compact(expected.prompt) !== compact(withoutAddedEmphasis(block.prompt, link?.emphasised ?? []))) issues.push({ code: "fabricated_prompt_changed", original_id });
     const changes = new Set(row.changes.map(({ kind }) => kind));
     if (expected && !changes.has("blank_workspace") && !changes.has("oral_response") &&
         fingerprint(expected.response) !== fingerprint(block.response)) issues.push({ code: "fabricated_response_changed", original_id });
@@ -149,7 +160,9 @@ function reviewDirectedDocument(
       issues.push({ code: "fabricated_response_changed", original_id });
     }
     const linkedResources = (block.resource_block_ids ?? []).flatMap((id) => blocks.get(id) ?? []);
-    const visible = [block, ...linkedResources.filter((item) => item.type !== "image")].map(studentText);
+    // Only the marks Adaptaula added to this activity are removed; the original's own bold, here and in its resources, stays.
+    const own = { ...block, prompt: withoutAddedEmphasis(block.prompt, link?.emphasised ?? []) };
+    const visible = [own, ...linkedResources.filter((item) => item.type !== "image")].map(studentText);
     for (const { kind, evidence, ref } of row.obligations) {
       if ((kind === "condition" || kind === "information") && evidence?.source_ref === original_id && evidence.quote &&
           !visible.some((text) => containsActivityQuote(text, evidence.quote!))) {
