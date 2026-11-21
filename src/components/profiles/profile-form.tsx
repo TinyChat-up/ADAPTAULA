@@ -239,7 +239,7 @@ export function ProfileForm({
 
       {showSummary ? (
         <aside aria-label="Resumen del perfil" className="min-w-0 xl:sticky xl:top-6 xl:self-start">
-          <ProfileSummaryPanel summary={summary} />
+          <ProfileSummaryPanel summary={summary} learning={{ areas: pedagogy.areas, subjects: catalog.subjects }} />
           <p className="mt-3 text-xs text-muted-foreground">
             Resumen generado a partir de tus ajustes. Nunca incluye el alias.{" "}
             <Link href="/privacidad" className="underline underline-offset-2">

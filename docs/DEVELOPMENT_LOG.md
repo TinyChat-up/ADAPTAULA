@@ -1,5 +1,10 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Fase 1 · Aprendizajes en el resumen pedagógico
+
+- El resumen del editor agrupa los aprendizajes por asignatura y muestra los cuatro estados de autonomía. Las entradas históricas de `knows` se mantienen como «Sin valorar». Lo que queda por reforzar tiene su propia etiqueta. Con más de cuatro entradas, la lista aparece en un desplegable.
+- Los enunciados se pasan solo al resumen del editor. La proyección general que usa la selección de perfil conserva sus campos. Pasaron ocho pruebas focalizadas y typecheck. Lint de los archivos tocados sin avisos. Entrega en la rama de la PR #115.
+
 ## 2026-11-21 · Fase 1 · E2E del alta directa y descarga de PDF
 
 - Playwright en Chromium local, con PGlite y proveedores simulados. Pasaron 18 casos en escritorio y 18 en móvil. Incluyen alta y edición, autonomía, apoyos de un clic, V1, duplicación, permisos, límites Free, protección ante actualizaciones obsoletas, accesibilidad y reflujo.
