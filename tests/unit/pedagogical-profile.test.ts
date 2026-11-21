@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { FunctionalProfileSchema, emptyFunctionalProfile } from "@/lib/schemas/functional-profile";
 import { compactProfile, setSupport, addPresets, replaceSupports } from "@/lib/profiles/draft";
 import { validPedagogicalAreas } from "@/lib/profiles/catalog";
+import { profileForSubject } from "@/lib/profiles/subject-profile";
+import { ABILITY_AUTONOMY } from "@/lib/schemas/pedagogical-profile";
 import { buildAdaptationContext } from "@/lib/adaptation/context";
 import { fractionsAnalysis } from "../../evals/adaptation/fixtures";
 
@@ -42,5 +44,31 @@ describe("perfil pedagógico V3", () => {
     expect(withNew.context).toEqual(buildAdaptationContext({ ...args, profile: withoutNew }).context);
     expect(JSON.stringify(withNew.context)).not.toContain("Reconoce partes de una planta");
     expect(withNew.context.adaptation_type).toBe("accessibility");
+  });
+});
+
+describe("aprendizajes con autonomía", () => {
+  const abilities = ABILITY_AUTONOMY.map((autonomy, i) => ({ statement: `Tarea educativa ${i + 1}`, autonomy }));
+  const extended = { ...profile, pedagogy: { ...pedagogy, short_responses_with_support: true as const, areas: [{ ...pedagogy.areas[0]!, abilities }, pedagogy.areas[1]!] } };
+
+  it("conserva los cuatro estados y descarta campos sin contenido de un borrador", () => {
+    const edited = compactProfile({ ...extended, pedagogy: { ...extended.pedagogy, areas: [{ ...extended.pedagogy.areas[0]!, abilities: [...abilities, { statement: " ", autonomy: "unassessed" }] }] } });
+    expect(FunctionalProfileSchema.parse(edited).pedagogy?.areas[0]?.abilities).toEqual(abilities);
+    expect(edited.pedagogy?.areas[0]?.knows).toEqual(profile.pedagogy.areas[0]?.knows);
+    expect(FunctionalProfileSchema.safeParse({ ...extended, pedagogy: { ...extended.pedagogy, areas: [{ ...extended.pedagogy.areas[0], abilities: [{ ...abilities[0], name: "dato innecesario" }] }] } }).success).toBe(false);
+  });
+
+  it("proyecta un área exacta, preserva lo desconocido y separa accesibilidad de autonomía", () => {
+    const science = profileForSubject(extended, "conocimiento-medio");
+    expect(science.learning?.abilities).toEqual([{ statement: "Reconoce partes de una planta", autonomy: "unassessed" }, ...abilities]);
+    expect(science.barriers).toEqual(["written_expression"]);
+    expect(science.strengths).toEqual(["oral_expression"]);
+    expect(science.short_responses_with_support).toBe(true);
+    expect(science.supports).toEqual({ visual_support: "medium", high_contrast: "none" });
+    expect(science.supports.writing_amount).toBeUndefined();
+    expect(science).not.toHaveProperty("adaptation_preferences");
+    expect(profileForSubject(extended, "matematicas").learning).toEqual({ subject: "matematicas", reference_grade: null, abilities: [], needs: [] });
+    for (const subject of [null, "ciencias"]) expect(profileForSubject(extended, subject).learning).toBeNull();
+    expect(profileForSubject(emptyFunctionalProfile(), "matematicas").short_responses_with_support).toBeNull();
   });
 });

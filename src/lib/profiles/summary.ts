@@ -15,6 +15,8 @@ export interface ProfileSummary {
   strengths: string[];
   barriers: string[];
   notNeeded: string[];
+  learningAreas: number;
+  supportedShortAnswers: boolean;
 }
 
 const LEVEL_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -38,6 +40,8 @@ function bilingualLine(code: string): string {
 export function summarizeProfile(profile: FunctionalProfile): ProfileSummary {
   const lines: SummaryLine[] = [];
   const observations = {
+    learningAreas: (profile.pedagogy?.areas ?? []).filter((area) => area.reference_grade || area.knows.some((s) => s.trim()) || area.needs.some((s) => s.trim()) || area.abilities?.some((ability) => ability.statement.trim())).length,
+    supportedShortAnswers: profile.pedagogy?.short_responses_with_support === true,
     strengths: (profile.observations?.strengths ?? []).map((id) => STRENGTHS[id]),
     barriers: (profile.observations?.barriers ?? []).map((id) => BARRIERS[id].label),
     notNeeded: (Object.entries(profile.supports) as [DimensionKey, string][]).filter(([, level]) => level === "none").map(([key]) => DIMENSION_COPY[key].control),

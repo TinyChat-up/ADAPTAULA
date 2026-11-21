@@ -34,8 +34,10 @@ test("registro → onboarding → crear perfil desde un punto de partida → edi
   await page.getByLabel("Etapa").selectOption({ label: "Educación Primaria" });
   await page.getByLabel("Curso").selectOption({ label: "5.º de Primaria" });
 
-  await expect(page.getByText("Todavía no has indicado ningún apoyo")).toBeVisible();
+  const summary = page.getByRole("complementary", { name: "Resumen del perfil" });
+  await expect(summary).toHaveCount(0);
   await applyProfilePreset(page, "Atención, planificación y organización");
+  await expect(summary).toBeVisible();
 
   await expect(page.getByText("instrucciones breves y divididas en pasos (habitual o imprescindible)")).toBeVisible();
   await expect(page.getByText("como máximo 3 tareas visibles a la vez")).toBeVisible();
@@ -123,6 +125,7 @@ test("accesibilidad (axe) en las pantallas principales de la app", async ({ page
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso", "/app/adaptar"]) {
     await page.goto(path);
     if (path === "/app/alumnos/nuevo") {
+      await page.getByText("Apoyos que le funcionan", { exact: true }).click();
       await page.getByText("Personalizar más", { exact: true }).click();
       await page.getByText("Elegir otras áreas de apoyo", { exact: true }).click();
       await page.getByRole("button", { name: /^Lectura/ }).click();

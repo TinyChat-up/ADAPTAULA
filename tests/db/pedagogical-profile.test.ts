@@ -9,7 +9,7 @@ it("actualiza V2 a V3, conserva y duplica datos, bloquea degradaciones y aísla 
   const a = await createUser(db, "perfil-v3-a@example.com"), b = await createUser(db, "perfil-v3-b@example.com");
   const v1 = { schema_version: 1, supports: {}, limits: {}, allowances: {} };
   const v2 = { schema_version: 2, supports: { high_contrast: "none" }, observations: { strengths: ["oral_expression"], barriers: [] }, limits: {}, allowances: {} };
-  const v3 = { ...v2, schema_version: 3, pedagogy: { areas: [{ subject: "conocimiento-medio", reference_grade: "3-primaria", knows: ["Reconoce plantas"], needs: ["Explica funciones"] }], response_preferences: ["oral"], adaptation_preferences: ["curricular"] } };
+  const v3 = { ...v2, schema_version: 3, pedagogy: { areas: [{ subject: "conocimiento-medio", reference_grade: "3-primaria", knows: ["Reconoce plantas"], abilities: [{ statement: "Lee un gráfico", autonomy: "with_help" }], needs: ["Explica funciones"] }], response_preferences: ["oral"], short_responses_with_support: true, adaptation_preferences: ["curricular"] } };
   const inserted = await as(db, "authenticated", a.id, () => db.query<{ id: string }>("insert into public.learner_profiles(workspace_id,created_by,display_name,functional_profile) values($1,$2,'Ficticio',$3) returning id", [a.workspaceId, a.id, JSON.stringify(v2)]));
   const id = inserted.rows[0]!.id;
   await expect(as(db, "authenticated", a.id, () => db.query("update public.learner_profiles set functional_profile=$1 where id=$2", [JSON.stringify(v3), id]))).rejects.toThrow(/profile_version_downgrade/);

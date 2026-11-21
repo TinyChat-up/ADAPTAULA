@@ -7,7 +7,9 @@ export const uniqueEmail = () => `docente-${Date.now()}-${Math.floor(Math.random
 
 export async function applyProfilePreset(page: Page, label: string) {
   const advanced = page.locator("details[data-profile-advanced]");
-  if (!await advanced.getAttribute("open").then((value) => value !== null)) await advanced.locator("summary").first().click();
+  const customizations = advanced.locator("summary").first();
+  if (!await customizations.isVisible()) await page.getByText("Apoyos que le funcionan", { exact: true }).click();
+  if (await advanced.getAttribute("open") === null) await customizations.click();
   await page.getByLabel("Punto de partida", { exact: true }).selectOption({ label });
   await page.getByRole("button", { name: "Aplicar", exact: true }).click();
   const more = page.getByRole("complementary", { name: "Resumen del perfil" }).locator("details");

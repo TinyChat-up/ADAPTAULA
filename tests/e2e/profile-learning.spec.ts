@@ -12,7 +12,9 @@ async function basics(page: Page, name = "Perfil ficticio") {
   await page.getByLabel("Curso", { exact: true }).selectOption("4-primaria");
 }
 async function observations(page: Page) {
-  await page.getByText("Fortalezas · ¿Qué se le da bien?", { exact: true }).click();
+  const strengths = page.getByText("Fortalezas · ¿Qué se le da bien?", { exact: true });
+  if (!await strengths.isVisible()) await page.getByText("Fortalezas y barreras", { exact: true }).click();
+  await strengths.click();
   await page.getByRole("checkbox", { name: strength, exact: true }).check();
   await page.getByText("Barreras · ¿Qué dificulta la tarea?", { exact: true }).click();
   await page.getByRole("checkbox", { name: barrier, exact: true }).check();
@@ -22,15 +24,58 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, style: "nextjs-portal {display:none}" });
 }
 
+test("aprendizajes por asignatura, autonomía y preferencia se guardan y se pueden editar", async ({ page }, info) => {
+  test.setTimeout(180_000);
+  await signUpAndOnboard(page, uniqueEmail());
+  await basics(page, "Caso educativo ficticio");
+  await expect(page.getByRole("heading", { name: "Información opcional" })).toBeVisible();
+  await expect(page.getByLabel("Añadir una asignatura")).toBeHidden();
+  await page.getByText("Aprendizajes por asignatura", { exact: true }).click();
+  await page.getByLabel("Añadir una asignatura").selectOption("matematicas");
+
+  const tasks = ["Lee gráficos de barras", "Explica una estrategia de cálculo", "Interpreta escalas distintas", "Lee una tabla de doble entrada"];
+  for (const [index, statement] of tasks.entries()) {
+    await page.getByRole("button", { name: "Añadir aprendizaje", exact: true }).click();
+    const row = page.getByRole("group", { name: `Aprendizaje ${index + 1}` });
+    await expect(row.getByLabel("Qué hace")).toBeFocused();
+    await row.getByLabel("Qué hace").fill(statement);
+    await row.getByLabel("Cómo lo hace").selectOption(["independent", "with_help", "not_yet", "unassessed"][index]!);
+  }
+  await page.getByLabel("Qué necesita aprender o mejorar").fill("Comparar escalas en gráficos");
+  await page.getByText("Formas de responder", { exact: true }).click();
+  await page.getByRole("checkbox", { name: "Respuestas breves con apoyos" }).check();
+  await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("Aprendizajes en una asignatura");
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze()).violations.map((v) => v.id)).toEqual([]);
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.evaluate(() => document.documentElement.style.fontSize = "200%");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
+  await page.setViewportSize(viewport);
+  await capture(page, info, "aprendizajes");
+  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
+  await expect(page).toHaveURL(/aviso=creado/);
+  await page.getByRole("link", { name: /Caso educativo ficticio/ }).click();
+  await expect(page.getByLabel("Qué hace").nth(1)).toHaveValue(tasks[1]!);
+  await expect(page.getByLabel("Cómo lo hace").nth(1)).toHaveValue("with_help");
+  await expect(page.getByLabel("Cómo lo hace").nth(3)).toHaveValue("unassessed");
+  await expect(page.getByRole("checkbox", { name: "Respuestas breves con apoyos" })).toBeChecked();
+  await page.getByLabel("Cómo lo hace").nth(1).selectOption("independent");
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect(page).toHaveURL(/aviso=guardado/);
+  await page.getByRole("link", { name: /Caso educativo ficticio/ }).click();
+  await expect(page.getByLabel("Cómo lo hace").nth(1)).toHaveValue("independent");
+  await expect(page.getByLabel("Qué necesita aprender o mejorar")).toHaveValue("Comparar escalas en gráficos");
+});
+
 test("tarjetas combinables, observaciones independientes, guardar, reabrir y duplicar", async ({ page }, info) => {
   await signUpAndOnboard(page, uniqueEmail());
   await basics(page);
-  await page.getByText(visual, { exact: true }).click();
-  await page.getByText(load, { exact: true }).click();
+  await page.getByText("Apoyos que le funcionan", { exact: true }).click();
+  await page.getByRole("button", { name: `Añadir apoyo de ${visual}`, exact: true }).click();
+  await page.getByText("Ver más propuestas de apoyo", { exact: true }).click();
+  await page.getByRole("button", { name: `Añadir apoyo de ${load}`, exact: true }).click();
   await capture(page, info, "tarjetas");
-  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-  await expect(page.getByText(/Pulsa «Añadir estos apoyos»/)).toBeVisible();
-  await page.getByRole("button", { name: "Añadir estos apoyos", exact: true }).click();
   const summary = page.getByRole("complementary", { name: "Resumen del perfil" });
   await expect(summary.getByText("Todavía no indicadas. No las deducimos de los apoyos.")).toBeVisible();
   await observations(page);
@@ -77,6 +122,7 @@ test("V1 editable, añadir sin borrar, sustituir con confirmación y deshacer", 
   await expect(page.getByText("Los apoyos del perfil anterior se conservan.", { exact: false })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("apoyo para decodificar al leer");
   await observations(page);
+  await page.getByText("Ver más propuestas de apoyo", { exact: true }).click();
   await page.getByText("Comprender números y operaciones", { exact: true }).click();
   await page.getByRole("button", { name: "Añadir estos apoyos", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("apoyo para decodificar al leer");
@@ -97,12 +143,12 @@ test("V1 editable, añadir sin borrar, sustituir con confirmación y deshacer", 
 
 test("teclado, reflujo, movimiento reducido y controles accesibles", async ({ page }, info) => {
   await signUpAndOnboard(page, uniqueEmail());
-  const checkbox = page.getByRole("checkbox", { name: visual, exact: true });
-  await checkbox.focus();
-  await expect(checkbox).toBeFocused();
-  await checkbox.press("Space");
-  await expect(checkbox).toBeChecked();
-  await page.getByRole("button", { name: "Añadir estos apoyos", exact: true }).click();
+  await page.getByText("Apoyos que le funcionan", { exact: true }).click();
+  const button = page.getByRole("button", { name: `Añadir apoyo de ${visual}`, exact: true });
+  await button.focus();
+  await expect(button).toBeFocused();
+  await button.press("Space");
+  await expect(page.getByRole("button", { name: `Apoyo añadido de ${visual}`, exact: true })).toHaveAttribute("aria-disabled", "true");
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze();
   expect(axe.violations.map((v) => v.id)).toEqual([]);
   await capture(page, info, "accesible");

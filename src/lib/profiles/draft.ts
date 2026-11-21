@@ -15,7 +15,19 @@ export function compactProfile(profile: FunctionalProfile): FunctionalProfile {
   }
   const limits = Object.fromEntries(Object.entries(profile.limits).filter(([, v]) => v !== undefined));
   const allowances = Object.fromEntries(Object.entries(profile.allowances).filter(([, v]) => v !== undefined && v !== false));
-  const pedagogy = profile.pedagogy && { ...profile.pedagogy, areas: profile.pedagogy.areas.map((a) => ({ ...a, knows: a.knows.map((s) => s.trim()).filter(Boolean), needs: a.needs.map((s) => s.trim()).filter(Boolean) })) };
+  const pedagogy = profile.pedagogy && {
+    ...profile.pedagogy,
+    areas: profile.pedagogy.areas.map((area) => {
+      const { abilities, ...saved } = area;
+      const observed = (abilities ?? []).map((ability) => ({ ...ability, statement: ability.statement.trim() })).filter((ability) => ability.statement);
+      return {
+        ...saved,
+        knows: area.knows.map((s) => s.trim()).filter(Boolean),
+        needs: area.needs.map((s) => s.trim()).filter(Boolean),
+        ...(observed.length ? { abilities: observed } : {}),
+      };
+    }),
+  };
   return { schema_version: profile.schema_version, supports, limits, allowances, ...(profile.observations ? { observations: profile.observations } : {}), ...(pedagogy ? { pedagogy } : {}) };
 }
 

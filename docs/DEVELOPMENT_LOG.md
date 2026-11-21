@@ -1,5 +1,30 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Fase 1 · Aprendizajes en el resumen pedagógico
+
+- El resumen del editor agrupa los aprendizajes por asignatura y muestra los cuatro estados de autonomía. Las entradas históricas de `knows` se mantienen como «Sin valorar». Lo que queda por reforzar tiene su propia etiqueta. Con más de cuatro entradas, la lista aparece en un desplegable.
+- Los enunciados se pasan solo al resumen del editor. La proyección general que usa la selección de perfil conserva sus campos. Pasaron ocho pruebas focalizadas y typecheck. Lint de los archivos tocados sin avisos. Entrega en la rama de la PR #115.
+
+## 2026-11-21 · Fase 1 · E2E del alta directa y descarga de PDF
+
+- Playwright en Chromium local, con PGlite y proveedores simulados. Pasaron 18 casos en escritorio y 18 en móvil. Incluyen alta y edición, autonomía, apoyos de un clic, V1, duplicación, permisos, límites Free, protección ante actualizaciones obsoletas, accesibilidad y reflujo.
+- La primera ejecución detectó una aserción desactualizada en `profiles.spec.ts`. La prueba ahora comprueba que el resumen aparece tras añadir apoyos. Se repitió el archivo completo en ambos tamaños.
+- Incluye un caso de Hacer magia en cada tamaño con creación del perfil desde el material, selección automática y descarga de un PDF comprobado con Chromium. Next.js usó fuentes de reserva por el bloqueo de Inter y Outfit en Google Fonts.
+
+## 2026-11-21 · Fase 1 · Alta de perfiles más directa
+
+- En `ProfileForm` y `ProfileBasics`, «Crear perfil» aparece junto a alias, etapa y curso. Los aprendizajes, apoyos, fortalezas y formas de responder se abren según se necesiten. El resumen aparece al añadir información relevante.
+- `StartingPointCards` aplica cada propuesta con un clic al crear. El docente puede deshacer el último cambio. La edición conserva la aplicación por lotes, la sustitución confirmada y la personalización detallada.
+- Typecheck, 45 pruebas unitarias de perfiles, renderizado aislado y control de privacidad superados. Lint con el aviso previo en `analysis-run-auth.test.ts`. Se actualizaron los selectores de E2E existentes para el nuevo recorrido. E2E sin ejecutar por petición del fundador. Entrega en la misma rama de la Fase 1 para revisión.
+
+## 2026-11-21 · Motor pedagógico 2.0, Fase 1 · Perfil del alumno
+
+- Base `48e945f` de `main`, que integra #114. Implementación en `codex/fase-1-perfil-pedagogico`. GitHub rechazó la consulta de PR por API.
+- El formulario permite guardar solo alias, etapa y curso. En la misma pantalla se pueden añadir aprendizajes y aspectos por reforzar por asignatura, indicar autonomía, combinar apoyos, registrar fortalezas y barreras y marcar «Respuestas breves con apoyos». Se conservan los ajustes avanzados y las opciones que existían.
+- Extensión opcional de V3 en el JSON actual. Se mantiene la compatibilidad V1–V3, los roles y las revisiones del registro. El contrato por asignatura queda en servidor. Se comprobó con servicios simulados que los campos nuevos quedan fuera de la entrada del planificador y que añadirlos a V3 conserva su plan. [ADR-061](ARCHITECTURE.md#adr-061--aprendizajes-por-asignatura-y-autonomía-en-el-perfil-v3-2026-11-21).
+- Pasaron 100 pruebas focalizadas de unidad y PGlite y las 10 E2E de `profile-learning.spec.ts` repartidas entre escritorio y móvil. Cubren creación mínima, guardado y reapertura, autonomía, V1, duplicación, conflicto entre pestañas, permisos, teclado, Axe y reflujo a 320 px con fuente del 200 %. Typecheck y privacidad superados. Lint registró un aviso anterior. El build quedó bloqueado por la descarga de Inter y Outfit. Playwright usó las fuentes de reserva y servicios simulados.
+- Queda pendiente la revisión de esta entrega. La fase siguiente conectará el análisis de actividades. La adaptación curricular sigue fuera de este cambio y conserva su prueba pendiente.
+
 ## 2026-11-21 · Cierre de la Fase 0 · Entrega y calidad pedagógica
 
 - La consulta de estado lee el estado pedagógico de la versión recreada exacta con los permisos del usuario. En el panel de resultado y la vista docente se distinguen PDF disponible, controles superados y comprobaciones pendientes. La pantalla de recreación conserva el estado y el mensaje de las versiones ya guardadas.

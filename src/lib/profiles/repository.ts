@@ -105,8 +105,12 @@ export async function updateProfile(workspaceId: string, id: string, input: Lear
   try { current = await getProfile(workspaceId, id); }
   catch { return { ok: false, reason: "error" }; }
   if (!current) return { ok: false, reason: "not_found" };
-  // Old clients cannot understand (and would drop) V2 observations. Never downgrade a stored profile silently.
-  if (current.functional_profile.schema_version > input.functional_profile.schema_version || input.expected_updated_at && input.expected_updated_at !== current.updated_at) return { ok: false, reason: "conflict" };
+  const stored = current.functional_profile;
+  const hasNewLearningData = stored.pedagogy?.short_responses_with_support || stored.pedagogy?.areas.some((area) => area.abilities?.length);
+  // An older form without a revision may omit the optional V3 fields it does not recognise.
+  if (stored.schema_version > input.functional_profile.schema_version ||
+      (hasNewLearningData && !input.expected_updated_at) ||
+      (input.expected_updated_at && input.expected_updated_at !== current.updated_at)) return { ok: false, reason: "conflict" };
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("learner_profiles")
