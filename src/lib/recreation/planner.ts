@@ -6,8 +6,10 @@ import { RECREATION_PLANNER_V4 } from "@prompts/recreation-planner/v4";
 import { RECREATION_PLANNER_V5 } from "@prompts/recreation-planner/v5";
 import { RECREATION_PLANNER_V6 } from "@prompts/recreation-planner/v6";
 import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
+import { DIRECTED_RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/directed-v1";
 import { estimateCostUsd, priceFor } from "@/lib/ai/costs";
-import type { AIProvider, AIRunRecord, ModelSelection } from "@/lib/ai/types";
+import type { AIProvider, AIRunRecord, ModelSelection, StructuredRequest } from "@/lib/ai/types";
+import { MockProvider } from "@/lib/ai/providers/mock";
 import { callStructured } from "@/lib/materials/visuals/auto/assistants";
 import type { Planner } from "./pilot";
 
@@ -81,4 +83,12 @@ export function createRecreationPlanner(deps: { provider: AIProvider; selection:
     await deps.recordAiRun({ ...run, attempt: repairOf ? 2 : 1 });
     return { draft, run };
   };
+}
+
+/** Isolated fixture transport. It has no selection or provider through which it could make a paid request. */
+export function createDirectedRecreationPlanner(fixture: (request: StructuredRequest) => unknown) {
+  const prompt = DIRECTED_RECREATION_PLANNER_V1;
+  const provider = new MockProvider({ fixtures: { [prompt.output.name]: fixture } });
+  const selection: ModelSelection = { alias: "STANDARD", provider: "mock", model: "directed-fixture", effort: "medium" };
+  return (content: string) => callStructured(provider, selection, "plan", prompt, content, RECREATION_PLANNER_LIMITS.maxOutputTokens);
 }

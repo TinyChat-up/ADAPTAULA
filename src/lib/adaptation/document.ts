@@ -274,9 +274,11 @@ export interface BuildDocumentInput {
   context: AdaptationContext;
   generated: GeneratedSegments | null;
   newBlockId?: () => string;
+  /** Preserve the original response area before the directed pilot applies individual changes. */
+  preserveResponseLayout?: boolean;
 }
 
-export function buildDocument({ analysis, plan, context, generated, newBlockId = createBlockId }: BuildDocumentInput): MaterialDocument {
+export function buildDocument({ analysis, plan, context, generated, newBlockId = createBlockId, preserveResponseLayout = false }: BuildDocumentInput): MaterialDocument {
   const units = literalUnits(analysis, plan, context, newBlockId);
   const answerKey: MaterialDocument["answer_key"] = [];
   const decisionsFor = (ref: string) => plan.decisions.filter((d) => d.target === ref);
@@ -405,7 +407,7 @@ export function buildDocument({ analysis, plan, context, generated, newBlockId =
     const activity = analysis.activities.find((a) => o.block.trace.source_refs.includes(a.id));
     if (!activity) continue;
     const decided = plan.decisions.some((d) => o.block.trace.decision_ids.includes(d.id) && d.response_target !== undefined);
-    o.block = { ...o.block, response: answerSpace(activity, o.block.response, space, decided).response };
+    if (!preserveResponseLayout) o.block = { ...o.block, response: answerSpace(activity, o.block.response, space, decided).response };
   }
 
   // Original stated answers go to the teacher's key; inferred ones never do.
