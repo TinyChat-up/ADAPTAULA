@@ -156,6 +156,21 @@ describe("B · 5.º con dificultad de escritura, adaptación METODOLÓGICA: mism
   const V3 = { areas: [area], response_preferences: ["oral", "match", "fill_blanks"] as const, adaptation_preferences: ["methodological"] as const };
   const pedagogy = { areas: V3.areas, response_preferences: [...V3.response_preferences], adaptation_preferences: [...V3.adaptation_preferences] };
 
+  it("la autonomía y la nueva preferencia no cambian las decisiones del motor actual ni se envían al planificador", async () => {
+    const baseline = await magic({ profile: profileOf(WRITING, pedagogy), type: "methodological" });
+    const statement = "Describe cambios de estado mediante un esquema propio";
+    const newer = await magic({ profile: profileOf(WRITING, {
+      ...pedagogy,
+      areas: [{ ...area, abilities: [{ statement, autonomy: "with_help" }] }],
+      short_responses_with_support: true,
+    }), type: "methodological" });
+    expect(newer.status).toBe("ready");
+    expect(newer.context).toEqual(baseline.context);
+    expect(newer.plan).toEqual(baseline.plan);
+    expect(newer.seen!.length).toBeGreaterThan(0);
+    expect(JSON.stringify(newer.seen)).not.toMatch(/Describe cambios de estado|with_help|short_responses_with_support/);
+  });
+
   it("los formatos disponibles salen del perfil y de lo que se puede ejecutar: oral primero (necesidad alta y opción declarada), breve después; unir y completar, declarados pero no disponibles", async () => {
     const t = await magic({ profile: profileOf(WRITING, pedagogy), type: "methodological" });
     expect(t.type).toBe("methodological");

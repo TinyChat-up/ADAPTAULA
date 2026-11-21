@@ -143,23 +143,15 @@ export function ProfileForm({
         ) : null}
 
         <ProfileBasics name={name} stage={stage} grade={grade} catalog={catalog} errors={errors} onName={setName} onStage={(value) => { setStage(value); setGrade(""); }} onGrade={setGrade} />
-        <p className="text-sm text-muted-foreground">Al adaptar una ficha se pueden tener en cuenta las formas de respuesta disponibles y los aprendizajes por reforzar del área correspondiente. El nivel orientativo y lo que sabe hacer todavía no intervienen en la generación ni cambian los objetivos.</p>
+        <p className="text-sm text-muted-foreground">Con el alias, la etapa y el curso ya puedes guardar el perfil. <a href="#guardar-perfil" className="font-medium text-primary underline underline-offset-2">Ir a guardar el perfil</a></p>
         <PedagogicalAreas value={profile.pedagogy ?? emptyPedagogicalProfile()} catalog={catalog} onChange={changePedagogy} />
-        <p className="text-sm text-muted-foreground">Puedes completar lo demás después. <a href="#guardar-perfil" className="font-medium text-primary underline underline-offset-2">Ir a guardar el perfil</a></p>
-
-        <section aria-labelledby="observaciones-titulo" className="space-y-4">
-          <h2 id="observaciones-titulo" className="text-xl font-semibold">B · Fortalezas y barreras</h2>
-          <LearningObservationsPicker value={profile.observations ?? { strengths: [], barriers: [] }} onChange={(observations) => changeProfile({ ...profile, schema_version: profile.schema_version === 3 ? 3 : 2, observations })} onAddSuggestions={(keys) => { const next = addPresets(profile, [{ id: "suggestions", label: "Sugerencias", description: "", supports: Object.fromEntries(keys.map((key) => [key, "medium" as const])) }]); changeProfile(next); setOpenAreas(new Set(areasInUse(next))); setNotice("Sugerencias añadidas por tu elección. Puedes ajustar su frecuencia o deshacer el cambio."); }} />
-          {initial.functional_profile.schema_version === 1 ? <p className="text-sm text-muted-foreground">Los apoyos del perfil anterior se conservan. No hemos inferido fortalezas, barreras ni competencias.</p> : null}
-        </section>
-
 
         <section aria-labelledby="apoyo-titulo" className="space-y-4">
           <div>
             <h2 id="apoyo-titulo" className="text-xl font-semibold">
-              C · Necesidades y apoyos
+              ¿Qué apoyos le funcionan?
             </h2>
-            <p className="text-muted-foreground">Imágenes para comprender y acceso visual son apoyos distintos. Puedes combinarlos con una página despejada.</p>
+            <p className="text-muted-foreground">Elige apoyos que le ayuden a acceder a la tarea o a mostrar lo que sabe.</p>
           </div>
           {areasInUse(initial.functional_profile).length > 0 ? <p className="text-sm text-muted-foreground">Tus apoyos guardados están en el resumen. Solo se marcan las tarjetas cuya propuesta completa ya coincide con ellos; no necesitas volver a aplicarlas.</p> : null}
           <StartingPointCards selected={points} onSelect={(id) => { const next = points.includes(id) ? points.filter((p) => p !== id) : [...points, id]; setPoints(next); setCardsPending(next.length > 0); }} onAdd={() => applyPoints()} onReplace={() => applyPoints(true)} />
@@ -184,16 +176,14 @@ export function ProfileForm({
           </details>
         </section>
 
+        <section aria-labelledby="observaciones-titulo" className="space-y-4">
+          <h2 id="observaciones-titulo" className="text-xl font-semibold">Fortalezas y barreras observadas</h2>
+          <LearningObservationsPicker value={profile.observations ?? { strengths: [], barriers: [] }} onChange={(observations) => changeProfile({ ...profile, schema_version: profile.schema_version === 3 ? 3 : 2, observations })} onAddSuggestions={(keys) => { const next = addPresets(profile, [{ id: "suggestions", label: "Sugerencias", description: "", supports: Object.fromEntries(keys.map((key) => [key, "medium" as const])) }]); changeProfile(next); setOpenAreas(new Set(areasInUse(next))); setNotice("Sugerencias añadidas por tu elección. Puedes ajustar su frecuencia o deshacer el cambio."); }} />
+          {initial.functional_profile.schema_version === 1 ? <p className="text-sm text-muted-foreground">Los apoyos del perfil anterior se conservan. No hemos inferido fortalezas, barreras ni competencias.</p> : null}
+        </section>
+
         <PedagogicalPreferences value={profile.pedagogy ?? emptyPedagogicalProfile()} onChange={changePedagogy} />
 
-        <div id="guardar-perfil" className="flex scroll-mt-24 flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <LinkButton href="/app/alumnos" variant="ghost">
-            Cancelar
-          </LinkButton>
-          <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Guardando…" : submitLabel}
-          </Button>
-        </div>
       </div>
 
       <aside aria-label="Resumen del perfil" className="min-w-0 xl:sticky xl:top-6 xl:self-start">
@@ -205,6 +195,14 @@ export function ProfileForm({
           </Link>
         </p>
       </aside>
+      <div id="guardar-perfil" className="flex scroll-mt-24 flex-col-reverse gap-3 sm:flex-row sm:justify-end xl:col-start-1">
+        <LinkButton href="/app/alumnos" variant="ghost">
+          Cancelar
+        </LinkButton>
+        <Button type="submit" size="lg" disabled={pending}>
+          {pending ? "Guardando…" : submitLabel}
+        </Button>
+      </div>
     </form>
   );
 }

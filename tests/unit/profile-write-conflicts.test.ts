@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/session", () => ({ getSupabase: async () => ({ from: fakes.f
 const id = "11111111-1111-4111-8111-111111111111", ws = "22222222-2222-4222-8222-222222222222";
 const timestamp = "2026-10-26T10:00:00.000Z";
 const input = () => ({ display_name: "Alias", stage_slug: "primaria", grade_slug: "4-primaria", functional_profile: emptyFunctionalProfile() });
-const pedagogy = { areas: [{ subject: "ciencias", reference_grade: null, knows: ["Identifica plantas"], needs: [] }], response_preferences: ["oral"], adaptation_preferences: ["curricular"] };
+const pedagogy = { areas: [{ subject: "ciencias", reference_grade: null, knows: ["Identifica plantas"], abilities: [{ statement: "Lee un gráfico", autonomy: "with_help" as const }], needs: [] }], response_preferences: ["oral" as const], adaptation_preferences: ["curricular" as const], short_responses_with_support: true as const };
 function setup(version: 1 | 2 | 3, matches = true) {
   const row = { id, display_name: "Alias", stage_slug: "primaria", grade_slug: "4-primaria", functional_profile: { ...emptyFunctionalProfile(), schema_version: version, ...(version === 3 ? { pedagogy } : {}) }, created_at: timestamp, updated_at: timestamp };
   fakes.from.mockImplementation(() => {
@@ -38,6 +38,14 @@ describe("guardado compatible y sin sobrescrituras silenciosas", () => {
     setup(3);
     expect(await updateProfile(ws, id, input())).toEqual({ ok: false, reason: "conflict" });
     expect(fakes.writes).not.toHaveBeenCalled();
+  });
+  it("una versión V3 con los campos opcionales exige la revisión actual para editar", async () => {
+    setup(3);
+    const data = { ...input(), functional_profile: { ...emptyFunctionalProfile(), schema_version: 3 as const, pedagogy } };
+    expect(await updateProfile(ws, id, data)).toEqual({ ok: false, reason: "conflict" });
+    expect(fakes.writes).not.toHaveBeenCalled();
+    expect(await updateProfile(ws, id, { ...data, expected_updated_at: timestamp })).toEqual({ ok: true, id });
+    expect(fakes.writes).toHaveBeenCalledWith(expect.objectContaining({ functional_profile: expect.objectContaining({ pedagogy }) }));
   });
   it("duplica el perfil V3 completo en el espacio y con el usuario actuales", async () => {
     setup(3);

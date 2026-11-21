@@ -5,9 +5,10 @@ export function ProfileSummaryPanel({ summary }: { summary: ProfileSummary }) {
   return (
     <section className="space-y-6 rounded-panel border border-border bg-surface p-5" aria-label="Revisar el perfil">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">04 · Revisar</p>
         <h2 className="mt-1 text-xl font-semibold">Así acompañaremos su aprendizaje</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Lo que has indicado, sin inferir capacidades ni cambiar su curso.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Resumen de lo que has indicado.</p>
+        {summary.learningAreas > 0 ? <p className="mt-2 text-sm">{summary.learningAreas === 1 ? "Aprendizajes en una asignatura" : `Aprendizajes en ${summary.learningAreas} asignaturas`}</p> : null}
+        {summary.supportedShortAnswers ? <p className="mt-2 text-sm">Prefiere respuestas breves con apoyos cuando el objetivo lo permite.</p> : null}
       </div>
       <div className="space-y-2">
         <h3 className="flex items-center gap-2 font-semibold"><Sprout aria-hidden className="size-4" />Sus fortalezas</h3>
@@ -23,7 +24,7 @@ export function ProfileSummaryPanel({ summary }: { summary: ProfileSummary }) {
         <ul className="space-y-2 text-sm">{summary.lines.slice(0, 5).map((line) => <li key={line.text}>{line.text}{line.level ? <span className="text-muted-foreground"> ({line.level})</span> : null}</li>)}</ul>
         {summary.lines.length > 5 ? <details className="text-sm"><summary className="min-h-9 cursor-pointer font-medium">Ver {summary.lines.length - 5} apoyos y ajustes más</summary><ul className="mt-2 space-y-2">{summary.lines.slice(5).map((line) => <li key={line.text}>{line.text}{line.level ? <span className="text-muted-foreground"> ({line.level})</span> : null}</li>)}</ul></details> : null}
         {summary.notNeeded.length > 0 ? <details className="text-sm"><summary className="min-h-9 cursor-pointer font-medium">Apoyos marcados como no necesarios ({summary.notNeeded.length})</summary><ul className="mt-2 list-inside list-disc space-y-2">{summary.notNeeded.map((line) => <li key={line}>{line}</li>)}</ul></details> : null}
-        <p className="text-xs text-muted-foreground">La ficha debe revisarse. No garantiza una imagen ni permite reducir objetivos curriculares automáticamente.</p>
+        <p className="text-xs text-muted-foreground">Los apoyos se eligen según la ficha y sus objetivos.</p>
       </div>
     </section>
   );
