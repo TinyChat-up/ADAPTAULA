@@ -4,6 +4,8 @@
  * server, when the adaptation is created, and is frozen in `pipeline_versions.engine`: a later change of the switch never alters an
  * adaptation that already exists, and every adaptation created before this change has no `engine` and runs the original engine.
  */
+import { inWorkspaceList } from "@/lib/config/workspace-list";
+
 export const RECREATION_ENGINE = "recreation_v1" as const;
 
 export interface MagicEngineConfig {
@@ -11,11 +13,8 @@ export interface MagicEngineConfig {
   HACER_MAGIA_RECREATION_WORKSPACES?: string | undefined;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Whether a comma-separated list of workspace ids (a server variable) names this workspace. Malformed entries never match. */
-export const inWorkspaceList = (list: string | undefined, workspaceId: string): boolean =>
-  (list ?? "").split(",").map((w) => w.trim()).filter((w) => UUID.test(w)).some((w) => w.toLowerCase() === workspaceId.toLowerCase());
+export { inWorkspaceList };
 
 /** True only when the server's switch allows the recreation engine for this workspace. Never decided by the browser. */
 export function recreationAllowed(config: MagicEngineConfig, workspaceId: string): boolean {

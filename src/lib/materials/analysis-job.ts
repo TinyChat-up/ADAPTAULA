@@ -23,8 +23,8 @@ const ClaimedJobSchema = z.object({
   input: z.object({ force: z.boolean().optional() }).passthrough().catch({}),
 });
 
-export const ANALYSIS_PROMPT_VERSION = () => {
-  const analyzer = activeAnalyzer();
+export const ANALYSIS_PROMPT_VERSION = (workspaceId?: string | null) => {
+  const analyzer = activeAnalyzer(workspaceId);
   return `${analyzer.key}@v${analyzer.version}`;
 };
 

@@ -1,5 +1,14 @@
 # Registro de desarrollo
 
+## 2026-11-22 · Análisis V4 solo para workspaces piloto
+
+- Rama `claude/analisis-v4-workspace-piloto` desde `main` (`65dd48c`, con #120).
+- `AI_ANALYSIS_V4_WORKSPACES`, vacío por defecto, selecciona v4 para los análisis nuevos de esos workspaces. V3 sigue siendo el predeterminado.
+- `getAnalysisRuntime(workspaceId)`, `activeAnalyzer(workspaceId)` y `ANALYSIS_PROMPT_VERSION(workspaceId)` comparten la decisión. Así la caché nunca mezcla versiones y el registro guarda la versión real.
+- `inWorkspaceList` pasa a `src/lib/config/workspace-list.ts`; `engine.ts` lo reexporta.
+- Pruebas focalizadas: `tests/unit/analysis-v4-workspace.test.ts` (2). Pasan también las de análisis, el puente, la ruta, el entorno y las fronteras. Typecheck, lint y privacidad correctos. No se ha ejecutado la suite completa.
+- No se ha activado ni llamado a ningún modelo. No hay migraciones.
+
 ## 2026-11-22 · Puente entre la aplicación y el director pedagógico
 
 - Rama `claude/puente-director-hacer-magia` desde `main` (`74641a5`, con #119). [Comprobaciones y lo que falta](RECREATION.md#puente-con-la-aplicación--vista-previa-del-director).

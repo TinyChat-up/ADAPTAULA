@@ -35,6 +35,11 @@ export const ServerEnvSchema = z.object({
   AI_ANALYSIS_EFFORT: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["low", "medium", "high"]).default("medium")),
   AI_ANALYSIS_MAX_REPAIR_ATTEMPTS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(1).default(1)),
   AI_ANALYSIS_PROMPT_VERSION: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().refine((n) => n === 1 || n === 2 || n === 3 || n === 4, "versiones disponibles: 1, 2, 3 o 4").default(3)),
+  /**
+   * Workspaces piloto (separados por comas) cuyos análisis NUEVOS usan el analizador v4 (comprensión por actividad del director
+   * pedagógico). Vacío (por defecto): nadie; todos los demás siguen con AI_ANALYSIS_PROMPT_VERSION. No reescribe análisis guardados.
+   */
+  AI_ANALYSIS_V4_WORKSPACES: optional(z.string().max(2000)),
   AI_ANALYSIS_MAX_OUTPUT_TOKENS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2000).max(64000).default(24000)),
   MOCK_AI_DELAY_MS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(30000).default(600)),
   AI_MAX_REVIEW_RETRIES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(5).default(2)),
