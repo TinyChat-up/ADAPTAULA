@@ -13,11 +13,19 @@ En las nuevas generaciones, el verificador, la versión visible y la revisión g
 | Evidencia disponible | Consecuencia |
 | --- | --- |
 | Respuesta abierta con criterios | El docente valorará la producción cuando responda el alumno. Por sí sola, esta condición no exige revisar el diseño de la ficha. |
-| Respuesta cerrada con evidencia textual | El docente contrasta con la fuente las interpretaciones pendientes. Las reglas detectan algunos tipos de pistas. La revelación indirecta sigue pendiente de revisión. |
-| Esquema con relaciones respaldadas por citas | Se revisa el significado y la dirección de las flechas. |
+| Respuesta cerrada con evidencia textual | Las interpretaciones siguen pendientes de contrastar con la fuente. Las reglas detectan algunos tipos de pistas. La revelación indirecta sigue pendiente de revisión. |
+| Esquema con relaciones respaldadas por citas | El significado y la dirección de las flechas quedan pendientes. |
 | Recurso imprescindible ausente o actividad sin resolver | La ficha queda incompleta y se mantiene el bloqueo de entrega de Hacer magia. |
 
-En la BD, `adaptations.status = ready` identifica una entrega. La versión visible usa `state = review` para pedir revisión antes de utilizarla. Su informe emplea `approved_with_warnings` según el contrato de entrega y cuota vigente. Estos estados permiten descargar la propuesta. Las versiones históricas conservan su documento y el dictamen registrado en su fecha. Un trabajo que retoma un plan anterior conserva la versión del verificador que lo examinó.
+En la BD, `adaptations.status = ready` identifica una entrega. El estado de la versión distingue controles superados (`ready`), comprobaciones pendientes (`review`) y una ficha incompleta (`incomplete`). Una propuesta imprimible se puede descargar aunque queden comprobaciones pendientes antes de usarla con el alumnado. `approved_with_warnings` sigue siendo el dictamen técnico de entrega y cuota. Cuando falta el estado de la versión, la interfaz indica que la verificación carece de confirmación. Los avisos públicos de recreación usan textos aprobados por el servidor. Una advertencia sobre el sentido de una flecha conserva ese significado. Las versiones históricas conservan su documento y el dictamen registrado en su fecha. Un trabajo que retoma un plan anterior conserva la versión del verificador que lo examinó.
+
+### Experiencia definitiva de Hacer magia
+
+Después de crear un perfil sencillo una vez, el docente sube el original, selecciona el perfil y pulsa «Hacer magia». El motor analiza, diseña, fabrica y comprueba la ficha. El recorrido habitual tiene cero preguntas adicionales y entrega un documento listo para usar. La revisión de calidad corresponde al motor. Debe resolver internamente lo que pueda con reglas deterministas, revisión semántica independiente cuando corresponda, controles de los recursos fabricados y reparación localizada. Una comprobación esencial pendiente o un error grave impiden presentar la ficha como validada. Las incertidumbres del piloto actual siguen visibles hasta disponer de evidencia que las resuelva.
+
+Una decisión docente excepcional solo se ofrece si la información falta en el perfil y su criterio puede mejorar significativamente el resultado. Como máximo, una pantalla breve con dos o tres opciones por decisión en lenguaje cotidiano y una recomendación cuando exista una razón pedagógica. Los fallos técnicos y las dudas del verificador corresponden al motor. Cualquier cambio de objetivos requiere autorización curricular explícita.
+
+«Respuestas breves con apoyos» es la preferencia del ejemplo comentado. Puede orientar hacia consignas claras, apoyos visuales funcionales, comienzos de frase que preserven el razonamiento y espacio suficiente para escribir. Las respuestas pueden ser breves cuando la extensión no sea parte del objetivo. Si se evalúa redacción, argumentación escrita o producción textual, se conserva esa demanda salvo autorización curricular explícita.
 
 ### Siguientes entregas y evidencia necesaria para avanzar
 

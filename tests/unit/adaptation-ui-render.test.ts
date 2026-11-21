@@ -231,11 +231,34 @@ describe("result screens", () => {
     });
     const out = view(dto);
     expect(out).toContain("La ficha está lista, con observaciones");
+    expect(out).toContain("Observaciones (no impiden usar la ficha)");
     expect(out).toContain("Hay una ayuda repetida");
     expect(out).toContain("no queda del todo cubierta");
     expect(out).toContain("presentación final");
     expect(visible(out)).not.toMatch(TECHNICAL);
     expect(out).not.toContain("traceability_complete");
+  });
+
+  it("recreación: la descarga está disponible y las comprobaciones pendientes se indican antes del uso", () => {
+    const dto = ready({
+      recreationState: "review",
+      review: { verdict: "approved_with_warnings", pendingJudgments: [], warnings: [
+        { check: "visual_references_resolved", status: "WARN", detail: "Comprueba el sentido de las flechas del esquema.", method: "deterministic" },
+      ] },
+    });
+    const out = view(dto);
+    expect(out).toContain("La ficha está generada");
+    expect(out).toContain("Comprobaciones pedagógicas pendientes");
+    expect(out).toContain("Comprueba el sentido de las flechas del esquema.");
+    expect(out).toContain("Descargar PDF");
+    expect(out).not.toMatch(/Falta una imagen|no impiden usar|La ficha está lista|ha superado/);
+  });
+
+  it("recreación: distingue controles superados y resultados históricos sin un estado disponible", () => {
+    expect(view(ready({ recreationState: "ready" }))).toContain("La ficha ha superado los controles aplicables");
+    const unknown = view(ready({ recreationState: "unknown" }));
+    expect(unknown).toContain("La verificación pedagógica está sin confirmar");
+    expect(unknown).not.toMatch(/La ficha está lista|ha superado/);
   });
 
   it("blocked: clearly not ready, no 'ready' wording, a way back to the review when the server allows it", () => {

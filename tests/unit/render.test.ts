@@ -323,6 +323,17 @@ describe("overflow, tokens, determinism and print", () => {
     expect(parseBlanks("a {{x}} b")).toEqual([{ text: "a " }, { blank: true }, { text: " b" }]);
   });
 
+  it("la vista docente distingue las comprobaciones pedagógicas de la presentación", () => {
+    const validation = build(geografia(), { mode: "teacher_preview" }).validation;
+    const observations = ["Comprueba el sentido de las flechas del esquema."];
+    const panel = renderToStaticMarkup(createElement(TeacherPanel, { validation, version: 1, observations, recreationState: "review" }));
+    expect(panel).toContain("Comprobaciones pedagógicas pendientes");
+    expect(panel).toContain(observations[0]);
+    expect(panel).not.toContain("no impiden usar la ficha");
+    const classic = renderToStaticMarkup(createElement(TeacherPanel, { validation, version: 1, observations: ["Hay una ayuda repetida."] }));
+    expect(classic).toContain("Observaciones de la revisión (no impiden usar la ficha)");
+  });
+
   it("16 · print: app chrome, the teacher panel and the viewer controls are hidden; the sheet is A4 with page breaks and no colour dependence", () => {
     const css = readFileSync("src/components/material/material.css", "utf8");
     const print = css.slice(css.indexOf("@media print"));

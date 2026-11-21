@@ -797,3 +797,9 @@ Dos defectos de fidelidad de #110, corregidos sin cambiar decisiones pedagógica
 - **Compatibilidad.** El planificador v7 es la versión de las adaptaciones nuevas. v1–v6 conservan su esquema de salida congelado (`RecreationPlanLegacySchema`, sin `diagrams`) y su saneado. Una adaptación antigua nunca gana esquemas nuevos.
 
 **Consecuencias.** La ficha original fija los objetivos, las operaciones y la exigencia, no el catálogo de recursos. Sin llamadas adicionales: el esquema lo dibuja el código. Lo que el motor aún no fabrica sigue declarado como capacidad pendiente, sin simularlo: cantidades exactas ilustradas, formatos de respuesta adicionales con solucionador y fabricantes de recursos a medida.
+
+## ADR-060 — Verificación interna como recorrido habitual de Hacer magia (2026-11-21)
+
+- **Decisión.** La verificación corresponde al motor. Hacer magia ofrece una ficha lista para usar cuando los controles aplicables han terminado. Las decisiones docentes se reservan para preferencias pedagógicas que faltan en el perfil y pueden mejorar sustancialmente el resultado. Los cambios de objetivos requieren autorización curricular explícita.
+- **Contrato en la Fase 0.** La entrega y el estado pedagógico se leen por separado. La versión recreada comunica los controles pendientes con mensajes de catálogo. Una propuesta imprimible puede descargarse para consulta. El estado de verificación y el PDF histórico se consultan tal como se guardaron.
+- **Criterios para las próximas fases.** [Experiencia definitiva de Hacer magia](RECREATION.md#experiencia-definitiva-de-hacer-magia).

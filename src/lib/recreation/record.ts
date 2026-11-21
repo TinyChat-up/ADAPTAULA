@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AIRunRecord } from "@/lib/ai/types";
 import { MaterialDocumentSchema } from "@/lib/schemas/material-document";
+import { RECREATION_STATES } from "./quality";
 import { pendingMaterialChecks } from "./verify";
 import type { RecreationOutcome } from "./pilot";
 
@@ -36,8 +37,6 @@ const AnswerlessDocument = MaterialDocumentSchema.refine((d) => d.answer_key.len
  *   incomplete  something essential is missing (a picture an activity needs).
  * A plan that fails an essential check is never stored (there is nothing to show).
  */
-export const RECREATION_STATES = ["ready", "review", "incomplete"] as const;
-
 export const RecreationLineSchema = z.object({
   id: z.string().uuid(),
   workspace_id: z.string().uuid(),
@@ -164,7 +163,7 @@ export function versionOf(
       : state === "incomplete"
       ? `Falta una imagen necesaria para ${list(missing.map((m) => label(m.activity_ids[0]!)))}. No uses la ficha hasta tenerla: puedes regenerarla.`
       : state === "review"
-        ? [review.length ? `Antes de usarla, revisa ${list(review)}.` : "Queda una comprobación del material pendiente.", ...pending.map((p) => p.detail)].join(" ")
+        ? [review.length ? `Comprobaciones pendientes en ${list(review)}.` : "Queda una comprobación del material pendiente.", ...pending.map((p) => p.detail)].join(" ")
         : null;
   return {
     pending,

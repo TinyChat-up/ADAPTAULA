@@ -1,3 +1,4 @@
+import { recreationWarningCopy, type RecreationState } from "@/lib/recreation/quality";
 import type { PedagogicalReview } from "@/lib/schemas/pedagogical-review";
 import { ADAPTATION_ERROR_CODES, FAILURE_KIND, type AdaptationErrorCode, type FailureKind } from "./errors";
 import type { CreationMode, PipelineSnapshot } from "./store";
@@ -22,6 +23,7 @@ export type StatusPhase = "working" | "awaiting_review" | "ready" | "blocked" | 
 export type AutomaticStopReason = "needs_decision" | "teacher_decision" | "quality" | "generation_refused" | VisualStopCode;
 
 export interface StatusArtifacts {
+  recreationState?: RecreationState | "unknown";
   visualSupportResult?: { generated: number; original: number; structured: number } | null;
   planValidation?: { counts: { valid: number; review: number; blocked: number } } | null;
   execution?: { ai: string[]; deferred: Array<{ id: string }>; blockers: string[] } | null;
@@ -41,6 +43,8 @@ export interface StatusArtifacts {
 }
 
 export interface AdaptationStatusDto {
+  /** Pedagogical state of a delivered recreation, independent of document delivery. */
+  recreationState?: RecreationState | "unknown";
   visualSupportResult?: { generated: number; original: number; structured: number };
   id: string;
   status: AdaptationStatus;
@@ -242,6 +246,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
 
   const warnings = artifacts.review ? artifacts.review.checks.filter((c) => c.status === "WARN" || c.status === "FAIL") : [];
   return {
+    ...(artifacts.recreationState ? { recreationState: artifacts.recreationState } : {}),
     id: row.id,
     status,
     creationMode: row.creation_mode,
@@ -264,7 +269,7 @@ export function buildStatusDto(snapshot: PipelineSnapshot, artifacts: StatusArti
       ? {
           verdict: artifacts.review.verdict,
           // Every non-PASS finding is kept, R1-type warnings included: nothing is filtered before the teacher sees it.
-          warnings: warnings.map((c) => ({ check: c.check, status: c.status, detail: c.detail, method: c.method })),
+          warnings: warnings.map((c) => ({ check: c.check, status: c.status, detail: artifacts.recreationState ? recreationWarningCopy(c) : c.detail, method: c.method })),
           pendingJudgments: artifacts.pending ?? [],
         }
       : null,

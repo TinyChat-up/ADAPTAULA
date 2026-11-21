@@ -1,6 +1,6 @@
 # Estado compartido de Adaptaula
 
-> **Motor pedagógico 2.0 · Fase 0 (2026-11-21).** La versión nueva de una recreación conserva las comprobaciones pedagógicas pendientes y las comunica antes de su uso. El recorrido de Hacer magia distingue entrega, revisión de la ficha y corrección posterior de las respuestas del alumno. [Criterios y siguientes entregas](RECREATION.md#estado-de-la-ficha-antes-de-usarla--fase-0).
+> **Motor pedagógico 2.0 · Fase 0 (2026-11-21).** La versión nueva de una recreación conserva las comprobaciones pedagógicas pendientes y las comunica antes de su uso. Hacer magia distingue un PDF descargable, los controles de calidad que quedan pendientes y los controles superados. En la experiencia definitiva el motor asumirá esa verificación y el docente intervendrá solo ante decisiones pedagógicas excepcionales. [Criterios y siguientes entregas](RECREATION.md#estado-de-la-ficha-antes-de-usarla--fase-0).
 
 > **«Hacer magia» con el motor de recreación (2026-11-18):** integrado detrás de `HACER_MAGIA_ENGINE` (apagado por defecto), sobre `main`. Migración 037 solo local; sin despliegue, E2E ni llamadas de pago; pruebas no ejecutadas por indicación (hay una de integración escrita). [Pasos de activación y límites](qa/hacer-magia-recreacion/README.md), ADR-052b.
 

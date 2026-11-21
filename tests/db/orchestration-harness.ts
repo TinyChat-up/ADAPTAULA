@@ -159,6 +159,7 @@ export async function expireLeases(db: PGlite) {
   await db.query("update public.adaptation_jobs set locked_until = now() - interval '1 second' where status = 'processing'");
 }
 
+import type { RecreationState } from "@/lib/recreation/quality";
 import type { AdaptationReader } from "@/lib/adaptation/orchestration/service";
 
 /** The USER's view of the database: every query runs as `authenticated` under RLS. */
@@ -169,6 +170,7 @@ export function readerFor(db: PGlite, user: User): AdaptationReader {
     getLearnerProfile: async (id) => (await q<never>("select id, workspace_id, stage_slug, grade_slug, functional_profile from public.learner_profiles where id = $1", [id]))[0] ?? null,
     getAdaptation: async (id) => (await q<never>("select id, workspace_id, material_id, status, current_version, delivered_at from public.adaptations where id = $1", [id]))[0] ?? null,
     getVersion: async (id, version) => (await q<never>(`select id, version, document, review, source, created_at::text from public.adaptation_versions where adaptation_id = $1 ${version === null ? "order by version desc" : "and version = $2"} limit 1`, version === null ? [id] : [id, version]))[0] ?? null,
+    getRecreationState: async (id) => (await q<{ state: RecreationState }>("select state from public.recreation_versions where adaptation_version_id = $1", [id]))[0]?.state ?? null,
     getSubjectName: async (slug) => (await q<{ name: string }>("select name from public.subjects where slug = $1", [slug]))[0]?.name ?? null,
     getArtifacts: async (id, kinds) => q<never>("select id, kind, input_fingerprint, fingerprint, payload, created_at::text from public.adaptation_artifacts where adaptation_id = $1 and kind = any($2::text[]) order by created_at", [id, kinds as unknown as string[]]),
   };

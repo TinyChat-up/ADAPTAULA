@@ -1,5 +1,6 @@
 import type { AdaptationStatusDto, ProgressStage } from "@/lib/adaptation/orchestration/status";
 import type { CreationMode } from "@/lib/adaptation/orchestration/store";
+import { RECREATION_QUALITY_COPY, recreationWarningCopy } from "@/lib/recreation/quality";
 import { DIAGNOSIS_COPY, STAGES, STATUS_COPY, checkCopy, failureCopy } from "./copy";
 
 /**
@@ -47,8 +48,8 @@ export function stageStates(progress: ProgressStage, options: { mode?: CreationM
 }
 
 /** Observations for the teacher, de-duplicated by wording; never a check name, an id or the reviewer's own text. */
-export function warningLines(dto: Pick<AdaptationStatusDto, "review" | "execution">): string[] {
-  const lines = (dto.review?.warnings ?? []).map((w) => checkCopy(w.check));
+export function warningLines(dto: Pick<AdaptationStatusDto, "review" | "execution" | "recreationState">): string[] {
+  const lines = (dto.review?.warnings ?? []).map((w) => dto.recreationState ? recreationWarningCopy(w) : checkCopy(w.check));
   if ((dto.execution?.deferredDecisions.length ?? 0) > 0) lines.push("Hay un cambio de presentación que se aplicará al preparar la presentación final.");
   return [...new Set(lines)];
 }
@@ -62,7 +63,10 @@ export function failureView(dto: Pick<AdaptationStatusDto, "error" | "canRetry" 
   };
 }
 
-export const readyTitle = (dto: Pick<AdaptationStatusDto, "review">) => (dto.review?.verdict === "approved_with_warnings" ? STATUS_COPY.readyWithWarnings : STATUS_COPY.ready);
+export function readyTitle(dto: Pick<AdaptationStatusDto, "review" | "recreationState">) {
+  if (dto.recreationState) return RECREATION_QUALITY_COPY[dto.recreationState];
+  return dto.review?.verdict === "approved_with_warnings" ? STATUS_COPY.readyWithWarnings : STATUS_COPY.ready;
+}
 
 const joinNames = (names: readonly string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} y ${names.at(-1)}`);
 

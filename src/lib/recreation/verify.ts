@@ -1,5 +1,6 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import { RECREATION_CHECK_COPY } from "./quality";
 import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type RecreationActivity, type RecreationPlan } from "./contract";
 
 /**
@@ -77,22 +78,22 @@ export function pendingMaterialChecks(plan: RecreationPlan, activities: Verified
   if (objectives.size) pending.push({
     check: "objectives_preserved",
     activityIds: plan.activities.filter((a) => a.objective_ids.some((id) => objectives.has(id))).map((a) => a.id),
-    detail: "Compara con el original el razonamiento que debe hacer el alumno.",
+    detail: RECREATION_CHECK_COPY.objectives_preserved,
   });
   const anchored = activities.filter((a) => a.status === "anchored");
   if (anchored.length) pending.push({
     check: "traceability_complete", activityIds: anchored.map((a) => a.id),
-    detail: "Contrasta las respuestas propuestas con la fuente citada.",
+    detail: RECREATION_CHECK_COPY.traceability_complete,
   });
   const arrows = (plan.diagrams ?? []).filter((d) => d.relations.length);
   if (arrows.length) pending.push({
     check: "visual_references_resolved", activityIds: [...new Set(arrows.flatMap((d) => d.activity_ids))],
-    detail: "Comprueba el sentido de las flechas del esquema.",
+    detail: RECREATION_CHECK_COPY.visual_references_resolved,
   });
   const closed = activities.filter((a) => a.status !== "teacher_review");
   if (closed.length) pending.push({
     check: "answers_not_leaked", activityIds: closed.map((a) => a.id),
-    detail: "Comprueba si alguna pista permite deducir una respuesta cerrada.",
+    detail: RECREATION_CHECK_COPY.answers_not_leaked,
   });
   return pending;
 }

@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Cierre de la Fase 0 · Entrega y calidad pedagógica
+
+- La consulta de estado lee el estado pedagógico de la versión recreada exacta con los permisos del usuario. En el panel de resultado y la vista docente se distinguen PDF disponible, controles superados y comprobaciones pendientes. La pantalla de recreación conserva el estado y el mensaje de las versiones ya guardadas.
+- Las advertencias públicas de recreación se contrastan con un catálogo fijo. El aviso de flechas conserva su significado y el texto libre histórico recibe una explicación genérica. Se mantienen las comprobaciones del piloto y las observaciones del motor clásico. Calificar una respuesta abierta se trata como evaluación posterior del trabajo del alumno.
+- La experiencia autónoma, las decisiones docentes excepcionales y el alcance de «Respuestas breves con apoyos» constan en [RECREATION.md](RECREATION.md#experiencia-definitiva-de-hacer-magia) y ADR-060. Siguiente fase tras revisar esta entrega: perfil pedagógico sencillo.
+- En local pasaron 261 pruebas focalizadas, 4 pruebas PDF con Chromium y una E2E de los estados del motor clásico en escritorio, con datos ficticios y fuentes de reserva. Pasaron typecheck, privacidad y control de secretos. Lint registró un aviso previo en `analysis-run-auth.test.ts`. El build siguió bloqueado por la descarga de Inter y Outfit. GitHub rechazó la consulta de PR por API. Rama `codex/fase-0-verificacion-pedagogica`.
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 0 · Estado de la verificación
 
 - Reproducción en local con un plan sintético de una resta. La solución calculada era correcta, el razonamiento seguía pendiente y la versión se guardaba como `ready`. Una segunda regresión mostró que la consulta de estado omitía el informe guardado sobre la versión recreada.
