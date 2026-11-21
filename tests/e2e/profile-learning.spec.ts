@@ -12,7 +12,9 @@ async function basics(page: Page, name = "Perfil ficticio") {
   await page.getByLabel("Curso", { exact: true }).selectOption("4-primaria");
 }
 async function observations(page: Page) {
-  await page.getByText("Fortalezas · ¿Qué se le da bien?", { exact: true }).click();
+  const strengths = page.getByText("Fortalezas · ¿Qué se le da bien?", { exact: true });
+  if (!await strengths.isVisible()) await page.getByText("Fortalezas y barreras", { exact: true }).click();
+  await strengths.click();
   await page.getByRole("checkbox", { name: strength, exact: true }).check();
   await page.getByText("Barreras · ¿Qué dificulta la tarea?", { exact: true }).click();
   await page.getByRole("checkbox", { name: barrier, exact: true }).check();
@@ -26,8 +28,7 @@ test("aprendizajes por asignatura, autonomía y preferencia se guardan y se pued
   test.setTimeout(180_000);
   await signUpAndOnboard(page, uniqueEmail());
   await basics(page, "Caso educativo ficticio");
-  await expect(page.getByRole("heading", { name: "¿Qué sabe hacer?" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "¿Qué necesita aprender o mejorar?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Información opcional" })).toBeVisible();
   await expect(page.getByLabel("Añadir una asignatura")).toBeHidden();
   await page.getByText("Aprendizajes por asignatura", { exact: true }).click();
   await page.getByLabel("Añadir una asignatura").selectOption("matematicas");
@@ -41,6 +42,7 @@ test("aprendizajes por asignatura, autonomía y preferencia se guardan y se pued
     await row.getByLabel("Cómo lo hace").selectOption(["independent", "with_help", "not_yet", "unassessed"][index]!);
   }
   await page.getByLabel("Qué necesita aprender o mejorar").fill("Comparar escalas en gráficos");
+  await page.getByText("Formas de responder", { exact: true }).click();
   await page.getByRole("checkbox", { name: "Respuestas breves con apoyos" }).check();
   await expect(page.getByRole("complementary", { name: "Resumen del perfil" })).toContainText("Aprendizajes en una asignatura");
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze()).violations.map((v) => v.id)).toEqual([]);
@@ -69,13 +71,11 @@ test("aprendizajes por asignatura, autonomía y preferencia se guardan y se pued
 test("tarjetas combinables, observaciones independientes, guardar, reabrir y duplicar", async ({ page }, info) => {
   await signUpAndOnboard(page, uniqueEmail());
   await basics(page);
-  await page.getByText(visual, { exact: true }).click();
+  await page.getByText("Apoyos que le funcionan", { exact: true }).click();
+  await page.getByRole("button", { name: `Añadir apoyo de ${visual}`, exact: true }).click();
   await page.getByText("Ver más propuestas de apoyo", { exact: true }).click();
-  await page.getByText(load, { exact: true }).click();
+  await page.getByRole("button", { name: `Añadir apoyo de ${load}`, exact: true }).click();
   await capture(page, info, "tarjetas");
-  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-  await expect(page.getByText(/Pulsa «Añadir estos apoyos»/)).toBeVisible();
-  await page.getByRole("button", { name: "Añadir estos apoyos", exact: true }).click();
   const summary = page.getByRole("complementary", { name: "Resumen del perfil" });
   await expect(summary.getByText("Todavía no indicadas. No las deducimos de los apoyos.")).toBeVisible();
   await observations(page);
@@ -143,12 +143,12 @@ test("V1 editable, añadir sin borrar, sustituir con confirmación y deshacer", 
 
 test("teclado, reflujo, movimiento reducido y controles accesibles", async ({ page }, info) => {
   await signUpAndOnboard(page, uniqueEmail());
-  const checkbox = page.getByRole("checkbox", { name: visual, exact: true });
-  await checkbox.focus();
-  await expect(checkbox).toBeFocused();
-  await checkbox.press("Space");
-  await expect(checkbox).toBeChecked();
-  await page.getByRole("button", { name: "Añadir estos apoyos", exact: true }).click();
+  await page.getByText("Apoyos que le funcionan", { exact: true }).click();
+  const button = page.getByRole("button", { name: `Añadir apoyo de ${visual}`, exact: true });
+  await button.focus();
+  await expect(button).toBeFocused();
+  await button.press("Space");
+  await expect(page.getByRole("button", { name: `Apoyo añadido de ${visual}`, exact: true })).toHaveAttribute("aria-disabled", "true");
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze();
   expect(axe.violations.map((v) => v.id)).toEqual([]);
   await capture(page, info, "accesible");

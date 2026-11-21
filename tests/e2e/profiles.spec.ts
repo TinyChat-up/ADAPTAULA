@@ -123,6 +123,7 @@ test("accesibilidad (axe) en las pantallas principales de la app", async ({ page
   for (const path of ["/app", "/app/alumnos", "/app/alumnos/nuevo", "/app/uso", "/app/adaptar"]) {
     await page.goto(path);
     if (path === "/app/alumnos/nuevo") {
+      await page.getByText("Apoyos que le funcionan", { exact: true }).click();
       await page.getByText("Personalizar más", { exact: true }).click();
       await page.getByText("Elegir otras áreas de apoyo", { exact: true }).click();
       await page.getByRole("button", { name: /^Lectura/ }).click();

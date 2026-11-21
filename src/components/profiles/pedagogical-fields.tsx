@@ -9,20 +9,22 @@ const adaptations: Record<(typeof ADAPTATION_PREFERENCES)[number], string> = { a
 const linesHint = `Hasta ${LEARNINGS_PER_AREA} ideas, una por línea (máximo ${LEARNING_STATEMENT_LIMIT} caracteres cada una).`;
 const subjectLabel = (catalog: EducationCatalog, slug: string) => catalog.subjects?.find((subject) => subject.slug === slug)?.name ?? slug;
 
-export function PedagogicalAreas({ value, catalog, onChange }: { value: PedagogicalProfile; catalog: EducationCatalog; onChange: (value: PedagogicalProfile) => void }) {
+export function PedagogicalAreas({ value, catalog, onChange, compact = false }: { value: PedagogicalProfile; catalog: EducationCatalog; compact?: boolean; onChange: (value: PedagogicalProfile) => void }) {
   const update = (index: number, area: PedagogicalProfile["areas"][number]) => onChange({ ...value, areas: value.areas.map((a, i) => i === index ? area : a) });
   const remaining = (catalog.subjects ?? []).filter((s) => !value.areas.some((a) => a.subject === s.slug));
 
   return (
     <section className="space-y-3" aria-labelledby="aprendizajes-titulo">
-      <div>
-        <h2 id="aprendizajes-titulo" className="text-xl font-semibold">¿Qué sabe hacer?</h2>
-        <h2 className="text-xl font-semibold">¿Qué necesita aprender o mejorar?</h2>
-      </div>
-      <p className="text-sm text-muted-foreground">Empieza por una asignatura, si te resulta útil. Puedes guardar el perfil y completar estos datos más adelante.</p>
-      <details open={value.areas.length > 0 ? true : undefined} className="rounded-card border border-border p-4">
-        <summary className="min-h-9 cursor-pointer font-medium">Aprendizajes por asignatura{value.areas.length > 0 ? ` (${value.areas.length})` : ""}</summary>
-        <div className="mt-3 space-y-5">
+      {compact ? null : (
+        <div>
+          <h2 id="aprendizajes-titulo" className="text-xl font-semibold">¿Qué sabe hacer?</h2>
+          <h2 className="text-xl font-semibold">¿Qué necesita aprender o mejorar?</h2>
+        </div>
+      )}
+      <details open={!compact && value.areas.length > 0 ? true : undefined} className={compact ? "workspace-disclosure" : "rounded-card border border-border p-4"}>
+        <summary id={compact ? "aprendizajes-titulo" : undefined} className="min-h-9 cursor-pointer font-medium">Aprendizajes por asignatura{value.areas.length > 0 ? ` (${value.areas.length})` : ""}</summary>
+        <div className={compact ? "space-y-5 pb-4 pt-2" : "mt-3 space-y-5"}>
+          {compact ? <p className="text-sm">Al elegir una asignatura puedes indicar qué sabe hacer y qué necesita reforzar.</p> : null}
           <p className="text-sm text-muted-foreground">Anota solo información educativa. Evita nombres, diagnósticos y datos médicos.</p>
           {value.areas.map((area, i) => (
             <section key={area.subject} className="min-w-0 space-y-4 rounded-card border border-border p-4" aria-label={subjectLabel(catalog, area.subject)}>

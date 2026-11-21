@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Fase 1 · Alta de perfiles más directa
+
+- En `ProfileForm` y `ProfileBasics`, «Crear perfil» aparece junto a alias, etapa y curso. Los aprendizajes, apoyos, fortalezas y formas de responder se abren según se necesiten. El resumen aparece al añadir información relevante.
+- `StartingPointCards` aplica cada propuesta con un clic al crear. El docente puede deshacer el último cambio. La edición conserva la aplicación por lotes, la sustitución confirmada y la personalización detallada.
+- Typecheck, 45 pruebas unitarias de perfiles, renderizado aislado y control de privacidad superados. Lint con el aviso previo en `analysis-run-auth.test.ts`. Se actualizaron los selectores de E2E existentes para el nuevo recorrido. E2E sin ejecutar por petición del fundador. Entrega en la misma rama de la Fase 1 para revisión.
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 1 · Perfil del alumno
 
 - Base `48e945f` de `main`, que integra #114. Implementación en `codex/fase-1-perfil-pedagogico`. GitHub rechazó la consulta de PR por API.

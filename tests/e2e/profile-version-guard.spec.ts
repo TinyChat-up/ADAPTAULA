@@ -12,6 +12,7 @@ test("032: un cliente antiguo autenticado no puede borrar observaciones mediante
   await page.getByLabel("Alias o iniciales").fill("Guardia ficticia");
   await page.getByLabel("Etapa", { exact: true }).selectOption("primaria");
   await page.getByLabel("Curso", { exact: true }).selectOption("4-primaria");
+  await page.getByText("Fortalezas y barreras", { exact: true }).click();
   await page.getByText("Fortalezas · ¿Qué se le da bien?", { exact: true }).click();
   await page.getByRole("checkbox", { name: "Explica oralmente lo que sabe.", exact: true }).check();
   await page.getByRole("button", { name: "Crear perfil", exact: true }).click();

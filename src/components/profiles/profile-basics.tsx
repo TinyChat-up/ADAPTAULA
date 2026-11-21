@@ -3,14 +3,15 @@ import { SelectField, TextField } from "@/components/ui/fields";
 import type { EducationCatalog } from "@/lib/profiles/catalog";
 import { DISPLAY_NAME_MAX } from "@/lib/schemas/learner-profile";
 
-export function ProfileBasics({ name, stage, grade, catalog, errors, onName, onStage, onGrade }: {
+export function ProfileBasics({ name, stage, grade, catalog, errors, onName, onStage, onGrade, compact = false }: {
   name: string; stage: string; grade: string; catalog: EducationCatalog; errors: Partial<Record<string, string>>;
+  compact?: boolean;
   onName: (value: string) => void; onStage: (value: string) => void; onGrade: (value: string) => void;
 }) {
   return <section aria-labelledby="info-titulo" className="space-y-4">
-    <h2 id="info-titulo" className="text-xl font-semibold">Datos básicos</h2>
-    <Card className="space-y-5">
-      <TextField label="Alias o iniciales" hint="Puedes utilizar un alias o iniciales. No necesitamos el nombre completo ni ningún dato médico." value={name} maxLength={DISPLAY_NAME_MAX} autoComplete="off" required error={errors.display_name} onChange={(e) => onName(e.target.value)} />
+    <h2 id="info-titulo" className={compact ? "sr-only" : "text-xl font-semibold"}>Datos básicos</h2>
+    <Card className={compact ? "space-y-4" : "space-y-5"}>
+      <TextField label="Alias o iniciales" hint={compact ? "Usa un alias que puedas reconocer." : "Puedes utilizar un alias o iniciales. No necesitamos el nombre completo ni ningún dato médico."} value={name} maxLength={DISPLAY_NAME_MAX} autoComplete="off" required error={errors.display_name} onChange={(e) => onName(e.target.value)} />
       <div className="grid gap-5 sm:grid-cols-2">
         <SelectField label="Etapa" value={stage} required error={errors.stage_slug} onChange={(e) => onStage(e.target.value)}>
           <option value="">Elige una etapa</option>{catalog.stages.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
@@ -19,7 +20,7 @@ export function ProfileBasics({ name, stage, grade, catalog, errors, onName, onS
           <option value="">{stage ? "Elige un curso" : "Elige primero la etapa"}</option>{catalog.grades.filter((g) => g.stage_slug === stage).map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}
         </SelectField>
       </div>
-      <p className="text-sm text-muted-foreground">Curso de escolarización. La intensidad del apoyo no determina su competencia curricular.</p>
+      {compact ? null : <p className="text-sm text-muted-foreground">Curso de escolarización. La intensidad del apoyo no determina su competencia curricular.</p>}
     </Card>
   </section>;
 }
