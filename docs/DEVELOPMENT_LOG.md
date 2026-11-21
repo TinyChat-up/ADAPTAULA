@@ -1,5 +1,13 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Motor pedagógico 2.0, Fase 0 · Estado de la verificación
+
+- Reproducción en local con un plan sintético de una resta. La solución calculada era correcta, el razonamiento seguía pendiente y la versión se guardaba como `ready`. Una segunda regresión mostró que la consulta de estado omitía el informe guardado sobre la versión recreada.
+- En `recreation/verify.ts`, `recreation/record.ts` y `adaptation/recreation/stages.ts`, los motivos de revisión se trasladan a la versión y al informe. Los avisos indican actividades y bloques. El servicio de estado lee el informe de la versión entregada dentro de los permisos habituales. Las respuestas abiertas conservan sus criterios de corrección privados. Los recursos imprescindibles ausentes siguen impidiendo la entrega.
+- Verificación local con proveedores simulados. Pasaron 144 pruebas focalizadas, incluidas persistencia, permisos, lectura de la versión histórica y separación de claves. Pasaron cuatro pruebas PDF con Chromium, typecheck y controles de privacidad y secretos. Lint terminó con un aviso previo en `analysis-run-auth.test.ts`.
+- Suite de unidad y BD: 2642 pruebas pasaron, 18 omitidas, una pendiente y un fallo en `pdf-preview-route.test.ts:30`. Reproducido por separado sobre el commit base `654ae19`: el espía recibe un argumento opcional adicional con valor `undefined`. El build queda pendiente en un entorno que pueda descargar Inter y Outfit de Google Fonts. E2E sin ejecutar.
+- Alcance: rama `codex/fase-0-verificacion-pedagogica`, sin migraciones. La revisión semántica sigue pendiente. La continuidad y las condiciones de avance de las fases 1–6 están en [RECREATION.md](RECREATION.md). Siguiente paso: revisión de esta entrega.
+
 ## 2026-11-19 · Evidencia de relaciones y esquemas impresos en PDF (seguimiento de ADR-059)
 
 - **Evidencia de las relaciones.** Antes bastaba con que la cita nombrara los dos extremos. Ahora tienen que estar en una misma oración afirmativa y unidos por algo más que una enumeración. La dirección y el significado de la flecha no se demuestran: se avisa (`diagram_relation_reading_unverified`), queda pendiente de revisión docente y la procedencia lo dice. El prompt v7 publicado no cambia: el mensaje de reparación explica el motivo exacto.

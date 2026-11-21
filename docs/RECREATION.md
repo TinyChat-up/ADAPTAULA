@@ -6,6 +6,30 @@ Decisiones: [ADR-049, ADR-050 y ADR-051](ARCHITECTURE.md). Pantalla y modo «gen
 
 «Hacer magia» adapta la ficha original conservando sus actividades y su estructura. El motor de recreación usa la ficha como **fuente** de contenidos, objetivos y exigencia cognitiva, y diseña **actividades nuevas** según el perfil y el alcance autorizado. Esta primera entrega es un recorrido vertical aislado. No cambia «Hacer magia», ninguna ruta, ninguna tabla ni ninguna variable de producción.
 
+## Estado de la ficha antes de usarla · Fase 0
+
+En las nuevas generaciones, el verificador, la versión visible y la revisión guardada comparten los motivos de revisión. Una resta puede tener solución demostrada y seguir pendiente de comprobar si el alumno tiene que decidir la operación. El aviso indica qué actividades revisar y la revisión guardada identifica sus bloques. La equivalencia del razonamiento sigue pendiente para cada objetivo del verificador actual.
+
+| Evidencia disponible | Consecuencia |
+| --- | --- |
+| Respuesta abierta con criterios | El docente valorará la producción cuando responda el alumno. Por sí sola, esta condición no exige revisar el diseño de la ficha. |
+| Respuesta cerrada con evidencia textual | El docente contrasta con la fuente las interpretaciones pendientes. Las reglas detectan algunos tipos de pistas. La revelación indirecta sigue pendiente de revisión. |
+| Esquema con relaciones respaldadas por citas | Se revisa el significado y la dirección de las flechas. |
+| Recurso imprescindible ausente o actividad sin resolver | La ficha queda incompleta y se mantiene el bloqueo de entrega de Hacer magia. |
+
+En la BD, `adaptations.status = ready` identifica una entrega. La versión visible usa `state = review` para pedir revisión antes de utilizarla. Su informe emplea `approved_with_warnings` según el contrato de entrega y cuota vigente. Estos estados permiten descargar la propuesta. Las versiones históricas conservan su documento y el dictamen registrado en su fecha. Un trabajo que retoma un plan anterior conserva la versión del verificador que lo examinó.
+
+### Siguientes entregas y evidencia necesaria para avanzar
+
+| Fase | Entrega para revisión independiente |
+| --- | --- |
+| 1 · Perfil | Formulario y resumen pertinente por área. Comprobar autonomía con y sin ayuda, campos desconocidos, privacidad y lectura de perfiles anteriores. |
+| 2 · Comprensión del original | Contrato por actividad con decisiones que corresponden al alumno, condiciones, recursos e incertidumbres trazables al original. |
+| 3 · Dirección pedagógica | Un director elige conservar, facilitar, transformar o sustituir dentro de la autorización docente. Contrastar sus decisiones en casos controlados. |
+| 4 · Fabricación | Cada herramienta demuestra un recorrido de encargo a PDF A4 mediante MaterialDocument y CLARO. Revisar la ficha impresa. |
+| 5 · Proveedores y gasto | Comparar modelos por tarea, acotar la reparación y probar presupuesto compartido bajo concurrencia. Los ensayos de pago requieren autorización. |
+| 6 · Sustitución gradual | Comparar calidad docente, errores graves, tasa de entrega y coste por ficha utilizable en Primaria y ESO. Conservar lectura histórica y retorno al motor previo. |
+
 ## Recorrido
 
 ```
@@ -15,7 +39,7 @@ MaterialAnalysis + AdaptationContext (perfil → necesidades, límites, formatos
 createRecreationPlanner()        proveedor de src/lib/ai + callStructured + recreation_planner v1 · tope de gasto · ai_runs
    │  RecreationPlanSchema       contrato recreation_plan@v1 (≤ 1 reparación con los motivos)
    ▼
-verifyPlan()                     recreation_verify@v2: alcance, objetivos/operaciones, citas y cifras, soluciones, pistas,
+verifyPlan()                     recreation_verify@v3: alcance, objetivos/operaciones, citas y cifras, soluciones, pistas,
    │                             equivalencia por objetivo (razonamiento siempre pendiente)
    ▼
 resolveVisuals()                 A original · B esquema por código · C illustrate() (puerta, cuota, presupuesto, revisión)
