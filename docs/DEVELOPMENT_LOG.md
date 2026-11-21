@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Fase 1 · E2E del alta directa y descarga de PDF
+
+- Playwright en Chromium local, con PGlite y proveedores simulados. Pasaron 18 casos en escritorio y 18 en móvil. Incluyen alta y edición, autonomía, apoyos de un clic, V1, duplicación, permisos, límites Free, protección ante actualizaciones obsoletas, accesibilidad y reflujo.
+- La primera ejecución detectó una aserción desactualizada en `profiles.spec.ts`. La prueba ahora comprueba que el resumen aparece tras añadir apoyos. Se repitió el archivo completo en ambos tamaños.
+- Incluye un caso de Hacer magia en cada tamaño con creación del perfil desde el material, selección automática y descarga de un PDF comprobado con Chromium. Next.js usó fuentes de reserva por el bloqueo de Inter y Outfit en Google Fonts.
+
 ## 2026-11-21 · Fase 1 · Alta de perfiles más directa
 
 - En `ProfileForm` y `ProfileBasics`, «Crear perfil» aparece junto a alias, etapa y curso. Los aprendizajes, apoyos, fortalezas y formas de responder se abren según se necesiten. El resumen aparece al añadir información relevante.
