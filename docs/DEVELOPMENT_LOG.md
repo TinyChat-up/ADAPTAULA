@@ -1,5 +1,11 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Motor pedagógico 2.0, Fase 2 · Comprensión del original
+
+- El analizador v4 guarda objetivos, operaciones, decisiones, datos, recursos, evaluación y condiciones por actividad. Las citas se contrastan con la transcripción y se enlazan a la actividad o a un recurso suyo. Las afirmaciones sin respaldo quedan pendientes. V4 se selecciona expresamente y el valor por defecto sigue siendo v3.
+- El almacenamiento y la lectura histórica se mantienen sobre los contratos existentes. [Pipeline de IA](AI_PIPELINE.md#comprensión-pedagógica-por-actividad--motor-pedagógico-20-fase-2) documenta los límites de la evidencia y cómo consumir el contrato en la Fase 3.
+- Pasaron 346 pruebas de unidad e integración, typecheck y el control de privacidad. Lint aprobó con un aviso anterior. El build normal no pudo descargar Google Fonts en este entorno. El mismo build completó con fuentes simuladas en local.
+
 ## 2026-11-21 · Fase 1 · Aprendizajes en el resumen pedagógico
 
 - El resumen del editor agrupa los aprendizajes por asignatura y muestra los cuatro estados de autonomía. Las entradas históricas de `knows` se mantienen como «Sin valorar». Lo que queda por reforzar tiene su propia etiqueta. Con más de cuatro entradas, la lista aparece en un desplegable.

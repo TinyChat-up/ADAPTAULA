@@ -1,6 +1,7 @@
 import { MATERIAL_ANALYZER_V1 } from "@prompts/material-analyzer/v1";
 import { MATERIAL_ANALYZER_V2 } from "@prompts/material-analyzer/v2";
 import { MATERIAL_ANALYZER_V3 } from "@prompts/material-analyzer/v3";
+import { MATERIAL_ANALYZER_V4 } from "@prompts/material-analyzer/v4";
 import { ADAPTATION_PLANNER_V1 } from "@prompts/adaptation-planner/v1";
 import { ADAPTATION_PLANNER_V2 } from "@prompts/adaptation-planner/v2";
 import { ADAPTATION_PLANNER_V3 } from "@prompts/adaptation-planner/v3";
@@ -9,6 +10,8 @@ import { MATERIAL_GENERATOR_V2 } from "@prompts/material-generator/v2";
 import { PEDAGOGICAL_REVIEWER_V1 } from "@prompts/pedagogical-reviewer/v1";
 import { PEDAGOGICAL_REVIEWER_V2 } from "@prompts/pedagogical-reviewer/v2";
 import type { z } from "zod";
+import { MaterialAnalysisV4Schema, normalizeActivityComprehension } from "@/lib/analysis/activity-comprehension";
+import { MaterialAnalysisV4DraftSchema, type MaterialAnalysisV4Draft } from "@/lib/schemas/activity-comprehension";
 import { normalizeAnalysis, type NormalizeOptions } from "@/lib/analysis/normalize";
 import { normalizeAnalysisV2 } from "@/lib/analysis/normalize-v2";
 import { upgradeAnalysisV2 } from "@/lib/analysis/upgrade";
@@ -21,13 +24,14 @@ import { MaterialAnalysisDraftSchema as MaterialAnalysisDraftSchemaV2, type Mate
  *   v1 → draft v2 → stored MaterialAnalysis v2 (historical; lifted to v3 when read)
  *   v2 → draft v3 → stored MaterialAnalysis v3
  *   v3 → draft v3 → stored MaterialAnalysis v3 (same contract as v2; adjusted prompt, see its header)
+ *   v4 → V3 projection plus independently versioned comprehension (opt-in)
  * `AI_ANALYSIS_PROMPT_VERSION` picks the one in use (default: v3, validated with the real model on two worksheets; v1 and v2 stay published and immutable for traceability).
  */
 export interface AnalyzerDefinition {
   key: "material_analyzer";
   version: number;
   /** Schema version of the analysis it stores. */
-  schemaVersion: 2 | 3;
+  schemaVersion: 2 | 3 | 4;
   system: string;
   buildUserParts: typeof MATERIAL_ANALYZER_V2.buildUserParts;
   repairMessage: (issues: readonly string[]) => string;
@@ -64,8 +68,15 @@ const V2: AnalyzerDefinition = {
 /** Same contract as v2 (same draft schema, same normalizer): only the prompt text differs. */
 const V3: AnalyzerDefinition = { ...V2, ...MATERIAL_ANALYZER_V3, schemaVersion: 3 };
 
-export const PROMPTS = { material_analyzer: { 1: V1, 2: V2, 3: V3 } } as const;
-export const ANALYZER_VERSIONS = [1, 2, 3] as const;
+const V4: AnalyzerDefinition = {
+  ...MATERIAL_ANALYZER_V4,
+  output: { name: "material_analysis_v4", schema: MaterialAnalysisV4DraftSchema },
+  normalize: (draft, options) => normalizeActivityComprehension(draft as MaterialAnalysisV4Draft, options),
+  toCanonical: (stored) => MaterialAnalysisV4Schema.parse(stored).base,
+};
+
+export const PROMPTS = { material_analyzer: { 1: V1, 2: V2, 3: V3, 4: V4 } } as const;
+export const ANALYZER_VERSIONS = [1, 2, 3, 4] as const;
 export type AnalyzerVersion = (typeof ANALYZER_VERSIONS)[number];
 
 /** The version in use unless configured otherwise (keep in step with the default of `AI_ANALYSIS_PROMPT_VERSION`). */

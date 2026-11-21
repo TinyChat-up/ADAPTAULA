@@ -34,7 +34,7 @@ export const ServerEnvSchema = z.object({
   AI_ANALYSIS_ALIAS: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["ECONOMY", "STANDARD", "PREMIUM"]).default("STANDARD")),
   AI_ANALYSIS_EFFORT: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["low", "medium", "high"]).default("medium")),
   AI_ANALYSIS_MAX_REPAIR_ATTEMPTS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(1).default(1)),
-  AI_ANALYSIS_PROMPT_VERSION: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().refine((n) => n === 1 || n === 2 || n === 3, "versiones disponibles: 1, 2 o 3").default(3)),
+  AI_ANALYSIS_PROMPT_VERSION: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().refine((n) => n === 1 || n === 2 || n === 3 || n === 4, "versiones disponibles: 1, 2, 3 o 4").default(3)),
   AI_ANALYSIS_MAX_OUTPUT_TOKENS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(2000).max(64000).default(24000)),
   MOCK_AI_DELAY_MS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(30000).default(600)),
   AI_MAX_REVIEW_RETRIES: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(0).max(5).default(2)),

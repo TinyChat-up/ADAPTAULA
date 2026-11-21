@@ -1,5 +1,8 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
+import { normalizeActivityComprehension } from "@/lib/analysis/activity-comprehension";
+import { parseStoredAnalysis } from "@/lib/analysis/parse";
+import { pedagogicalOriginalDraft } from "../support/pedagogical-original";
 import { as, createTestDb, createUser } from "./harness";
 
 let db: PGlite;
@@ -167,6 +170,33 @@ describe("cola de análisis", () => {
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
     expect(byId[first]).toMatchObject({ analysis: v3, analysis_prompt_version: "material_analyzer@v2", analysis_meta: { schema_version: 3 } });
     expect(byId[second]).toMatchObject({ analysis: v2, analysis_prompt_version: "material_analyzer@v1", analysis_meta: { schema_version: 2 } });
+  });
+
+  it("persiste la comprensión v4 completa y mantiene el aislamiento por workspace", async () => {
+    const owner = await createUser(db, "analisis-v4@example.com");
+    const outsider = await createUser(db, "otro-v4@example.com");
+    const material = await insertMaterial(owner);
+    const job = await enqueue(material, owner.id);
+    await claim(job);
+    const { stored } = normalizeActivityComprehension(pedagogicalOriginalDraft(), { pageCount: 2 });
+    const { rows } = await service(() =>
+      db.query<{ ok: boolean }>(
+        "select public.complete_analysis_job($1, 1, $2::jsonb, 'material_analyzer@v4', '{\"schema_version\":4}'::jsonb, '{}'::jsonb) as ok",
+        [job, JSON.stringify(stored)],
+      ),
+    );
+    expect(rows[0]?.ok).toBe(true);
+
+    const read = (user: User) =>
+      as(db, "authenticated", user.id, () =>
+        db.query<{ analysis: unknown; analysis_prompt_version: string }>(
+          "select analysis, analysis_prompt_version from public.materials where id = $1", [material],
+        ),
+      );
+    const personal = (await read(owner)).rows[0];
+    expect(personal).toEqual({ analysis: stored, analysis_prompt_version: "material_analyzer@v4" });
+    expect(parseStoredAnalysis(personal?.analysis).comprehension).toEqual(stored.comprehension);
+    expect((await read(outsider)).rows).toEqual([]);
   });
 
   it("lo detectado rellena solo los campos sin confirmar: el contexto del docente nunca se pisa", async () => {

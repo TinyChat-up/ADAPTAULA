@@ -22,7 +22,7 @@ import { AnalysisReadinessSchema } from "./analysis-readiness";
  */
 
 export const MATERIAL_ANALYSIS_SCHEMA_VERSION = 3;
-export const SUPPORTED_SCHEMA_VERSIONS = [2, 3] as const;
+export const SUPPORTED_SCHEMA_VERSIONS = [2, 3, 4] as const;
 
 export const STAGE_SLUGS = ["primaria", "eso", "bachillerato"] as const;
 export const GRADE_SLUGS = [
@@ -424,7 +424,7 @@ export type AnalysisUncertainty = MaterialAnalysis["uncertainties"][number];
 
 /** Provenance of a stored analysis. Never contains material content. Shared by every schema version. */
 export const AnalysisMetaSchema = z.object({
-  schema_version: z.union([z.literal(2), z.literal(3)]),
+  schema_version: z.union([z.literal(2), z.literal(3), z.literal(4)]),
   prompt_key: z.string(),
   prompt_version: z.number().int().positive(),
   source: z.enum(["model", "reused"]),

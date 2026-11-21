@@ -39,6 +39,11 @@ const KEY = (page: number, type: string, label: string) => `${type}|${page}|${no
  * - ambiguous relations are dropped, not guessed, and each repair leaves a warning (a code and a count, never content).
  */
 export function normalizeAnalysis(draft: MaterialAnalysisDraft, options: NormalizeOptions): NormalizeResult {
+  const { analysis, warnings } = normalizeAnalysisWithReferences(draft, options);
+  return { analysis, warnings };
+}
+
+export function normalizeAnalysisWithReferences(draft: MaterialAnalysisDraft, options: NormalizeOptions) {
   const counters = new Map<string, number>();
   const bump = (key: string, n = 1) => counters.set(key, (counters.get(key) ?? 0) + n);
 
@@ -333,5 +338,5 @@ export function normalizeAnalysis(draft: MaterialAnalysisDraft, options: Normali
 
   const analysis = MaterialAnalysisSchema.parse(candidate);
   const warnings = [...counters.entries()].map(([key, count]) => `${key}:${count}`);
-  return { analysis, warnings };
+  return { analysis, warnings, objectiveMap, textMap, visualMap };
 }
