@@ -153,6 +153,19 @@ describe("runAnalysisJob", () => {
     expect(calls.inserts.find((i) => i.table === "ai_runs")!.row).toMatchObject({ prompt_version: 2 });
   });
 
+  it("guarda la comprensión v4 junto al análisis base en el mismo trabajo y la misma llamada", async () => {
+    analyzerVersion = 4;
+    expect(await runAnalysisJob(JOB.id)).toBe("completed");
+    const save = calls.rpc.find(({ name }) => name === "complete_analysis_job");
+    expect(save?.args).toMatchObject({
+      p_attempt: 1,
+      p_prompt_version: "material_analyzer@v4",
+      p_analysis: { schema_version: 4, base: { schema_version: 3 }, comprehension: { version: 1, activities: expect.any(Array) } },
+      p_meta: { schema_version: 4, prompt_version: 4, attempts: 1 },
+    });
+    expect(calls.inserts.filter(({ table }) => table === "ai_runs")).toHaveLength(1);
+  });
+
   it("records that the teacher forced the re-analysis (forceReanalysis) in the provenance", async () => {
     claim = { ...JOB, input: { force: true, prompt_version: 1 } };
     expect(await runAnalysisJob(JOB.id)).toBe("completed");

@@ -17,7 +17,11 @@ export type ParseOutcome<T> =
 
 /** Short, content-free descriptions of what failed validation (paths and rules, never values). */
 export function describeIssues(error: z.ZodError, max = 15): string[] {
-  return error.issues.slice(0, max).map((issue) => `${issue.path.join(".") || "(raíz)"}: ${issue.message}`.slice(0, 200));
+  return error.issues.slice(0, max).map((issue) => {
+    // Unexpected keys can contain copied source material. Keep only the count in diagnostics.
+    const message = issue.code === "unrecognized_keys" ? `Campos inesperados: ${issue.keys.length}` : issue.message;
+    return `${issue.path.join(".") || "(raíz)"}: ${message}`.slice(0, 200);
+  });
 }
 
 export function parseStructured<T>(text: string, schema: z.ZodType<T>): ParseOutcome<T> {

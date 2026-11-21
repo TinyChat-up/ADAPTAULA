@@ -80,10 +80,10 @@ Notas de los modelos Claude actuales (para la implementación de la Fase 4):
 ### A · Ingesta (sin IA)
 PDF, JPG, PNG, WEBP. Validación de MIME por *magic bytes*, tamaño (`features.max_file_mb`), número de páginas (`features.max_pages_per_material`) y hash sha256. El fichero va al bucket privado `source-materials`. El escaneo de malware queda pendiente de infraestructura (se documenta como riesgo aceptado del MVP: los ficheros nunca se ejecutan ni se sirven públicamente).
 
-### B · Análisis — `material_analyzer@v1` (activo) y `@v2` (implementado en la fase 3.6, sin validar con el modelo real)
+### B · Análisis del material original
 Entrada: el fichero original (PDF nativo o imagen) + el contexto que el docente haya **confirmado** (etapa, curso, asignatura, tema). Nunca datos del alumnado: en esta fase no interviene ningún perfil.
 
-Cada versión del prompt va emparejada con el contrato que produce (`src/lib/ai/prompts.ts`): **v1 → esquema v2** (histórico; sus filas se leen elevadas a v3 en memoria) y **v2 → esquema v3**. La versión en uso se elige con `AI_ANALYSIS_PROMPT_VERSION` (por defecto 1): nada cambia solo. El resto de la app consume siempre la forma v3 (`MaterialAnalysis`).
+Cada versión del prompt va emparejada con el contrato que produce. `material_analyzer@v1` guarda el esquema v2, que se convierte a v3 en memoria. Los prompts v2 y v3 guardan el esquema v3. El prompt v4 guarda el esquema v4 y requiere configurar `AI_ANALYSIS_PROMPT_VERSION=4` expresamente. El valor por defecto sigue siendo 3.
 
 **`MaterialAnalysis` v3** (`src/lib/schemas/material-analysis.ts`):
 - **Identificación:** título e idioma (texto leído tal cual), etapa, curso, asignatura (con su `slug` del catálogo si encaja) y tema con su `confidence`.
@@ -119,7 +119,7 @@ Por eso el proveedor (`providers/anthropic.ts`) prueba primero el modo **nativo*
 
 Consecuencias: (1) sin decodificación restringida, la primera respuesta puede salir inválida con más frecuencia (1 de 3 en el primer benchmark, reparada); (2) el bloque del esquema son ≈ 6.300 tokens por llamada: ≈ 0,0013 USD si se lee de caché y ≈ 0,016 USD si hay que escribirla (1,25×); (3) los esquemas de la fase 4 (`MaterialDocument`, aún mayor) tendrán el mismo problema y habrá que partirlos o usar este mismo modo.
 
-**Caché y reutilización:** el análisis canónico vive en `materials.analysis` y la procedencia en `materials.analysis_meta`. Al completar una subida se calcula SHA-256 de los bytes recibidos (`content_hash`); si **en el mismo workspace** existe un material `analyzed` con el mismo hash, la misma `analysis_prompt_version` (`material_analyzer@v1`) y el mismo `schema_version` (**`content_hash + prompt_version + schema_version`**), el análisis se copia (`cache_hit: true`, coste 0) sin llamar al modelo ni consumir cuota. Nunca se reutiliza entre workspaces (no se puede inferir que otro usuario subió un fichero), ni un análisis fallido o de otra versión. Cambiar solo de modelo **no** invalida la caché (queda en el meta); cambiar el prompt o el esquema, sí. Las adaptaciones futuras (una ficha para 5 alumnos) leen `materials.analysis` y no reenvían el fichero.
+**Caché y reutilización:** el análisis canónico vive en `materials.analysis` y la procedencia en `materials.analysis_meta`. Al completar una subida se calcula SHA-256 de los bytes recibidos (`content_hash`); si **en el mismo workspace** existe un material `analyzed` con el mismo hash, la misma `analysis_prompt_version` y el mismo `schema_version` (**`content_hash + prompt_version + schema_version`**), el análisis se copia (`cache_hit: true`, coste 0) sin llamar al modelo ni consumir cuota. Nunca se reutiliza entre workspaces (no se puede inferir que otro usuario subió un fichero), ni un análisis fallido o de otra versión. Cambiar solo de modelo **no** invalida la caché (queda en el meta); cambiar el prompt o el esquema, sí. Las adaptaciones futuras (una ficha para 5 alumnos) leen `materials.analysis` y no reenvían el fichero.
 
 **`forceReanalysis` (ignorar la caché a propósito):** `requestAnalysis(ctx, materialId, { force })` (`materials/service.ts`) es la única puerta de entrada en el servidor. Con `force: true` no se consulta la caché y se encola un análisis nuevo, que gasta una unidad de cuota como cualquier llamada al modelo. La UI lo usa en «Volver a analizar» (material ya analizado); «Analizar» y «Reintentar» (material subido o fallido) usan `force: false` y pueden reutilizar un análisis idéntico. El indicador viaja en `adaptation_jobs.input.force` y acaba en el meta.
 
@@ -134,6 +134,21 @@ Consecuencias: (1) sin decodificación restringida, la primera respuesta puede s
 - Una reutilización de caché no encola nada y por tanto no reserva.
 
 Además, límites técnicos independientes (`ANALYSIS_LIMITS` en `src/lib/materials/config.ts`): 30 subidas por usuario y hora, 20 análisis por workspace y hora (reintentos incluidos) y 3 análisis simultáneos por workspace (índice único + comprobación en `enqueue_analysis_job`). El uso técnico queda en `ai_runs` (tokens, incluida la escritura en caché, y coste por llamada).
+
+#### Comprensión pedagógica por actividad · Motor pedagógico 2.0, Fase 2
+
+El contrato persistido v4 contiene `base` (el grafo v3 del material) y `comprehension` (versión 1). `parseStoredAnalysis(raw)` entrega la proyección v3 como `analysis` a los consumidores actuales y añade `comprehension` para el lector que la solicita. Los análisis históricos se leen sin este campo y no se reinterpretan. El trabajo guarda el contrato completo en las columnas JSON existentes y la caché exige que coincidan el prompt y el esquema. Para desactivar el ensayo se puede volver a seleccionar v3 y conservar el lector de v4 para los materiales ya guardados.
+
+| Datos por actividad | Interpretación |
+| --- | --- |
+| Objetivos, operaciones y decisiones del alumno | Distinguen un objetivo explícito de una interpretación y separan, por ejemplo, calcular de elegir y ordenar las operaciones. |
+| Información y recursos imprescindibles | Identifican datos y relaciones a partir de citas o referencias a un gráfico o tabla. Los recursos se enlazan por identificador y conservan su contenido y página en el grafo base. |
+| Formato de respuesta, evaluación y condiciones | El formato observado puede ser parte de la exigencia (`assessed`), un medio de acceso (`access`) o quedar por determinar. La argumentación, la producción escrita y las restricciones de la consigna se registran por separado. |
+| Evidencia e incertidumbre | Cada afirmación enlaza la actividad o un recurso suyo. La evidencia guarda el id, la página y la cita literal. `quote: null` identifica una referencia visual que debe consultarse. Las dudas se conservan por campo y se enlazan las incertidumbres del grafo base. |
+
+El modelo recibe el original y el contexto confirmado. El servidor contrasta las citas con la transcripción del mismo análisis y verifica los enlaces, el alcance y la página. Retira afirmaciones con citas o referencias incompatibles y deja constancia de lo pendiente. Una cita válida permite localizar un fragmento y por sí sola no prueba una interpretación pedagógica ni certifica la fidelidad de la transcripción a los píxeles. Un gráfico o tabla sin datos legibles conserva esa incertidumbre. V4 no pide ni almacena una respuesta esperada por actividad. Los avisos técnicos de normalización contienen códigos y recuentos.
+
+**Para el director pedagógico de la Fase 3.** Vincular el diseño al original y al análisis v4 completos, incluida su procedencia. Consultar la consigna, el contexto, los recursos y los elementos de `base.protected_elements` además de las afirmaciones por actividad. Las huellas que usan los motores actuales corresponden solo a la proyección v3. Un valor `access` informa sobre el papel del formato, pero no autoriza eliminar una operación cognitiva ni una condición. Por ejemplo, una respuesta más breve puede facilitar la escritura si conserva la justificación exigida. Ante un dato no respaldado, consultar el original o conservar la demanda sin reinterpretarla. Una lista vacía no acredita que pueda suprimirse información, un recurso o una decisión del alumno.
 
 ### C–E · Plan, generación y revisión (Fase 4)
 

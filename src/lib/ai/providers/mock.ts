@@ -2,6 +2,21 @@ import { AIError } from "../errors";
 import type { AIProvider, ContentPart, StructuredRequest, StructuredResponse } from "../types";
 import { mockAnalysisDraft } from "./mock-analysis";
 import { mockAnalysisDraftV3 } from "./mock-analysis-v3";
+import type { MaterialAnalysisV4Draft } from "@/lib/schemas/activity-comprehension";
+
+function mockAnalysisDraftV4() {
+  const draft = mockAnalysisDraftV3();
+  const activities = draft.activities.map((item) => {
+    const activity = { ...item };
+    delete activity.answer;
+    const comprehension: MaterialAnalysisV4Draft["activities"][number]["comprehension"] = {
+      objectives: [], operations: [], student_decisions: [], information: [], essential_resources: [],
+      response_format_role: null, evaluation: [], conditions: [], uncertainties: [],
+    };
+    return { ...activity, comprehension };
+  });
+  return { ...draft, activities };
+}
 
 const MARKERS = { fail: "MOCK_FAIL", invalid: "MOCK_INVALID", truncated: "MOCK_TRUNCATED", refusal: "MOCK_REFUSAL", slow: "MOCK_SLOW" } as const;
 const SLOW_DELAY_MS = 8000;
@@ -48,6 +63,7 @@ export class MockProvider implements AIProvider {
     if (fixture) return { ...base, text: JSON.stringify(fixture(request)), stopReason: "complete" };
     if (request.output.name === "material_analysis") return { ...base, text: JSON.stringify(mockAnalysisDraft()), stopReason: "complete" };
     if (request.output.name === "material_analysis_v3") return { ...base, text: JSON.stringify(mockAnalysisDraftV3()), stopReason: "complete" };
+    if (request.output.name === "material_analysis_v4") return { ...base, text: JSON.stringify(mockAnalysisDraftV4()), stopReason: "complete" };
     throw new AIError("bad_request", `mock: no fixture for ${request.output.name}`);
   }
 }

@@ -79,12 +79,13 @@ describe("server env", () => {
     expect(env.FLAG_PROVIDER_FALLBACK).toBe(false);
   });
 
-  it("the analysis prompt version defaults to 3 (the validated one), accepts 1 and 2 and refuses anything else; repairs are capped at 1", () => {
+  it("the analysis prompt version defaults to 3 (the validated one), accepts the published alternatives and refuses anything else; repairs are capped at 1", () => {
     expect(parseServerEnv({}).AI_ANALYSIS_PROMPT_VERSION).toBe(3);
     expect(parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "2" }).AI_ANALYSIS_PROMPT_VERSION).toBe(2);
     expect(parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "1" }).AI_ANALYSIS_PROMPT_VERSION).toBe(1);
     expect(parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "" }).AI_ANALYSIS_PROMPT_VERSION).toBe(3);
-    expect(() => parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "4" })).toThrow(/AI_ANALYSIS_PROMPT_VERSION/);
+    expect(parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "4" }).AI_ANALYSIS_PROMPT_VERSION).toBe(4);
+    expect(() => parseServerEnv({ AI_ANALYSIS_PROMPT_VERSION: "5" })).toThrow(/AI_ANALYSIS_PROMPT_VERSION/);
     expect(() => parseServerEnv({ AI_ANALYSIS_MAX_REPAIR_ATTEMPTS: "2" })).toThrow(/AI_ANALYSIS_MAX_REPAIR_ATTEMPTS/);
   });
 

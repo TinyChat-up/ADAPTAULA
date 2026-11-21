@@ -70,8 +70,8 @@ Versión nueva (hoy ya no es la activa: lo es v3; se elige con `AI_ANALYSIS_PROM
 - Una respuesta `inferred` solo con total seguridad; si la actividad es abierta o dudosa, se omite `answer`.
 - Salida: `MaterialAnalysisDraftSchema` v3 (compacto, con campos opcionales; ver `docs/AI_PIPELINE.md`). Los ejemplos del prompt son genéricos, no tomados de ninguna ficha concreta.
 
-### material_analyzer_v3 (implementado, sin validar con el modelo real; `prompts/material-analyzer/v3.ts`)
-Misma salida y mismo esquema (`MaterialAnalysis` v3, sin v4) que v2. **Versión nueva porque v2 ya produjo un run real y una versión publicada no se edita** (los SHA-256 de v1 y v2 están fijados en `tests/unit/analysis-robustness.test.ts`). Solo cambia «Cómo rellenar el esquema», a raíz de los fallos del run real de v2:
+### material_analyzer_v3 (activo por defecto; `prompts/material-analyzer/v3.ts`)
+Misma salida y mismo esquema (`MaterialAnalysis` v3) que v2. **Versión nueva porque v2 ya produjo un run real y una versión publicada no se edita** (los SHA-256 de v1 y v2 están fijados en `tests/unit/analysis-robustness.test.ts`). Solo cambia «Cómo rellenar el esquema», a raíz de los fallos del run real de v2:
 - Las **condiciones que definen el problema** («sin reducir…», «exclusivamente…», mínimos y máximos, qué mantener o suponer) se protegen como `reasoning_constraint`/`response_constraint`; sin tipo nuevo ni frases fijas.
 - **`importance` con criterio** (`essential` = alterar el objetivo, la respuesta, la dificultad evaluada o las condiciones; `important` = fidelidad y contexto; `optional`), con «no marques todo como essential».
 - **Títulos, series, ejes, leyendas y unidades solo si figuran en el material**; si no, vacíos.
@@ -79,6 +79,10 @@ Misma salida y mismo esquema (`MaterialAnalysis` v3, sin v4) que v2. **Versión 
 El bloque system + esquema crece +4,5 % frente a v2 (≈ +264 tokens), por debajo de v1. **Es la versión activa por defecto** (`AI_ANALYSIS_PROMPT_VERSION=3`, validada con dos llamadas reales: Bachillerato y Geografía); v1 y v2 siguen disponibles e inmutables para trazabilidad. La caché de análisis incluye la versión del prompt, así que los materiales ya analizados con otra versión se conservan y no se reanalizan solos.
 
 **`importance` (decisión):** el 75 % de `essential` es solo una señal blanda de los evals. Nada lo normaliza ni degrada automáticamente `essential` → `important` para cumplir una proporción: la corrección pedagógica pesa más que la distribución estadística.
+
+### material_analyzer_v4 (ensayo explícito; `prompts/material-analyzer/v4.ts`)
+
+Guarda el esquema v4 con comprensión versionada por actividad. Pide citas y enlaces al original para distinguir objetivos, razonamiento, decisiones, datos, recursos y condiciones. Declara ambigüedades por campo y omite soluciones. Se selecciona con `AI_ANALYSIS_PROMPT_VERSION=4`. V3 sigue siendo el valor por defecto. La verificación de esta entrega utiliza fichas sintéticas y proveedores simulados. Véase [el contrato de análisis](AI_PIPELINE.md#comprensión-pedagógica-por-actividad--motor-pedagógico-20-fase-2).
 
 De los tres prompts de la Fase 4 están publicados `adaptation_planner@v1` y `material_generator@v1` (inmutable; su SHA-256 está fijado en `tests/unit/adaptation-planner.test.ts` y su tabla de estrategias se contrasta con el código). `pedagogical_reviewer` sigue pendiente; su diseño de entrada y salida está fijado por los contratos de `docs/ADAPTATION.md`. ECONOMY no es el alias por defecto de ninguno: se descartó para el análisis por degradaciones materiales y no se asume suficiente aquí sin evals.
 
