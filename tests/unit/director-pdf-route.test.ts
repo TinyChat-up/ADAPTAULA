@@ -31,7 +31,7 @@ beforeEach(() => {
   privileged.sheet.mockResolvedValue({ status: "review_pending", pdf, checks: { supports: "complete" }, trace: [] });
 });
 
-it.each([
+const denied: Array<[name: string, arrange: () => void, status: number, target?: string]> = [
   ["sin sesión", () => { session.authenticated = false; }, 401],
   ["workspace que no está en la lista", () => { env.list = OTHER; }, 404],
   ["lista vacía (por defecto)", () => { env.list = undefined; }, 404],
@@ -40,7 +40,8 @@ it.each([
   ["rol de solo lectura", () => { session.role = "viewer"; }, 403],
   ["adaptación que el usuario no puede leer (RLS)", () => { row.visible = null; }, 404],
   ["adaptación de otro workspace", () => { row.visible = { id, workspace_id: OTHER }; }, 404],
-] as const)("%s: se rechaza sin lecturas privilegiadas ni fabricación", async (_name, arrange, status, target) => {
+];
+it.each(denied)("%s: se rechaza sin lecturas privilegiadas ni fabricación", async (_name, arrange, status, target) => {
   arrange();
   const res = await get(target);
   expect(res.status).toBe(status);
