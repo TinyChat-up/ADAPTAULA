@@ -160,7 +160,9 @@ function reviewDirectedDocument(
       issues.push({ code: "fabricated_response_changed", original_id });
     }
     const linkedResources = (block.resource_block_ids ?? []).flatMap((id) => blocks.get(id) ?? []);
-    const visible = [block, ...linkedResources.filter((item) => item.type !== "image")].map((item) => studentText(item).replace(/\*\*/gu, ""));
+    // Only the marks Adaptaula added to this activity are removed; the original's own bold, here and in its resources, stays.
+    const own = { ...block, prompt: withoutAddedEmphasis(block.prompt, link?.emphasised ?? []) };
+    const visible = [own, ...linkedResources.filter((item) => item.type !== "image")].map(studentText);
     for (const { kind, evidence, ref } of row.obligations) {
       if ((kind === "condition" || kind === "information") && evidence?.source_ref === original_id && evidence.quote &&
           !visible.some((text) => containsActivityQuote(text, evidence.quote!))) {

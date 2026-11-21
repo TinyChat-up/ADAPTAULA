@@ -119,6 +119,21 @@ describe("dirección conectada al planificador y fabricada", () => {
     expect(explicitRequirements("Usa **dos** ejemplos con dos argumentos", own, { id: "act_9", expected_answer: { basis: "not_inferable", value: null } })).toEqual(["con dos argumentos"]);
   });
 
+  it("Fase 4.1 · una condición citada con negrita original se verifica sin perder esa negrita", async () => {
+    const draft = completeOriginal();
+    const argued = draft.activities[2]!;
+    // The original prints the very condition that is quoted in bold; the sheet must keep it and still recognise the quote.
+    argued.instruction = argued.instruction.replace("con dos argumentos", "**con dos argumentos**");
+    argued.comprehension = JSON.parse(JSON.stringify(argued.comprehension).replaceAll("con dos argumentos", "**con dos argumentos**"));
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const prompt = activity(output, "act_3").prompt;
+    expect(prompt).toContain("Defiende tu postura **con dos argumentos**.");
+    expect(prompt).not.toContain("****");
+    expect(output.trace.find(({ original_id }) => original_id === "act_3")?.emphasised).toEqual([]);
+    expect(output.checks.fabrication).toBe("passed");
+  });
+
   it("conserva toda la ficha sin pedir un plan si no hay cambios justificados", async () => {
     const { input, original } = await directorFixture({ supports: {} });
     const planner = vi.fn(echoPlan);
