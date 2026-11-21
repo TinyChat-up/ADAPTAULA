@@ -77,6 +77,11 @@ export const ServerEnvSchema = z.object({
   HACER_MAGIA_ENGINE: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["off", "pilot", "on"]).default("on")),
   /** Identificadores de workspace separados por comas (solo con HACER_MAGIA_ENGINE=pilot). */
   HACER_MAGIA_RECREATION_WORKSPACES: optional(z.string().max(2000)),
+  /**
+   * Vista previa del director pedagógico 2.0 (solo lectura, sin IA ni entrega): workspaces separados por comas que pueden pedir
+   * `GET /api/adaptations/[id]/director-pdf`. Vacío (por defecto): nadie. No cambia «Hacer magia».
+   */
+  DIRECTOR_PREVIEW_WORKSPACES: optional(z.string().max(2000)),
 
   FLAG_MAX_PLAN_ENABLED: flag(false),
   FLAG_AI_IMAGES_ENABLED: flag(false),

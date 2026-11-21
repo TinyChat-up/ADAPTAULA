@@ -91,6 +91,30 @@ Si se pide `visual_navigation` y la actividad no tiene requisitos de forma que r
 
 Comprobado con la ficha sintética de 1.º de ESO en PDF A4 real: sin páginas vacías, datos sin resaltar y comprobación final después del espacio de escritura. La utilidad para el alumnado sigue pendiente de valoración docente con materiales reales.
 
+## Puente con la aplicación · vista previa del director
+
+[bridge.ts](../src/lib/adaptation/directed/bridge.ts) construye la ficha del director para una adaptación **ya creada** en la aplicación, solo con datos en los que confía el servidor. No llama a ningún modelo, no guarda nada, no consume cuota ni presupuesto y no cambia el estado de la adaptación. Hacer magia no cambia.
+
+| Comprobación | Si falla |
+| --- | --- |
+| La adaptación es del workspace del docente, leída antes con sus propios permisos (RLS) | `not_found` |
+| Contexto congelado con su huella | `invalid_input` |
+| Análisis V4 guardado con el material e idéntico al de la adaptación | `v4_required`, `stale_analysis` |
+| Alcance por ficha de la adaptación (acceso o metodológico) | `curricular_unavailable`, `invalid_authorization` |
+| Original subido: sha-256 de sus bytes igual a `materials.content_hash` | `material_unavailable`, `original_unavailable`, `original_changed` |
+| Perfil de la adaptación, del mismo workspace y sin cambios desde la creación (fecha y contexto reconstruido) | `profile_required`, `profile_unavailable`, `profile_changed` |
+| Bloqueos del director, de la fabricación 4.1 y de la impresión | sus códigos, sin contenido |
+
+Sin planificador, los enlaces son las propias decisiones del director: es todo lo que necesitan conservar, facilitar y la respuesta oral. Una sustitución, que necesitaría un planificador real, se bloquea con `replacement_planner_unavailable`. Una imagen nueva se bloquea con `illustration_unavailable`.
+
+Acceso web: `GET /api/adaptations/[id]/director-pdf`, solo profesorado y solo para los workspaces de `DIRECTOR_PREVIEW_WORKSPACES`, vacío por defecto. Para los demás responde 404. Devuelve el PDF, o un 409 con los códigos del bloqueo.
+
+**Falta para integrarlo en Hacer magia:**
+1. Analizar con V4 los materiales del workspace piloto. Hoy V4 solo se activa de forma global (`AI_ANALYSIS_PROMPT_VERSION`) y cuesta una llamada de pago por material.
+2. Fijar el motor en la adaptación (`pipeline_versions.engine`) y llevar el trabajo de generación al director. Hay que guardar la versión como documento y revisión y consumir la cuota al entregar. Cambia el contrato de versiones, así que va en su propia PR.
+3. Fijar a hash las imágenes del original (`originalAssets`). Sin ellas, una actividad cuyo recurso es una imagen original se bloquea.
+4. Conectar un planificador real para las sustituciones, con presupuesto y registro en `ai_runs`.
+
 ## Recorrido
 
 ```

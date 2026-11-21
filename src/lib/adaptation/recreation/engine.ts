@@ -13,13 +13,17 @@ export interface MagicEngineConfig {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Whether a comma-separated list of workspace ids (a server variable) names this workspace. Malformed entries never match. */
+export const inWorkspaceList = (list: string | undefined, workspaceId: string): boolean =>
+  (list ?? "").split(",").map((w) => w.trim()).filter((w) => UUID.test(w)).some((w) => w.toLowerCase() === workspaceId.toLowerCase());
+
 /** True only when the server's switch allows the recreation engine for this workspace. Never decided by the browser. */
 export function recreationAllowed(config: MagicEngineConfig, workspaceId: string): boolean {
   switch (config.HACER_MAGIA_ENGINE ?? "off") {
     case "on":
       return true;
     case "pilot":
-      return (config.HACER_MAGIA_RECREATION_WORKSPACES ?? "").split(",").map((w) => w.trim()).filter((w) => UUID.test(w)).some((w) => w.toLowerCase() === workspaceId.toLowerCase());
+      return inWorkspaceList(config.HACER_MAGIA_RECREATION_WORKSPACES, workspaceId);
     default:
       return false;
   }
