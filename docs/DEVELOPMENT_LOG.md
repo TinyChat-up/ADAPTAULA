@@ -1,5 +1,17 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Motor pedagógico 2.0, Fase 4.1 · Consignas claras y apoyos concretos
+
+- Rama `claude/fase-4-1-consignas-apoyos` desde `main` (`f9b9eed`). Solo cambia el piloto del director. Hacer magia en producción no cambia. [Criterios](RECREATION.md#consignas-claras-y-apoyos-concretos--fase-41).
+- Se resaltan las condiciones literales de cómo responder, nunca los datos. «Antes de entregar» sustituye al cuadro genérico «Orientación». El espacio se ajusta a la producción exigida, con un mínimo de 8 líneas para argumentar o redactar.
+- Pruebas focalizadas, según la nueva metodología:
+  - en `tests/unit/directed-recreation.test.ts` se adaptó una y se añadieron dos (espacio y comprobación final; ni datos ni decisiones del alumno resaltados);
+  - en `tests/pdf/directed-recreation.test.ts` se añadió una y se ajustó la existente, que ya no espera «Orientación».
+  - Pasan las 11 de unidad y las 3 de PDF del archivo.
+- Typecheck correcto. Lint de los archivos tocados sin avisos. No se ha ejecutado la suite completa.
+- Se revisaron a ojo las tres páginas del PDF de ejemplo en `.pdf-smoke/directed-fase-4-1/`.
+- Fallo previo conocido, no relacionado: `pdf-preview-route.test.ts`.
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 3B · Integración aislada del director
 
 - Rama independiente desde `41fbc29`, con #117 integrada. [Recorrido y comprobaciones](RECREATION.md#integración-aislada-del-director--fase-3b).

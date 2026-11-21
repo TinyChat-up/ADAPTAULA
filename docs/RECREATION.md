@@ -77,6 +77,18 @@ El contrato aislado de plan v1 declara el id de origen, el id de resultado y las
 
 **Antes de activar el recorrido.** Validar el análisis V4 con materiales reales autorizados, comprobar la procedencia y la legibilidad de imágenes y gráficos, añadir revisión semántica independiente de actividades y apoyos, y verificar la compatibilidad de las versiones con la aplicación. Para admitir división o fusión harán falta enlaces comprobables de cada obligación a los bloques correspondientes. Esta entrega cubre pruebas locales con datos sintéticos y uso de los ejecutores actuales.
 
+## Consignas claras y apoyos concretos · Fase 4.1
+
+Primera entrega de fabricación, solo en el piloto del director ([directed-supports.ts](../src/lib/recreation/directed-supports.ts)). Hacer magia en producción no cambia. Todo se deriva del original verificado, sin modelo ni información nueva.
+
+| Apoyo | Qué hace | Límite |
+| --- | --- | --- |
+| Condiciones resaltadas | Con `segment_instruction` o `visual_navigation`, pone en negrita las citas literales de cómo responder: extensión, términos, unidades, método, formato y el razonamiento que se pide («Justifica el procedimiento», «con dos argumentos»). | Nunca datos (`required_data`, información) ni lo que el alumno debe seleccionar, inferir, clasificar, interpretar o elegir como criterio. Se omite una cita que contenga la respuesta esperada, que no aparezca literal o que ocupe más del 60 % de la consigna. Como máximo tres por actividad. El texto es idéntico salvo las marcas. |
+| «Antes de entregar, comprueba» | Sustituye el cuadro genérico «Orientación» por una lista con esas mismas citas. Solo aparece si hay dos o más requisitos, o uno en una producción escrita extensa. | Sin requisitos no se imprime nada. No añade pasos de razonamiento ni pistas. Pasa por la auditoría de pistas existente. |
+| Espacio para responder | `blank_workspace` reserva como mínimo 8 líneas si se evalúa redacción o argumentación. En el resto suma 2 líneas a las del original. | El espacio no lleva encabezados. Tope de 40 líneas. |
+
+Comprobado con la ficha sintética de 1.º de ESO en PDF A4 real: sin páginas vacías, datos sin resaltar y comprobación final después del espacio de escritura. La utilidad para el alumnado sigue pendiente de valoración docente con materiales reales.
+
 ## Recorrido
 
 ```

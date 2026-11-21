@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
@@ -7,7 +9,7 @@ import { printDirectedRecreation } from "@/lib/recreation/directed-print";
 import { candidateFor, completeOriginal, directorFixture, echoPlan, replacementPlan, shortOriginal } from "../support/directed-recreation";
 import { pedagogicalOriginalPdf } from "../support/pedagogical-original";
 import { analyzePdf, placedText } from "./analyze";
-import { engine } from "./harness";
+import { engine, OUT_DIR } from "./harness";
 
 describe("director pedagógico a PDF A4 con el renderizador existente", () => {
   it("imprime la consigna, la lectura, el gráfico y la argumentación y conserva un recurso fijado", async () => {
@@ -47,10 +49,11 @@ describe("director pedagógico a PDF A4 con el renderizador existente", () => {
     const pages = await analyzePdf(printed.pdf);
     const text = pages.map((page) => page.body).join(" ");
     for (const token of ["qué operaciones necesitas y en qué orden", "75 por la mañana y 32 por la tarde",
-      "ORIENTACIÓN", "recogió su mapa", "con dos argumentos", "Visitas a la biblioteca", "Marzo", "Abril", "Muestra del material"]) {
+      "recogió su mapa", "con dos argumentos", "Visitas a la biblioteca", "Marzo", "Abril", "Muestra del material"]) {
       expect(text).toContain(token);
     }
     expect(text).not.toMatch(/Solución|Clave de respuestas/iu);
+    expect(text).not.toMatch(/Orientación|Localiza la consigna/iu);
     const graphic = pages.find((page) => page.body.includes("Visitas a la biblioteca"))!;
     expect(graphic.body).toMatch(/12/u);
     expect(graphic.body).toMatch(/20/u);
@@ -60,6 +63,26 @@ describe("director pedagógico a PDF A4 con el renderizador existente", () => {
     const glyphs = (await placedText(printed.pdf)).flat();
     const label = glyphs.find(({ str }) => str === "Marzo");
     expect(label?.height ?? 0).toBeGreaterThan(6);
+  });
+
+  it("Fase 4.1 · imprime condiciones resaltadas, la comprobación final y espacio para argumentar, sin páginas vacías", async () => {
+    const { input, original } = await directorFixture();
+    const draft = await runDirectedRecreation(input, { original, plannerFixture: echoPlan });
+    if (draft.status === "blocked") throw new Error(JSON.stringify(draft.issues));
+    const printed = await printDirectedRecreation(draft, engine);
+    if (printed.status === "blocked") throw new Error(JSON.stringify(printed.issues));
+    const pages = await analyzePdf(printed.pdf);
+    const dir = path.join(OUT_DIR, "directed-fase-4-1");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "sheet.pdf"), printed.pdf);
+    for (const page of pages) writeFileSync(path.join(dir, `page-${page.number}.png`), page.png);
+    const text = pages.map(({ body }) => body).join(" ");
+    expect(text).toMatch(/Antes de entregar, comprueba/iu);
+    expect(text).toContain("Con dos argumentos");
+    expect(text).toContain("Hay 150 plazas. Se han reservado 75 por la mañana y 32 por la tarde");
+    expect(text).not.toMatch(/Orientación|Localiza la consigna/iu);
+    // Every page carries an activity: the extra space and the checklist never leave a page with only a header.
+    for (const page of pages) expect(page.body, `página ${page.number}`).toMatch(/Decide qué operaciones|Escribe un texto|Usa el gráfico/u);
   });
 
   it("imprime la sustitución abierta con su condición, sin publicar los criterios internos ni aprobar su equivalencia", async () => {

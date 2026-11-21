@@ -13,6 +13,9 @@ function resultOf(result: DirectedPilotResult) {
   return result;
 }
 
+/** The fragments printed in bold (`**…**`). */
+const bolded = (prompt: string) => [...prompt.matchAll(/\*\*([^*]+)\*\*/gu)].map((m) => m[1]!);
+
 function activity(result: ReturnType<typeof resultOf>, originalId: string) {
   const id = result.trace.find(({ original_id }) => original_id === originalId)?.block_id;
   const block = allBlocks(result.document).find((b): b is Extract<Block, { type: "activity" }> => b.id === id && b.type === "activity");
@@ -38,11 +41,14 @@ describe("dirección conectada al planificador y fabricada", () => {
     const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: fixture, candidate: { version: 1, activities: keep } }));
     expect(fixture).toHaveBeenCalledTimes(1);
     expect(output.document.meta.stage).toBe("eso");
-    expect(activity(output, "act_1")).toMatchObject({ prompt: expect.stringContaining("orden.\n\nJustifica"), response: { kind: "lines", lines: 5 } });
-    expect(activity(output, "act_1").prompt).toContain("Se han reservado 75 por la mañana y 32 por la tarde");
+    // Fase 4.1: the explicit requirement of how to answer is emphasised; the data stay exactly as the original prints them.
+    expect(activity(output, "act_1")).toMatchObject({ prompt: expect.stringContaining("orden.\n\n**Justifica el procedimiento**."), response: { kind: "lines", lines: 5 } });
+    expect(activity(output, "act_1").prompt).toContain("Hay 150 plazas. Se han reservado 75 por la mañana y 32 por la tarde");
+    expect(bolded(activity(output, "act_1").prompt)).toEqual(["Justifica el procedimiento"]);
     expect(activity(output, "act_3")).toMatchObject({ trace: { origin: "original" }, prompt: expect.stringContaining("con dos argumentos") });
+    // No generic «Orientación» box anywhere: a support says something specific to its activity or is not printed.
+    expect(allBlocks(output.document).some((b) => b.type === "help_box" && b.title === "Orientación")).toBe(false);
     expect(allBlocks(output.document)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "help_box", title: "Orientación", trace: expect.objectContaining({ source_refs: ["act_2"] }) }),
       expect.objectContaining({ type: "chart", categories: ["Marzo", "Abril"], series: [{ label: null, values: [12, 20] }] }),
       expect.objectContaining({ type: "reading_text", literal: true }),
     ]));
@@ -51,6 +57,34 @@ describe("dirección conectada al planificador y fabricada", () => {
     );
     expect(output.provenance.document).toBe(fingerprint(output.document));
     expect(output.checks).toMatchObject({ fabrication: "passed", pdf: "pending", semantic: "pending" });
+  });
+
+  it("Fase 4.1 · un texto argumentativo recibe espacio suficiente, su condición resaltada y una comprobación final literal", async () => {
+    const { input, original } = await directorFixture();
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const argued = activity(output, "act_3");
+    expect(argued.prompt).toContain("**con dos argumentos**");
+    expect(argued.response).toMatchObject({ kind: "lines", lines: 8 });
+    // A short written answer keeps its own space plus two lines; it is not stretched to the extended minimum.
+    expect(activity(output, "act_1").response).toMatchObject({ kind: "lines", lines: 5 });
+    const checks = allBlocks(output.document).filter((b): b is Extract<Block, { type: "checklist" }> => b.type === "checklist");
+    expect(checks.map(({ title, items, trace }) => ({ title, items, refs: trace.source_refs }))).toEqual([
+      { title: "Antes de entregar, comprueba", items: ["Con dos argumentos"], refs: ["act_3"] },
+    ]);
+  });
+
+  it("Fase 4.1 · no resalta ni lista datos ni lo que el alumno debe seleccionar o inferir", async () => {
+    const draft = completeOriginal();
+    // A form requirement that is also where the student selects the evidence: pointing at it would say what to look for.
+    draft.activities[1]!.comprehension.conditions.push({ kind: "response_length", evidence: { source_ref: "a2", quote: "con una frase del texto" } });
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    for (const id of ["act_1", "act_2", "act_5"]) {
+      for (const fragment of bolded(activity(output, id).prompt)) expect(fragment).not.toMatch(/\d|frase del texto|tendencia/u);
+    }
+    expect(activity(output, "act_2").prompt).not.toContain("**");
+    const listed = allBlocks(output.document).flatMap((b) => (b.type === "checklist" ? b.items : [])).join(" ");
+    expect(listed).not.toMatch(/150|75|32|frase del texto|exploradora|Marzo|Abril/u);
   });
 
   it("conserva toda la ficha sin pedir un plan si no hay cambios justificados", async () => {

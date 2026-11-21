@@ -12,11 +12,13 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { DirectorActivity } from "@/lib/schemas/pedagogical-direction";
 import type { DirectedPlan } from "./directed-plan";
 import { checkResource, type DirectedIssue } from "./directed-checks";
+import { emphasise, explicitRequirements, extendedWriting, finalChecklist, workspaceLines } from "./directed-supports";
 import type { CompiledRecreation } from "./compile";
 
 type ActivityBlock = Extract<Block, { type: "activity" }>;
 const isActivity = (b: Block): b is ActivityBlock => b.type === "activity";
-const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
+// Emphasis marks are presentation: the literal checks compare the text without them.
+const compact = (value: string) => value.replace(/\*\*/gu, "").replace(/\s+/gu, " ").trim();
 
 export type DirectedTrace = { original_id: string; result_id: string; block_id: string; obligations: string[] };
 type Fabrication = { ok: true; document: MaterialDocument; trace: DirectedTrace[] } | { ok: false; issues: DirectedIssue[] };
@@ -80,9 +82,13 @@ export function fabricateDirectedDocument(input: {
         if (!activity.prompt.startsWith(original.instruction)) return issue("literal_segmentation_unavailable", original_id);
         activity.prompt = original.instruction.split(/(?<=[.!?])\s+(?=\S)/u).join("\n\n") + activity.prompt.slice(original.instruction.length);
       }
+      // Requirements of how to answer, emphasised where the prompt already states them (never data: see directed-supports.ts).
+      const requirements = changes.has("segment_instruction") || changes.has("visual_navigation") ? explicitRequirements(activity.prompt, row, original) : [];
+      if (requirements.length > 0) activity.prompt = emphasise(activity.prompt, requirements);
+      const extended = extendedWriting(row);
       if (changes.has("blank_workspace")) {
         const response = activity.response;
-        if (response.kind === "lines" && response.lines <= 38) activity.response = { ...response, lines: response.lines + 2 };
+        if (response.kind === "lines" && response.lines <= 38) activity.response = { ...response, lines: workspaceLines(response.lines, extended) };
         else if (response.kind === "grid") {
           const rows = "rows" in response ? response.rows : undefined;
           if (rows === undefined || rows > 58) return issue("unlabelled_workspace_unavailable", original_id);
@@ -94,11 +100,10 @@ export function fabricateDirectedDocument(input: {
       if (!replacement && compact(activity.prompt) !== compact(block.prompt)) return issue("source_text_changed", original_id);
       if (changes.size > 0) activity = { ...activity, trace: { ...activity.trace, origin: "adapted" } };
       pageBlocks.push(activity);
-      if (changes.has("visual_navigation")) {
-        pageBlocks.push({ id: newBlockId(), type: "help_box", variant: "strategy", title: "Orientación",
-          text: original.resource_ids.length > 0 || original.context
-            ? "Localiza la consigna, el material de la actividad y el espacio de respuesta."
-            : "Localiza la consigna y el espacio de respuesta.",
+      // The navigation support is the activity's own requirements to check before handing it in, or nothing: never a generic box.
+      const checklist = changes.has("visual_navigation") ? finalChecklist(requirements, extended) : null;
+      if (checklist) {
+        pageBlocks.push({ id: newBlockId(), type: "checklist", title: "Antes de entregar, comprueba", items: checklist,
           trace: { origin: "support", source_refs: [original_id], decision_ids: [] } });
       }
       trace.push({ original_id, result_id, block_id: activity.id, obligations: row.retains });
@@ -149,7 +154,7 @@ function reviewDirectedDocument(
       issues.push({ code: "fabricated_response_changed", original_id });
     }
     const linkedResources = (block.resource_block_ids ?? []).flatMap((id) => blocks.get(id) ?? []);
-    const visible = [block, ...linkedResources.filter((item) => item.type !== "image")].map(studentText);
+    const visible = [block, ...linkedResources.filter((item) => item.type !== "image")].map((item) => studentText(item).replace(/\*\*/gu, ""));
     for (const { kind, evidence, ref } of row.obligations) {
       if ((kind === "condition" || kind === "information") && evidence?.source_ref === original_id && evidence.quote &&
           !visible.some((text) => containsActivityQuote(text, evidence.quote!))) {
