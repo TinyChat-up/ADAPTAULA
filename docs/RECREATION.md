@@ -33,10 +33,31 @@ Una decisión docente excepcional solo se ofrece si la información falta en el 
 | --- | --- |
 | 1 · Perfil | Formulario y resumen pertinente por área. Comprobar autonomía con y sin ayuda, campos desconocidos, privacidad y lectura de perfiles anteriores. |
 | 2 · Comprensión del original | Contrato por actividad con decisiones que corresponden al alumno, condiciones, recursos e incertidumbres trazables al original. |
-| 3 · Dirección pedagógica | Un director elige conservar, facilitar, transformar o sustituir dentro de la autorización docente. Contrastar sus decisiones en casos controlados. |
+| 3 · Dirección pedagógica | 3A propone y comprueba decisiones por actividad en casos controlados. 3B conectará la dirección al planificador existente y comprobará qué se fabrica. |
 | 4 · Fabricación | Cada herramienta demuestra un recorrido de encargo a PDF A4 mediante MaterialDocument y CLARO. Revisar la ficha impresa. |
 | 5 · Proveedores y gasto | Comparar modelos por tarea, acotar la reparación y probar presupuesto compartido bajo concurrencia. Los ensayos de pago requieren autorización. |
 | 6 · Sustitución gradual | Comparar calidad docente, errores graves, tasa de entrega y coste por ficha utilizable en Primaria y ESO. Conservar lectura histórica y retorno al motor previo. |
+
+## Director pedagógico · Fase 3A
+
+`directPedagogy(input, propuesta?)` es la interfaz interna de servidor en [director.ts](../src/lib/recreation/director.ts). Recibe el análisis v4 completo vinculado al original, el SHA-256 del archivo que conserva el servidor, la etapa y el curso, la asignatura verificada, el perfil y la autorización docente por ficha. Reutiliza `profileForSubject()`, `buildAdaptationContext()` y `checkPedagogicalScope()`. Si falta V4 devuelve un bloqueo explícito. V3 continúa como analizador predeterminado y el motor actual conserva su lectura de análisis y adaptaciones históricas.
+
+La salida versionada `PedagogicalDirectionSchema` contiene una decisión por actividad. Registra qué cambiar, qué está prohibido, las necesidades de apoyo, los aprendizajes pertinentes, la evidencia y los requisitos de fabricación. Sus huellas vinculan el resultado al original, el análisis completo, el perfil pertinente y el contexto que se utilizaron. La salida es interna. Las citas del original son contenido no confiable. Las observaciones libres del perfil se cotejan solo en memoria y quedan fuera de la salida.
+
+| Decisión | Qué propone y con qué límites |
+| --- | --- |
+| **Conservar** | Mantiene la actividad cuando no hay un cambio justificado. Si falta evidencia de la fuente o del apoyo necesario, conserva el original como referencia y devuelve `needs_evidence`. |
+| **Facilitar** | Puede separar literalmente oraciones de la consigna, aportar espacio en blanco, distinguir visualmente secciones o aplicar ajustes de presentación. El espacio en blanco deja que el alumno elija y ordene sus operaciones. La navegación visual señala estructuras y mantiene el texto, sin resaltar el fragmento que resuelve una inferencia. |
+| **Transformar** | Puede proponer una respuesta oral si la escritura es solo un medio de respuesta, hay una necesidad pertinente, el perfil la contempla y el docente autorizó metodología. Redacción, argumentación o restricciones explícitas de formato bloquean este cambio. |
+| **Sustituir** | Examina una propuesta estructurada que conserva todas las obligaciones y pide un ejecutor compatible. En 3A se admite como candidata únicamente la respuesta abierta breve ya disponible en recreación. El planificador existente tendrá que diseñar la sustitución concreta y contrastar su equivalencia. |
+
+**Qué comprueba el código.** El servidor deriva las obligaciones desde V4 y el grafo v3. Incluyen objetivos, operaciones, decisiones del alumno, evaluación, condiciones, datos, recursos enlazados y elementos protegidos del original. Cada propuesta cita las obligaciones que conserva. Omitir una operación como inferir, una condición como «con dos argumentos» u otro elemento protegido provoca rechazo. Las necesidades deben constar en el contexto y ser pertinentes para el cambio. El acceso conserva el formato de respuesta. La preferencia curricular guardada en un perfil carece de valor como autorización. La vía curricular queda bloqueada en 3A, incluso con una autorización válida. El registro y la presentación se mantienen acordes a la etapa de Secundaria, con independencia del apoyo o nivel competencial.
+
+**Qué aporta el perfil.** El cotejo de aprendizajes se limita a coincidencias de texto completo con objetivos de su asignatura verificada. Una habilidad «con ayuda» o «todavía no» y una necesidad de refuerzo pueden dejar el apoyo pendiente aunque se conserve la actividad. «Sin valorar», incluido el historial, no cuenta como competencia demostrada. Los registros vinculados conservan su estado e índice interno. Una fortaleza, una dificultad de acceso o la falta de observaciones nunca justifican eliminar un objetivo.
+
+**Límite de comprobación.** `design_candidate` indica que las restricciones estructurales permiten continuar al diseño. La equivalencia queda `pending` porque una lista de obligaciones no demuestra lo que pedirá la actividad fabricada. Las incertidumbres del análisis se conservan. Cualquier cambio requiere comprobación del contenido y del resultado renderizado, con atención a pistas, relaciones, demanda, recursos y accesibilidad. Una imagen nueva se declara fuera de la cobertura de este director. Los ensayos sintéticos no estiman calidad pedagógica ni tasa de entrega con materiales reales.
+
+**Integración 3B.** Usar este contrato antes de proponer cambios en el planificador de recreación existente. Vincular el plan y sus recursos a las huellas y al identificador del original por actividad. Consumir únicamente `design_candidate` para diseñar cambios y mantener el texto y los recursos de `unchanged`. Respetar `needs_evidence` y `rejected` como bloqueos. Verificar después con `verifyPlan()` y con comprobaciones semánticas y de fabricación que examinen la actividad real. La respuesta oral tiene un componente en el ensamblador clásico. Su integración en la recreación y la ruta de cada apoyo hasta el PDF están pendientes. Esta fase no modifica el planificador, los contratos de recreación ni la cadena de Hacer magia.
 
 ## Recorrido
 

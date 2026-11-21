@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Motor pedagógico 2.0, Fase 3A · Director pedagógico
+
+- Desde `main` con la PR #116 integrada. `directPedagogy()` usa el análisis V4, el perfil por asignatura y la autorización por ficha. Devuelve una decisión por actividad y las obligaciones del original que protege. La sustitución se examina como propuesta y queda sujeta a verificación sobre la actividad fabricada.
+- Los ensayos sintéticos cubren lectura, planificación, escritura, visuales, registro de ESO, incertidumbre, autorización y conservación de operaciones. Pasaron 92 pruebas focalizadas. La ejecución general obtuvo 2672 aprobadas, 18 omitidas, 1 pendiente y 1 fallo. Se reprodujo ese fallo en el árbol de `main`, en la aserción de argumentos de `pdf-preview-route.test.ts`.
+- Typecheck, control de privacidad y rasterizado superados. Pasaron las 104 pruebas de PDF real y la comprobación de la traza. Lint general con un aviso preexistente. El build normal no pudo descargar Google Fonts y completó con fuentes simuladas.
+- Hacer magia mantiene su recorrido y V3 sigue siendo el analizador predeterminado. [Contrato y conexión prevista en 3B](RECREATION.md#director-pedagógico--fase-3a).
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 2 · Comprensión del original
 
 - El analizador v4 guarda objetivos, operaciones, decisiones, datos, recursos, evaluación y condiciones por actividad. Las citas se contrastan con la transcripción y se enlazan a la actividad o a un recurso suyo. Las afirmaciones sin respaldo quedan pendientes. V4 se selecciona expresamente y el valor por defecto sigue siendo v3.
