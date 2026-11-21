@@ -64,10 +64,14 @@ function pinnedOriginals(analysis: MaterialAnalysis, sourceHash: string, origina
   return { assets, pins: [...byId.values()] };
 }
 
-/** Offline only. This entry point has no production flag, persistence, external provider or route caller. */
+/**
+ * The director's sheet from a verified input. No persistence and no external provider: `plannerFixture` is a simulated planner for the
+ * offline pilot. Without it (the server bridge), the links are the director's own decisions, which is all an access change needs; a
+ * substitution needs a real planner and is refused with its reason (`replacement_planner_unavailable`), never guessed.
+ */
 export async function runDirectedRecreation(input: DirectorInput, options: {
   original: Uint8Array;
-  plannerFixture: (request: StructuredRequest) => unknown;
+  plannerFixture?: (request: StructuredRequest) => unknown;
   candidate?: unknown;
   originalAssets?: readonly DirectedOriginalAsset[];
 }): Promise<DirectedPilotResult> {
@@ -91,9 +95,18 @@ export async function runDirectedRecreation(input: DirectorInput, options: {
   }).context;
   const candidates = direction.activities.filter(({ status }) => status === "design_candidate");
   const request = requestFor(direction, recreationInput(analysis, context, direction.scope), candidates);
-  const answer = candidates.length > 0 ? await createDirectedRecreationPlanner(options.plannerFixture)(request.text) : null;
-  if (candidates.length > 0 && !answer?.draft) return blocked([{ code: "planner_contract_invalid" }]);
-  const draft = answer?.draft ?? { version: 1 as const, request_fingerprint: request.hash, links: [], replacement: null };
+  const fixture = options.plannerFixture;
+  if (!fixture) {
+    const replacing = candidates.filter(({ changes }) => changes.some(({ kind }) => kind === "replacement"));
+    if (replacing.length) return blocked(replacing.map(({ activity_id }) => ({ code: "replacement_planner_unavailable", original_id: activity_id })));
+  }
+  const answer = candidates.length > 0 && fixture ? await createDirectedRecreationPlanner(fixture)(request.text) : null;
+  if (candidates.length > 0 && fixture && !answer?.draft) return blocked([{ code: "planner_contract_invalid" }]);
+  // Without a planner the links ARE the director's decisions (same ids, same changes, same obligations), checked below like any plan.
+  if (!fixture && candidates.some(({ changes }) => changes.some(({ kind }) => kind === "new_illustration"))) return blocked([{ code: "illustration_unavailable" }]);
+  const ownLinks = fixture ? [] : candidates.map(({ activity_id, changes, retains }) => ({ original_id: activity_id, result_id: activity_id,
+    changes: changes.flatMap(({ kind }) => (kind === "new_illustration" ? [] : [kind])), retains }));
+  const draft = answer?.draft ?? { version: 1 as const, request_fingerprint: request.hash, links: ownLinks, replacement: null };
   const errors = verifyDirectedLinks(draft, request.hash, candidates);
   if (errors.length) return blocked(errors);
 

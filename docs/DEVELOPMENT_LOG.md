@@ -1,5 +1,17 @@
 # Registro de desarrollo
 
+## 2026-11-22 · Puente entre la aplicación y el director pedagógico
+
+- Rama `claude/puente-director-hacer-magia` desde `main` (`74641a5`, con #119). [Comprobaciones y lo que falta](RECREATION.md#puente-con-la-aplicación--vista-previa-del-director).
+- `directedSheet()` construye la ficha del director para una adaptación existente. Usa el análisis V4 de la adaptación, el original verificado por hash, el perfil sin cambios y el alcance por ficha. Sin modelo, sin persistencia y sin cuota.
+- Ruta de vista previa `GET /api/adaptations/[id]/director-pdf`: solo profesorado y solo los workspaces de `DIRECTOR_PREVIEW_WORKSPACES`, vacío por defecto.
+- El piloto funciona sin planificador cuando no hay sustituciones (enlaces = decisiones del director). Una sustitución o una imagen nueva se bloquean con su motivo.
+- Pruebas focalizadas:
+  - `tests/unit/directed-bridge.test.ts` (3): bloqueos del análisis, el workspace, lo curricular, el original, el perfil y la sustitución sin planificador;
+  - `tests/pdf/directed-bridge.test.ts` (1): PDF real del recorrido con datos de aplicación.
+- Además pasaron las del piloto, las de fronteras y las de entorno (36). Typecheck, lint de lo tocado y privacidad correctos. No se ha ejecutado la suite completa.
+- Hacer magia, el analizador V3 predeterminado, las migraciones y producción no cambian.
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 4.1 · Consignas claras y apoyos concretos
 
 - Rama `claude/fase-4-1-consignas-apoyos` desde `main` (`f9b9eed`). Solo cambia el piloto del director. Hacer magia en producción no cambia. [Criterios](RECREATION.md#consignas-claras-y-apoyos-concretos--fase-41).
