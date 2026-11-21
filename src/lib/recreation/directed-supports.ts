@@ -19,17 +19,23 @@ const STUDENT_FINDS = new Set(["select_data", "select_evidence", "infer_conclusi
 const MAX_HIGHLIGHTS = 3;
 const MAX_QUOTE = 80;
 
-const plain = (text: string) => text.replace(/\*\*/gu, "");
+/** Bold already printed by the original (`**…**`): Adaptaula never adds marks inside, next to or across it. */
+const originalBold = (text: string) => [...text.matchAll(/\*\*[^*]+\*\*/gu)].map((m) => [m.index!, m.index! + m[0].length] as const);
+/** Marks the original leaves unpaired make any added pair ambiguous to the inline parser: then nothing is emphasised. */
+const balanced = (text: string) => (text.match(/\*\*/gu) ?? []).length % 2 === 0;
 const words = (text: string) => text.toLocaleLowerCase("es").normalize("NFD").replace(/[̀-ͯ]/gu, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /** The literal, verified requirements of an activity, in prompt order, that may be pointed at without giving anything away. */
 export function explicitRequirements(prompt: string, row: Pick<DirectorActivity, "obligations">, activity: Pick<AnalysisActivity, "id" | "expected_answer">): string[] {
-  const text = plain(prompt);
+  const text = prompt;
+  if (!balanced(text)) return [];
   const quoteOf = (o: DirectorObligation) => (o.evidence?.source_ref === activity.id ? o.evidence.quote : null);
   const span = (quote: string) => {
     const at = text.indexOf(quote);
     return at < 0 ? null : ([at, at + quote.length] as const);
   };
+  // An original bold span is guarded too, widened by one character so no added mark touches it.
+  const marked = originalBold(text).map(([a, b]) => [a - 1, b + 1] as const);
   const guarded = row.obligations
     .filter((o) => o.kind === "information" || (o.kind === "student_decision" && STUDENT_FINDS.has(o.value ?? "")))
     .flatMap((o) => { const q = quoteOf(o); const s = q ? span(q) : null; return s ? [s] : []; });
@@ -45,17 +51,24 @@ export function explicitRequirements(prompt: string, row: Pick<DirectorActivity,
   for (const quote of [...new Set(candidates)].sort((a, b) => a.length - b.length)) {
     const s = span(quote);
     const overlaps = (r: readonly [number, number]) => s && s[0] < r[1] && r[0] < s[1];
-    if (!s || chosen.some(overlaps) || guarded.some(overlaps) || out.length >= MAX_HIGHLIGHTS) continue;
+    if (!s || chosen.some(overlaps) || guarded.some(overlaps) || marked.some(overlaps) || out.length >= MAX_HIGHLIGHTS) continue;
     chosen.push(s);
     out.push(quote);
   }
   return out.sort((a, b) => text.indexOf(a) - text.indexOf(b));
 }
 
-/** The prompt with each requirement in bold. Its text is otherwise unchanged (the checks compare it without the marks). */
+/** The prompt with each requirement in bold. Everything else, the original's own marks included, is kept character for character. */
 export function emphasise(prompt: string, requirements: readonly string[]): string {
-  let out = plain(prompt);
+  let out = prompt;
   for (const quote of requirements) out = out.replace(quote, `**${quote}**`);
+  return out;
+}
+
+/** The exact inverse of `emphasise`: removes only the marks Adaptaula added, so the literal checks compare the original's text. */
+export function withoutAddedEmphasis(prompt: string, requirements: readonly string[]): string {
+  let out = prompt;
+  for (const quote of requirements) out = out.replace(`**${quote}**`, quote);
   return out;
 }
 

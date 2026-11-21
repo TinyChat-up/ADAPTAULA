@@ -27,7 +27,7 @@ export type DirectedPilotResult =
   | (Omit<Fabricated, "ok"> & {
       status: "review_pending"; direction: Direction;
       provenance: { direction: string; plan: string; document: string; assets: string; trace: string };
-      checks: { links: "passed"; legacy_replacement: "passed" | "not_applicable"; fabrication: "passed"; pdf: "pending"; semantic: "pending" };
+      checks: { links: "passed"; legacy_replacement: "passed" | "not_applicable"; fabrication: "passed"; supports: "complete" | "partial"; pdf: "pending"; semantic: "pending" };
       assets: Record<string, AssetSource>; pins: PinnedAsset[];
     });
 
@@ -130,6 +130,8 @@ export async function runDirectedRecreation(input: DirectorInput, options: {
   return {
     status: "review_pending", direction, document, trace: result.trace, ...pinned,
     provenance: { direction: fingerprint(direction), plan: fingerprint(draft), document: fingerprint(document), assets: fingerprint(pinned.assets), trace: fingerprint(result.trace) },
-    checks: { links: "passed", legacy_replacement: compiled ? "passed" : "not_applicable", fabrication: "passed", pdf: "pending", semantic: "pending" },
+    // `partial`: a requested support could not be made without adding information; the trace says which and where.
+    checks: { links: "passed", legacy_replacement: compiled ? "passed" : "not_applicable", fabrication: "passed",
+      supports: result.trace.some(({ unfabricated }) => unfabricated.length > 0) ? "partial" : "complete", pdf: "pending", semantic: "pending" },
   };
 }

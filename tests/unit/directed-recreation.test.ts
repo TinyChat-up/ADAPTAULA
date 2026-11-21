@@ -7,6 +7,7 @@ import { printDirectedRecreation } from "@/lib/recreation/directed-print";
 import type { DirectedPlan } from "@/lib/recreation/directed-plan";
 import { candidateFor, completeOriginal, directorFixture, echoPlan, PRIVATE_STATEMENT, readPlannerRequest, replacementPlan, shortOriginal } from "../support/directed-recreation";
 import { pedagogicalOriginalDraft } from "../support/pedagogical-original";
+import { emphasise, explicitRequirements } from "@/lib/recreation/directed-supports";
 
 function resultOf(result: DirectedPilotResult) {
   if (result.status === "blocked") throw new Error(JSON.stringify({ issues: result.issues, direction: result.direction?.activities.filter((row) => row.issues.length).map(({ activity_id, issues, uncertainties }) => ({ activity_id, issues, uncertainties })) }));
@@ -85,6 +86,37 @@ describe("dirección conectada al planificador y fabricada", () => {
     expect(activity(output, "act_2").prompt).not.toContain("**");
     const listed = allBlocks(output.document).flatMap((b) => (b.type === "checklist" ? b.items : [])).join(" ");
     expect(listed).not.toMatch(/150|75|32|frase del texto|exploradora|Marzo|Abril/u);
+  });
+
+  it("Fase 4.1 · declara la orientación visual que no puede fabricarse sin añadir información, en lugar de darla por aplicada", async () => {
+    const { input, original } = await directorFixture();
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const row = output.direction.activities.find(({ activity_id }) => activity_id === "act_2")!;
+    expect(row.changes.map(({ kind }) => kind)).toContain("visual_navigation");
+    // act_2 has no requirement of form to point at (the student infers and selects): nothing generic is printed in its place.
+    expect(output.trace.find(({ original_id }) => original_id === "act_2")).toMatchObject({ emphasised: [], unfabricated: ["visual_navigation"] });
+    expect(output.trace.find(({ original_id }) => original_id === "act_3")).toMatchObject({ unfabricated: [] });
+    expect(allBlocks(output.document).some((b) => (b.type === "help_box" || b.type === "checklist") && b.trace.source_refs.includes("act_2"))).toBe(false);
+    expect(output.checks.supports).toBe("partial");
+  });
+
+  it("Fase 4.1 · conserva literalmente la negrita del original al resaltar y al verificar", async () => {
+    const draft = completeOriginal();
+    const argued = draft.activities[2]!;
+    // The original prints «clase» in bold: the transcription and every quote of it carry the marks.
+    argued.instruction = argued.instruction.replace("tu clase", "tu **clase**");
+    argued.comprehension = JSON.parse(JSON.stringify(argued.comprehension).replaceAll("tu clase", "tu **clase**"));
+    const { input, original } = await directorFixture({ draft });
+    const output = resultOf(await runDirectedRecreation(input, { original, plannerFixture: echoPlan }));
+    const prompt = activity(output, "act_3").prompt;
+    expect(prompt).toContain("tu **clase**");
+    expect(prompt).toContain("**con dos argumentos**");
+    // A requirement inside or touching the original's bold is left as the original prints it: no added or lost mark.
+    const own = { obligations: [{ ref: "condition_1", kind: "condition" as const, value: "reasoning", evidence: { source_ref: "act_9", page: 1, quote: "con dos argumentos" } }] };
+    const marked = "Defiende tu postura **con dos argumentos**.";
+    expect(explicitRequirements(marked, own, { id: "act_9", expected_answer: { basis: "not_inferable", value: null } })).toEqual([]);
+    expect(emphasise(marked, [])).toBe(marked);
+    expect(explicitRequirements("Usa **dos** ejemplos con dos argumentos", own, { id: "act_9", expected_answer: { basis: "not_inferable", value: null } })).toEqual(["con dos argumentos"]);
   });
 
   it("conserva toda la ficha sin pedir un plan si no hay cambios justificados", async () => {

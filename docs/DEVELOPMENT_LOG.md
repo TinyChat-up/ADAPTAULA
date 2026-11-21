@@ -11,6 +11,10 @@
 - Typecheck correcto. Lint de los archivos tocados sin avisos. No se ha ejecutado la suite completa.
 - Se revisaron a ojo las tres páginas del PDF de ejemplo en `.pdf-smoke/directed-fase-4-1/`.
 - Fallo previo conocido, no relacionado: `pdf-preview-route.test.ts`.
+- Revisión de la PR #119:
+  - La orientación que no puede fabricarse sin añadir información se declara en la traza y en `checks.supports: "partial"`, en lugar de darse por aplicada.
+  - La negrita del original se conserva literalmente al resaltar y al verificar.
+  - Una prueba focalizada por caso. Pasan las 13 de unidad y las 3 de PDF del archivo. Typecheck y lint de los archivos tocados correctos.
 
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 3B · Integración aislada del director
 

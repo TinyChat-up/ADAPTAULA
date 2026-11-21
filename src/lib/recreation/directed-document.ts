@@ -12,15 +12,18 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { DirectorActivity } from "@/lib/schemas/pedagogical-direction";
 import type { DirectedPlan } from "./directed-plan";
 import { checkResource, type DirectedIssue } from "./directed-checks";
-import { emphasise, explicitRequirements, extendedWriting, finalChecklist, workspaceLines } from "./directed-supports";
+import { emphasise, explicitRequirements, extendedWriting, finalChecklist, withoutAddedEmphasis, workspaceLines } from "./directed-supports";
 import type { CompiledRecreation } from "./compile";
 
 type ActivityBlock = Extract<Block, { type: "activity" }>;
 const isActivity = (b: Block): b is ActivityBlock => b.type === "activity";
-// Emphasis marks are presentation: the literal checks compare the text without them.
-const compact = (value: string) => value.replace(/\*\*/gu, "").replace(/\s+/gu, " ").trim();
+const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
 
-export type DirectedTrace = { original_id: string; result_id: string; block_id: string; obligations: string[] };
+/**
+ * `emphasised`: the requirements Adaptaula put in bold (removed again, exactly, by the literal checks). `unfabricated`: a support the
+ * director asked for that could not be made without adding information (declared, never claimed as applied).
+ */
+export type DirectedTrace = { original_id: string; result_id: string; block_id: string; obligations: string[]; emphasised: string[]; unfabricated: Array<"visual_navigation"> };
 type Fabrication = { ok: true; document: MaterialDocument; trace: DirectedTrace[] } | { ok: false; issues: DirectedIssue[] };
 
 export function fabricateDirectedDocument(input: {
@@ -97,8 +100,11 @@ export function fabricateDirectedDocument(input: {
         else return issue("unlabelled_workspace_unavailable", original_id);
       }
       if (changes.has("oral_response")) activity.response = responseForDecision(original, "oral_or_alternative");
-      if (!replacement && compact(activity.prompt) !== compact(block.prompt)) return issue("source_text_changed", original_id);
-      if (changes.size > 0) activity = { ...activity, trace: { ...activity.trace, origin: "adapted" } };
+      if (!replacement && compact(withoutAddedEmphasis(activity.prompt, requirements)) !== compact(block.prompt)) return issue("source_text_changed", original_id);
+      // Navigation is made by the emphasised requirements (and their final check). Without any, nothing safe is left to print:
+      // the support is declared as not fabricated rather than replaced by a generic box.
+      const unfabricated: DirectedTrace["unfabricated"] = changes.has("visual_navigation") && requirements.length === 0 ? ["visual_navigation"] : [];
+      if (changes.size > unfabricated.length) activity = { ...activity, trace: { ...activity.trace, origin: "adapted" } };
       pageBlocks.push(activity);
       // The navigation support is the activity's own requirements to check before handing it in, or nothing: never a generic box.
       const checklist = changes.has("visual_navigation") ? finalChecklist(requirements, extended) : null;
@@ -106,7 +112,7 @@ export function fabricateDirectedDocument(input: {
         pageBlocks.push({ id: newBlockId(), type: "checklist", title: "Antes de entregar, comprueba", items: checklist,
           trace: { origin: "support", source_refs: [original_id], decision_ids: [] } });
       }
-      trace.push({ original_id, result_id, block_id: activity.id, obligations: row.retains });
+      trace.push({ original_id, result_id, block_id: activity.id, obligations: row.retains, emphasised: requirements, unfabricated });
     }
     pages.push({ blocks: pageBlocks });
   }
@@ -146,7 +152,7 @@ function reviewDirectedDocument(
     const literal = originalBlocks.get(block.id);
     const replacement = link && replacements.get(link.result_id);
     const expected = replacement || (literal?.type === "activity" ? literal : undefined);
-    if (!expected || compact(expected.prompt) !== compact(block.prompt)) issues.push({ code: "fabricated_prompt_changed", original_id });
+    if (!expected || compact(expected.prompt) !== compact(withoutAddedEmphasis(block.prompt, link?.emphasised ?? []))) issues.push({ code: "fabricated_prompt_changed", original_id });
     const changes = new Set(row.changes.map(({ kind }) => kind));
     if (expected && !changes.has("blank_workspace") && !changes.has("oral_response") &&
         fingerprint(expected.response) !== fingerprint(block.response)) issues.push({ code: "fabricated_response_changed", original_id });
