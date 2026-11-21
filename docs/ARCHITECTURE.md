@@ -6,6 +6,10 @@ Prioridades al decidir: seguridad → simplicidad → mantenibilidad → UX → 
 
 El director genera restricciones y decisiones vinculadas al análisis v4 y al original. El planificador de recreación sigue siendo el encargado de proponer actividades y recursos fabricables. Se conserva un único planificador y la revisión de equivalencia se aplica a la actividad que se fabrique. El director se entrega como módulo interno, con pruebas sintéticas. [Contrato y conexión prevista](RECREATION.md#director-pedagógico--fase-3a).
 
+## Integración del director · Motor pedagógico 2.0, Fase 3B (2026-11-21)
+
+Un contrato aislado entrega al mismo planificador los cambios del director y exige enlaces uno a uno a las actividades originales. El ensamblador literal conserva el original y el compilador de recreación fabrica las sustituciones verificables. El mismo renderizador imprime ambos. Una validación técnica superada conserva el estado de revisión pedagógica pendiente. [Recorrido, controles y activación](RECREATION.md#integración-aislada-del-director--fase-3b).
+
 ## ADR-052 — Recreación: respuestas solo en el servidor, estado de revisión, tarjetas ilustradas, versiones y evaluación real preparada (2026-11-18)
 
 - **Respuestas.** El registro y la propuesta de tablas se separan en tres partes: línea, versión visible e interno.

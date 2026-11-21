@@ -1,5 +1,14 @@
 # Registro de desarrollo
 
+## 2026-11-21 · Motor pedagógico 2.0, Fase 3B · Integración aislada del director
+
+- Rama independiente desde `41fbc29`, con #117 integrada. [Recorrido y comprobaciones](RECREATION.md#integración-aislada-del-director--fase-3b).
+- Las candidatas pasan por el planificador de recreación con correspondencia uno a uno y huellas. El ensamblador literal mantiene las actividades conservadas. La sustitución admitida usa el verificador y el compilador existentes. Un bloqueo devuelve sus motivos sin fabricar una ficha parcial.
+- El recorrido técnico imprime con `sheetModel()`, CLARO y Chromium. Se comprobaron las condiciones de respuesta, los recursos, las etiquetas y cifras de un gráfico y la presencia de una imagen fijada. La revisión semántica queda pendiente incluso si se valida el PDF.
+- Pasaron 167 pruebas focalizadas de unidad e integración y 106 pruebas de PDF. La comprobación de renderizador único y los dos nuevos casos PDF se verificaron también en el código final. Typecheck y privacidad aprobados. Lint con un aviso preexistente. El build completó con fuentes simuladas debido al bloqueo de Google Fonts.
+- El fallo de `pdf-preview-route.test.ts` se reproduce en el árbol de `main`. El mock espera cuatro argumentos y recibe un quinto argumento opcional con valor `undefined`. La prueba aislada de borrado de cuenta pasó al repetirla con tiempo suficiente para inicializar PGlite.
+- V3 sigue siendo el analizador predeterminado. La Fase 3B se ejecuta solo con análisis y planificación simulados. Hacer magia y la lectura de adaptaciones históricas siguen su ruta habitual.
+
 ## 2026-11-21 · Motor pedagógico 2.0, Fase 3A · Director pedagógico
 
 - Desde `main` con la PR #116 integrada. `directPedagogy()` usa el análisis V4, el perfil por asignatura y la autorización por ficha. Devuelve una decisión por actividad y las obligaciones del original que protege. La sustitución se examina como propuesta y queda sujeta a verificación sobre la actividad fabricada.

@@ -11,7 +11,7 @@ import { normalizeAnalysisWithReferences, type NormalizeOptions } from "./normal
 
 const space = (value: string) => value.replace(/\s+/gu, " ").trim();
 
-function containsQuote(source: string, quote: string): boolean {
+export function containsActivityQuote(source: string, quote: string): boolean {
   const literal = space(quote);
   if (!literal) return false;
   // Keep signs, accents and punctuation. A shorter number or word inside a longer one is not a citation.
@@ -43,7 +43,7 @@ function activitySources(base: MaterialAnalysis, activity: AnalysisActivity) {
 }
 
 function matchesEvidence(source: EvidenceSource, quote: string | null, allowVisualReference: boolean) {
-  return quote === null ? allowVisualReference && source.visual : source.texts.some((text) => containsQuote(text, quote));
+  return quote === null ? allowVisualReference && source.visual : source.texts.some((text) => containsActivityQuote(text, quote));
 }
 
 function contradictsAccessRole(
@@ -75,7 +75,7 @@ function validComprehension(base: MaterialAnalysis, rows: ActivityComprehension[
       (formatRole !== null || pending.has("response_format_role")) &&
       (!missingRequiredVisual || pending.has("essential_resources")) &&
       row.objectives.every((item) => activity.objective_ids.includes(item.objective_ref) && cited(item.evidence) &&
-        (item.basis === "interpreted" || containsQuote(item.evidence.quote ?? "", objectives.get(item.objective_ref) ?? ""))) &&
+        (item.basis === "interpreted" || containsActivityQuote(item.evidence.quote ?? "", objectives.get(item.objective_ref) ?? ""))) &&
       [...row.operations, ...row.student_decisions, ...row.evaluation, ...row.conditions].every((item) => cited(item.evidence)) &&
       row.information.every((item) => cited(item, true)) &&
       row.essential_resources.every((item) => linked.has(item.resource_ref) && cited(item.evidence, true)) &&
@@ -149,7 +149,7 @@ export function normalizeActivityComprehension(draft: MaterialAnalysisV4Draft, o
       const evidence = cite(item.evidence, "objectives");
       if (!evidence) return [];
       const text = base.pedagogical_intent.objectives.find((goal) => goal.id === id)!.text;
-      if (item.basis === "explicit" && !containsQuote(evidence.quote ?? "", text)) {
+      if (item.basis === "explicit" && !containsActivityQuote(evidence.quote ?? "", text)) {
         withhold("objectives");
         return [];
       }
