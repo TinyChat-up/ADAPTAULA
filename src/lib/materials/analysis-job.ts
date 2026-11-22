@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { ANALYSIS_DEFAULTS } from "@/lib/ai/config";
+import { getMaterialAnalyzer } from "@/lib/ai/prompts";
 import { activeAnalyzer, getAnalysisRuntime } from "@/lib/ai/runtime";
 import { analyzeMaterialFile, type AnalyzeFile } from "@/lib/ai/pipeline/analyze";
 import { AIError, jobFailureDecision, type FailureCode } from "@/lib/ai/errors";
@@ -20,7 +21,7 @@ const ClaimedJobSchema = z.object({
   material_id: z.uuid(),
   attempts: z.number().int(),
   /** `force` is set when the teacher explicitly asked to ignore the cache. */
-  input: z.object({ force: z.boolean().optional() }).passthrough().catch({}),
+  input: z.object({ force: z.boolean().optional(), prompt_version: z.unknown().optional() }).passthrough().catch({}),
 });
 
 export const ANALYSIS_PROMPT_VERSION = (workspaceId?: string | null) => {
@@ -66,6 +67,20 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
     return data === "retry" ? "retry" : "failed";
   };
 
+  // The analyzer version fixed when the job was queued (`queueAnalysis`). A job queued before it was recorded has none and follows the
+  // current configuration, as it always did. A version that is recorded but cannot be honoured stops the job BEFORE any file read or
+  // model call: running it with another analyzer would store an analysis the teacher's request did not ask for.
+  const queued = job.input.prompt_version;
+  let pinned: number | undefined;
+  if (queued !== undefined) {
+    const known = typeof queued === "number" && Number.isInteger(queued) && (() => { try { return getMaterialAnalyzer(queued).version === queued; } catch { return false; } })();
+    if (!known) {
+      logger.error("analysis_job_version_unresolvable", ids);
+      return await fail("bad_request", false);
+    }
+    pinned = queued as number;
+  }
+
   try {
     const [materialRes, fileRes, subjectsRes, stagesRes, gradesRes] = await Promise.all([
       admin.from("materials").select("confirmed_fields, stage_slug, grade_slug, subject_slug, topic").eq("id", job.material_id).single(),
@@ -102,7 +117,8 @@ export async function runAnalysisJob(jobId: string): Promise<JobOutcome> {
               throw new AIError("bad_request", "unsupported stored file type");
             })();
 
-    const runtime = getAnalysisRuntime(job.workspace_id);
+    const runtime = getAnalysisRuntime(job.workspace_id, { promptVersion: pinned });
+    if (pinned !== undefined && runtime.analyzer.version !== pinned) return await fail("bad_request", false);
     const setStep = async (step: "analyzing" | "validating" | "saving", progress: number) => {
       await admin.from("adaptation_jobs").update({ step, progress }).eq("id", job.id).eq("attempts", job.attempts).eq("status", "processing");
     };

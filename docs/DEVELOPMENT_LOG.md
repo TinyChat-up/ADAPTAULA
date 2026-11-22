@@ -7,6 +7,7 @@
 - `getAnalysisRuntime(workspaceId)`, `activeAnalyzer(workspaceId)` y `ANALYSIS_PROMPT_VERSION(workspaceId)` comparten la decisión. Así la caché nunca mezcla versiones y el registro guarda la versión real.
 - `inWorkspaceList` pasa a `src/lib/config/workspace-list.ts`; `engine.ts` lo reexporta.
 - Pruebas focalizadas: `tests/unit/analysis-v4-workspace.test.ts` (2). Pasan también las de análisis, el puente, la ruta, el entorno y las fronteras. Typecheck, lint y privacidad correctos. No se ha ejecutado la suite completa.
+- Revisión de la PR #121: el trabajador respeta la versión fijada al encolar, aunque la configuración cambie después. Un trabajo sin versión sigue la configuración actual. Una versión que no se puede cumplir se bloquea antes de llamar a la IA (`bad_request`, sin reintento). Prueba focalizada: `tests/unit/analysis-job-pinned-version.test.ts` (4).
 - No se ha activado ni llamado a ningún modelo. No hay migraciones.
 
 ## 2026-11-22 · Puente entre la aplicación y el director pedagógico

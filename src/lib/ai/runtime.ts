@@ -25,8 +25,8 @@ export function analysisPromptVersionFor(env: { AI_ANALYSIS_PROMPT_VERSION: numb
   return inWorkspaceList(env.AI_ANALYSIS_V4_WORKSPACES, workspaceId) ? 4 : env.AI_ANALYSIS_PROMPT_VERSION;
 }
 
-/** Builds the analysis setup from the environment. Throws a categorized AIError when it is not configured. */
-export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime {
+/** Builds the analysis setup from the environment. `promptVersion` is the one fixed at queue time. Throws a categorized AIError when it is not configured. */
+export function getAnalysisRuntime(workspaceId?: string | null, options: { promptVersion?: number | undefined } = {}): AnalysisRuntime {
   const env = serverEnv();
   const selection = resolveModel(env.AI_ANALYSIS_ALIAS, env as ModelEnv, env.AI_ANALYSIS_EFFORT);
   const provider = createProvider(selection, {
@@ -36,7 +36,8 @@ export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime
     spendMeter: pilotSpendMeter(workspaceId),
   });
   return {
-    analyzer: getMaterialAnalyzer(analysisPromptVersionFor(env, workspaceId)),
+    // A job runs with the version that was fixed when it was queued; only a job without one follows the current configuration.
+    analyzer: getMaterialAnalyzer(options.promptVersion ?? analysisPromptVersionFor(env, workspaceId)),
     selection,
     provider,
     maxRepairAttempts: env.AI_ANALYSIS_MAX_REPAIR_ATTEMPTS ?? ANALYSIS_DEFAULTS.maxRepairAttempts,
