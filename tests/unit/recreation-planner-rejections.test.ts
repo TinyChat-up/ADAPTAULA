@@ -97,10 +97,10 @@ describe("rechazos de la planificación de recreación", () => {
     expect(check().issues).toContainEqual(expect.objectContaining({ code: "correct_count_mismatch", severity: "error" }));
   });
 
-  it("la coincidencia causada por repetir los datos exactos de una resta no cuenta como copia de la consigna", () => {
+  it("cambiar cómo se dice que hay que restar y separar un paso no rediseña la actividad", () => {
     const { row, original, check } = fixture("compute");
     expect(similarity(original.instruction, row.prompt)).toBeGreaterThanOrEqual(NOT_NEW_SIMILARITY);
-    expect(check()).toMatchObject({ ok: true, review_required: true, activities: [{ status: "verified" }] });
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
   });
 
   it.each(["copy", "required condition", "changed quantity", "unsupported fact", "learner decision", "different operation", "wrong comparison", "given result"] as const)(
@@ -119,6 +119,60 @@ describe("rechazos de la planificación de recreación", () => {
       expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new", severity: "error" }));
     },
   );
+
+  it("en Lengua distingue los datos literales, la facilitación escrita y una clasificación manipulativa real", async () => {
+    const { request, plan, row, original, check } = fixture("select");
+    const words = "Palabras: correr, mesa, saltar, puerta, caminar, ventana, dibujar, cuaderno.";
+    const groups = "Categorías: sustantivos, verbos.";
+    const task = "Clasifica las palabras en sus categorías.";
+    const condition = "Usa todas las palabras.";
+    const options = ["correr", "mesa", "saltar", "puerta", "caminar", "ventana", "dibujar", "cuaderno"];
+    const categories = [{ id: "cat_1", label: "sustantivos" }, { id: "cat_2", label: "verbos" }];
+    Object.assign(original, { type: "classification", response_format: "write_text", instruction: `${words} ${task} ${groups} ${condition}`, context: null });
+    request.analysis.texts[0]!.text = words + " " + groups;
+    request.analysis.protected_elements = [words, groups, condition].map((value, i) => ({
+      id: `prt_${i + 1}`, type: i === 2 ? "response_constraint" : "required_data", importance: "essential", value, activity_ids: ["act_1"], resource_ids: [],
+    }));
+    plan.objectives[0]!.operations = ["classify"];
+    plan.strategies[0]!.method = "manipulative_sorting";
+    row.operations = ["classify"];
+    row.executor = { kind: "classify", categories, item_fact_ids: options.map((_, i) => `f_${i + 1}`) };
+    plan.facts = options.map((item, i) => ({
+      id: `f_${i + 1}`, kind: "membership", source_ref: "ctt_1", quote: words, item, category_id: i % 2 === 0 ? "cat_2" : "cat_1",
+    }));
+    row.prompt = original.instruction;
+    row.steps = [];
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
+
+    row.prompt = `${words} ${task}`;
+    row.steps = [groups, condition];
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
+    row.prompt = `${row.prompt} Coloca cada tarjeta en la columna del tablero que corresponda.`;
+    expect(similarity(original.instruction, row.prompt)).toBeGreaterThanOrEqual(NOT_NEW_SIMILARITY);
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
+
+    plan.materials = [
+      { id: "rm_1", kind: "cut_out_cards", activity_id: row.id, purpose: "Manipular las palabras.", instructions: "Recorta las tarjetas.", cards: options },
+      { id: "rm_2", kind: "sorting_board", activity_id: row.id, purpose: "Organizar los grupos.", instructions: "Usa las columnas.", columns: categories.map(({ label }) => label) },
+    ];
+    expect(check()).toMatchObject({ ok: true, review_required: true });
+    const outcome = await runRecreation(async () => ({ draft: plan, run: null }), request);
+    if (outcome.status !== "ready") throw new Error(JSON.stringify(outcome));
+    expect(outcome.compiled.unresolved).toEqual([]);
+    expect(outcome.compiled.materials).not.toBeNull();
+    expect(allBlocks(outcome.compiled.student)).toContainEqual(expect.objectContaining({ prompt: row.prompt, steps: [groups, condition] }));
+
+    row.steps = [];
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
+    row.steps = [groups, condition];
+    const board = plan.materials[1]!;
+    if (board.kind !== "sorting_board") throw new Error("fixture");
+    board.columns = ["sustantivos", "adjetivos"];
+    expect(check().issues.map(({ code }) => code)).toEqual(expect.arrayContaining(["activity_not_new", "board_mismatch"]));
+    board.columns = categories.map(({ label }) => label);
+    plan.materials[0]!.activity_id = "ra_2";
+    expect(check().issues).toContainEqual(expect.objectContaining({ code: "activity_not_new" }));
+  });
 
   it("usa la única reparación existente y nunca descarta una actividad para eludir el recuento", async () => {
     const { request, row, plan } = fixture("select");

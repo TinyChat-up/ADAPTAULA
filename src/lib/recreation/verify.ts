@@ -1,5 +1,4 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
-import { containsActivityQuote } from "@/lib/analysis/activity-comprehension";
 import type { AnalysisActivity, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { RECREATION_CHECK_COPY } from "./quality";
 import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type RecreationActivity, type RecreationPlan } from "./contract";
@@ -297,7 +296,7 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
     if (needed && !a.operations.includes(needed)) error("executor_operation_mismatch", path, `El formato ${a.executor.kind} trabaja «${needed}».`);
     const copied = analysis.activities.find((o) => {
       if (o.instruction.replace(/\s+/gu, " ").trim() === a.prompt.replace(/\s+/gu, " ").trim()) return true;
-      return similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY && !differsBeyondGivenData(o, a, analysis, facts, quantities);
+      return similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY && !hasVerifiedSortingRedesign(o, a, analysis, plan, facts);
     });
     if (copied) error("activity_not_new", path, `La consigna se parece demasiado a la de ${copied.id}. Rediseña cómo se realiza la tarea y conserva sus datos literales, objetivos, operaciones y decisiones del alumno. Cambiar solo sinónimos o añadir pistas no sirve.`);
     const result = solve(a, facts, quantities, analysis, (code, message) => error(code, path, message), (code, message) => warning(code, path, message));
@@ -474,52 +473,54 @@ export function similarity(a: string, b: string): number {
   const shared = [...x].filter((w) => y.has(w)).length;
   return shared / (x.size + y.size - shared);
 }
-type QuantityCheck = ReturnType<typeof quantityEvidence>;
-
 /**
- * A narrow exception for plain subtraction. Long, identical givens can dominate Jaccard even when the instructions differ.
- * The exemption needs exact operands and a literal factual sentence. It never masks instructions, constraints or choices of method.
+ * Printed cards and a sorting board change how the student classifies. The vocabulary, given categories, and requirements can
+ * stay literal. Without evidence of this change, segmentation, synonyms and promises of materials do not defeat the copy check.
  */
-function differsBeyondGivenData(
+function hasVerifiedSortingRedesign(
   original: AnalysisActivity,
   activity: RecreationActivity,
   analysis: MaterialAnalysis,
+  plan: RecreationPlan,
   facts: ReadonlyMap<string, Fact>,
-  quantities: ReadonlyMap<string, QuantityCheck>,
 ): boolean {
   const executor = activity.executor;
-  if (executor.kind !== "compute" || original.type !== "calculation" || original.response_format !== "calculate" ||
-    original.resource_ids.length > 0 || original.objective_ids.length === 0 ||
-    original.objective_ids.some((id) => !activity.objective_ids.includes(id)) ||
-    [...operationsOf(original)].some((operation) => !activity.operations.includes(operation))) return false;
+  if (original.type !== "classification" || original.response_format !== "write_text" || original.context || original.resource_ids.length ||
+    executor.kind !== "classify" || original.objective_ids.length === 0 || !sameItems(original.objective_ids, activity.objective_ids) ||
+    !sameItems([...operationsOf(original)], ["classify"]) || !sameItems(activity.operations, ["classify"])) return false;
+
+  const sentences = (text: string) => text.trim().split(/(?<=[.!?])\s+/u);
+  const source = sentences(original.instruction);
+  if (/\b(tarjetas?|tablero|recort\w*|peg\w*)\b/u.test(normalize(original.instruction))) return false;
+  const candidate = [activity.prompt, ...activity.steps].flatMap(sentences);
+  const action = "Coloca cada tarjeta en la columna del tablero que corresponda.";
+  const retained = candidate.filter((text) => text !== action);
+  if (candidate.length !== retained.length + 1 || source.length !== retained.length ||
+    source.some((text, index) => text !== retained[index])) return false;
 
   const protectedElements = analysis.protected_elements.filter((item) => item.importance !== "optional" &&
     (item.activity_ids.includes(original.id) || (item.activity_ids.length === 0 && item.resource_ids.length === 0)));
-  if (protectedElements.some(({ type }) => type === "reasoning_constraint" || type === "target_operation")) return false;
-  const given = protectedElements.filter(({ type }) => type === "required_data");
-  if (given.length !== 1) return false;
+  if (protectedElements.some(({ type, value }) => !source.includes(value) ||
+    (type !== "required_data" && !(type === "response_constraint" && value === "Usa todas las palabras.")))) return false;
+  const data = protectedElements.filter(({ type }) => type === "required_data").map(({ value }) => value);
+  if (data.length !== 2 || source.filter((line) => line === "Clasifica las palabras en sus categorías.").length !== 1 ||
+    source.some((line) => !data.includes(line) && line !== "Clasifica las palabras en sus categorías." && line !== "Usa todas las palabras.")) return false;
+  const givenList = (label: string) => {
+    const literal = data.filter((line) => line.startsWith(label) && line.endsWith("."));
+    return literal.length === 1 ? literal[0]!.slice(label.length, -1).split(",").map((item) => item.trim()) : [];
+  };
+  const items = givenList("Palabras:");
+  const categories = givenList("Categorías:");
+  const cited = executor.item_fact_ids.map((id) => facts.get(id)).flatMap((fact) => fact?.kind === "membership" ? [fact.item] : []);
+  const materials = plan.materials.filter(({ activity_id }) => activity_id === activity.id);
+  const [cards, board] = [materials.find((item) => item.kind === "cut_out_cards"), materials.find((item) => item.kind === "sorting_board")];
+  return materials.length === 2 && !!cards && !!board && sameItems(items, cited) && sameItems(items, cards.cards) &&
+    sameItems(categories, executor.categories.map(({ label }) => label)) && sameItems(categories, board.columns);
+}
 
-  const operandIds = [executor.minuend_fact_id, executor.subtrahend_fact_id];
-  const data = given[0]!.value;
-  const operands = operandIds.map((id) => facts.get(id));
-  if (operands.some((fact) => fact?.kind !== "quantity" || !Number.isSafeInteger(fact.value) || fact.value <= 0 ||
-    quantities.get(fact.id)?.status !== "exact" || !containsActivityQuote(data, fact.quote))) return false;
-  if (operands[0]!.id === operands[1]!.id || [...data.matchAll(NUMBER)].length !== 2 || !data.endsWith(".")) return false;
-
-  const sentences = (text: string) => text.split(/(?<=[.!?])\s+/u);
-  const source = sentences(original.instruction);
-  const candidate = sentences(activity.prompt);
-  if (!source.includes(data) || !candidate.includes(data)) return false;
-  const sourceTask = source.filter((text) => text !== data);
-  const candidatePrompt = candidate.filter((text) => text !== data);
-  if (normalize(sourceTask[0] ?? "") !== "calcula la diferencia" || candidatePrompt.length !== 1 ||
-    !/^(?:en cuanto difieren|cual es la diferencia entre) (?:las dos|ambas) cantidades$/u.test(normalize(candidatePrompt[0]!))) return false;
-  if (sourceTask.slice(1).some((sentence) => !activity.steps.includes(sentence)) ||
-    activity.steps.some((step) => !sourceTask.slice(1).includes(step))) return false;
-  const candidateTask = [...candidatePrompt, ...activity.steps].join(" ");
-  if (protectedElements.some(({ type, value }) => type !== "required_data" && type !== "learning_objective" &&
-    !containsActivityQuote(candidateTask, value))) return false;
-  return similarity(sourceTask.join(" "), candidateTask) < NOT_NEW_SIMILARITY;
+function sameItems(original: readonly string[], candidate: readonly string[]): boolean {
+  return new Set(original).size === original.length && new Set(candidate).size === candidate.length &&
+    original.length === candidate.length && original.every((item) => candidate.includes(item));
 }
 
 /**
