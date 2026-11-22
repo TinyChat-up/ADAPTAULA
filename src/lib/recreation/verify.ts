@@ -1,5 +1,6 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
-import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import { containsActivityQuote } from "@/lib/analysis/activity-comprehension";
+import type { AnalysisActivity, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { RECREATION_CHECK_COPY } from "./quality";
 import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type RecreationActivity, type RecreationPlan } from "./contract";
 
@@ -22,7 +23,7 @@ import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type Recreati
  * person or a semantic reviewer confirms it. It is never reported as passed by default.
  */
 
-export const RECREATION_VERIFIER_VERSION = "recreation_verify@v3";
+export const RECREATION_VERIFIER_VERSION = "recreation_verify@v4";
 
 export type VerificationStatus = "verified" | "anchored" | "teacher_review";
 
@@ -294,8 +295,11 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
     for (const id of a.visual_ids) if (!visuals.has(id)) error("activity_visual_unknown", path, `${id} no existe.`);
     const needed = EXECUTOR_OPERATION[a.executor.kind];
     if (needed && !a.operations.includes(needed)) error("executor_operation_mismatch", path, `El formato ${a.executor.kind} trabaja «${needed}».`);
-    const copied = analysis.activities.find((o) => similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY);
-    if (copied) error("activity_not_new", path, `Repite el enunciado de ${copied.id}: el motor diseña actividades nuevas.`);
+    const copied = analysis.activities.find((o) => {
+      if (o.instruction.replace(/\s+/gu, " ").trim() === a.prompt.replace(/\s+/gu, " ").trim()) return true;
+      return similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY && !differsBeyondGivenData(o, a, analysis, facts, quantities);
+    });
+    if (copied) error("activity_not_new", path, `La consigna se parece demasiado a la de ${copied.id}. Rediseña cómo se realiza la tarea y conserva sus datos literales, objetivos, operaciones y decisiones del alumno. Cambiar solo sinónimos o añadir pistas no sirve.`);
     const result = solve(a, facts, quantities, analysis, (code, message) => error(code, path, message), (code, message) => warning(code, path, message));
     if (result) verified.push({ id: a.id, ...result });
   }
@@ -325,6 +329,26 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   const ok = !issues.some((i) => i.severity === "error");
   const review_required = pendingMaterialChecks(plan, verified, equivalence).length > 0;
   return { ok, issues, activities: verified, required, equivalence, review_required, version: RECREATION_VERIFIER_VERSION };
+}
+
+const SELECTION_COUNT = new RegExp([
+  String.raw`(?:^|[.;:!?¡¿,)\n]|\s+y\s+)\s*(?<negation>no\s+)?(?:(?:debes|tienes que|hay que)\s+)?`,
+  String.raw`(?:marca(?:r|s)?|marques|selecciona(?:r|s)?|selecciones|elige(?:s)?|elegir|elijas|senala(?:r|s)?|senales|rodea(?:r|s)?|rodees)\s+`,
+  String.raw`(?<bound>al menos\s+|como maximo\s+|hasta\s+)?(?:(?:exactamente|solo|unicamente|las|los)\s+)*`,
+  String.raw`(?<number>una?|dos|tres|cuatro|cinco|seis|siete|ocho|amb[ao]s|[+−-]?\d+(?:[.,]\d+)?)`,
+  String.raw`(?:\s+(?:opciones?|respuestas?|afirmacion(?:es)?|enunciados?|casillas?)\b|\s*(?=$|[.!?;]))`,
+].join(""), "g");
+const SELECTION_VALUES: Record<string, number> = { un: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, ambos: 2, ambas: 2 };
+
+function announcesSelectionCount(a: RecreationActivity, count: number): boolean {
+  // Preserve punctuation and check each printed step independently. A topic number or a lower/upper limit is not an exact instruction.
+  const commands = [a.prompt, ...a.steps].flatMap((text) => [
+    ...text.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").matchAll(SELECTION_COUNT),
+  ]);
+  return (count === 1 || commands.length > 0) && commands.every(({ groups }) => {
+    const declared = groups?.number ?? "";
+    return !groups?.negation && !groups?.bound && (SELECTION_VALUES[declared] ?? asNumber(declared)) === count;
+  });
 }
 
 function solve(
@@ -414,7 +438,10 @@ function solve(
     case "select": {
       const correct = e.options.filter((o) => o.correct);
       if (correct.length !== e.correct_count) fail("correct_count_mismatch", `Hay ${correct.length} opciones correctas y se anuncian ${e.correct_count}.`);
-      if (e.correct_count > 1 && !new RegExp(`\\b(${["", "una", "dos", "tres"][e.correct_count]}|${e.correct_count})\\b`).test(normalize(a.prompt))) fail("count_not_stated", "El enunciado debe decir cuántas opciones hay que marcar.");
+      if (!announcesSelectionCount(a, e.correct_count)) {
+        const count = ["", "una opción", "dos opciones", "tres opciones"][e.correct_count];
+        fail("count_not_stated", `El enunciado o un paso debe indicar una cantidad exacta y coherente: «Marca ${count}». Si averiguar la cantidad forma parte de lo evaluado, usa un formato compatible sin anticiparla.`);
+      }
       for (const o of correct) if (!o.evidence_fact_id || !fact(o.evidence_fact_id, "statement")) fail("option_unanchored", `«${o.text}» no cita el dato del texto que la apoya.`);
       if (new Set(e.options.map((o) => normalize(o.text))).size !== e.options.length) fail("option_repeated", "Opciones repetidas.");
       // A distractor that the cited text supports as much as a correct option would make two answers right.
@@ -447,6 +474,54 @@ export function similarity(a: string, b: string): number {
   const shared = [...x].filter((w) => y.has(w)).length;
   return shared / (x.size + y.size - shared);
 }
+type QuantityCheck = ReturnType<typeof quantityEvidence>;
+
+/**
+ * A narrow exception for plain subtraction. Long, identical givens can dominate Jaccard even when the instructions differ.
+ * The exemption needs exact operands and a literal factual sentence. It never masks instructions, constraints or choices of method.
+ */
+function differsBeyondGivenData(
+  original: AnalysisActivity,
+  activity: RecreationActivity,
+  analysis: MaterialAnalysis,
+  facts: ReadonlyMap<string, Fact>,
+  quantities: ReadonlyMap<string, QuantityCheck>,
+): boolean {
+  const executor = activity.executor;
+  if (executor.kind !== "compute" || original.type !== "calculation" || original.response_format !== "calculate" ||
+    original.resource_ids.length > 0 || original.objective_ids.length === 0 ||
+    original.objective_ids.some((id) => !activity.objective_ids.includes(id)) ||
+    [...operationsOf(original)].some((operation) => !activity.operations.includes(operation))) return false;
+
+  const protectedElements = analysis.protected_elements.filter((item) => item.importance !== "optional" &&
+    (item.activity_ids.includes(original.id) || (item.activity_ids.length === 0 && item.resource_ids.length === 0)));
+  if (protectedElements.some(({ type }) => type === "reasoning_constraint" || type === "target_operation")) return false;
+  const given = protectedElements.filter(({ type }) => type === "required_data");
+  if (given.length !== 1) return false;
+
+  const operandIds = [executor.minuend_fact_id, executor.subtrahend_fact_id];
+  const data = given[0]!.value;
+  const operands = operandIds.map((id) => facts.get(id));
+  if (operands.some((fact) => fact?.kind !== "quantity" || !Number.isSafeInteger(fact.value) || fact.value <= 0 ||
+    quantities.get(fact.id)?.status !== "exact" || !containsActivityQuote(data, fact.quote))) return false;
+  if (operands[0]!.id === operands[1]!.id || [...data.matchAll(NUMBER)].length !== 2 || !data.endsWith(".")) return false;
+
+  const sentences = (text: string) => text.split(/(?<=[.!?])\s+/u);
+  const source = sentences(original.instruction);
+  const candidate = sentences(activity.prompt);
+  if (!source.includes(data) || !candidate.includes(data)) return false;
+  const sourceTask = source.filter((text) => text !== data);
+  const candidatePrompt = candidate.filter((text) => text !== data);
+  if (normalize(sourceTask[0] ?? "") !== "calcula la diferencia" || candidatePrompt.length !== 1 ||
+    !/^(?:en cuanto difieren|cual es la diferencia entre) (?:las dos|ambas) cantidades$/u.test(normalize(candidatePrompt[0]!))) return false;
+  if (sourceTask.slice(1).some((sentence) => !activity.steps.includes(sentence)) ||
+    activity.steps.some((step) => !sourceTask.slice(1).includes(step))) return false;
+  const candidateTask = [...candidatePrompt, ...activity.steps].join(" ");
+  if (protectedElements.some(({ type, value }) => type !== "required_data" && type !== "learning_objective" &&
+    !containsActivityQuote(candidateTask, value))) return false;
+  return similarity(sourceTask.join(" "), candidateTask) < NOT_NEW_SIMILARITY;
+}
+
 /**
  * Whether `text` says `claim`: all of the claim's content words, in the claim's order. Order matters: «las algas se alimentan de
  * larvas» is the reverse of «las larvas se alimentan de algas», a legitimate distractor, not the same claim.
