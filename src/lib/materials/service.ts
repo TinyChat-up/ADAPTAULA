@@ -194,7 +194,8 @@ async function tryReuseAnalysis(ctx: WorkspaceContext, materialId: string, hash:
     .neq("id", materialId)
     .order("created_at", { ascending: false })
     .limit(10);
-  const reusable = pickReusableAnalysis(data ?? [], { promptVersion: ANALYSIS_PROMPT_VERSION(), schemaVersion: activeAnalyzer().schemaVersion });
+  // The version this workspace analyses with (v4 for a pilot workspace): an earlier analysis of another version is never reused.
+  const reusable = pickReusableAnalysis(data ?? [], { promptVersion: ANALYSIS_PROMPT_VERSION(ctx.workspace.id), schemaVersion: activeAnalyzer(ctx.workspace.id).schemaVersion });
   if (!reusable) return false;
   const source = { id: reusable.sourceId };
   const analysis = { data: reusable.analysis };
@@ -216,7 +217,7 @@ async function tryReuseAnalysis(ctx: WorkspaceContext, materialId: string, hash:
     .from("materials")
     .update({
       analysis: reusable.stored,
-      analysis_prompt_version: ANALYSIS_PROMPT_VERSION(),
+      analysis_prompt_version: ANALYSIS_PROMPT_VERSION(ctx.workspace.id),
       analysis_meta: { ...meta.data, source: "reused", cache_hit: true, forced_reanalysis: false, reused_from_material_id: source.id, cost_usd: 0, attempts: 0 },
       status: "analyzed",
       failure_code: null,
@@ -272,7 +273,7 @@ export async function queueAnalysis(ctx: WorkspaceContext, materialId: string, i
   const { data, error } = await createAdminClient().rpc("enqueue_analysis_job", {
     p_material: materialId,
     p_requested_by: ctx.user.id,
-    p_input: { force: input.force === true, prompt_version: activeAnalyzer().version },
+    p_input: { force: input.force === true, prompt_version: activeAnalyzer(ctx.workspace.id).version },
     p_max_active: ANALYSIS_LIMITS.maxActivePerWorkspace,
   });
   if (error) {

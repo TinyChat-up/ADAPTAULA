@@ -1,5 +1,6 @@
 import "server-only";
 import { serverEnv } from "@/lib/config/env.server";
+import { inWorkspaceList } from "@/lib/config/workspace-list";
 import { ANALYSIS_DEFAULTS } from "./config";
 import { getMaterialAnalyzer, type AnalyzerDefinition } from "./prompts";
 import { resolveModel, type ModelEnv } from "./registry";
@@ -15,8 +16,17 @@ export interface AnalysisRuntime {
   maxOutputTokens: number;
 }
 
-/** Builds the analysis setup from the environment. Throws a categorized AIError when it is not configured. */
-export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime {
+/**
+ * The analyzer version for a workspace: v4 only for the pilot workspaces of AI_ANALYSIS_V4_WORKSPACES (the director's per-activity
+ * comprehension), the global AI_ANALYSIS_PROMPT_VERSION for everyone else. Decided by the server, never by the browser. It only
+ * chooses how NEW analyses are made: stored analyses keep the version they were made with (`analysis_prompt_version`).
+ */
+export function analysisPromptVersionFor(env: { AI_ANALYSIS_PROMPT_VERSION: number; AI_ANALYSIS_V4_WORKSPACES?: string | undefined }, workspaceId: string | null | undefined): number {
+  return inWorkspaceList(env.AI_ANALYSIS_V4_WORKSPACES, workspaceId) ? 4 : env.AI_ANALYSIS_PROMPT_VERSION;
+}
+
+/** Builds the analysis setup from the environment. `promptVersion` is the one fixed at queue time. Throws a categorized AIError when it is not configured. */
+export function getAnalysisRuntime(workspaceId?: string | null, options: { promptVersion?: number | undefined } = {}): AnalysisRuntime {
   const env = serverEnv();
   const selection = resolveModel(env.AI_ANALYSIS_ALIAS, env as ModelEnv, env.AI_ANALYSIS_EFFORT);
   const provider = createProvider(selection, {
@@ -26,7 +36,8 @@ export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime
     spendMeter: pilotSpendMeter(workspaceId),
   });
   return {
-    analyzer: getMaterialAnalyzer(env.AI_ANALYSIS_PROMPT_VERSION),
+    // A job runs with the version that was fixed when it was queued; only a job without one follows the current configuration.
+    analyzer: getMaterialAnalyzer(options.promptVersion ?? analysisPromptVersionFor(env, workspaceId)),
     selection,
     provider,
     maxRepairAttempts: env.AI_ANALYSIS_MAX_REPAIR_ATTEMPTS ?? ANALYSIS_DEFAULTS.maxRepairAttempts,
@@ -34,9 +45,9 @@ export function getAnalysisRuntime(workspaceId?: string | null): AnalysisRuntime
   };
 }
 
-/** The analyzer in use (prompt + contract), for code that needs its identity without building a provider. */
-export function activeAnalyzer(): AnalyzerDefinition {
-  return getMaterialAnalyzer(serverEnv().AI_ANALYSIS_PROMPT_VERSION);
+/** The analyzer in use for a workspace (prompt + contract), for code that needs its identity without building a provider. */
+export function activeAnalyzer(workspaceId?: string | null): AnalyzerDefinition {
+  return getMaterialAnalyzer(analysisPromptVersionFor(serverEnv(), workspaceId));
 }
 
 /**

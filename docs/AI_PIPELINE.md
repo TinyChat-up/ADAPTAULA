@@ -137,6 +137,14 @@ Además, límites técnicos independientes (`ANALYSIS_LIMITS` en `src/lib/materi
 
 #### Comprensión pedagógica por actividad · Motor pedagógico 2.0, Fase 2
 
+> **V4 por workspace piloto.** `AI_ANALYSIS_V4_WORKSPACES` (identificadores separados por comas, vacío por defecto) hace que los análisis **nuevos** de esos workspaces usen v4. El resto sigue con `AI_ANALYSIS_PROMPT_VERSION` (v3).
+>
+> Lo decide el servidor con `analysisPromptVersionFor()`. El trabajo de análisis, la caché de reutilización y el registro `analysis_prompt_version` usan la misma versión del workspace, así que un análisis v3 nunca se reutiliza como v4. Los análisis guardados y las adaptaciones creadas no cambian.
+>
+> **Versión fijada al encolar.** `queueAnalysis()` guarda `prompt_version` en el trabajo y `runAnalysisJob()` la respeta aunque `AI_ANALYSIS_V4_WORKSPACES` cambie después. Un trabajo antiguo sin versión sigue la configuración actual. Una versión guardada que no se puede cumplir (inexistente o mal formada) detiene el trabajo con `bad_request`, sin reintento y antes de leer el archivo o llamar a la IA.
+>
+> Cuotas, límites de frecuencia y gasto son los del análisis actual. Un v4 cuesta una llamada de análisis, como un v3.
+
 El contrato persistido v4 contiene `base` (el grafo v3 del material) y `comprehension` (versión 1). `parseStoredAnalysis(raw)` entrega la proyección v3 como `analysis` a los consumidores actuales y añade `comprehension` para el lector que la solicita. Los análisis históricos se leen sin este campo y no se reinterpretan. El trabajo guarda el contrato completo en las columnas JSON existentes y la caché exige que coincidan el prompt y el esquema. Para desactivar el ensayo se puede volver a seleccionar v3 y conservar el lector de v4 para los materiales ya guardados.
 
 | Datos por actividad | Interpretación |
