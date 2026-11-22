@@ -5,7 +5,7 @@ import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { compileRecreation, type CompiledRecreation } from "./compile";
 import { RecreationPlanSchema, type RecreationPlan, type RecreationScope } from "./contract";
 import { recreationInput, type RecreationApproach, type RecreationInput } from "./input";
-import { salvagePlan, sanitizePlan, undesignedResources } from "./repair";
+import { salvagePlan, sanitizePlan, requiresInstructionRepair, undesignedResources } from "./repair";
 import { verifyPlan, type PlanIssue, type Verification } from "./verify";
 import { auditFidelity } from "./fidelity";
 import { toolReport } from "./tools";
@@ -95,8 +95,25 @@ export async function planRecreation(planner: Planner, request: Pick<RecreationR
     // Mechanical slips are fixed by the server (one correct value, no model call); then the essential checks decide.
     const options = { picturesRequired: policyNew(request.visualPolicy), preciseRelations: request.visualPolicy === "designed", diagrams: request.visualPolicy === "designed" && request.diagrams === true };
     let plan = sanitizePlan(parsed.data, request.analysis, needs, request.scope, options);
+    const repairingInstruction = previousPlan && repairOf?.some(({ code }) => requiresInstructionRepair(code));
+    if (repairingInstruction) {
+      const revised = new Map(plan.activities.map((a) => [a.id, a]));
+      const issues: PlanIssue[] = [];
+      for (const before of previousPlan.activities) {
+        const after = revised.get(before.id);
+        const path = `activities.${before.id}`;
+        if (!after) issues.push({ severity: "error", code: "repair_activity_removed", path,
+          message: "La reparación de una consigna no puede eliminar actividades del plan." });
+        else if (before.objective_ids.some((id) => !after.objective_ids.includes(id)) ||
+          before.operations.some((op) => !after.operations.includes(op))) {
+          issues.push({ severity: "error", code: "repair_activity_scope_changed", path,
+            message: "La reparación debe conservar los objetivos y operaciones de cada actividad." });
+        }
+      }
+      if (issues.length) return { status: "rejected", plan, runs, calls: call, issues };
+    }
     let verification = verifyPlan(plan, request.analysis, { needs });
-    if (!verification.ok) {
+    if (!verification.ok && !repairingInstruction) {
       const salvaged = salvagePlan(plan, verification, request.analysis, needs, request.scope, options);
       if (salvaged) ({ plan, verification } = salvaged);
     }

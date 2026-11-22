@@ -124,7 +124,7 @@ MaterialAnalysis + AdaptationContext (perfil → necesidades, límites, formatos
 createRecreationPlanner()        proveedor de src/lib/ai + callStructured + recreation_planner v1 · tope de gasto · ai_runs
    │  RecreationPlanSchema       contrato recreation_plan@v1 (≤ 1 reparación con los motivos)
    ▼
-verifyPlan()                     recreation_verify@v3: alcance, objetivos/operaciones, citas y cifras, soluciones, pistas,
+verifyPlan()                     recreation_verify@v4: alcance, objetivos/operaciones, citas y cifras, soluciones, pistas,
    │                             equivalencia por objetivo (razonamiento siempre pendiente)
    ▼
 resolveVisuals()                 A original · B esquema por código · C illustrate() (puerta, cuota, presupuesto, revisión)
@@ -167,7 +167,7 @@ Siete partes separadas:
 1. **Objetivos y nivel autorizado** (`scope`, `objectives[].level`): todos los objetivos del original, `kept`. `adjusted` solo existe con autorización curricular, que el piloto rechaza.
 2. **Operaciones cognitivas** (`objectives[].operations`): identificar, localizar pruebas, clasificar, ordenar, interpretar relaciones, predecir, calcular, valorar, justificar y proponer. El servidor deduce las operaciones mínimas de cada objetivo a partir de los enunciados del original (`originalOperations`); el plan puede añadir operaciones, nunca quitar una.
 3. **Estrategias metodológicas** (`strategies`): método y necesidades del contexto que lo justifican. Una necesidad que no está en el contexto se rechaza.
-4. **Actividades nuevas** (`activities`): cada una cita sus objetivos, operaciones y estrategias. Si su enunciado se parece demasiado a uno del original (Jaccard ≥ 0,5), se rechaza por no ser nueva.
+4. **Actividades nuevas** (`activities`): cada una cita sus objetivos, operaciones y estrategias. La copia literal o una similitud de Jaccard de al menos 0,5 bloquean la consigna. Separar visualmente una consigna puede facilitar el acceso, pero para recrearla hace falta cambiar cómo se realiza la tarea. Se admite un caso acotado de clasificación de palabras con categorías ya dadas. Se conservan literalmente las frases originales y se añade una instrucción de uso de tarjetas y tablero. El verificador exige que ambos materiales correspondan a la actividad y contengan todas las palabras y las mismas categorías. Los controles de pistas y la revisión pedagógica siguen aplicándose.
 5. **Formatos y soluciones** (`executor` + `facts`): ver la tabla siguiente.
 6. **Materiales** (`visuals`, `diagrams`, `materials`): `flow` con los rótulos del original, comprobados; desde v7, esquemas nuevos (`diagrams`) anclados a hechos citados (ADR-059); tarjetas para recortar (por ahora como estructura, se imprimen en la guía).
 7. **Docente** (`guide`): visión general y qué observar en cada actividad.
@@ -179,11 +179,15 @@ Siete partes separadas:
 | `sequence` | casillas para numerar (`sequence`) | Orden de aparición de las citas en el texto, con posiciones distintas: única. Los ítems se imprimen en un orden que nunca es el de la solución. | `verified` |
 | `compute` | `Operación:` / `Resultado:` + unidad (`fields`) | Aritmética sobre dos cantidades citadas con la misma unidad. | `verified` |
 | `classify` | relacionar con letras (`match`) | Cada ítem citado va a un solo grupo: única por construcción. El grupo es conocimiento curricular, no se puede probar con las palabras. | `anchored` |
-| `select` | opciones (`choice`) | Cada opción correcta cita su dato; el número de correctas coincide con el que anuncia el enunciado. | `anchored` |
+| `select` | opciones (`choice`) | Cada opción correcta cita su dato; el número de correctas coincide con la cantidad exacta que anuncia el enunciado o un paso visible. Una cifra incidental, un mínimo, un máximo o dos instrucciones incompatibles no constituyen evidencia suficiente. | `anchored` |
 | `true_false` | V/F | Cada afirmación cita su dato; no todas tienen el mismo valor. | `anchored` |
 | `short_answer` | ≤ 4 líneas + inicios de frase | Criterios para el docente, nunca una respuesta modelo. | `teacher_review` |
 
 **Ninguna actividad se da por válida solo porque el mismo modelo haya escrito su solución.** En `sequence` y `compute` el modelo no escribe la solución. En los formatos `anchored`, la guía avisa de que el sentido lo revisa el docente.
+
+### Reparación de consignas
+
+El prompt v8 explicita cómo declarar la cantidad de opciones y cómo conservar el texto de los datos y lo que decide el alumno. Se fija para nuevas recreaciones. Los prompts anteriores conservan sus versiones. Ante errores de cantidad o similitud, la reparación existente recibe el motivo y conserva todas las actividades ya propuestas, con sus objetivos y operaciones. La reparación sigue limitada a un intento y los casos que evalúan determinar la cantidad necesitan un formato que no la adelante. Superar el control de copia o cantidad no confirma la equivalencia pedagógica.
 
 ### Pistas
 

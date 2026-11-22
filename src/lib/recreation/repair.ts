@@ -15,7 +15,7 @@ import { EXECUTOR_OPERATION, explanationIssues, normalize, originalOperations, s
  *   sanitizePlan  fixes what has ONE correct value the server knows (references, the scope, the board's columns, the cards of a
  *                 classification, the operations an executor implies, the original's operations of each objective) and drops what
  *                 only decorates (a picture request, a guide line, an explanation line) when it is wrong.
- *   salvagePlan   when only some activities fail (an answer leaked, an unproven order, an unknown fact, a copied prompt), removes
+ *   salvagePlan   when only some activities fail (for example, an answer leaked or an unknown fact), removes
  *                 THOSE activities and keeps the plan only if every objective and operation of the original is still worked.
  *
  * Never: inventing a fact, changing an answer, lowering an objective, or keeping an activity whose solution failed its check.
@@ -150,6 +150,9 @@ function scrubExplanation(plan: RecreationPlan, verification: Verification, need
   return out;
 }
 
+export const requiresInstructionRepair = (code: string) =>
+  code === "count_not_stated" || code === "correct_count_mismatch" || code === "activity_not_new";
+
 const activityOf = (path: string) => /^activities\.(ra_[0-9]+)$/.exec(path)?.[1] ?? null;
 
 /** Removes the failing activities (and what only they used) when nothing essential is lost. Null: the plan cannot be saved this way. */
@@ -165,6 +168,8 @@ export function salvagePlan(plan: RecreationPlan, verification: Verification, an
       checked = verifyPlan(current, analysis, { needs });
       continue;
     }
+    // A corrected instruction must keep its activity. Shared objective tags alone cannot prove that another activity preserves it.
+    if (errors.some(({ code }) => requiresInstructionRepair(code))) return null;
     // Facts with a bad quote are dropped only together with the activities that rely on them.
     const badFacts = new Set(errors.flatMap((e) => (/^facts\.(f_[0-9]+)$/.exec(e.path)?.[1] ? [/^facts\.(f_[0-9]+)$/.exec(e.path)![1]!] : [])));
     const usesBadFact = (a: RecreationPlan["activities"][number]) => JSON.stringify(a.executor).match(/f_[0-9]+/g)?.some((id) => badFacts.has(id)) ?? false;

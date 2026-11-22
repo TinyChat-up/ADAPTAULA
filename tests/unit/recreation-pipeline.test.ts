@@ -9,6 +9,8 @@ import { POND_RECREATION_PLAN } from "../../evals/recreation/pond-plan";
 import { mockStack, runMockRecreation } from "../support/recreation-mocks";
 import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
 import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
+import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
+import { RECREATION_PLANNER_V8 } from "@prompts/recreation-planner/v8";
 import { recreationInput } from "@/lib/recreation/input";
 
 /**
@@ -70,6 +72,19 @@ describe("recorrido completo simulado", () => {
     expect(versions.recreation?.planner.max_output_tokens).toBe(RECREATION_PLANNER_LIMITS.maxOutputTokens);
     expect(RECREATION_PLANNER_LIMITS.maxOutputTokens).toBeGreaterThan(8_000);
   });
+  it("los trabajos nuevos fijan v8 con la consigna de selección y los antiguos conservan v7", async () => {
+    const version = resolvePipelineVersions({}, { recreation: true }).recreation?.planner.prompt_version;
+    expect(version).toBe(8);
+    expect(RECREATION_PLANNER_V8.system).toContain("«Marca dos opciones»");
+    expect(RECREATION_PLANNER_V8.system.startsWith(RECREATION_PLANNER_V7.system)).toBe(true);
+    for (const promptVersion of [7, version]) {
+      const { request, planner } = mockStack({ promptVersion });
+      const planned = await planRecreation(planner, request);
+      expect(planned.status).toBe("planned");
+      expect(planned.runs[0]?.promptVersion).toBe(promptVersion);
+    }
+  });
+
   it("imágenes autorizadas: plan del «Claude» simulado, ilustración del «OpenAI» simulado revisada; la de contexto abre la ficha, antes de la lectura", async () => {
     const { outcome, runs, assets, calls } = await ready({ imagesAuthorized: true });
     // One context illustration + one per card (6): 7 briefs, 7 images, 7 reviews; one plan.

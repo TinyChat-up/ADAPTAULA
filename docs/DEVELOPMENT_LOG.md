@@ -1,5 +1,20 @@
 # Registro de desarrollo
 
+## 2026-11-22 · Revisión de la PR #122 · Rediseño comprobable
+
+- Se retira la excepción para la resta. Los sinónimos y la separación en pasos pueden facilitar la lectura de la misma actividad, pero por sí solos no constituyen una recreación.
+- La regresión de Lengua solo permite conservar toda la consigna en la recreación cuando se verifica un cambio de metodología. El caso acotado usa tarjetas y un tablero con las palabras y categorías que ya daba el original. Conserva la obligación de usar todas las palabras y deja su clasificación al alumno. Una copia, un tablero con categorías distintas o materiales ajenos a la actividad siguen bloqueados.
+- La equivalencia semántica continúa pendiente. El incidente de producción sigue sin poder reproducirse con los códigos disponibles.
+
+## 2026-11-22 · Hacer magia · Rechazos de consignas en recreación
+
+- Rama `codex/corregir-rechazos-recreacion` desde `main` en `e44b1c4` (PR #121). Los códigos aportados corresponden a rechazo del verificador y agotamiento de la reparación. El estado externo `planner_schema` cubre también planes con esquema válido que no superan ese control.
+- Regresiones sintéticas reproducidas antes de cambiar el código. La selección omitía los pasos impresos y podía aceptar una cifra incidental o contradictoria. El cálculo de similitud podía confundir una oración de datos que debía copiarse con una consigna copiada.
+- El verificador reconoce cantidades exactas en instrucciones de selección y comprueba su coherencia con la clave. La excepción inicial para una resta se retiró en la revisión de la PR #122, descrita arriba. La revisión de equivalencia sigue pendiente.
+- Ante estos errores se conserva la actividad para la única reparación disponible. La respuesta de reparación debe conservar los identificadores, objetivos y operaciones previos. Los trabajos nuevos usan el prompt v8 y los anteriores mantienen la versión fijada. El director V4 conserva su implementación.
+- Pasaron 161 pruebas focalizadas de unidad e integración, 4 de PDF, typecheck y privacidad. Lint mantuvo un aviso preexistente. GitHub devolvió `Forbidden` en la consulta de PR abiertas.
+- Los registros sin texto no permiten asignar los falsos positivos a las actividades de producción. La adaptación del incidente no se ha reproducido con material privado ni con una llamada de pago.
+
 ## 2026-11-22 · Análisis V4 solo para workspaces piloto
 
 - Rama `claude/analisis-v4-workspace-piloto` desde `main` (`65dd48c`, con #120).

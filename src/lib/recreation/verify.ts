@@ -1,5 +1,5 @@
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
-import type { MaterialAnalysis } from "@/lib/schemas/material-analysis";
+import type { AnalysisActivity, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import { RECREATION_CHECK_COPY } from "./quality";
 import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type RecreationActivity, type RecreationPlan } from "./contract";
 
@@ -22,7 +22,7 @@ import { COGNITIVE_OPERATIONS, type CognitiveOperation, type Fact, type Recreati
  * person or a semantic reviewer confirms it. It is never reported as passed by default.
  */
 
-export const RECREATION_VERIFIER_VERSION = "recreation_verify@v3";
+export const RECREATION_VERIFIER_VERSION = "recreation_verify@v4";
 
 export type VerificationStatus = "verified" | "anchored" | "teacher_review";
 
@@ -294,8 +294,11 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
     for (const id of a.visual_ids) if (!visuals.has(id)) error("activity_visual_unknown", path, `${id} no existe.`);
     const needed = EXECUTOR_OPERATION[a.executor.kind];
     if (needed && !a.operations.includes(needed)) error("executor_operation_mismatch", path, `El formato ${a.executor.kind} trabaja «${needed}».`);
-    const copied = analysis.activities.find((o) => similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY);
-    if (copied) error("activity_not_new", path, `Repite el enunciado de ${copied.id}: el motor diseña actividades nuevas.`);
+    const copied = analysis.activities.find((o) => {
+      if (o.instruction.replace(/\s+/gu, " ").trim() === a.prompt.replace(/\s+/gu, " ").trim()) return true;
+      return similarity(o.instruction, a.prompt) >= NOT_NEW_SIMILARITY && !hasVerifiedSortingRedesign(o, a, analysis, plan, facts);
+    });
+    if (copied) error("activity_not_new", path, `La consigna se parece demasiado a la de ${copied.id}. Rediseña cómo se realiza la tarea y conserva sus datos literales, objetivos, operaciones y decisiones del alumno. Cambiar solo sinónimos o añadir pistas no sirve.`);
     const result = solve(a, facts, quantities, analysis, (code, message) => error(code, path, message), (code, message) => warning(code, path, message));
     if (result) verified.push({ id: a.id, ...result });
   }
@@ -325,6 +328,26 @@ export function verifyPlan(plan: RecreationPlan, analysis: MaterialAnalysis, inp
   const ok = !issues.some((i) => i.severity === "error");
   const review_required = pendingMaterialChecks(plan, verified, equivalence).length > 0;
   return { ok, issues, activities: verified, required, equivalence, review_required, version: RECREATION_VERIFIER_VERSION };
+}
+
+const SELECTION_COUNT = new RegExp([
+  String.raw`(?:^|[.;:!?¡¿,)\n]|\s+y\s+)\s*(?<negation>no\s+)?(?:(?:debes|tienes que|hay que)\s+)?`,
+  String.raw`(?:marca(?:r|s)?|marques|selecciona(?:r|s)?|selecciones|elige(?:s)?|elegir|elijas|senala(?:r|s)?|senales|rodea(?:r|s)?|rodees)\s+`,
+  String.raw`(?<bound>al menos\s+|como maximo\s+|hasta\s+)?(?:(?:exactamente|solo|unicamente|las|los)\s+)*`,
+  String.raw`(?<number>una?|dos|tres|cuatro|cinco|seis|siete|ocho|amb[ao]s|[+−-]?\d+(?:[.,]\d+)?)`,
+  String.raw`(?:\s+(?:opciones?|respuestas?|afirmacion(?:es)?|enunciados?|casillas?)\b|\s*(?=$|[.!?;]))`,
+].join(""), "g");
+const SELECTION_VALUES: Record<string, number> = { un: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, ambos: 2, ambas: 2 };
+
+function announcesSelectionCount(a: RecreationActivity, count: number): boolean {
+  // Preserve punctuation and check each printed step independently. A topic number or a lower/upper limit is not an exact instruction.
+  const commands = [a.prompt, ...a.steps].flatMap((text) => [
+    ...text.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").matchAll(SELECTION_COUNT),
+  ]);
+  return (count === 1 || commands.length > 0) && commands.every(({ groups }) => {
+    const declared = groups?.number ?? "";
+    return !groups?.negation && !groups?.bound && (SELECTION_VALUES[declared] ?? asNumber(declared)) === count;
+  });
 }
 
 function solve(
@@ -414,7 +437,10 @@ function solve(
     case "select": {
       const correct = e.options.filter((o) => o.correct);
       if (correct.length !== e.correct_count) fail("correct_count_mismatch", `Hay ${correct.length} opciones correctas y se anuncian ${e.correct_count}.`);
-      if (e.correct_count > 1 && !new RegExp(`\\b(${["", "una", "dos", "tres"][e.correct_count]}|${e.correct_count})\\b`).test(normalize(a.prompt))) fail("count_not_stated", "El enunciado debe decir cuántas opciones hay que marcar.");
+      if (!announcesSelectionCount(a, e.correct_count)) {
+        const count = ["", "una opción", "dos opciones", "tres opciones"][e.correct_count];
+        fail("count_not_stated", `El enunciado o un paso debe indicar una cantidad exacta y coherente: «Marca ${count}». Si averiguar la cantidad forma parte de lo evaluado, usa un formato compatible sin anticiparla.`);
+      }
       for (const o of correct) if (!o.evidence_fact_id || !fact(o.evidence_fact_id, "statement")) fail("option_unanchored", `«${o.text}» no cita el dato del texto que la apoya.`);
       if (new Set(e.options.map((o) => normalize(o.text))).size !== e.options.length) fail("option_repeated", "Opciones repetidas.");
       // A distractor that the cited text supports as much as a correct option would make two answers right.
@@ -447,6 +473,56 @@ export function similarity(a: string, b: string): number {
   const shared = [...x].filter((w) => y.has(w)).length;
   return shared / (x.size + y.size - shared);
 }
+/**
+ * Printed cards and a sorting board change how the student classifies. The vocabulary, given categories, and requirements can
+ * stay literal. Without evidence of this change, segmentation, synonyms and promises of materials do not defeat the copy check.
+ */
+function hasVerifiedSortingRedesign(
+  original: AnalysisActivity,
+  activity: RecreationActivity,
+  analysis: MaterialAnalysis,
+  plan: RecreationPlan,
+  facts: ReadonlyMap<string, Fact>,
+): boolean {
+  const executor = activity.executor;
+  if (original.type !== "classification" || original.response_format !== "write_text" || original.context || original.resource_ids.length ||
+    executor.kind !== "classify" || original.objective_ids.length === 0 || !sameItems(original.objective_ids, activity.objective_ids) ||
+    !sameItems([...operationsOf(original)], ["classify"]) || !sameItems(activity.operations, ["classify"])) return false;
+
+  const sentences = (text: string) => text.trim().split(/(?<=[.!?])\s+/u);
+  const source = sentences(original.instruction);
+  if (/\b(tarjetas?|tablero|recort\w*|peg\w*)\b/u.test(normalize(original.instruction))) return false;
+  const candidate = [activity.prompt, ...activity.steps].flatMap(sentences);
+  const action = "Coloca cada tarjeta en la columna del tablero que corresponda.";
+  const retained = candidate.filter((text) => text !== action);
+  if (candidate.length !== retained.length + 1 || source.length !== retained.length ||
+    source.some((text, index) => text !== retained[index])) return false;
+
+  const protectedElements = analysis.protected_elements.filter((item) => item.importance !== "optional" &&
+    (item.activity_ids.includes(original.id) || (item.activity_ids.length === 0 && item.resource_ids.length === 0)));
+  if (protectedElements.some(({ type, value }) => !source.includes(value) ||
+    (type !== "required_data" && !(type === "response_constraint" && value === "Usa todas las palabras.")))) return false;
+  const data = protectedElements.filter(({ type }) => type === "required_data").map(({ value }) => value);
+  if (data.length !== 2 || source.filter((line) => line === "Clasifica las palabras en sus categorías.").length !== 1 ||
+    source.some((line) => !data.includes(line) && line !== "Clasifica las palabras en sus categorías." && line !== "Usa todas las palabras.")) return false;
+  const givenList = (label: string) => {
+    const literal = data.filter((line) => line.startsWith(label) && line.endsWith("."));
+    return literal.length === 1 ? literal[0]!.slice(label.length, -1).split(",").map((item) => item.trim()) : [];
+  };
+  const items = givenList("Palabras:");
+  const categories = givenList("Categorías:");
+  const cited = executor.item_fact_ids.map((id) => facts.get(id)).flatMap((fact) => fact?.kind === "membership" ? [fact.item] : []);
+  const materials = plan.materials.filter(({ activity_id }) => activity_id === activity.id);
+  const [cards, board] = [materials.find((item) => item.kind === "cut_out_cards"), materials.find((item) => item.kind === "sorting_board")];
+  return materials.length === 2 && !!cards && !!board && sameItems(items, cited) && sameItems(items, cards.cards) &&
+    sameItems(categories, executor.categories.map(({ label }) => label)) && sameItems(categories, board.columns);
+}
+
+function sameItems(original: readonly string[], candidate: readonly string[]): boolean {
+  return new Set(original).size === original.length && new Set(candidate).size === candidate.length &&
+    original.length === candidate.length && original.every((item) => candidate.includes(item));
+}
+
 /**
  * Whether `text` says `claim`: all of the claim's content words, in the claim's order. Order matters: «las algas se alimentan de
  * larvas» is the reverse of «las larvas se alimentan de algas», a legitimate distractor, not the same claim.
