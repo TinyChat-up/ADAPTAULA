@@ -10,6 +10,7 @@ import { mockStack, runMockRecreation } from "../support/recreation-mocks";
 import { planRecreation, runRecreation } from "@/lib/recreation/pilot";
 import { RECREATION_PLANNER_V2 } from "@prompts/recreation-planner/v2";
 import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
+import { RECREATION_PLANNER_V11 } from "@prompts/recreation-planner/v11";
 import { RECREATION_PLANNER_V8 } from "@prompts/recreation-planner/v8";
 import { recreationInput } from "@/lib/recreation/input";
 
@@ -72,12 +73,14 @@ describe("recorrido completo simulado", () => {
     expect(versions.recreation?.planner.max_output_tokens).toBe(RECREATION_PLANNER_LIMITS.maxOutputTokens);
     expect(RECREATION_PLANNER_LIMITS.maxOutputTokens).toBeGreaterThan(8_000);
   });
-  it("los trabajos nuevos fijan v8 con la consigna de selección y los antiguos conservan v7", async () => {
+  it("los trabajos nuevos fijan v11 con el criterio editorial y los anteriores conservan v7 y v8", async () => {
     const version = resolvePipelineVersions({}, { recreation: true }).recreation?.planner.prompt_version;
-    expect(version).toBe(8);
+    expect(version).toBe(11);
+    expect(RECREATION_PLANNER_V11.system.startsWith(RECREATION_PLANNER_V8.system)).toBe(true);
+    expect(RECREATION_PLANNER_V11.system).toContain("ilustración de OpenAI");
     expect(RECREATION_PLANNER_V8.system).toContain("«Marca dos opciones»");
     expect(RECREATION_PLANNER_V8.system.startsWith(RECREATION_PLANNER_V7.system)).toBe(true);
-    for (const promptVersion of [7, version]) {
+    for (const promptVersion of [7, 8, version]) {
       const { request, planner } = mockStack({ promptVersion });
       const planned = await planRecreation(planner, request);
       expect(planned.status).toBe("planned");

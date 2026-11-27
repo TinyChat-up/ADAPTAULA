@@ -1,5 +1,12 @@
 # Registro de desarrollo
 
+## 2026-11-27 · Papel: cálculo, evidencias e ilustración contextual
+
+- La rama integra los aprendizajes del piloto editorial en la ruta real «Hacer magia» y en el tamaño determinista de respuestas del generador de acceso. No importa plantillas de las 16 fichas ni cambia el criterio curricular.
+- La recreación reserva cuadrícula y resultado separado; el render también deja al menos 34 mm para un campo existente llamado «Operación/Operaciones/Cálculo» sin cambiar el documento guardado. Los campos de evidencia requieren una consigna explícita; una alternativa oral autorizada no altera las evidencias pedidas.
+- Los recortables se nombran en la propia actividad. La ilustración opcional de vocabulario aprobada usa la ruta de OpenAI existente y abre la lectura cuando procede. El nuevo prompt v11 conserva las versiones antiguas y evita volver a encargar números, mapas o relaciones exactas a la IA.
+- Las imágenes siguen sujetas a autorización, plan, cuota, tope económico, caché y revisión. No hay migración ni cambio de flags. La prueba local utiliza modelos simulados y Chromium real; falta comprobar el flujo autenticado y una imagen nueva de OpenAI en un workspace aislado antes de fusionar.
+
 ## 2026-11-22 · Revisión de la PR #122 · Rediseño comprobable
 
 - Se retira la excepción para la resta. Los sinónimos y la separación en pasos pueden facilitar la lectura de la misma actividad, pero por sí solos no constituyen una recreación.

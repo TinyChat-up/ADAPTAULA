@@ -113,16 +113,6 @@
      },
      {
       "id": "blk_r0005",
-      "type": "instruction",
-      "trace": {
-       "origin": "structure",
-       "source_refs": [],
-       "decision_ids": []
-      },
-      "text": "Para esta actividad usa las tarjetas y el tablero del documento «Materiales para recortar»."
-     },
-     {
-      "id": "blk_r0006",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -137,6 +127,9 @@
       },
       "label": "1",
       "prompt": "¿Cada componente del estanque es un ser vivo o un elemento no vivo? Coloca las tarjetas en el tablero y después escribe la letra en cada casilla.",
+      "requirements": [
+       "Usa las tarjetas y el tablero del documento «Materiales para recortar»."
+      ],
       "resource_block_ids": [
        "blk_r0002"
       ],
@@ -181,7 +174,7 @@
       }
      },
      {
-      "id": "blk_r0007",
+      "id": "blk_r0006",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -201,7 +194,7 @@
       }
      },
      {
-      "id": "blk_r0008",
+      "id": "blk_r0007",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -219,7 +212,7 @@
       ]
      },
      {
-      "id": "blk_r0009",
+      "id": "blk_r0008",
       "type": "image",
       "trace": {
        "origin": "original",
@@ -250,7 +243,7 @@
       "alt_text": "Esquema del estanque: Algas, Larvas de insectos, Ranas, Garzas, unidos por flechas."
      },
      {
-      "id": "blk_r0010",
+      "id": "blk_r0009",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -266,7 +259,7 @@
       "label": "3",
       "prompt": "Mira el esquema. ¿Qué indica la flecha que va de las algas a las larvas de insectos? Marca una respuesta.",
       "resource_block_ids": [
-       "blk_r0009"
+       "blk_r0008"
       ],
       "response": {
        "kind": "choice",
@@ -292,7 +285,7 @@
       }
      },
      {
-      "id": "blk_r0011",
+      "id": "blk_r0010",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -306,7 +299,7 @@
       "label": "4",
       "prompt": "Imagina que casi desaparecen las larvas de insectos. ¿Qué les pasaría a las ranas? Explica tu idea con el esquema.",
       "resource_block_ids": [
-       "blk_r0009"
+       "blk_r0008"
       ],
       "response": {
        "kind": "lines",
@@ -314,7 +307,7 @@
       }
      },
      {
-      "id": "blk_r0012",
+      "id": "blk_r0011",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -331,7 +324,7 @@
       ]
      },
      {
-      "id": "blk_r0013",
+      "id": "blk_r0012",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -353,21 +346,21 @@
        "kind": "fields",
        "fields": [
         {
-         "label": "Operación",
-         "space": "lines",
-         "lines": 1
+         "label": "Operaciones",
+         "space": "grid",
+         "lines": 6
         },
         {
          "label": "Resultado",
-         "space": "lines",
-         "lines": 1,
+         "space": "box",
+         "lines": 2,
          "unit": true
         }
        ]
       }
      },
      {
-      "id": "blk_r0014",
+      "id": "blk_r0013",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -386,7 +379,7 @@
       }
      },
      {
-      "id": "blk_r0015",
+      "id": "blk_r0014",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",
@@ -403,7 +396,7 @@
       ]
      },
      {
-      "id": "blk_r0016",
+      "id": "blk_r0015",
       "type": "activity",
       "trace": {
        "origin": "adapted",
@@ -422,7 +415,7 @@
       }
      },
      {
-      "id": "blk_r0017",
+      "id": "blk_r0016",
       "type": "sentence_starters",
       "trace": {
        "origin": "support",

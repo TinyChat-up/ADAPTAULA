@@ -1,3 +1,4 @@
+import { isCalculationField, MIN_CALCULATION_MM } from "@/lib/recreation/response-space";
 import type { Block, MaterialDocument, ResponseSpec } from "@/lib/schemas/material-document";
 import { VisualSpecSchema, describeSpec, type ComparisonSpec, type VisualSpec } from "@/lib/visuals/spec";
 import { FAILURE_COPY, type VisualAssetFailure } from "./visual-assets";
@@ -326,7 +327,15 @@ function responseOf(spec: ResponseSpec, requirements: readonly string[], tokens:
     case "comparison":
       return { kind: "comparison", spec: spec.spec };
     case "fields":
-      return { kind: "fields", fields: spec.fields.map((f) => ({ label: f.label, space: f.space, lines: f.lines, unit: f.unit === true })), cellMm, columns };
+      return { kind: "fields", fields: spec.fields.map((f) => {
+        const calculate = !f.unit && isCalculationField(f.label);
+        return {
+          label: f.label,
+          space: calculate ? "grid" : f.space,
+          lines: calculate ? Math.max(f.lines, Math.ceil(MIN_CALCULATION_MM / cellMm)) : f.lines,
+          unit: f.unit === true,
+        };
+      }), cellMm, columns };
     case "sequence":
       return { kind: "sequence", items: spec.items };
     case "none":
@@ -654,7 +663,7 @@ export function buildRenderModel(doc: MaterialDocument, options: BuildRenderOpti
       }
       // A writing help placed right after a writing activity is that activity's help (see `supports`): it travels inside it.
       const previous = current.at(-1);
-      if ((node.kind === "planner" || node.kind === "sentence_starters") && previous?.kind === "activity" && WRITING.has(previous.response.kind)) {
+      if ((node.kind === "planner" || node.kind === "sentence_starters") && previous?.kind === "activity" && (WRITING.has(previous.response.kind) || (previous.response.kind === "fields" && previous.response.fields.every((f) => f.space !== "grid")))) {
         previous.supports.push(node);
         // An organised essay is long: its writing space may continue on the next page (the prompt and the organiser never leave
         // its first lines: CSS), rather than pushing the whole activity on and leaving half a page empty.
