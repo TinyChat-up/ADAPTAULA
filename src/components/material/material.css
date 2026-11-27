@@ -109,6 +109,15 @@ ul.ms-list { list-style: disc; }
 .ms-answer-field-line .ms-answer-field-label { flex: 0 0 auto; max-width: 45%; padding-bottom: .15em; }
 .ms-answer-field-line .ms-lines { flex: 1 1 auto; }
 .ms-answer-field-box .ms-box-area, .ms-answer-field-lines .ms-lines, .ms-answer-field-grid .ms-grid-area { margin-top: .3em; }
+/* The pupil tucks rough work above the result, without a suggested operation or a prefilled unit. */
+.ms-answer-fields[data-calculation] .ms-answer-field-box[data-unit] {
+  display: grid;
+  grid-template-columns: minmax(6em, 1fr) auto;
+  column-gap: .7em;
+  align-items: end;
+}
+.ms-answer-fields[data-calculation] .ms-answer-field-box[data-unit] > .ms-answer-field-label { grid-column: 1 / -1; }
+.ms-answer-fields[data-calculation] .ms-answer-field-box[data-unit] > .ms-unit { margin-bottom: 0; }
 /* Hueco para la unidad junto a la respuesta: vacío, más corto que la respuesta y con su etiqueta pequeña. */
 /* Las partes de un problema no se separan de sus operaciones: los datos y la cuadrícula, y la cuadrícula y la respuesta, juntas. */
 .ms-answer-field:has(+ .ms-answer-field-grid), .ms-answer-field-grid + .ms-answer-field { break-before: avoid; }

@@ -9,7 +9,7 @@ import { pondAnalysis } from "../support/pond-case";
 
 /** Regression of the audit (ADR-053): an instruction never points at a picture, arrows or cards that the student will not have. */
 const none = { picture: false, scheme: false, arrows: false, cards: false };
-const text = (doc: { pages: Array<{ blocks: Array<{ type: string; prompt?: string; steps?: string[]; text?: string }> }> }) => doc.pages.flatMap((p) => p.blocks).map((b) => `${b.prompt ?? ""} ${(b.steps ?? []).join(" ")} ${b.text ?? ""}`).join(" ");
+const text = (doc: { pages: Array<{ blocks: Array<{ type: string; prompt?: string; steps?: string[]; requirements?: string[]; text?: string }> }> }) => doc.pages.flatMap((p) => p.blocks).map((b) => `${b.prompt ?? ""} ${(b.steps ?? []).join(" ")} ${(b.requirements ?? []).join(" ")} ${b.text ?? ""}`).join(" ");
 
 describe("referencias a recursos que no existen", () => {
   it("detecta imagen, flechas y tarjetas, y solo lo que falta", () => {

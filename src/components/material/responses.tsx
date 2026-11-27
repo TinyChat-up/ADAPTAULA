@@ -146,7 +146,7 @@ export function Response({ response }: { response: RenderResponse }) {
       // Every labelled field keeps its label and its own space: lines to write, a box or squares to calculate in. The answer of a
       // quantity has an EMPTY slot for its unit (never the unit: it may be what is evaluated).
       return (
-        <div className="ms-answer-fields">
+        <div className="ms-answer-fields" data-calculation={response.fields.some((f) => f.space === "grid") || undefined}>
           {response.fields.map((f, i) => (
             <div key={i} className={f.space === "grid" ? "ms-answer-field ms-answer-field-grid" : f.space === "box" ? "ms-answer-field ms-answer-field-box" : f.lines > 1 ? "ms-answer-field ms-answer-field-lines" : "ms-answer-field ms-answer-field-line"} data-unit={f.unit || undefined}>
               <p className="ms-answer-field-label">{f.label}:</p>

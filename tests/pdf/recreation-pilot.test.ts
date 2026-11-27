@@ -5,6 +5,8 @@ import { assetRef } from "@/lib/render/print/pinned-assets";
 import type { MaterialDocument } from "@/lib/schemas/material-document";
 import { runMockRecreation } from "../support/recreation-mocks";
 import { printPdf } from "./harness";
+import { measureLayout } from "./layout-measurements";
+import { twoEvidenceFields } from "@/lib/adaptation/evidence-space";
 
 /**
  * The recreation route printed by the product's renderer and engine (docs/qa/recreacion-pedagogica): simulated Claude and simulated
@@ -71,6 +73,31 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
     expect(pdf.print.html).toContain('class="ms-sortboard"');
   });
 
+  it("postura y dos evidencias tienen espacio medible en el PDF al forzar salto junto a una ilustración", async () => {
+    const { run, compiled } = await ready(authorized);
+    const doc = structuredClone(compiled.student);
+    const blocks = doc.pages[0]!.blocks;
+    const item = blocks.find((b) => b.type === "activity" && b.label === "6");
+    if (item?.type !== "activity") throw new Error("open question missing");
+    item.prompt = "Defiende tu postura con dos evidencias del texto.";
+    item.response = twoEvidenceFields(item.prompt)!;
+    const sit = blocks.find((b) => b.type === "image" && b.source.kind === "generated");
+    if (sit?.type !== "image") throw new Error("context image missing");
+    // The pupil receives the actual generated-asset slot immediately before this activity.
+    item.resource_block_ids = [sit.id];
+    blocks.splice(blocks.indexOf(sit), 1);
+    blocks.splice(blocks.indexOf(item), 0, sit);
+    const { pdf } = await print("recreation-writing-space", doc, run);
+    const measure = await measureLayout(pdf.print.html);
+    expect(measure.fields.filter((f) => f.label?.includes("Evidencia")).map((f) => f.lines)).toEqual([3, 3]);
+    const printed = pdf.pages.find((p) => p.text.includes("Defiende tu postura"));
+    expect(printed?.text).toContain("Mi postura");
+    expect(printed?.text).toContain("Evidencia 1");
+    expect(printed?.text).toContain("Evidencia 2");
+    expect(pdf.result.blockedRequests).toEqual([]);
+    expect(pdf.validation.issues).toEqual([]);
+  });
+
   it("no se produce ninguna clave ni informe para imprimir: solo la ficha y los materiales", async () => {
     const { compiled } = await ready(authorized);
     expect(Object.keys(compiled).sort()).toEqual(["materials", "student", "trace", "unresolved"]);
@@ -80,7 +107,16 @@ describe("recreación del estanque · PDF del recorrido completo simulado", () =
     const { run, compiled } = await ready(withoutImages);
     const student = await print("recreation-student-sin-imagenes", compiled.student, run);
     expect(student.validation.status).toBe("renderable");
-    for (const page of student.pdf.pages.slice(0, -1)) expect(page.ink).toBeGreaterThan(0.03);
+    for (const page of student.pdf.pages) {
+      expect(page.body.trim().length).toBeGreaterThan(45);
+      expect(page.ink).toBeGreaterThan(0.02);
+    }
+    const operations = student.pdf.pages.find((p) => /Operaciones\s*:/.test(p.text));
+    expect(operations?.text ?? "").toMatch(/Resultado\s*:/);
+    expect(operations?.text ?? "").toMatch(/Unidad\s*:/);
+    expect(student.pdf.pages.find((p) => p.body.includes("vivo o un elemento no vivo"))?.body).toContain("del documento");
+    const layout = await measureLayout(student.pdf.print.html);
+    expect(layout.grids.some((g) => g.heightMm >= 34 && g.widthMm > 110)).toBe(true);
     expect(run.outcome.status === "ready" && run.outcome.visuals[0]!.attempts.join(" ")).toContain("generación no disponible");
   });
 });

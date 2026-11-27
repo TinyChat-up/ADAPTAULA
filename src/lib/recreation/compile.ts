@@ -5,6 +5,7 @@ import { VISUAL_SPEC_VERSION } from "@/lib/visuals/spec";
 import type { RecreationActivity, RecreationPlan } from "./contract";
 import type { Solution, Verification, VerifiedActivity } from "./verify";
 import { mentions, resolveReferences } from "./references";
+import { calculationResponse, writtenResponse } from "./response-space";
 import { diagramSpecOf, diagramsFor } from "./diagrams";
 import { describeDiagram } from "@/lib/visuals/diagram";
 import type { Diagram } from "./contract";
@@ -83,7 +84,11 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     return { id: id(), type: "image", alt_text: v.alt.slice(0, 300), source, trace: { origin: "support", source_refs: a.objective_ids, decision_ids: decisions(a.strategy_ids) } };
   };
   // A CONTEXT picture is looked at before reading (to recognise what the text names): it opens the sheet, before the reading.
-  const isContext = (v: ResolvedVisual) => plan.visual_requests.find((r) => r.id === v.request_id)?.function === "context" && plan.reading !== null;
+  const isContext = (v: ResolvedVisual) => {
+    const request = plan.visual_requests.find((r) => r.id === v.request_id);
+    return plan.reading !== null && (request?.function === "context" ||
+      (designed && request?.function === "vocabulary" && !request.essential && !request.for_cards && v.source?.kind === "generated"));
+  };
   // Each resource is printed ONCE; every activity that uses it points at that block (the renderer repeats it on a later sheet).
   const printed = new Map<string, string>();
   for (const v of visuals.filter((x) => x.source && isContext(x))) {
@@ -119,11 +124,10 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const resources: string[] = [];
     const used: string[] = (usedBy[a.id] = []);
     const cards = plan.materials.filter((m) => m.activity_id === a.id);
-    // Its cut-out materials are in another document: the activity says so where it is done (before its figures, which travel with it).
-    if (cards.length > 0) {
-      const what = [cards.some((m) => m.kind === "cut_out_cards") ? "las tarjetas" : null, cards.some((m) => m.kind === "sorting_board") ? "el tablero" : null].filter(Boolean).join(" y ");
-      blocks.push({ id: id(), type: "instruction", text: `Para esta actividad usa ${what} del documento «Materiales para recortar».`, trace: { origin: "structure", source_refs: [], decision_ids: [] } });
-    }
+    // The note is part of the activity, not a loose block that can end up on a different physical page.
+    const materialNote = cards.length > 0
+      ? `Usa ${[cards.some((m) => m.kind === "cut_out_cards") ? "las tarjetas" : null, cards.some((m) => m.kind === "sorting_board") ? "el tablero" : null].filter(Boolean).join(" y ")} del documento «Materiales para recortar».`
+      : null;
     const use = (key: string, make: () => Block) => {
       used.push(key);
       const known = printed.get(key);
@@ -180,7 +184,7 @@ export function compileRecreation({ plan, verification, analysis, presentation, 
     const resolution = resolveReferences(a, available, { reword });
     if (resolution.unresolved.length > 0) unresolved.push(label);
     const shown = resolution.unresolved.length === 0 ? resolution : { prompt: a.prompt, steps: a.steps as string[] };
-    blocks.push({ id: block, type: "activity", label, prompt: shown.prompt, ...(shown.steps.length ? { steps: shown.steps } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
+    blocks.push({ id: block, type: "activity", label, prompt: shown.prompt, ...(shown.steps.length ? { steps: shown.steps } : {}), ...(materialNote ? { requirements: [materialNote] } : {}), ...(resources.length ? { resource_block_ids: resources } : {}), response, trace: t });
     if (a.executor.kind === "short_answer" && a.executor.starters.length > 0) blocks.push({ id: id(), type: "sentence_starters", items: a.executor.starters, trace: { origin: "support", source_refs: a.objective_ids, decision_ids: decisions(a.strategy_ids) } });
     answerKey.push({ block_id: block, basis: "new_item", ...key });
     trace.push({ activity_id: a.id, label, block_id: block, objective_ids: a.objective_ids, operations: a.operations, status: verified.status });
@@ -242,7 +246,7 @@ function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpe
       return { response: { kind: "sequence", items: order.printed }, key: { value: order.printed.map((item) => `${order.solution.indexOf(item) + 1}. ${item}`).join(" · ") } };
     }
     case "compute":
-      return { response: { kind: "fields", fields: [{ label: "Operación", space: "lines", lines: 1 }, { label: "Resultado", space: "lines", lines: 1, unit: true }] }, key: { value: s.kind === "number" ? `${s.operation} ${s.unit}` : "" } };
+      return { response: calculationResponse(), key: { value: s.kind === "number" ? `${s.operation} ${s.unit}` : "" } };
     case "select": {
       const options = e.options.map((o, i) => ({ id: `o${i + 1}`, text: o.text }));
       return { response: { kind: "choice", multiple: e.correct_count > 1, options }, key: { correct_option_ids: options.filter((_, i) => e.options[i]!.correct).map((o) => o.id) } };
@@ -250,7 +254,7 @@ function responseOf(a: RecreationActivity, s: Solution): { response: ResponseSpe
     case "true_false":
       return { response: { kind: "true_false", statements: e.statements.map((st, i) => ({ id: `s${i + 1}`, text: st.text })) }, key: { value: e.statements.map((st, i) => `${i + 1}: ${st.value ? "V" : "F"}`).join(", ") } };
     case "short_answer":
-      return { response: { kind: "lines", lines: e.lines }, key: { value: e.criteria.join(" ").slice(0, 500) } };
+      return { response: writtenResponse({ ...a, executor: e }), key: { value: e.criteria.join(" ").slice(0, 500) } };
   }
 }
 

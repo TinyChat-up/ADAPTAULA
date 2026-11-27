@@ -7,6 +7,7 @@ import { RECREATION_PLANNER_V5 } from "@prompts/recreation-planner/v5";
 import { RECREATION_PLANNER_V6 } from "@prompts/recreation-planner/v6";
 import { RECREATION_PLANNER_V7 } from "@prompts/recreation-planner/v7";
 import { RECREATION_PLANNER_V8 } from "@prompts/recreation-planner/v8";
+import { RECREATION_PLANNER_V11 } from "@prompts/recreation-planner/v11";
 import { DIRECTED_RECREATION_PLANNER_V1 } from "@prompts/recreation-planner/directed-v1";
 import { estimateCostUsd, priceFor } from "@/lib/ai/costs";
 import type { AIProvider, AIRunRecord, ModelSelection, StructuredRequest } from "@/lib/ai/types";
@@ -50,7 +51,7 @@ export function worstCallUsd(selection: ModelSelection, inputChars: number, maxO
 
 const RECREATION_PROMPTS = [
   RECREATION_PLANNER_V1, RECREATION_PLANNER_V2, RECREATION_PLANNER_V3, RECREATION_PLANNER_V4,
-  RECREATION_PLANNER_V5, RECREATION_PLANNER_V6, RECREATION_PLANNER_V7, RECREATION_PLANNER_V8,
+  RECREATION_PLANNER_V5, RECREATION_PLANNER_V6, RECREATION_PLANNER_V7, RECREATION_PLANNER_V8, RECREATION_PLANNER_V11,
 ];
 
 export function createRecreationPlanner(deps: { provider: AIProvider; selection: ModelSelection; budget: PlannerBudget; maxOutputTokens?: number; promptVersion?: number; recordAiRun(run: AIRunRecord): Promise<void> }): Planner {

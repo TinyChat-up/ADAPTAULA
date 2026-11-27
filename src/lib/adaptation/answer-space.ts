@@ -2,6 +2,7 @@ import type { AdaptationContext } from "@/lib/schemas/adaptation-context";
 import type { DimensionKey } from "@/lib/schemas/functional-profile";
 import type { AnalysisActivity, AnalysisProtected, MaterialAnalysis } from "@/lib/schemas/material-analysis";
 import type { ResponseSpec } from "@/lib/schemas/material-document";
+import { twoEvidenceFields } from "./evidence-space";
 import { renderTokens } from "@/lib/render/tokens";
 
 /**
@@ -204,6 +205,11 @@ export function answerSpace(activity: AnalysisActivity, current: ResponseSpec, c
 function proposeSpace(activity: AnalysisActivity, current: ResponseSpec, ctx: SpaceContext, need: SpaceNeed): ResponseSpec {
   if (current.kind === "fields") return sizedFields(current, activity, ctx, need);
   if (current.kind === "grid") return { kind: "grid", rows: calculationRows(activity, ctx) };
+  if (current.kind === "lines" && activity.response_format === "write_text" && (need === "short" || need === "explanation") &&
+      /\b(?:defiende|explica|justifica|razona|argumenta)\b/i.test(activity.instruction)) {
+    const evidence = twoEvidenceFields(activity.instruction, Math.max(current.lines, statedLines(activity) ?? 0));
+    if (evidence) return evidence;
+  }
 
   const original = linesOf(current);
   // What the rules add is bounded; what the original already gave is never cut (Math.max with the original outside the bound).
