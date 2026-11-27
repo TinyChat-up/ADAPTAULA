@@ -5,6 +5,7 @@ import type { CompiledRecreation } from "./compile";
 import type { RecreationPlan } from "./contract";
 import { declaredSchemes, diagramSpecOf } from "./diagrams";
 import { chooseScheme, diagramFlow, originalFlowOf, planFlow, type Flow } from "./relations";
+import { writtenResponse } from "./response-space";
 import { normalize } from "./verify";
 import type { ResolvedVisual } from "./visuals";
 
@@ -80,7 +81,17 @@ export function auditFidelity(plan: RecreationPlan, compiled: CompiledRecreation
       : [];
     for (const t of texts.filter(Boolean)) if (!has(response, t)) lose(`falta «${t.slice(0, 30)}» en la respuesta`);
     if (e.kind === "short_answer") {
-      if (block.response.kind !== "lines" || block.response.lines < e.lines) lose("faltan líneas de respuesta");
+      const expected = writtenResponse({ ...a, executor: e });
+      if (expected.kind === "fields") {
+        const required = expected.fields;
+        const actual = block.response.kind === "fields" ? block.response.fields : [];
+        if (required.length !== actual.length || required.some((field, i) => {
+          const got = actual[i];
+          return !got || got.label !== field.label || got.space !== field.space || got.lines < field.lines;
+        })) lose("faltan los espacios separados de postura o evidencias");
+      } else if (expected.kind === "lines" && (block.response.kind !== "lines" || block.response.lines < expected.lines)) {
+        lose("faltan líneas de respuesta");
+      }
       const starters = blocks.slice(blocks.indexOf(block) + 1).find((b) => b.type === "sentence_starters");
       for (const st of e.starters) if (!starters || starters.type !== "sentence_starters" || !starters.items.includes(st)) lose(`falta el inicio de frase «${st.slice(0, 30)}»`);
     }

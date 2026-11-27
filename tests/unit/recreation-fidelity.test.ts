@@ -272,3 +272,26 @@ describe("dos esquemas distintos y actividades que necesitan recursos diferentes
     expect(auditFidelity(outcome.plan, rehomed, outcome.visuals, analysis).map((l) => l.message).join(" | ")).toMatch(/no está bajo la actividad 1/);
   });
 });
+
+it("acepta los recuadros de dos evidencias sin dejar de detectar una evidencia suprimida", async () => {
+  const stack = mockStack({ imagesAuthorized: false });
+  const outcome = await runRecreation(stack.planner, { ...stack.request, visualPolicy: "designed" });
+  if (outcome.status !== "ready") throw new Error(outcome.status);
+  const plan = structuredClone(outcome.plan);
+  const compiled = structuredClone(outcome.compiled);
+  const index = plan.activities.findIndex((a) => a.executor.kind === "short_answer");
+  const activity = plan.activities[index]!;
+  const block = compiled.student.pages.flatMap((p) => p.blocks).filter((b) => b.type === "activity")[index]!;
+  if (activity.executor.kind !== "short_answer" || block.type !== "activity") throw new Error("short answer missing");
+  activity.prompt = block.prompt = "Defiende tu postura con dos evidencias del texto.";
+  activity.operations = ["justify"];
+  block.response = { kind: "fields", fields: [
+    { label: "Mi postura", space: "box", lines: 2 },
+    { label: "Evidencia 1", space: "lines", lines: 3 },
+    { label: "Evidencia 2", space: "lines", lines: 3 },
+  ] };
+  const related = () => auditFidelity(plan, compiled, outcome.visuals).filter((i) => i.message.includes("espacios separados"));
+  expect(related()).toEqual([]);
+  block.response.fields.pop();
+  expect(related()).toHaveLength(1);
+});
